@@ -2,10 +2,11 @@ import { computed, onScopeDispose, ref, watch } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 import type { WorkspaceRestoreSource } from './useWorkspaceRestore'
 import type { DropboxSignInController } from './useDropboxSignIn'
-import { DropboxApiError, deleteDropboxBackup, listDropboxBackups, readDropboxBackup } from '../utils/dropbox-api'
+import { DropboxApiError, deleteDropboxBackup, listDropboxBackups, readDropboxBackup, readDropboxBackupBytes } from '../utils/dropbox-api'
 import type { DropboxBackupFile } from '../utils/dropbox-api'
 import { isDropboxDatedBackupName } from '../utils/dropbox-backup-snapshot'
 import { DropboxCancelledError } from '../utils/dropbox-auth'
+import { downloadBlob, jsonDownloadFilename } from '../utils/browser-download'
 
 export interface DropboxRestoreBackup {
   id: string
@@ -14,7 +15,7 @@ export interface DropboxRestoreBackup {
   modifiedAt: string
 }
 
-export type DropboxRestoreState = 'idle' | 'authorizing' | 'listing' | 'choosing' | 'downloading' | 'deleting' | 'refreshing'
+export type DropboxRestoreState = 'idle' | 'authorizing' | 'listing' | 'choosing' | 'reading' | 'downloading' | 'deleting' | 'refreshing'
 
 interface WorkspaceRestoreOwner {
   openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean>
@@ -23,7 +24,9 @@ interface WorkspaceRestoreOwner {
 export interface DropboxRestoreDependencies {
   listBackups(accessToken: string, signal?: AbortSignal): Promise<DropboxBackupFile[]>
   readFile(accessToken: string, file: DropboxBackupFile, signal?: AbortSignal): Promise<string>
+  readFileBytes?(accessToken: string, file: DropboxBackupFile, signal?: AbortSignal): Promise<Uint8Array>
   deleteFile(accessToken: string, file: DropboxBackupFile, signal?: AbortSignal): Promise<void>
+  downloadFile?(filename: string, content: Uint8Array): void
 }
 
 export interface DropboxRestoreOptions {
@@ -34,6 +37,7 @@ export interface DropboxRestoreController {
   readonly state: Readonly<Ref<DropboxRestoreState>>
   readonly message: Readonly<Ref<string>>
   readonly backups: Readonly<Ref<readonly DropboxRestoreBackup[]>>
+  readonly completedDownloads: Readonly<Ref<number>>
   readonly completedDeletions: Readonly<Ref<number>>
   readonly refreshRequired: Readonly<Ref<boolean>>
   readonly dialogOpen: ComputedRef<boolean>
@@ -42,14 +46,21 @@ export interface DropboxRestoreController {
   activate(): void
   cancel(notifyCancellation?: boolean): void
   select(id: string): void
+  downloadBackup(id: string): void
   deleteBackup(id: string, rev: string): void
   refresh(): void
 }
 
-const defaultDependencies: DropboxRestoreDependencies = {
+const defaultDependencies: Required<DropboxRestoreDependencies> = {
   listBackups: (accessToken, signal) => listDropboxBackups(accessToken, fetch, signal),
   readFile: (accessToken, file, signal) => readDropboxBackup(accessToken, file, fetch, signal),
+  readFileBytes: (accessToken, file, signal) => readDropboxBackupBytes(accessToken, file, fetch, signal),
   deleteFile: (accessToken, file, signal) => deleteDropboxBackup(accessToken, file, fetch, signal),
+  downloadFile: (filename, content) => {
+    const buffer = new ArrayBuffer(content.byteLength)
+    new Uint8Array(buffer).set(content)
+    downloadBlob(filename, new Blob([buffer], { type: 'application/json' }))
+  },
 }
 
 /** Starts the shared restore lease before Dropbox authorization and keeps each selection tied to its account and revision. */
@@ -62,6 +73,7 @@ export function useDropboxRestore(
   const state = ref<DropboxRestoreState>('idle')
   const message = ref('')
   const backups = ref<DropboxRestoreBackup[]>([])
+  const completedDownloads = ref(0)
   const completedDeletions = ref(0)
   const refreshRequired = ref(false)
   const dialogOpen = computed(() => state.value !== 'idle')
@@ -76,6 +88,8 @@ export function useDropboxRestore(
   let listedFiles: DropboxBackupFile[] = []
   let resolveSelection: ((source: WorkspaceRestoreSource | null) => void) | undefined
   let selectionAbortHandler: (() => void) | undefined
+  const readFileBytes = dependencies.readFileBytes ?? defaultDependencies.readFileBytes
+  const downloadFile = dependencies.downloadFile ?? defaultDependencies.downloadFile
 
   function isCurrent(operation: number, signal?: AbortSignal): boolean {
     return activeOperation === operation && !activeAbortController?.signal.aborted && !signal?.aborted
@@ -187,7 +201,7 @@ export function useDropboxRestore(
     const operation = activeOperation
     const accessToken = activeAccessToken
     const signal = activeProviderSignal
-    state.value = 'downloading'
+    state.value = 'reading'
     message.value = ''
 
     void dependencies.readFile(accessToken, file, signal).then(content => {
@@ -197,6 +211,33 @@ export function useDropboxRestore(
     }).catch((error: unknown) => {
       if (!isCurrent(operation, signal)) return
       if (closeForUnauthorized(error, accessToken)) return
+      message.value = getErrorMessage(error, 'Dropbox could not download this backup. Refresh the list and try again.')
+      state.value = 'choosing'
+    })
+  }
+
+  function downloadBackup(id: string): void {
+    if (state.value !== 'choosing' || !activeAccessToken || !activeProviderSignal || activeProviderSignal.aborted) return
+    if (!accountIsCurrent(activeOperation, activeProviderSignal)) return
+    const file = listedFiles.find(candidate => candidate.id === id)
+    if (!file) return
+
+    const operation = activeOperation
+    const accessToken = activeAccessToken
+    const signal = activeProviderSignal
+    state.value = 'downloading'
+    message.value = ''
+
+    void readFileBytes(accessToken, file, signal).then(content => {
+      if (!isCurrent(operation, signal) || !accountIsCurrent(operation, signal)) return
+      downloadFile(jsonDownloadFilename(file.name), content)
+      if (!isCurrent(operation, signal) || !accountIsCurrent(operation, signal)) return
+      state.value = 'choosing'
+      completedDownloads.value += 1
+    }).catch((error: unknown) => {
+      if (!isCurrent(operation, signal)) return
+      if (closeForUnauthorized(error, accessToken)) return
+      if (!accountIsCurrent(operation, signal)) return
       message.value = getErrorMessage(error, 'Dropbox could not download this backup. Refresh the list and try again.')
       state.value = 'choosing'
     })
@@ -269,7 +310,10 @@ export function useDropboxRestore(
 
   function setListedFiles(files: DropboxBackupFile[]): void {
     listedFiles = files
-    backups.value = files.map(file => ({
+      .map((file, index) => ({ file, index }))
+      .sort((left, right) => Date.parse(right.file.serverModified) - Date.parse(left.file.serverModified) || left.index - right.index)
+      .map(({ file }) => file)
+    backups.value = listedFiles.map(file => ({
       id: file.id,
       name: file.name,
       rev: file.rev,
@@ -340,7 +384,7 @@ export function useDropboxRestore(
     settleSelection(null)
   })
 
-  return { state, message, backups, completedDeletions, refreshRequired, dialogOpen, busy, canCancel, activate, cancel, select, deleteBackup, refresh }
+  return { state, message, backups, completedDownloads, completedDeletions, refreshRequired, dialogOpen, busy, canCancel, activate, cancel, select, downloadBackup, deleteBackup, refresh }
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {

@@ -32,7 +32,7 @@ In **Map files**, choose **Back up Jump Cluster to Dropbox**. The backup is a co
 
 The app keeps the ten most recent dated backups per Dropbox account across all Jump Clusters. After Dropbox confirms a new backup, the app removes older dated backups above that limit. Other files in the App Folder stay outside this limit. Download a local JSON copy before backing up if you want to keep a version beyond the limit.
 
-To remove a dated backup yourself, open **Restore Jump Cluster from Dropbox**, choose **Delete** next to the backup, and confirm. You can also manage the files in your Dropbox App Folder. Dropbox applies its account-specific recovery period to deleted files. [Dropbox deleted-file recovery](https://help.dropbox.com/delete-restore/deleted-files)
+Open **Restore Jump Cluster from Dropbox** to see the newest backups first. Use **Restore** to review a backup before opening it, **Download JSON** to save a local copy, or **Delete** to remove a dated backup after confirmation. You can also manage the files in your Dropbox App Folder. Dropbox applies its account-specific recovery period to deleted files. [Dropbox deleted-file recovery](https://help.dropbox.com/delete-restore/deleted-files)
 
 ## Account support verification
 

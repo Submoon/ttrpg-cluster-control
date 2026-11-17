@@ -5,7 +5,7 @@ import type { GoogleDriveSignInController } from './useGoogleDriveSignIn'
 import { GoogleDriveCancelledError } from '../utils/google-drive-auth'
 import { deleteGoogleDriveBackup, GoogleDriveApiError, isGoogleDriveBackupName, listGoogleDriveBackups, readGoogleDriveFile } from '../utils/google-drive-api'
 import type { GoogleDriveBackupFile } from '../utils/google-drive-api'
-import { downloadBlob } from '../utils/browser-download'
+import { downloadBlob, jsonDownloadFilename } from '../utils/browser-download'
 
 export interface GoogleDriveRestoreFile {
   id: string
@@ -403,10 +403,4 @@ export function useGoogleDriveRestore(
     refreshBackups,
     loadMore,
   }
-}
-
-function jsonDownloadFilename(filename: string): string {
-  const safeName = filename.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-').trim().replace(/[. ]+$/g, '') // eslint-disable-line no-control-regex -- Replace filesystem-reserved C0 controls.
-  const fallback = safeName || 'jump-cluster-backup'
-  return /\.json$/i.test(fallback) ? fallback : `${fallback}.json`
 }

@@ -19,6 +19,13 @@ export function downloadBlob(filename: string, blob: Blob): void {
   }
 }
 
+/** Builds a safe JSON backup filename while preserving an existing JSON extension. */
+export function jsonDownloadFilename(filename: string): string {
+  const safeName = filename.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-').trim().replace(/[. ]+$/g, '') // eslint-disable-line no-control-regex -- Replace filesystem-reserved C0 controls.
+  const fallback = safeName || 'jump-cluster-backup'
+  return /\.json$/i.test(fallback) ? fallback : `${fallback}.json`
+}
+
 /** Builds a download name with filesystem-reserved characters replaced. */
 export function exportFileName(
   name: string,
