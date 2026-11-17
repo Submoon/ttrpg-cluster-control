@@ -297,6 +297,156 @@ test('continuous Inspector Apply commits the source draft before selecting the d
   }
 })
 
+test('continuous Inspector failed Apply keeps its source target and invalid draft @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    const sourceObject = system?.objects[0]
+    if (!system || !sourceObject) throw new Error('The local workspace did not create its first system object.')
+    const destinationObject = { ...sourceObject, id: 'continuous-inspector-invalid-apply-destination', name: 'Destination World' }
+    system.objects.push(destinationObject)
+    harness.store.setSelection({ activeView: 'cluster' })
+    const sourceTarget = { kind: 'object' as const, systemId: system.id, objectId: sourceObject.id }
+    expect(await harness.workflows.navigation.inspectContinuousTarget(sourceTarget)).toBe(true)
+    await harness.workflows.inspector.beginObjectEdit()
+    const session = harness.workflows.inspector.entitySession.value
+    if (!session || session.kind !== 'object') throw new Error('The source object draft was not created.')
+    session.draft.name = '   '
+
+    const leaveSource = harness.workflows.navigation.inspectContinuousTarget({
+      kind: 'object', systemId: system.id, objectId: destinationObject.id,
+    })
+    await expect.poll(() => harness.workflows.charts.transitionGuard.value).toBe('inspector')
+    await harness.workflows.charts.resolveTransitionChoice('apply')
+
+    expect(await leaveSource).toBe(false)
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.store.inspectedTarget).toEqual(sourceTarget)
+    expect(harness.workflows.inspector.entitySession.value?.id).toBe(session.id)
+    expect(harness.workflows.inspector.entitySession.value?.kind === 'object'
+      ? harness.workflows.inspector.entitySession.value.errors.name
+      : null).toBe('Object name is required.')
+    expect(harness.workspace.value.cluster.systems.find(candidate => candidate.id === system.id)?.objects
+      .find(object => object.id === sourceObject.id)?.name).toBe(sourceObject.name)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('continuous Inspector Discard selects the destination and leaves source data unchanged @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    const sourceObject = system?.objects[0]
+    if (!system || !sourceObject) throw new Error('The local workspace did not create its first system object.')
+    const destinationObject = { ...sourceObject, id: 'continuous-inspector-discard-destination', name: 'Destination World' }
+    system.objects.push(destinationObject)
+    harness.store.setSelection({ activeView: 'cluster' })
+    expect(await harness.workflows.navigation.inspectContinuousTarget({
+      kind: 'object', systemId: system.id, objectId: sourceObject.id,
+    })).toBe(true)
+    await harness.workflows.inspector.beginObjectEdit()
+    const session = harness.workflows.inspector.entitySession.value
+    if (!session || session.kind !== 'object') throw new Error('The source object draft was not created.')
+    session.draft.name = 'Discarded source draft'
+
+    const leaveSource = harness.workflows.navigation.inspectContinuousTarget({
+      kind: 'object', systemId: system.id, objectId: destinationObject.id,
+    })
+    await expect.poll(() => harness.workflows.charts.transitionGuard.value).toBe('inspector')
+    await harness.workflows.charts.resolveTransitionChoice('discard')
+
+    expect(await leaveSource).toBe(true)
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: system.id, objectId: destinationObject.id })
+    expect(harness.workflows.inspector.entitySession.value).toBeNull()
+    expect(harness.workspace.value.cluster.systems.find(candidate => candidate.id === system.id)?.objects
+      .find(object => object.id === sourceObject.id)?.name).toBe(sourceObject.name)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('continuous route selection and Cluster details keep the Inspector target synchronized @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    const object = system?.objects[0]
+    if (!system || !object) throw new Error('The local workspace did not create its first system object.')
+    const route = {
+      id: 'continuous-inspected-route',
+      jumpLevel: 1,
+      fromSystemId: system.id,
+      fromPointId: null,
+      toSystemId: null,
+      toPointId: null,
+      unresolvedExit: 'Uncharted Exit',
+      playerShared: false,
+    }
+    harness.workspace.value.cluster.routes.push(route)
+    harness.store.setSelection({ activeView: 'cluster' })
+    expect(await harness.workflows.navigation.inspectContinuousTarget({
+      kind: 'object', systemId: system.id, objectId: object.id,
+    })).toBe(true)
+
+    await harness.workflows.navigation.selectRoute(route.id)
+
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.store.selectedRouteId).toBe(route.id)
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'route', routeId: route.id })
+
+    await harness.workflows.navigation.showChartDetails()
+
+    expect(harness.store.selectedRouteId).toBeNull()
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'cluster' })
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('continuous history keeps route selection or falls back to Cluster in the Inspector @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    if (!system) throw new Error('The local workspace did not create its first system.')
+    const route = {
+      id: 'continuous-history-route',
+      jumpLevel: 1,
+      fromSystemId: system.id,
+      fromPointId: null,
+      toSystemId: null,
+      toPointId: null,
+      unresolvedExit: 'Uncharted Exit',
+      playerShared: false,
+    }
+    harness.workspace.value.cluster.routes.push(route)
+    harness.store.setSelection({ activeView: 'cluster' })
+    const action = {
+      workspaceId: harness.workspace.value.id,
+      clusterId: harness.workspace.value.cluster.id,
+      contextLabel: 'Jump Route',
+      kind: 'update' as const,
+      label: 'Update Jump Route',
+      target: { kind: 'route' as const, id: route.id },
+      parent: { kind: 'cluster' as const, id: harness.workspace.value.cluster.id },
+    }
+
+    await harness.workflows.navigation.revealHistoryContext({ direction: 'undo', action })
+
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.store.selectedRouteId).toBe(route.id)
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'route', routeId: route.id })
+
+    harness.workspace.value.cluster.routes.splice(0, 1)
+    await harness.workflows.navigation.revealHistoryContext({ direction: 'undo', action })
+
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.store.selectedRouteId).toBeNull()
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'cluster' })
+  } finally {
+    harness.dispose()
+  }
+})
+
 test('a continuous map selection invalidates a pending Search frame on the captured cluster canvas @pure', async () => {
   const ready = deferred<boolean>()
   const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
@@ -336,10 +486,47 @@ test('a continuous map selection invalidates a pending Search frame on the captu
   }
 })
 
+test('manual camera interaction abandons a pending continuous Search frame @pure', async () => {
+  const ready = deferred<boolean>()
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    const object = system?.objects[0]
+    if (!system || !object) throw new Error('The local workspace did not create its first system object.')
+    harness.store.setSelection({ activeView: 'cluster' })
+    let interactionVersion = 0
+    let frameCount = 0
+    harness.workflows.mapControls.clusterMapRef.value = createMapHandle({
+      whenReady: () => ready.promise,
+      frameSearchTarget: () => { frameCount += 1; return true },
+      focusMap: () => undefined,
+      getCameraInteractionVersion: () => interactionVersion,
+    })
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = object.name
+    const result = search.results.value.find(candidate => candidate.target.kind === 'object')
+    if (!result || result.target.kind !== 'object') throw new Error('The object did not produce an object search result.')
+
+    const reveal = search.reveal(result.target)
+    await expect.poll(() => harness.store.inspectedTarget?.kind).toBe('object')
+    interactionVersion += 1
+    ready.resolve(true)
+
+    expect(await reveal).toEqual({ status: 'rejected', reason: 'stale' })
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: system.id, objectId: object.id })
+    expect(frameCount).toBe(0)
+  } finally {
+    ready.resolve(false)
+    harness.dispose()
+  }
+})
+
 function createMapHandle(options: {
   whenReady: () => Promise<boolean>
   frameSearchTarget: NonNullable<MapNavigationHandle['frameSearchTarget']>
   focusMap: () => void
+  getCameraInteractionVersion?: NonNullable<MapNavigationHandle['getCameraInteractionVersion']>
 }): MapNavigationHandle {
   return {
     exportImage: async () => new Blob(),
@@ -358,6 +545,7 @@ function createMapHandle(options: {
     moveTouchNavigation: () => undefined,
     endTouchNavigation: () => undefined,
     whenReady: options.whenReady,
+    getCameraInteractionVersion: options.getCameraInteractionVersion,
     frameSearchTarget: options.frameSearchTarget,
   }
 }

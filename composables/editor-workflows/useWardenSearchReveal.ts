@@ -392,6 +392,21 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
       const activeMap = continuousMap.value || store.activeView === 'cluster'
         ? mapControls.clusterMapRef.value
         : mapControls.systemMapRef.value
+      let continuousCameraOwner = continuousMap.value ? activeMap : null
+      let continuousCameraVersion = continuousCameraOwner?.getCameraInteractionVersion?.()
+      const cameraInteractionIsCurrent = (): boolean => {
+        if (!continuousMap.value) return true
+        const currentMap = mapControls.clusterMapRef.value
+        if (!continuousCameraOwner) {
+          if (!currentMap) return true
+          continuousCameraOwner = currentMap
+          continuousCameraVersion = currentMap.getCameraInteractionVersion?.()
+          return true
+        }
+        return currentMap === continuousCameraOwner
+          && (continuousCameraVersion === undefined
+            || currentMap?.getCameraInteractionVersion?.() === continuousCameraVersion)
+      }
       activeMap?.cancelActiveGesture()
       const chartSessionMatches = target.kind === 'system' && getChartSession()?.systemId === target.systemId
       const entityDraft = getEntitySession()
@@ -406,7 +421,9 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
       })
       if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
       if (!accepted) return { status: 'rejected', reason: 'guard' }
-      if (searchContextGeneration !== startingGeneration) return { status: 'rejected', reason: 'stale' }
+      if (searchContextGeneration !== startingGeneration || !cameraInteractionIsCurrent()) {
+        return { status: 'rejected', reason: 'stale' }
+      }
 
       const latestWorkspace = workspace.value
       if (!searchTargetExists(latestWorkspace, target)) return { status: 'rejected', reason: 'unavailable' }
@@ -489,12 +506,17 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
     }
 
     const destinationMap = searchDestinationMap(target)
+    if (continuousMap.value && !continuousCameraOwner && destinationMap) {
+      continuousCameraOwner = destinationMap
+      continuousCameraVersion = destinationMap.getCameraInteractionVersion?.()
+    }
     if (!destinationMap?.whenReady) {
       return rejectSearchAfterAcceptedState(requestId, target, 'unavailable', acceptedState, markRestored)
     }
     const destinationReady = await destinationMap.whenReady()
     const workspaceAfterReady = workspace.value
     if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
+    if (!cameraInteractionIsCurrent()) return { status: 'rejected', reason: 'stale' }
     if (!sameSearchWorkspace(workspaceAfterReady, target)) return { status: 'rejected', reason: 'stale' }
     if (!searchTargetExists(workspaceAfterReady, target)) {
       return rejectSearchAfterAcceptedState(requestId, target, 'unavailable', acceptedState, markRestored)
@@ -517,6 +539,7 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
       ? await options.waitForSearchPresentation(presentationController.signal)
       : 'settled'
     if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
+    if (!cameraInteractionIsCurrent()) return { status: 'rejected', reason: 'stale' }
     const workspaceAfterPresentation = workspace.value
     if (!sameSearchWorkspace(workspaceAfterPresentation, target)) return { status: 'rejected', reason: 'stale' }
     if (!searchTargetExists(workspaceAfterPresentation, target)) {
@@ -532,6 +555,7 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
 
     await nextTick()
     if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
+    if (!cameraInteractionIsCurrent()) return { status: 'rejected', reason: 'stale' }
     const workspaceAfterPresentationTick = workspace.value
     if (!sameSearchWorkspace(workspaceAfterPresentationTick, target)) return { status: 'rejected', reason: 'stale' }
     if (!searchTargetExists(workspaceAfterPresentationTick, target)) {
@@ -553,6 +577,7 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
     if (!ownsSearchDestinationMap(target, destinationMap)) {
       return rejectSearchAfterAcceptedState(requestId, target, 'stale', acceptedState, markRestored)
     }
+    if (!cameraInteractionIsCurrent()) return { status: 'rejected', reason: 'stale' }
 
     const framed = destinationMap.frameSearchTarget?.(target) ?? false
     const workspaceAfterFrame = workspace.value

@@ -319,6 +319,10 @@ export interface MapNavigationHandle extends MapImageExporter {
   revealHistoryTarget?(target: MapHistoryTarget, usableRect?: SvgViewportRect): boolean
   /** Resolves after this canvas has restored its initial visit and is ready for navigation. */
   whenReady?(): Promise<boolean>
+  /** Camera input generation used to abandon a pending Search frame after manual movement. */
+  getCameraInteractionVersion?(): number
+  /** Records a toolbar-driven camera change as user input without tagging programmatic Search framing. */
+  noteManualCameraInteraction?(): void
   /** Frames a search destination inside the current obstruction-aware map area. */
   frameSearchTarget?(target: SearchTarget): boolean
   /** Centers the current independent Inspector target inside the unobstructed map area. */

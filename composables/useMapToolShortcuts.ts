@@ -16,7 +16,7 @@ interface MapToolShortcutOptions {
   focusActiveMap(): void
 }
 
-const mapRootSelector = 'svg.cluster-map-svg, svg.system-map-svg'
+const mapRootSelector = 'svg.cluster-map-svg, svg.system-map-svg, svg.continuous-warden-map-svg'
 const mapMarkSelector = '.cluster-system-node, .cluster-route, .system-object, .orbit-hit-target, .continuous-warden-object, .continuous-warden-orbit-target'
 
 export function mapModeForShortcut(key: string, continuousMapEnabled = false): MapToolMode | null {

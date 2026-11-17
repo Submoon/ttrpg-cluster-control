@@ -171,6 +171,7 @@ export function useEditorMapControls(
     const map = activeMapHandle()
     if (!map || !Number.isFinite(percentage)) return
     map.dismissSearchLocator?.()
+    map.noteManualCameraInteraction?.()
     const viewport = map.getViewport()
     map.setViewport({ ...viewport, k: Math.max(minimumZoomScale.value, Math.min(MAP_ZOOM_MAX_SCALE, percentage / 100)) })
   }

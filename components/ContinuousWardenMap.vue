@@ -180,6 +180,8 @@ import {
   type ContinuousWardenSystemProjection,
 } from '../utils/continuous-map-projection'
 import { clusterSystemPosition } from '../utils/cluster-map-geometry'
+import { minimumHistoryRevealViewport, rotatedEllipseBounds } from '../utils/continuous-map-history-reveal'
+import type { ClientRectBounds } from '../utils/map-usable-area'
 import { createMapTouchNavigation } from './maps/map-touch-navigation'
 import { exportMapImage, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
@@ -206,6 +208,7 @@ const props = defineProps<{
   moveTargeting: boolean
   touchNavigation?: boolean
   initialViewport: MapViewport | null
+  getUsableClientRect?: () => ClientRectBounds | undefined
 }>()
 
 const emit = defineEmits<{
@@ -510,16 +513,25 @@ function preserveFocusBeforeDetailCollapse(nextDetailSystemIds: ReadonlySet<stri
   if (typeof document === 'undefined' || typeof Element === 'undefined') return
   const focusedMark = document.activeElement
   if (!(focusedMark instanceof Element)) return
-  const objectMark = focusedMark.closest<SVGElement>('.continuous-warden-object[data-system-id]')
-  const systemId = objectMark?.getAttribute('data-system-id')
-  if (!objectMark || !systemId || nextDetailSystemIds.has(systemId)) return
+  const focusedEntity = focusedMark.closest<SVGElement>(
+    '.continuous-warden-object[data-system-id], .continuous-warden-orbit-target[data-system-id]',
+  )
+  const systemId = focusedEntity?.getAttribute('data-system-id')
+  if (!focusedEntity || !systemId || nextDetailSystemIds.has(systemId)) return
   const capturedGeneration = ++focusFallbackGeneration
   void nextTick(() => {
-    if (capturedGeneration !== focusFallbackGeneration || objectMark.isConnected) return
+    if (capturedGeneration !== focusFallbackGeneration || focusedEntity.isConnected) return
     const currentFocus = document.activeElement
     if (currentFocus !== document.body && currentFocus !== svgElement.value && currentFocus !== focusedMark) return
     const visibleName = [...(svgElement.value?.querySelectorAll<SVGElement>('.continuous-warden-name-target[data-system-id]') ?? [])]
-      .find(candidate => candidate.getAttribute('data-system-id') === systemId)
+      .find((candidate) => {
+        if (candidate.getAttribute('data-system-id') !== systemId || candidate.getClientRects().length === 0) return false
+        const usable = props.getUsableClientRect?.()
+        if (!usable) return false
+        const bounds = candidate.getBoundingClientRect()
+        return bounds.left >= usable.left && bounds.top >= usable.top
+          && bounds.right <= usable.right && bounds.bottom <= usable.bottom
+      })
     if (visibleName) visibleName.focus({ preventScroll: true })
     else focusMap()
   })
@@ -622,11 +634,17 @@ function frameEntityTarget(
   const center = { x: targetPoint.x + delta.x, y: targetPoint.y + delta.y }
   const object = kind === 'object' ? projection.objects.find(candidate => candidate.id === entityId) : undefined
   const orbit = kind === 'orbit' ? projection.orbits.find(candidate => candidate.id === entityId) : undefined
-  const halfWidth = object
-    ? Math.max(18, object.name.length * 3.6, object.locationKey.length * 2.8)
-    : Math.max(18, orbit?.sceneRadii.horizontal ?? 18)
-  const halfHeight = object ? 27 : Math.max(18, orbit?.sceneRadii.vertical ?? 18)
-  const bounds = { x: center.x - halfWidth, y: center.y - halfHeight, width: halfWidth * 2, height: halfHeight * 2 }
+  const orbitBounds = orbit
+    ? rotatedEllipseBounds(center, orbit.sceneRadii, orbit.rotation, 2)
+    : null
+  const halfWidth = object ? Math.max(18, object.name.length * 3.6, object.locationKey.length * 2.8) : 18
+  const halfHeight = object ? 27 : 18
+  const bounds = orbitBounds ?? {
+    x: center.x - halfWidth,
+    y: center.y - halfHeight,
+    width: halfWidth * 2,
+    height: halfHeight * 2,
+  }
   const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
   if (!rect) return false
   const fitted = fitMapViewport(bounds, rect, minimumZoomScale.value)
@@ -703,11 +721,57 @@ watch(() => props.inspectedTarget, (target) => {
 }, { flush: 'sync' })
 
 function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportRect): boolean {
-  if (target.kind === 'system') return frameSystem(target.id, usableRect)
-  if (target.kind === 'object' || target.kind === 'orbit') {
-    return frameEntityTarget(target.systemId, target.kind, target.id, usableRect)
+  if (target.kind === 'route') return false
+  const systemId = target.kind === 'system' ? target.id : target.systemId
+  const projection = projections.value.find(candidate => candidate.id === systemId)
+  const element = svgElement.value
+  const rect = normalizeSvgViewportRect(usableRect)
+  if (!projection || !element || !zoomBehavior || !rect) return false
+
+  const delta = anchorDelta(projection)
+  const current = getViewport()
+  let bounds: SvgViewportRect
+  let minimumScale: number | undefined
+  if (target.kind === 'system') {
+    const anchor = { x: projection.anchor.x + delta.x, y: projection.anchor.y + delta.y }
+    bounds = { x: anchor.x - 16, y: anchor.y - 16, width: 32, height: 32 }
+  } else if (target.kind === 'object') {
+    const object = projection.objects.find(candidate => candidate.id === target.id)
+    if (!object) return false
+    const center = { x: object.scenePosition.x + delta.x, y: object.scenePosition.y + delta.y }
+    const halfWidth = Math.max(18, object.name.length * 3.6, object.locationKey.length * 2.8)
+    bounds = { x: center.x - halfWidth, y: center.y - 27, width: halfWidth * 2, height: 54 }
+    if (!detailSystemIds.value.has(projection.id)) {
+      minimumScale = DETAIL_REVEAL_PIXELS
+        / (Math.max(projection.envelope.width, projection.envelope.height) * svgPixelScale.value)
+    }
+  } else if (target.kind === 'orbit') {
+    const orbit = projection.orbits.find(candidate => candidate.id === target.id)
+    if (!orbit) return false
+    const center = { x: orbit.sceneCenter.x + delta.x, y: orbit.sceneCenter.y + delta.y }
+    const orbitBounds = rotatedEllipseBounds(center, orbit.sceneRadii, orbit.rotation, 2)
+    if (!orbitBounds) return false
+    bounds = orbitBounds
+    if (!detailSystemIds.value.has(projection.id)) {
+      minimumScale = DETAIL_REVEAL_PIXELS
+        / (Math.max(projection.envelope.width, projection.envelope.height) * svgPixelScale.value)
+    }
+  } else {
+    return false
   }
-  return false
+
+  const next = minimumHistoryRevealViewport({
+    current,
+    targetBounds: bounds,
+    usableRect: rect,
+    minimumScale,
+    maximumScale: MAP_ZOOM_MAX_SCALE,
+  })
+  if (!next) return false
+  if (Math.abs(next.x - current.x) < 0.01 && Math.abs(next.y - current.y) < 0.01
+    && Math.abs(next.k - current.k) < 0.0001) return true
+  setViewport(next)
+  return true
 }
 
 function zoomBy(factor: number): void {

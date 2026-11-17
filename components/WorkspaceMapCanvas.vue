@@ -2,6 +2,8 @@
   <div
     ref="canvasRoot"
     class="workspace-map-canvas"
+    :data-workspace-id="props.workspace.id"
+    :data-cluster-id="props.workspace.cluster.id"
     @pointerdown.capture="onPointerDownCapture"
     @mousedown.capture="onMouseDownCapture"
     @mouseup.capture="onMouseUpCapture"
@@ -44,6 +46,7 @@
       :cluster-chooser-open="props.clusterChooserOpen ?? false"
       :cluster-move-targeting="props.clusterMoveTargeting ?? false"
       :move-targeting="props.moveTargeting ?? false"
+      :get-usable-client-rect="measureUnobstructedClientRect"
       :initial-viewport="props.initialViewport"
       touch-navigation
       @activate-system="handleSystemActivation"
@@ -253,6 +256,10 @@ function dismissSearchLocator(): void {
   else systemMapRef.value?.dismissSearchLocator()
 }
 
+function noteManualCameraInteraction(): void {
+  cameraInteractionVersion += 1
+}
+
 const matchingOrbitAdjustmentPreview = computed(() => {
   const preview = props.orbitAdjustmentPreview
   const system = props.system
@@ -292,6 +299,7 @@ let suppressNextClick = false
 let suppressClickTimer: ReturnType<typeof setTimeout> | undefined
 let suppressNextContextMenu = false
 let suppressContextMenuTimer: ReturnType<typeof setTimeout> | undefined
+let cameraInteractionVersion = 0
 let pendingRightClickContextMenu: {
   pointerId: number
   target: EventTarget | null
@@ -482,6 +490,7 @@ function onDocumentKeyDownCapture(event: KeyboardEvent): void {
 function onLostPointerCapture(event: PointerEvent): void { orbitInput.onLostPointerCapture(event) }
 
 function onWheelCapture(event: WheelEvent): void {
+  noteManualCameraInteraction()
   pendingRightClickContextMenu = null
   dismissSearchLocator()
   orbitInput.onWheelCapture(event)
@@ -801,6 +810,7 @@ function onWindowPointerMove(event: PointerEvent): void {
   if (!pan.moved && Math.hypot(dx, dy) < 4) return
   const firstPanMove = !pan.moved
   pan.moved = true
+  if (firstPanMove) noteManualCameraInteraction()
   if (firstPanMove && props.activeView === 'cluster') emit('cancel-cluster-preview')
   if (pan.button === 2) {
     if (pendingRightClickContextMenu?.pointerId === pan.id) pendingRightClickContextMenu = null
@@ -994,6 +1004,7 @@ function onTouchStartCapture(event: TouchEvent): void {
   if (orbitInput.isTouchPending() && event.touches.length === 1) return
   if (orbitInput.onTouchStartCapture(event)) return
   if (event.touches.length !== 1) {
+    if (event.touches.length > 1) noteManualCameraInteraction()
     clearLongPress()
     touchStart = null
     touchPanStarted = false
@@ -1057,6 +1068,7 @@ function onTouchMoveCapture(event: TouchEvent): void {
     if (touchStart && touch && !touchPanStarted
       && Math.hypot(touch.clientX - touchStart.x, touch.clientY - touchStart.y) > MAP_TOUCH_PAN_THRESHOLD_PX) {
       touchPanStarted = true
+      noteManualCameraInteraction()
       clearLongPress()
       if (props.activeView === 'cluster') emit('cancel-cluster-preview')
       if (props.activeView === 'system') {
@@ -1167,7 +1179,7 @@ function handleSystemViewportChange(viewport: MapViewport): void {
   emitViewport(viewport)
 }
 
-function measureUnobstructedViewport(): SvgViewportRect | undefined {
+function measureUnobstructedClientRect(): ClientRectBounds | undefined {
   const svg = canvasRoot.value?.querySelector<SVGSVGElement>('svg')
   if (!svg) return undefined
   const svgBounds = svg.getBoundingClientRect()
@@ -1198,8 +1210,13 @@ function measureUnobstructedViewport(): SvgViewportRect | undefined {
     .filter(isUsableClientRect)
     .map(rect => ({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }))
   const usableClientRect = largestUnobstructedClientRect(svgRect, obstructions)
-  if (!usableClientRect) return undefined
-  return clientRectToSvgViewportRect(svg, usableClientRect)
+  return usableClientRect
+}
+
+function measureUnobstructedViewport(): SvgViewportRect | undefined {
+  const svg = canvasRoot.value?.querySelector<SVGSVGElement>('svg')
+  const usableClientRect = measureUnobstructedClientRect()
+  return svg && usableClientRect ? clientRectToSvgViewportRect(svg, usableClientRect) : undefined
 }
 
 function fitMap(usableRect?: SvgViewportRect): void {
@@ -1239,6 +1256,7 @@ function centerInspectedTarget(target: InspectedMapTarget): boolean {
   const map = currentClusterMap()
   const usableRect = measureUnobstructedViewport()
   if (!map || !usableRect) return false
+  noteManualCameraInteraction()
   return map.centerInspectedTarget(target, usableRect)
 }
 
@@ -1379,9 +1397,17 @@ defineExpose({
   getMinimumZoomScale: () => props.activeView === 'cluster'
     ? currentClusterMap()?.getMinimumZoomScale?.() ?? MAP_ZOOM_MIN_SCALE
     : systemMapRef.value?.getMinimumZoomScale() ?? MAP_ZOOM_MIN_SCALE,
+  getCameraInteractionVersion: () => cameraInteractionVersion,
+  noteManualCameraInteraction,
   setViewport: (viewport: MapViewport) => currentMap()?.setViewport(viewport),
-  zoomBy: (factor: number) => currentMap()?.zoomBy(factor),
-  panBy: (dx: number, dy: number) => currentMap()?.panBy(dx, dy),
+  zoomBy: (factor: number) => {
+    noteManualCameraInteraction()
+    currentMap()?.zoomBy(factor)
+  },
+  panBy: (dx: number, dy: number) => {
+    noteManualCameraInteraction()
+    currentMap()?.panBy(dx, dy)
+  },
   revealHistoryTarget: (target: MapHistoryTarget) => {
     const usableRect = props.continuousMap ? measureUnobstructedViewport() : undefined
     return currentMap()?.revealHistoryTarget?.(target, usableRect) ?? false
@@ -1394,7 +1420,10 @@ defineExpose({
     : systemMapRef.value?.prepareSearchLocator(objectId),
   dismissSearchLocator,
   focusMap: () => currentMap()?.focusMap?.(),
-  fitMap,
+  fitMap: () => {
+    noteManualCameraInteraction()
+    fitMap()
+  },
   cancelActiveGesture: () => cancelCanvasGesture(true),
   startViewPan: (event: MouseEvent) => currentMap()?.startViewPan(event),
   moveViewPan: (event: MouseEvent) => currentMap()?.moveViewPan(event),

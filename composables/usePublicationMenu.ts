@@ -57,6 +57,7 @@ export function usePublicationMenu(options: {
       store.selectedSystemId,
       store.clusterSelectedSystemId,
       store.inspectedClusterSystemId,
+      store.inspectedTarget,
       store.mapMode,
     ])
   }
@@ -90,19 +91,32 @@ export function usePublicationMenu(options: {
 
   function isTargetInMapContext(menu: OwnedMenu): boolean {
     if (menu.source !== 'map') return true
+    const canvas = menu.mapCanvas
+    const continuousMap = !!canvas?.querySelector('.continuous-warden-map-svg')
+    if (continuousMap) {
+      return store.activeView === 'cluster'
+        && canvas?.getAttribute('data-workspace-id') === menu.workspaceId
+        && canvas?.getAttribute('data-cluster-id') === menu.clusterId
+    }
     if (menu.target.kind === 'system') return store.activeView === 'cluster'
     return store.activeView === 'system' && store.selectedSystemId === menu.target.systemId
   }
 
   function markerMatchesTarget(menu: OwnedMenu, marker: Element): boolean {
+    if (!isTargetInMapContext(menu)) return false
     if (menu.target.kind === 'system') {
       return marker.matches('.cluster-system-node[data-system-id]')
         && marker.getAttribute('data-system-id') === menu.target.id
     }
 
+    const continuousMap = !!menu.mapCanvas?.querySelector('.continuous-warden-map-svg')
+    if (continuousMap) {
+      return marker.matches('.continuous-warden-object[data-system-id][data-object-id]')
+        && marker.getAttribute('data-system-id') === menu.target.systemId
+        && marker.getAttribute('data-object-id') === menu.target.id
+    }
     const systemMap = menu.mapCanvas?.querySelector('.system-map-svg[data-system-id]')
-    return isTargetInMapContext(menu)
-      && systemMap?.getAttribute('data-system-id') === menu.target.systemId
+    return systemMap?.getAttribute('data-system-id') === menu.target.systemId
       && marker.matches('.system-object[data-object-id]')
       && marker.getAttribute('data-object-id') === menu.target.id
   }
@@ -111,9 +125,12 @@ export function usePublicationMenu(options: {
     const canvas = menu.mapCanvas
     if (!canvas || !isVisible(canvas) || !isTargetInMapContext(menu)) return null
 
+    const continuousMap = canvas.querySelector('.continuous-warden-map-svg') !== null
     const selector = menu.target.kind === 'system'
       ? '.cluster-system-node[data-system-id]'
-      : '.system-object[data-object-id]'
+      : continuousMap
+        ? '.continuous-warden-object[data-system-id][data-object-id]'
+        : '.system-object[data-object-id]'
     return [...canvas.querySelectorAll(selector)].find(marker => markerMatchesTarget(menu, marker)) ?? null
   }
 
