@@ -126,7 +126,9 @@ test('invalid public endpoint references fail closed to the revealed system anch
   const document = publicDocument()
   const origin = document.systems[0]
   if (origin?.disclosure !== 'revealed') throw new Error('Fixture origin must be Revealed.')
-  origin.map.objects[0]!.family = 'CelestialBody'
+  const marker = origin.map.objects[0]
+  if (marker?.disclosure !== 'revealed') throw new Error('Fixture marker must be Revealed.')
+  origin.map.objects[0] = { ...marker, family: 'CelestialBody', subtype: 'planet' }
   const descriptors = projectPlayerContinuousRouteEndpoints(
     document,
     projectPlayerContinuousMap(document).systems,

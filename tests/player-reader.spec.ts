@@ -101,9 +101,8 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
     label: 'Star system',
   })
   const publicSystem = document.systems.find(system => system.disclosure === 'revealed')
-  const publicStation = publicSystem?.disclosure === 'revealed'
-    ? publicSystem.map.objects.find(object => object.label === 'Public Station')
-    : undefined
+  if (!publicSystem) throw new Error('The player fixture must contain a revealed system.')
+  const publicStation = publicSystem.map.objects.find(object => object.label === 'Public Station')
   if (!publicStation || publicStation.disclosure !== 'revealed') {
     throw new Error('The player fixture has no revealed station for cross-system navigation.')
   }

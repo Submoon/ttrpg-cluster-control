@@ -1,4 +1,5 @@
 import { expect, test, type Locator } from './fixtures'
+import { exportJumpCluster, restoreJumpClusterBackup } from '../domain/workspace'
 import campaignFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 import {
@@ -11,7 +12,7 @@ import {
 } from './helpers'
 
 test('the player preview inspects the same public route through its shared document view', async ({ page }) => {
-  const fixture = structuredClone(campaignFixture)
+  const fixture = exportJumpCluster(restoreJumpClusterBackup(structuredClone(campaignFixture)))
   for (const system of fixture.cluster.systems) {
     system.publication = 'revealed'
     for (const object of system.objects) {
