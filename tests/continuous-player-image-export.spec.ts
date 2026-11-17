@@ -99,6 +99,35 @@ test('the entire player image shows published system names and anchor routes, in
   expect(image.width).toBeGreaterThan(2950)
 })
 
+test('an anonymous exit remains above a coincident public anchor in overview and viewport images @pure', () => {
+  const document = publicDocument()
+  const route = document.routes[2]
+  if (route?.destination.kind !== 'unknown') throw new Error('The fixture has no anonymous exit.')
+  route.destination.position = { x: 2600, y: 500 }
+  const drawable = { x: 0, y: 0, width: 3000, height: 800 }
+  const scopes = [
+    { scope: 'cluster' },
+    {
+      scope: 'viewport',
+      snapshot: {
+        camera: { x: 0, y: 0, k: 1 }, drawable, nameViewport: drawable, svgPixelScale: 1,
+        detailSystemIds: ['system-2'], dimmedObjects: null, selectedRouteId: null,
+      },
+    },
+  ] as const
+
+  for (const scope of scopes) {
+    const { svg } = serializeContinuousPlayerMapImage(document, scope, 'print-light')
+    const routeIndex = svg.search(/d="M 400 200 C [^"]+ 2600 500"/)
+    const anchorIndex = svg.lastIndexOf('class="player-continuous-system"')
+    const captionIndex = svg.indexOf('Unknown destination')
+    expect(routeIndex).toBeGreaterThanOrEqual(0)
+    expect(routeIndex).toBeLessThan(anchorIndex)
+    expect(captionIndex).toBeGreaterThan(anchorIndex)
+    expect(svg).toMatch(/transform="translate\(2600 500\) scale\(1\)">[^<]*<text[^>]*>Unknown destination<\/text><circle r="7"/)
+  }
+})
+
 test('a selected player system includes its full detail and bounded incoming and outgoing route segments @pure', () => {
   const image = serializeContinuousPlayerMapImage(
     publicDocument(),

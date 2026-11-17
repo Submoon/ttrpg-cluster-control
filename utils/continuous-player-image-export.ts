@@ -120,14 +120,24 @@ export function serializeContinuousPlayerMapImage(
       snapshot?.dimmedObjects?.systemId === system.id ? dimmed : undefined,
     )),
   ].join('')
+  const destinations = selected ? '' : routes.filter(route => route.unresolved)
+    .map(route => anonymousExitSvg(route.geometry.end, scenePixelScale, paint)).join('')
   const body = [
-    snapshot ? svgElement('g', { transform: `translate(${camera.x} ${camera.y}) scale(${camera.k})` }, scene) : scene,
+    worldLayer(scene, snapshot?.camera),
     ...names.map(name => nameSvg(name, svgPixelScale, paint)),
+    // Keep anonymous exits in front of opaque system marks even when their published coordinates coincide.
+    worldLayer(destinations, snapshot?.camera),
   ].join('')
   const title = selected
     ? `${selected.label} player map`
     : `${document.title} player map — ${snapshot ? 'Current viewport' : 'Entire Cluster'}`
   return rootSvg(frame, svgPixelScale, title, body, paint)
+}
+
+function worldLayer(content: string, camera: MapViewport | undefined): string {
+  return content && camera
+    ? svgElement('g', { transform: `translate(${camera.x} ${camera.y}) scale(${camera.k})` }, content)
+    : content
 }
 
 function automaticNameViewport(systems: readonly PlayerContinuousSystemProjection[], bounds: MapImageBounds): MapImageBounds {
@@ -302,8 +312,7 @@ function routeSvg(
     ...fixedStroke,
   })
   const badge = label ? routeBadgeSvg(geometry.midpoint, label, scale, paint) : ''
-  const exit = unresolved ? anonymousExitSvg(geometry.end, scale, paint) : ''
-  return svgElement('g', { class: 'cluster-route' }, line + badge + exit)
+  return svgElement('g', { class: 'cluster-route' }, line + badge)
 }
 
 function routeBadgeSvg(

@@ -515,7 +515,7 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await revealHarbor()
   const mapFiles = page.getByRole('button', { name: 'Map files', exact: true })
   await mapFiles.click()
-  const viewportScope = page.getByRole('radio', { name: 'Current viewport', exact: true })
+  const viewportScope = page.getByRole('radio', { name: /^current viewport$/i })
   await viewportScope.click()
   await expect(viewportScope).toBeChecked()
   const paintedViewport = await continuousScene.evaluate(element => {
@@ -572,11 +572,29 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await expect(compactDetails).toContainText('Harbor World')
   await expect(continuousMap.locator('[data-map-search-locator]')).toHaveCount(0)
 
-  const nextDocument = { ...document, title: 'Updated Player Reach' }
+  const nextDocument = {
+    ...document,
+    title: 'Updated Player Reach',
+    routes: [...document.routes, {
+      id: 'route-3',
+      jumpLevel: 4,
+      fromSystemId: 'system-3',
+      destination: { kind: 'unknown' as const, position: revealedMarker.position, label: 'Unknown destination' as const },
+    }],
+  }
   const nextHash = new URL(await createPlayerShareUrl(nextDocument, readerUrl)).hash
   await page.evaluate(hash => { window.location.hash = hash }, nextHash)
   await expect(page.getByRole('heading', { name: nextDocument.title, exact: true })).toBeVisible()
   await expect(compactDetails).toBeHidden()
   await expect(publicRouteMark).toHaveAttribute('aria-pressed', 'false')
   await expect(continuousMap.locator('[data-map-search-locator]')).toHaveCount(0)
+
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await continuousMap.getByRole('button', { name: 'Fit player map', exact: true }).click()
+  const anonymousExit = continuousMap.locator('[data-player-destination-route-id="route-3"] > .cluster-exit-mark')
+  await anonymousExit.click()
+  const anonymousRoute = continuousMap.getByRole('button', { name: /jump level 4 .* unknown destination/i })
+  await expect(anonymousRoute).toBeFocused()
+  await expect(anonymousRoute).toHaveAttribute('aria-pressed', 'true')
+  await expect(routeDetails).toContainText('Unknown destination')
 })
