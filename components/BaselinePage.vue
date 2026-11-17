@@ -1476,8 +1476,9 @@ async function chooseObjectCreationType(subtype: CatalogueSubtype): Promise<void
   const startingActiveView = activeView.value
   const startingContinuousMap = continuousMapEnabled.value
   const startingRouteSessionId = routeSession.value?.id ?? null
+  const leavingArmedAdd = Boolean(creationSession.value || clusterAddType.value)
   const resolvingRouteCreation = activeView.value === 'cluster' && continuousMapEnabled.value
-    && clusterAddType.value === 'route'
+    && leavingArmedAdd
     && routeSession.value?.routeId === null
     && hasModifiedRouteSession.value
   let routeMayBeClosed = false

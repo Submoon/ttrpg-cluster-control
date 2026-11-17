@@ -150,6 +150,24 @@ test('continuous Add keeps a definite owner, uses local geometry, and asks befor
   expect(orbitObject?.placement).toMatchObject({ kind: 'orbit', orbitId })
   expect(afterOrbitSystem?.objects).toHaveLength((planetCountBefore.cluster?.systems.find(system => system.id === systemId)?.objects.length ?? 0) + 1)
 
+  const mapObjects = map.locator(`.continuous-warden-object[data-system-id="${systemId}"]`)
+  const afterPointerCount = await mapObjects.count()
+  await orbit.focus()
+  await expect(orbit).toBeFocused()
+  await page.keyboard.down('Enter')
+  try {
+    await expect(mapObjects).toHaveCount(afterPointerCount + 1)
+    await waitForWorkspaceSaved(page)
+    await expect(orbit).toBeFocused()
+    await page.keyboard.down('Enter')
+  } finally {
+    await page.keyboard.up('Enter')
+  }
+  await waitForWorkspaceSaved(page)
+  const afterHeldKey = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(afterHeldKey.cluster?.systems.find(system => system.id === systemId)?.objects)
+    .toHaveLength(afterPointerCount + 1)
+
   await (await selectCatalogueObjectButton(page, 'moon')).click()
   const uniqueEnvelopePoint = await freePointInUniqueEnvelope(map)
   await page.mouse.click(uniqueEnvelopePoint.x, uniqueEnvelopePoint.y)
@@ -194,4 +212,26 @@ test('continuous Add keeps a definite owner, uses local geometry, and asks befor
   await ownerDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(ownerDialog).toBeHidden()
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(afterPinnedAdd)
+})
+
+test('continuous Add protects a modified route draft after a different Cluster Add tool was armed', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 })
+  const { systemName } = await createSingleSystemWorkspace(page)
+  await page.goto('/?map=continuous')
+  await waitForWorkspaceStartup(page)
+
+  await (await dockAction(page, 'Add Jump Route')).click()
+  const inspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
+  const origin = inspector.getByLabel('From system', { exact: true })
+  await selectInspectorOption(origin, systemName)
+  await expect(origin).toContainText(systemName)
+  await (await dockAction(page, 'Add star system')).click()
+
+  await (await selectCatalogueObjectButton(page, 'other')).click()
+  const stay = page.getByRole('button', { name: 'Stay here', exact: true })
+  await expect(stay).toBeVisible()
+  await stay.click()
+
+  await expect(page.getByRole('dialog', { name: 'Name this object type', exact: true })).toBeHidden()
+  await expect(origin).toContainText(systemName)
 })
