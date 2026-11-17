@@ -1,5 +1,5 @@
 <template>
-  <g class="continuous-warden-route-layer" :class="{ 'is-move-enabled': moveEnabled }">
+  <g class="continuous-map-route-layer continuous-warden-route-layer" :class="{ 'is-move-enabled': moveEnabled }">
     <g
       v-for="mark in paintedMarks"
       :key="mark.id"
@@ -28,6 +28,14 @@
         />
         <text class="cluster-route-label" dy="0.34em">{{ mark.label.text }}</text>
       </g>
+      <text
+        v-if="mark.destinationCaption"
+        class="cluster-route-destination-caption"
+        :transform="`translate(${mark.geometry.end.x} ${mark.geometry.end.y}) scale(${1 / scenePixelScale})`"
+        x="8"
+        y="4"
+        aria-hidden="true"
+      >{{ mark.destinationCaption }}</text>
       <template v-if="mark.unresolved">
         <circle
           class="cluster-exit-hit-target"
@@ -61,6 +69,7 @@ interface RouteMark {
   jumpLevel: number
   accessibleLabel: string
   unresolved: boolean
+  destinationCaption?: string
 }
 
 const props = defineProps<{
@@ -109,9 +118,9 @@ function stopAnimation(): void {
 function routeIdAtStroke(event: MouseEvent): string | undefined {
   const stroke = event.target
   if (!(stroke instanceof SVGPathElement) || !stroke.matches('.cluster-route-hit-target')) return
-  const layer = stroke.closest('.continuous-warden-route-layer')
+  const layer = stroke.closest('.continuous-map-route-layer')
   const hits = stroke.ownerDocument.elementsFromPoint(event.clientX, event.clientY)
-    .filter(element => element.matches('.cluster-route-hit-target') && element.closest('.continuous-warden-route-layer') === layer)
+    .filter(element => element.matches('.cluster-route-hit-target') && element.closest('.continuous-map-route-layer') === layer)
   if (hits.length < 2) return
   const matrix = stroke.getScreenCTM()
   if (!matrix) return
@@ -199,6 +208,15 @@ defineExpose({ routeIdAtStroke })
 
 .cluster-route-label {
   font-size: 11px;
+}
+
+.cluster-route-destination-caption {
+  fill: var(--text-secondary);
+  font: 11px Georgia, serif;
+  paint-order: stroke;
+  stroke: var(--map-bg);
+  stroke-width: 4px;
+  pointer-events: none;
 }
 
 .cluster-route:focus {
