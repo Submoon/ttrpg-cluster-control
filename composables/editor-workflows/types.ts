@@ -331,6 +331,8 @@ export interface MapNavigationHandle extends MapImageExporter {
   frameSearchTarget?(target: SearchTarget): boolean
   /** Centers the current independent Inspector target inside the unobstructed map area. */
   centerInspectedTarget?(target: InspectedMapTarget, usableRect?: SvgViewportRect): boolean
+  /** Frames the detached standalone-system preview without changing committed Cluster bounds. */
+  frameStandaloneImportPlacement?(): boolean
   /** Captures a locator attempt for the current map, published only after accepted Search framing. */
   prepareSearchLocator?(objectId: string): (() => void) | undefined
   dismissSearchLocator?(): void

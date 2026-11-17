@@ -1418,6 +1418,12 @@ watch(() => props.mode, () => {
   publicationMenuLease = null
   cancelCanvasGesture(true)
 }, { flush: 'sync' })
+watch(() => props.standaloneImportPlacementEnabled, (enabled, wasEnabled) => {
+  if (!wasEnabled || enabled) return
+  clearLongPress()
+  clearPointerLongPress()
+  for (const sequence of livePointerSequences.values()) sequence.cancelledRelease = true
+}, { flush: 'sync' })
 watch(() => props.creationType, () => {
   pendingRightClickContextMenu = null
   orbitInput.cancel()
