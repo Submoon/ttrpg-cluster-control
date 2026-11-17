@@ -1,6 +1,6 @@
 ---
 title: "Export all three player map image scopes"
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
