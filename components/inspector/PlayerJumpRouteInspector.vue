@@ -1,8 +1,7 @@
 <template>
   <section class="player-jump-route-inspector" aria-label="Jump Route details">
     <div class="player-jump-route-inspector-body">
-      <span class="section-kicker">JUMP ROUTE / PLAYER VIEW</span>
-      <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">SYSTEM CONNECTIONS</span>
+      <span class="section-kicker">JUMP ROUTE</span>
       <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere]">Jump Level {{ props.route.jumpLevel }}</h2>
       <dl class="player-jump-route-endpoints">
         <div>
@@ -14,9 +13,6 @@
           <dd>{{ props.route.destinationLabel }}</dd>
         </div>
       </dl>
-      <p v-if="props.route.unresolved" class="player-jump-route-unknown">
-        The destination is not identified in the player view.
-      </p>
     </div>
     <footer class="player-jump-route-inspector-footer" aria-label="Jump Route actions">
       <UButton block class="w-full justify-center" color="primary" aria-label="Center selected Jump Route" @click="emit('center')">
@@ -61,7 +57,6 @@ const emit = defineEmits<{ center: [] }>()
 .player-jump-route-endpoints div { min-width: 0; }
 .player-jump-route-endpoints dt { color: var(--text-muted); font-size: .75rem; }
 .player-jump-route-endpoints dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
-.player-jump-route-unknown { color: var(--text-secondary); font-size: .85rem; }
 
 .player-jump-route-inspector-footer {
   display: flex;

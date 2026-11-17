@@ -537,4 +537,20 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await centerRoute.click()
   await expect(continuousMap.locator('.player-continuous-map-scene')).toBeFocused()
   await expect.poll(() => playerRouteFitsViewport(publicRouteMark.locator('.cluster-route-line'))).toBe(true)
+
+  await continuousSearch.click()
+  const compactSearch = page.getByRole('dialog', { name: 'Search player map', exact: true })
+  await compactSearch.getByRole('combobox').fill('Harbor World')
+  await compactSearch.getByRole('option', { name: /Harbor World/ }).click()
+  const compactDetails = page.getByRole('dialog', { name: 'Player details', exact: true })
+  await expect(compactDetails).toContainText('Harbor World')
+  await expect(continuousMap.locator('[data-map-search-locator]')).toHaveCount(0)
+
+  const nextDocument = { ...document, title: 'Updated Player Reach' }
+  const nextHash = new URL(await createPlayerShareUrl(nextDocument, readerUrl)).hash
+  await page.evaluate(hash => { window.location.hash = hash }, nextHash)
+  await expect(page.getByRole('heading', { name: nextDocument.title, exact: true })).toBeVisible()
+  await expect(compactDetails).toBeHidden()
+  await expect(publicRouteMark).toHaveAttribute('aria-pressed', 'false')
+  await expect(continuousMap.locator('[data-map-search-locator]')).toHaveCount(0)
 })
