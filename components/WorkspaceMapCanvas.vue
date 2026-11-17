@@ -1228,7 +1228,7 @@ function fitMap(usableRect?: SvgViewportRect): void {
   if (rect) map.fitMap(rect)
 }
 
-/** Fits the whole cluster or one visible system node inside the post-overlay usable map area. */
+/** Frames a Search destination inside the measured post-overlay usable map area. */
 function frameSearchTarget(target: SearchTarget): boolean {
   const usableRect = measureUnobstructedViewport()
   if (!usableRect) return false
