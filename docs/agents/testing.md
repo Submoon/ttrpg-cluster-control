@@ -14,17 +14,15 @@ Test a behavior at the narrowest existing boundary that can reproduce its failur
 
 Do not duplicate a deterministic matrix in full browser journeys when domain or controller tests can own it. Retain the browser check that proves the UI is wired to that behavior. If two boundaries assert related outcomes, name the distinct failure each one would catch.
 
-Start a browser coverage review by selecting the smallest set of journeys that exercises the important browser and application boundaries. Keep another journey only when it demonstrates a different failure that matters to a user. When several data values, viewports, or modes exercise the same branch, use a representative case. Keep a separate variant when its interaction, responsive layout, or state transition changes the failure it can expose.
+Build most coverage with unit tests for domain rules and focused controller tests for application behavior. Keep the browser suite centered on a small set of standard user journeys, such as creating and reopening a workspace, editing a map, restoring a backup, and publishing a player view. Give each journey a clear starting state, a normal UI action, and an observable outcome.
 
 ### Browser coverage for a feature or fix
 
-Start with existing coverage. A change can need zero new browser cases when the relevant journey already asserts its outcome or a domain or controller test can catch the regression. For an important new browser behavior, add one representative happy path when appropriate and at most two failure or edge cases that protect distinct important outcomes. Apply the same budget to bug fixes and assert the exact action and outcome that regressed.
+Start with existing coverage. Reuse a standard journey when it already exercises the entry point or can show the changed outcome with a focused assertion. Cover validation branches, alternate data, and error handling in unit or controller tests. Add a separate browser scenario when it proves a distinct important failure that requires browser behavior or real application wiring, such as native gesture arbitration or IndexedDB recovery.
 
-Keep individual controls and intermediate steps within the relevant journey. Cover business rules, validation combinations and state or data permutations at the domain or controller boundary. Expand input, state, role or browser matrices only when explicitly requested. Before adding a scenario, identify the regression it would catch beyond existing coverage and why real browser execution is necessary. Reuse a suitable owner when the assertion belongs to its existing behavior.
+For a bug fix, choose the lowest boundary that can reproduce the actual failure. Keep individual controls and intermediate steps within the relevant journey. Select representative inputs, viewports, and tool modes unless another variant can expose a different failure. Keep each journey focused on one user objective so that distinct actions can fail independently.
 
-The numerical budget is a repository policy. The published guidance favors observable user behavior, isolated browser contexts, resilient locators and assertions that wait for the outcome. [Playwright best practices](https://playwright.dev/docs/best-practices) and [Playwright browser isolation](https://playwright.dev/docs/browser-contexts).
-
-Keep the suite at 100 browser-backed cases or fewer, including the development-storage case. Run `npm run check:browser-budget` to see the same project counts CI enforces. The command discovers cases without opening a browser or starting an app. Before adding a case near the limit, review existing coverage for the behavior and retain the representative browser interaction. The budget leaves domain and controller coverage free to reflect the important deterministic rules.
+Use case counts and runtime to spot suites that need review. Decide what to retain by the user outcome, the distinct regression it catches, and the boundary needed to prove it. [Playwright best practices](https://playwright.dev/docs/best-practices) and [Playwright browser isolation](https://playwright.dev/docs/browser-contexts).
 
 ## Permanent behavior and temporary visual checks
 

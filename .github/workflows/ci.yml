@@ -112,9 +112,6 @@ jobs:
         run: |
           node --input-type=module -e "import { readFileSync } from 'node:fs'; const { version } = JSON.parse(readFileSync('node_modules/@playwright/test/package.json', 'utf8')); if (version !== process.env.PLAYWRIGHT_IMAGE_VERSION) { console.error('Playwright image/package mismatch:', process.env.PLAYWRIGHT_IMAGE_VERSION, version); process.exit(1); } console.log('Playwright image and package version:', version);"
 
-      - name: Enforce native Playwright browser case budget
-        run: npm run check:browser-budget
-
       - name: Check Markdown links and headings across the documentation corpus
         run: node scripts/ci/check-markdown-links.mjs
 
