@@ -72,28 +72,15 @@
         <p class="inspector-intro m-0 text-sm">The parent system must be Revealed before players can open its map.</p>
         <fieldset class="entity-inspector-fields" :disabled="!objectSession || props.saving">
           <UFormField label="Marker color" :error="fieldError('markerColor')">
-            <div class="flex min-w-0 flex-wrap items-center gap-2">
-              <UInput
-                :id="controlId('markerColor')"
-                :model-value="objectDraft.markerColor ?? defaultMarkerColor"
-                class="w-16 shrink-0"
-                type="color"
-                @update:model-value="value => objectDraft.markerColor = String(value ?? '')"
-              />
-              <span class="text-sm text-[var(--text-secondary)]" role="status">
-                {{ objectDraft.markerColor === null ? 'Default' : 'Custom' }}
-              </span>
-              <UButton
-                class="workspace-control"
-                color="neutral"
-                variant="outline"
-                size="xs"
-                type="button"
-                @click="objectDraft.markerColor = objectDraft.markerColor === null ? defaultMarkerColor : null"
-              >
-                {{ objectDraft.markerColor === null ? 'Customize marker color' : 'Use default color' }}
-              </UButton>
-            </div>
+            <MarkerColorField
+              :model-value="objectDraft.markerColor"
+              :default-color="defaultMarkerColor"
+              :trigger-id="controlId('markerColor')"
+              :hex-input-id="controlId('markerColor-hex')"
+              :error="fieldError('markerColor')"
+              :disabled="!objectSession || props.saving"
+              @update:model-value="objectDraft.markerColor = $event"
+            />
           </UFormField>
           <UFormField v-if="selectedObject.family === 'Other'" label="Type label" :error="fieldError('subtype')">
             <UInput
@@ -389,6 +376,7 @@ import { objectDraftValuesFor } from '../../composables/editor-workflows/entity-
 import { catalogueFamilyLabel, catalogueSubtypeLabel } from '../../utils/catalogue-labels'
 import { objectMark } from '../../utils/catalogue-marks'
 import { useEditorCommands } from '../../composables/editor-workflows/editor-command-context'
+import MarkerColorField from './MarkerColorField.vue'
 import WorkspaceFeedback from '../WorkspaceFeedback.vue'
 
 const props = defineProps<{
