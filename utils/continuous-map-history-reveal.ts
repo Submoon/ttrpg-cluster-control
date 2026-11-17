@@ -30,7 +30,7 @@ export function minimumHistoryRevealViewport(options: MinimumHistoryRevealViewpo
   }
 }
 
-/** Centers a target in the usable area while retaining scale unless reveal needs to increase it. */
+/** Centers a target at its largest feasible scale while preserving the current scale when it fits. */
 export function centerMapTargetViewport(options: MinimumHistoryRevealViewportOptions): MapViewport | null {
   const { current, targetBounds, usableRect } = options
   if (![current.x, current.y, current.k, targetBounds.x, targetBounds.y, targetBounds.width, targetBounds.height,
@@ -42,7 +42,11 @@ export function centerMapTargetViewport(options: MinimumHistoryRevealViewportOpt
   if (!Number.isFinite(maximumScale) && maximumScale !== Number.POSITIVE_INFINITY) return null
   const minimumScale = options.minimumScale ?? current.k
   if (!Number.isFinite(minimumScale) || minimumScale <= 0 || maximumScale <= 0) return null
-  const k = Math.max(current.k, Math.min(maximumScale, minimumScale))
+  const horizontalFitScale = targetBounds.width > 0 ? usableRect.width / targetBounds.width : Number.POSITIVE_INFINITY
+  const verticalFitScale = targetBounds.height > 0 ? usableRect.height / targetBounds.height : Number.POSITIVE_INFINITY
+  const fitCeiling = Math.min(maximumScale, horizontalFitScale, verticalFitScale)
+  if (!Number.isFinite(fitCeiling) || fitCeiling <= 0) return null
+  const k = Math.max(Math.min(current.k, fitCeiling), Math.min(minimumScale, fitCeiling))
   const targetCenterX = targetBounds.x + targetBounds.width / 2
   const targetCenterY = targetBounds.y + targetBounds.height / 2
   return {
@@ -50,6 +54,44 @@ export function centerMapTargetViewport(options: MinimumHistoryRevealViewportOpt
     y: usableRect.y + usableRect.height / 2 - targetCenterY * k,
     k,
   }
+}
+
+/** Keeps the Cluster camera if any anchor is visible; otherwise reveals its nearest anchor at current scale. */
+export function revealNearestAnchorViewport(options: {
+  current: MapViewport
+  anchorBounds: readonly SvgViewportRect[]
+  usableRect: SvgViewportRect
+}): MapViewport | null {
+  const { current, anchorBounds, usableRect } = options
+  if (!anchorBounds.length) return null
+  if (anchorBounds.some(bounds => targetIntersectsViewport(bounds, current, usableRect))) return current
+
+  let nearest: MapViewport | null = null
+  let nearestDistance = Number.POSITIVE_INFINITY
+  for (const targetBounds of anchorBounds) {
+    const candidate = minimumHistoryRevealViewport({ current, targetBounds, usableRect })
+    if (!candidate) continue
+    const distance = (candidate.x - current.x) ** 2 + (candidate.y - current.y) ** 2
+    if (distance < nearestDistance) {
+      nearest = candidate
+      nearestDistance = distance
+    }
+  }
+  return nearest
+}
+
+function targetIntersectsViewport(
+  targetBounds: SvgViewportRect,
+  current: MapViewport,
+  usableRect: SvgViewportRect,
+): boolean {
+  const left = current.x + targetBounds.x * current.k
+  const top = current.y + targetBounds.y * current.k
+  const right = left + targetBounds.width * current.k
+  const bottom = top + targetBounds.height * current.k
+  return [left, top, right, bottom].every(Number.isFinite)
+    && right > usableRect.x && left < usableRect.x + usableRect.width
+    && bottom > usableRect.y && top < usableRect.y + usableRect.height
 }
 
 function minimumAxisTranslation(
@@ -72,8 +114,8 @@ function minimumAxisTranslation(
   }
 
   // An oversized target only needs to intersect the usable area to count as revealed.
-  if (projectedEnd < usableStart) return usableStart - targetStart * scale
-  if (projectedStart > usableEnd) return usableEnd - targetStart * scale
+  if (projectedEnd < usableStart) return usableStart + 1 - targetEnd * scale
+  if (projectedStart > usableEnd) return usableEnd - 1 - targetStart * scale
   return translation
 }
 

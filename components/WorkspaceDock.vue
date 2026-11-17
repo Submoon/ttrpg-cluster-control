@@ -129,7 +129,8 @@
         @cancel="emit('cancel-orbit-center-move')"
       />
       <p id="workspace-map-tool-shortcut-help" class="sr-only" role="note">
-        Focus the map or a map item to use these shortcuts: N Navigate, S Select, M Move, and A open Add. Text entry, map controls, and dialogs keep their own keys.
+        <template v-if="props.continuousMap">Focus the map or a map item to use these shortcuts: S Select, M Move, and A open Add. Text entry, map controls, and dialogs keep their own keys.</template>
+        <template v-else>Focus the map or a map item to use these shortcuts: N Navigate, S Select, M Move, and A open Add. Text entry, map controls, and dialogs keep their own keys.</template>
       </p>
     </div>
   </nav>

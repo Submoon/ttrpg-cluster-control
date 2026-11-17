@@ -183,6 +183,7 @@ import { clusterSystemPosition } from '../utils/cluster-map-geometry'
 import {
   centerMapTargetViewport,
   minimumHistoryRevealViewport,
+  revealNearestAnchorViewport,
   rotatedEllipseBounds,
 } from '../utils/continuous-map-history-reveal'
 import type { ClientRectBounds } from '../utils/map-usable-area'
@@ -605,7 +606,7 @@ function fitMap(usableRect?: SvgViewportRect): void {
   if (fitted) setViewport(fitted)
 }
 
-function frameSystem(systemId: string, usableRect?: SvgViewportRect, centerTarget = false): boolean {
+function frameSystem(systemId: string, usableRect?: SvgViewportRect): boolean {
   const projection = projections.value.find(candidate => candidate.id === systemId)
   const element = svgElement.value
   if (!projection || !element || !zoomBehavior) return false
@@ -613,21 +614,20 @@ function frameSystem(systemId: string, usableRect?: SvgViewportRect, centerTarge
   const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
   if (!rect) return false
   const current = getViewport()
-  const targetBounds = centerTarget
-    ? {
-        ...projection.envelope,
-        x: projection.envelope.x + delta.x,
-        y: projection.envelope.y + delta.y,
-      }
-    : {
-        x: projection.anchor.x + delta.x - 16,
-        y: projection.anchor.y + delta.y - 16,
-        width: 32,
-        height: 32,
-      }
-  const next = centerTarget
-    ? centerMapTargetViewport({ current, targetBounds, usableRect: rect })
-    : minimumHistoryRevealViewport({ current, targetBounds, usableRect: rect })
+  const targetBounds = {
+    ...projection.envelope,
+    x: projection.envelope.x + delta.x,
+    y: projection.envelope.y + delta.y,
+  }
+  const detailScaleFloor = (detailSystemIds.value.has(projection.id) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS)
+    / (Math.max(projection.envelope.width, projection.envelope.height) * svgPixelScale.value)
+  const next = centerMapTargetViewport({
+    current,
+    targetBounds,
+    usableRect: rect,
+    minimumScale: detailScaleFloor,
+    maximumScale: MAP_ZOOM_MAX_SCALE,
+  })
   if (!next) return false
   if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
     || Math.abs(next.k - current.k) >= 0.0001) setViewport(next)
@@ -704,7 +704,7 @@ function centerInspectedTarget(target: InspectedMapTarget, usableRect?: SvgViewp
     fitMap(usableRect)
     return true
   }
-  if (target.kind === 'system') return frameSystem(target.systemId, usableRect, true)
+  if (target.kind === 'system') return frameSystem(target.systemId, usableRect)
   if (target.kind === 'object' || target.kind === 'orbit') {
     return frameEntityTarget(
       target.systemId,
@@ -800,12 +800,20 @@ function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportR
 }
 
 function revealHistoryCluster(usableRect?: SvgViewportRect): boolean {
-  const bounds = sceneBounds.value
   const element = svgElement.value
-  if (!bounds || !element || !zoomBehavior) return false
+  if (projections.value.length === 0 || !element || !zoomBehavior) return false
   const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
   if (!rect) return false
-  fitMap(rect)
+  const anchorBounds = projections.value.map((projection) => {
+    const delta = anchorDelta(projection)
+    const anchor = { x: projection.anchor.x + delta.x, y: projection.anchor.y + delta.y }
+    return { x: anchor.x - 16, y: anchor.y - 16, width: 32, height: 32 }
+  })
+  const current = getViewport()
+  const next = revealNearestAnchorViewport({ current, anchorBounds, usableRect: rect })
+  if (!next) return false
+  if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
+    || Math.abs(next.k - current.k) >= 0.0001) setViewport(next)
   return true
 }
 

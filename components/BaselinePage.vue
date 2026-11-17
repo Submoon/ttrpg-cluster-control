@@ -112,6 +112,7 @@
                 />
                 <WorkspaceMapHelp
                   v-model:open="helpOpen"
+                  :continuous-map="continuousMapEnabled"
                   @active-change="helpOwnsFocus = $event"
                 />
               </template>

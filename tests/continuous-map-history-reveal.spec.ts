@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test'
-import { centerMapTargetViewport, minimumHistoryRevealViewport, rotatedEllipseBounds } from '../utils/continuous-map-history-reveal'
+import {
+  centerMapTargetViewport,
+  minimumHistoryRevealViewport,
+  revealNearestAnchorViewport,
+  rotatedEllipseBounds,
+} from '../utils/continuous-map-history-reveal'
 import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
 
 test('history reveal keeps an already visible target camera unchanged @pure', () => {
@@ -25,7 +30,15 @@ test('history reveal exposes the near edge of an oversized target with minimum p
     current: { x: 0, y: 0, k: 1 },
     targetBounds: { x: 1200, y: 100, width: 1200, height: 40 },
     usableRect: { x: 0, y: 0, width: 960, height: 560 },
-  })).toEqual({ x: -240, y: 0, k: 1 })
+  })).toEqual({ x: -241, y: 0, k: 1 })
+})
+
+test('history reveal exposes the far edge of an oversized target on the left with minimum pan @pure', () => {
+  expect(minimumHistoryRevealViewport({
+    current: { x: 0, y: 0, k: 1 },
+    targetBounds: { x: -2400, y: 100, width: 1200, height: 40 },
+    usableRect: { x: 0, y: 0, width: 960, height: 560 },
+  })).toEqual({ x: 1201, y: 0, k: 1 })
 })
 
 test('Center moves a target into the usable-area center without refitting its scale @pure', () => {
@@ -34,6 +47,36 @@ test('Center moves a target into the usable-area center without refitting its sc
     targetBounds: { x: 300, y: 100, width: 80, height: 48 },
     usableRect: { x: 0, y: 0, width: 960, height: 560 },
   })).toEqual({ x: 208, y: 180.8, k: 0.8 })
+})
+
+test('Center clamps an infeasible reveal floor to the target fit ceiling @pure', () => {
+  expect(centerMapTargetViewport({
+    current: { x: 0, y: 0, k: 0.8 },
+    targetBounds: { x: 100, y: 100, width: 1000, height: 800 },
+    usableRect: { x: 0, y: 0, width: 500, height: 400 },
+    minimumScale: 0.6,
+    maximumScale: 4,
+  })?.k).toBe(0.5)
+})
+
+test('Cluster fallback keeps the current camera for an intersecting anchor @pure', () => {
+  const current = { x: 0, y: 0, k: 1 }
+  expect(revealNearestAnchorViewport({
+    current,
+    anchorBounds: [{ x: 950, y: 100, width: 32, height: 32 }],
+    usableRect: { x: 0, y: 0, width: 960, height: 560 },
+  })).toBe(current)
+})
+
+test('Cluster fallback pans the nearest surviving anchor without changing zoom @pure', () => {
+  expect(revealNearestAnchorViewport({
+    current: { x: 0, y: 0, k: 1 },
+    anchorBounds: [
+      { x: 1200, y: 100, width: 32, height: 32 },
+      { x: 1600, y: 100, width: 32, height: 32 },
+    ],
+    usableRect: { x: 0, y: 0, width: 960, height: 560 },
+  })).toEqual({ x: -272, y: 0, k: 1 })
 })
 
 test('history reveal only raises scale to a missing entity reveal threshold @pure', () => {
