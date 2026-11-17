@@ -14,6 +14,11 @@ import {
 } from '../../domain/workspace'
 import type { ObjectDraft } from './types'
 
+interface ParsedObjectDraft {
+  changes: SystemObjectChanges
+  errors: Record<string, string>
+}
+
 function customValueForDraft(
   value: string,
   definition: CustomFieldDefinition,
@@ -67,30 +72,32 @@ function sameStringSet(first: readonly string[], second: readonly string[]): boo
  * Parses a draft against the current workspace and applies a validated result through the shared placement operation.
  * Session ownership, dependency checks and stale-context handling remain with the editing controller.
  */
-export function validateObjectDraft(
+function parseObjectDraft(
   workspace: LocalWorkspace,
   system: StarSystem,
   object: SystemObject,
   initial: ObjectDraft,
   draft: ObjectDraft,
-): { workspace: LocalWorkspace | null; errors: Record<string, string> } {
+): ParsedObjectDraft {
   const errors: Record<string, string> = {}
   const changes: SystemObjectChanges = {}
   const locationKey = draft.locationKey.trim()
   const name = draft.name.trim()
   const subtype = draft.subtype.trim()
+  const duplicateLocationKey = system.objects.some(candidate => candidate.id !== object.id && candidate.locationKey === locationKey)
   if (!locationKey) errors.locationKey = 'Location key is required.'
-  if (system.objects.some(candidate => candidate.id !== object.id && candidate.locationKey === locationKey)) {
+  else if (duplicateLocationKey) {
     errors.locationKey = `Location key "${locationKey}" is already used in this star system.`
   }
+  else if (locationKey !== initial.locationKey) changes.locationKey = locationKey
   if (!name) errors.name = 'Object name is required.'
-  if (name.length > 80) errors.name = 'Object name must be 80 characters or fewer.'
+  else if (name.length > 80) errors.name = 'Object name must be 80 characters or fewer.'
+  else if (name !== initial.name) changes.name = name
   if (!subtype) errors.subtype = 'Object type is required.'
-  if (object.family !== 'Other' && subtype !== object.subtype) {
+  else if (object.family !== 'Other' && subtype !== object.subtype) {
     errors.subtype = 'This catalogue type cannot be changed.'
   }
-  if (locationKey !== initial.locationKey) changes.locationKey = locationKey
-  if (name !== initial.name) changes.name = name
+  else if (subtype !== initial.subtype) changes.subtype = subtype
   if (draft.description !== initial.description) changes.description = draft.description
   if (draft.playerText !== initial.playerText) changes.playerText = draft.playerText
   const allowedPlayerMaskIds = new Set([
@@ -116,8 +123,6 @@ export function validateObjectDraft(
   } else if (draft.markerColor !== initial.markerColor) {
     changes.markerColor = draft.markerColor
   }
-  if (subtype !== initial.subtype) changes.subtype = subtype
-
   if (draft.placement === 'system') {
     if (draft.placement !== initial.placement) changes.placement = initialSystemPlacement(system)
   } else {
@@ -134,8 +139,9 @@ export function validateObjectDraft(
   const jumpStationId = draft.jumpStationId
   if (jumpStationId && !system.objects.some(candidate => candidate.id === jumpStationId && isPhysicalStation(candidate))) {
     errors.jumpStationId = 'Choose an existing Physical Station.'
+  } else if (jumpStationId !== initial.jumpStationId) {
+    changes.jumpStationId = jumpStationId || null
   }
-  if (jumpStationId !== initial.jumpStationId) changes.jumpStationId = jumpStationId || null
 
   const settings = workspace.objectFieldSettings
   if (draft.atmosphere !== initial.atmosphere) {
@@ -183,16 +189,94 @@ export function validateObjectDraft(
   }
   if (customFieldValuesChanged) changes.customFieldValues = customFieldValues
 
-  if (Object.keys(errors).length) return { workspace: null, errors }
+  return { changes, errors }
+}
+
+/**
+ * Applies a complete object draft only when every field passes validation. Apply uses this result as one
+ * indivisible editor operation, while the Warden preview uses the same parsed changes field by field.
+ */
+export function validateObjectDraft(
+  workspace: LocalWorkspace,
+  system: StarSystem,
+  object: SystemObject,
+  initial: ObjectDraft,
+  draft: ObjectDraft,
+): { workspace: LocalWorkspace | null; errors: Record<string, string> } {
+  const parsed = parseObjectDraft(workspace, system, object, initial, draft)
+  if (Object.keys(parsed.errors).length) return { workspace: null, errors: parsed.errors }
   try {
     return {
-      workspace: updateWorkspaceObject(workspace, system.id, object.id, changes),
-      errors,
+      workspace: updateWorkspaceObject(workspace, system.id, object.id, parsed.changes),
+      errors: parsed.errors,
     }
   } catch (error) {
     return {
       workspace: null,
-      errors: { form: error instanceof Error ? error.message : String(error) },
+      errors: { ...parsed.errors, form: error instanceof Error ? error.message : String(error) },
     }
   }
+}
+
+/**
+ * Projects the valid, independent values from an object edit. Each accepted group still passes through the
+ * shared workspace operation, so its placement, Field applicability, and relationship rules remain in force.
+ */
+export function projectObjectDraft(
+  workspace: LocalWorkspace,
+  system: StarSystem,
+  object: SystemObject,
+  initial: ObjectDraft,
+  draft: ObjectDraft,
+): LocalWorkspace | null {
+  const { changes } = parseObjectDraft(workspace, system, object, initial, draft)
+  let projected = workspace
+  const apply = (candidate: SystemObjectChanges): boolean => {
+    try {
+      projected = updateWorkspaceObject(projected, system.id, object.id, candidate)
+      return true
+    } catch {
+      return false
+    }
+  }
+  const applyField = (key: keyof SystemObjectChanges): void => {
+    if (!Object.prototype.hasOwnProperty.call(changes, key)) return
+    const value = changes[key]
+    apply({ [key]: value } as SystemObjectChanges)
+  }
+
+  applyField('locationKey')
+  applyField('name')
+  applyField('description')
+  applyField('playerText')
+  applyField('playerFieldMasks')
+  applyField('publication')
+  applyField('markerColor')
+  applyField('placement')
+  applyField('jumpStationId')
+
+  const currentCustomValues = () => projected.cluster.systems
+    .find(candidate => candidate.id === system.id)?.objects.find(candidate => candidate.id === object.id)?.customFieldValues
+  const customValueIds = new Set([
+    ...Object.keys(initial.customFieldValues),
+    ...Object.keys(draft.customFieldValues),
+  ])
+  for (const fieldId of customValueIds) {
+    if ((draft.customFieldValues[fieldId] ?? '') === (initial.customFieldValues[fieldId] ?? '')) continue
+    const values = changes.customFieldValues
+    if (!values) continue
+    const nextValues = { ...(currentCustomValues() ?? {}) }
+    if (Object.prototype.hasOwnProperty.call(values, fieldId)) nextValues[fieldId] = values[fieldId]!
+    else delete nextValues[fieldId]
+    apply({ customFieldValues: nextValues })
+  }
+
+  applyField('atmosphere')
+  applyField('portClass')
+  applyField('subtype')
+
+  if (projected === workspace) return null
+  const projectedObject = projected.cluster.systems.find(candidate => candidate.id === system.id)
+    ?.objects.find(candidate => candidate.id === object.id)
+  return projectedObject && JSON.stringify(projectedObject) !== JSON.stringify(object) ? projected : null
 }

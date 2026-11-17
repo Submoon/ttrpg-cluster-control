@@ -21,7 +21,7 @@
       :class="{ 'map-touch-surface': touchNavigation }"
       viewBox="0 0 960 560"
       role="group"
-      :aria-label="`${system.name} star system map`"
+      :aria-label="`${props.presentation?.system.name ?? system.name} star system map`"
       aria-describedby="workspace-map-tool-shortcut-help system-map-keyboard-help"
       :data-system-id="system.id"
       :data-system-object-move-targeting="props.moveTargeting ? 'true' : undefined"
@@ -81,6 +81,7 @@ import {
   type SystemMapEventHandlers,
   type SystemMapRenderer,
 } from './maps/system-map-renderer'
+import type { WardenSystemMapPresentation } from './maps/warden-map-presentation'
 import {
   createMapTouchNavigation,
   type MapTouchPoint,
@@ -93,8 +94,35 @@ import {
 const SYSTEM_OBJECT_BRANCH_FRAME_MAX_SCALE = 2
 const SYSTEM_ORBIT_RING_STROKE_WIDTH = 2
 
+const exportRenderHandlers: SystemMapEventHandlers = {
+  editingGestureChange: () => undefined,
+  selectObject: () => undefined,
+  beginSelectedObjectDrag: () => null,
+  clearObjectSelectionForMove: () => true,
+  isEntityCommandBlocked: () => false,
+  entityCommandBlocked: () => undefined,
+  cancelObjectPlacementPreview: () => undefined,
+  cancelOrbitPlacementPreview: () => undefined,
+  isObjectMoveBlocked: () => false,
+  objectMoveBlocked: () => undefined,
+  objectMoveCandidates: () => undefined,
+  orbitCenterCandidates: () => undefined,
+  selectOrbit: () => undefined,
+  orbitAdjustment: () => undefined,
+  moveObject: () => undefined,
+  moveOrbitCenter: () => undefined,
+  rotateObject: () => undefined,
+  resizeOrbit: () => undefined,
+  rotateOrbit: () => undefined,
+  placeObjectInOrbit: () => undefined,
+  creationTarget: () => undefined,
+  moveTarget: () => undefined,
+  creationDropTarget: () => undefined,
+}
+
 const props = withDefaults(defineProps<{
   system: StarSystem
+  presentation?: WardenSystemMapPresentation | null
   orbitRadii: Record<string, OrbitRadii>
   orbitRotations: Record<string, number>
   objectAngles: Record<string, number>
@@ -161,6 +189,8 @@ const mapGeometry = computed<SystemMapGeometry>(() => ({
   orbitRadii: props.orbitRadii,
   orbitRotations: props.orbitRotations,
 }))
+const presentationSystem = computed(() => props.presentation?.system ?? props.system)
+const presentationGeometry = computed(() => props.presentation?.geometry ?? mapGeometry.value)
 const renderedCreationPreview = computed(() => props.creationPreview?.orbitDrag
   ? null
   : props.creationPreview)
@@ -520,8 +550,46 @@ async function exportImage(format: MapImageFormat, palette: MapImagePalette = 'a
     format,
     props.system.name,
     palette,
-    clone => mapRenderer?.prepareExportClone(clone),
+    props.presentation
+      ? clone => renderAppliedExportScene(clone)
+      : clone => mapRenderer?.prepareExportClone(clone),
   )
+}
+
+/** Rebuilds only the isolated export copy from applied data when the live scene has draft presentation. */
+function renderAppliedExportScene(clone: SVGSVGElement): void {
+  clone.setAttribute('aria-label', `${props.system.name} star system map`)
+  clone.removeAttribute('data-system-object-move-targeting')
+  const renderer = renderSystemMap({
+    element: clone,
+    system: props.system,
+    geometry: mapGeometry.value,
+    appliedSystem: props.system,
+    appliedGeometry: mapGeometry.value,
+    dimmedObjectIds: [],
+    selectedObjectId: null,
+    selectedObjectIds: [],
+    selectedOrbitId: null,
+    creationType: null,
+    creationPreview: null,
+    creationChooserOpen: false,
+    moveTargeting: false,
+    objectPlacementPreviews: new Map(),
+    orbitPlacementPreviews: new Map(),
+    orbitAdjustmentPreview: null,
+    orbitCenterMovePreviews: new Map(),
+    moveEnabled: false,
+    touchNavigation: true,
+    orbitRotationWheelEvents: new WeakSet<Event>(),
+    handlers: exportRenderHandlers,
+    setZoomLevel: () => undefined,
+    onViewportChange: () => undefined,
+  })
+  renderer.prepareExportClone(clone)
+  select(clone).on('.zoom', null).on('click.cluster-target', null)
+  clone.querySelectorAll<SVGElement>('*').forEach(node => {
+    select(node).on('.drag', null).on('.zoom', null).on('click', null).on('keydown', null)
+  })
 }
 
 /**
@@ -609,7 +677,7 @@ function frameObjectBranch(objectId: string, usableRect: SvgViewportRect): boole
   const rect = normalizeSvgViewportRect(usableRect)
   if (!element || !zoomBehavior || !rect) return false
 
-  const branch = resolveSystemObjectBranch(props.system, objectId)
+  const branch = resolveSystemObjectBranch(presentationSystem.value, objectId)
   if (!branch) return false
   const objectMarks = [...element.querySelectorAll<SVGGElement>('.system-object[data-object-id]')]
   const glyphBounds = new Map<string, SvgViewportRect>()
@@ -621,9 +689,9 @@ function frameObjectBranch(objectId: string, usableRect: SvgViewportRect): boole
   }
 
   const measured = measureSystemObjectBranchBounds(
-    props.system,
+    presentationSystem.value,
     objectId,
-    mapGeometry.value,
+    presentationGeometry.value,
     glyphBounds,
     SYSTEM_ORBIT_RING_STROKE_WIDTH,
   )
@@ -668,8 +736,10 @@ function render(preserveNavigation = false): void {
   }
   mapRenderer = renderSystemMap({
     element,
-    system: props.system,
-    geometry: mapGeometry.value,
+    system: presentationSystem.value,
+    geometry: presentationGeometry.value,
+    appliedSystem: props.system,
+    appliedGeometry: mapGeometry.value,
     dimmedObjectIds: props.dimmedObjectIds,
     selectedObjectId: props.selectedObjectId,
     selectedObjectIds: props.selectedObjectIds ?? [],
@@ -720,8 +790,8 @@ function getObjectIdsWithinClientRect(rect: Pick<DOMRect, 'left' | 'top' | 'righ
   const content = element?.querySelector<SVGGElement>('.system-map-content')
   const matrix = content?.getScreenCTM()
   if (!matrix) return []
-  const positions = objectPositions(props.system, mapGeometry.value)
-  return props.system.objects.filter(object => {
+  const positions = objectPositions(presentationSystem.value, presentationGeometry.value)
+  return presentationSystem.value.objects.filter(object => {
     const position = positions.get(object.id)
     if (!position) return false
     const anchor = new DOMPoint(position.x, position.y).matrixTransform(matrix)
@@ -750,6 +820,7 @@ watch(() => props.system, () => {
   }
   render()
 }, { deep: true })
+watch(() => props.presentation, () => render(), { deep: true })
 watch(() => props.orbitRadii, () => render(), { deep: true })
 watch(() => props.orbitRotations, () => render(), { deep: true })
 watch(() => props.objectAngles, () => render(), { deep: true })

@@ -59,6 +59,7 @@
           :publication-busy="props.publicationBusy"
           :selected-system="props.selectedSystem"
           :selected-object="props.selectedObject"
+          :draft-object="props.draftSystem?.objects.find(object => object.id === props.selectedObject?.id)"
           :focus-request="props.objectFocusRequest"
           :focus-enabled="props.inspectorVisible"
           :session="objectSession"
@@ -91,6 +92,8 @@
           :workspace="props.workspace"
           :selected-system="props.selectedSystem"
           :selected-orbit="props.selectedOrbit"
+          :draft-system="props.draftSystem"
+          :draft-orbit="props.draftSystem?.orbits.find(orbit => orbit.id === props.selectedOrbit?.id)"
           :session="orbitSession"
           :has-modified-entity-session="props.hasModifiedEntitySession"
           :has-orbit-placement-preview="props.hasOrbitPlacementPreview"
@@ -158,6 +161,7 @@ const props = defineProps<{
   mode: 'cluster' | 'system'
   workspace: LocalWorkspace
   selectedSystem?: StarSystem
+  draftSystem?: StarSystem
   inspectedClusterSystem?: StarSystem
   selectedObject?: SystemObject
   selectedObjectCount: number

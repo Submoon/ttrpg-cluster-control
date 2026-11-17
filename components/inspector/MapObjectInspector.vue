@@ -1,14 +1,14 @@
 <template>
-  <section v-if="selectedObject" class="entity-inspector" aria-label="Object inspector">
+  <section v-if="selectedObject && presentedObject" class="entity-inspector" aria-label="Object inspector">
     <header class="entity-inspector-header">
       <div class="min-w-0">
-        <p class="section-kicker">{{ catalogueFamilyLabel(selectedObject.family) }}</p>
+        <p class="section-kicker">{{ catalogueFamilyLabel(presentedObject.family) }}</p>
         <h2 class="object-title mt-2 mb-1 [overflow-wrap:anywhere] text-[1.45rem]">
-          <span class="object-mark object-mark-large" aria-hidden="true">{{ objectMark(selectedObject) }}</span>
-          <span>{{ selectedObject.name }}</span>
+          <span class="object-mark object-mark-large" aria-hidden="true">{{ objectMark(presentedObject) }}</span>
+          <span>{{ presentedObject.name }}</span>
         </h2>
         <p class="entity-inspector-subtitle m-0">
-          {{ selectedObject.locationKey }} · {{ catalogueSubtypeLabel(selectedObject) }}
+          {{ presentedObject.locationKey }} · {{ catalogueSubtypeLabel(presentedObject) }}
         </p>
       </div>
       <UButton
@@ -54,7 +54,7 @@
           <div>
             <p class="section-kicker">MAP OBJECT</p>
             <h3 id="object-details-heading">Object details</h3>
-            <span class="entity-inspector-type-chip">{{ catalogueSubtypeLabel(selectedObject) }}</span>
+            <span class="entity-inspector-type-chip">{{ catalogueSubtypeLabel(presentedObject) }}</span>
           </div>
           <UBadge color="neutral" variant="subtle">Built-in</UBadge>
         </div>
@@ -383,6 +383,7 @@ const props = defineProps<{
   workspace: LocalWorkspace
   selectedSystem?: StarSystem
   selectedObject?: SystemObject
+  draftObject?: SystemObject
   focusRequest: ObjectInspectorFocusRequest | null
   focusEnabled: boolean
   session: Extract<EntityInspectorSession, { kind: 'object' }> | null
@@ -417,6 +418,7 @@ const colorMode = useColorMode()
 const defaultMarkerColor = computed(() => colorMode.value === 'dark' ? '#e8eee7' : '#26302c')
 
 const selectedObject = computed(() => props.selectedObject)
+const presentedObject = computed(() => props.draftObject ?? props.selectedObject)
 const selectedSystem = computed(() => props.selectedSystem)
 const objectSession = computed(() => {
   const session = props.session

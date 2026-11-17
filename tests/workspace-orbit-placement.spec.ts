@@ -166,7 +166,6 @@ test('an ambiguous Orbit center drag requires a named host choice before preview
   await expect(page.getByRole('option', { name: 'Unoccupied center', exact: true })).toHaveCount(0)
   await page.getByRole('option', { name: 'A, Primary Star (Star)', exact: true }).click()
   expect(await readInspectorSelection(host)).toBe('A, Primary Star (Star)')
-  await inspector.getByRole('button', { name: 'Preview placement', exact: true }).click()
 
   await expect.poll(async () => Number(await ring.getAttribute('cx'))).toBe(primaryPosition.x)
   await expect.poll(async () => Number(await ring.getAttribute('cy'))).toBe(primaryPosition.y)
@@ -175,6 +174,8 @@ test('an ambiguous Orbit center drag requires a named host choice before preview
   await expectObjectPosition(map, passenger.id, { x: primaryPosition.x, y: primaryPosition.y + 60 })
   await expectObjectPosition(map, nestedObject.id, { x: primaryPosition.x + 46, y: primaryPosition.y + 60 })
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
+  await expect(inspector.getByRole('button', { name: /Apply changes/ })).toBeDisabled()
+  await previewButton.click()
   await inspector.getByRole('button', { name: /Apply changes/ }).click()
 
   const applied = await downloadJson(page, 'Export star system JSON')

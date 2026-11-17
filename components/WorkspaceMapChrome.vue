@@ -253,6 +253,7 @@ const props = withDefaults(defineProps<{
   workspace: LocalWorkspace | null
   activeView: 'cluster' | 'system'
   selectedSystem: StarSystem | null | undefined
+  displayName?: string
   clusterMap: MapImageExporter | null
   systemMap: MapImageExporter | null
   exportError: string
@@ -334,9 +335,9 @@ const selectedSystem = computed(() => props.selectedSystem)
 const activeView = computed(() => props.activeView)
 const hierarchyOpen = computed(() => props.hierarchyOpen)
 const inspectorOpen = computed(() => props.inspectorOpen)
-const contextName = computed(() => activeView.value === 'cluster'
+const contextName = computed(() => props.displayName ?? (activeView.value === 'cluster'
   ? workspace.value?.cluster.name ?? 'Jump Cluster'
-  : selectedSystem.value?.name ?? 'Star System')
+  : selectedSystem.value?.name ?? 'Star System'))
 const creationProgress = computed(() => {
   const session = props.creationSession
   if (!session) return ''

@@ -91,7 +91,7 @@
           </template>
           <template #header>
             <WorkspaceHeader
-              :workspace="workspace"
+              :workspace="wardenDraftWorkspace ?? workspace"
               :active-view="activeView"
               :selected-system="selectedSystem"
               :compact-modal-open="compactPanelPresentationOpen"
@@ -124,6 +124,7 @@
               :workspace="workspace"
               :active-view="activeView"
               :selected-system="selectedSystem"
+              :display-name="activeView === 'cluster' ? wardenDraftWorkspace?.cluster.name : wardenSystem?.name"
               :cluster-map="clusterMapRef"
               :system-map="systemMapRef"
               :export-error="exportError"
@@ -291,7 +292,7 @@
 
           <template #hierarchy>
             <MapHierarchy
-              :workspace="workspace"
+              :workspace="wardenDraftWorkspace ?? workspace"
               :dimmed-object-ids="dimmedMapObjectIds"
               :has-chart-name-draft="hasChartNameDraft"
               :saving="saveState === 'saving'"
@@ -317,6 +318,7 @@
                     :map-key="activeMapKey ?? ''"
                     :initial-viewport="initialViewport"
                     :workspace="workspace"
+                    :draft-workspace="wardenDraftWorkspace"
                     :system="selectedSystem"
                     :selected-system-id="clusterSelectedSystemId"
                     :selected-object-id="selectedObjectId"
@@ -366,6 +368,7 @@
                     :map-key="activeMapKey ?? ''"
                     :initial-viewport="initialViewport"
                     :workspace="workspace"
+                    :draft-workspace="wardenDraftWorkspace"
                     :system="selectedSystem"
                     :selected-system-id="clusterSelectedSystemId"
                     :selected-object-id="selectedObjectId"
@@ -470,6 +473,7 @@
               :workspace="workspace"
               :publication-busy="publicationBusy"
               :selected-system="selectedSystem"
+              :draft-system="wardenSystem"
               :inspected-cluster-system="inspectedClusterSystem"
               :selected-object="selectedObject"
               :selected-object-count="selectedObjectIds.length"
@@ -608,7 +612,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
+import { catalogueTypes, jumpPointsInCluster, projectPlayerCluster, type CatalogueSubtype, type JumpRoute, type ObjectFamily, type Point } from '../domain/workspace'
 import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { EntityCommand, SearchPresentationSettlement, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
 import type { WorkspaceHistoryTraversalContext } from '../composables/editor-workflows/workspace-mutations'
@@ -980,13 +984,19 @@ const {
   inspectedClusterSystem, routeEndpointSummary, showClusterMap, selectSystem,
   selectClusterSystem, selectObject, replaceObjectSelection, toggleObjectSelection, selectOrbit, selectRoute, showChartDetails,
 } = navigation
+const { wardenDraftWorkspace } = workflows
+const wardenWorkspace = computed(() => wardenDraftWorkspace.value ?? workspace.value)
+const wardenSystem = computed(() => wardenDraftWorkspace.value?.cluster.systems.find(system => system.id === selectedSystem.value?.id))
+const wardenFilterSystem = computed(() => wardenSystem.value ?? selectedSystem.value)
+const wardenJumpPoints = computed(() => wardenDraftWorkspace.value && jumpPointsInCluster(wardenDraftWorkspace.value.cluster))
+const wardenRouteSummary = (route: JumpRoute): string => routeEndpointSummary(route, wardenJumpPoints.value ?? undefined)
 const mapTypeFiltersOpen = computed({
   get: () => editorUi.mapTypeFiltersOpen,
   set: open => editorUi.setMapTypeFiltersOpen(open),
 })
 const wardenFilters = useWardenMapFilters({
-  workspace,
-  selectedSystem,
+  workspace: wardenWorkspace,
+  selectedSystem: wardenFilterSystem,
   activeView,
   criteria: filterCriteria.map.criteria,
   fieldOptions: filterCriteria.fieldOptions,
@@ -1155,7 +1165,7 @@ provideEditorCommands({
     selectRoute,
     showClusterMap,
     showChartDetails,
-    routeSummary: routeEndpointSummary,
+    routeSummary: wardenRouteSummary,
   },
   charts: { beginNamesEdit: beginChartNamesEdit },
   cluster: { deleteSystem },

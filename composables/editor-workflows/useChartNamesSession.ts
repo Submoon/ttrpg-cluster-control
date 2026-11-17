@@ -6,6 +6,7 @@ import {
   type PublicationMode,
   type StarSystem,
 } from '../../domain/workspace'
+import { isPublicationMode, maxNameLength, validName, validText } from '../../domain/workspace-validation'
 import type { EditorWorkflowOptions } from './types'
 
 export interface ChartNamesSession {
@@ -237,6 +238,43 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
     }
   }
 
+  /** Reuses chart validation and the domain update for a read-only, captured-target draft projection. */
+  function projectDraft(currentWorkspace: LocalWorkspace): LocalWorkspace | null {
+    const active = session.value
+    if (!active || currentWorkspace.cluster.id !== active.clusterId) return null
+    const system = currentWorkspace.cluster.systems.find(candidate => candidate.id === active.systemId)
+    if (!system) return null
+
+    const safeName = (value: string, label: string, fallback: string): string => {
+      try {
+        return validName(value, label)
+      } catch {
+        return fallback
+      }
+    }
+    let safePlayerTitle = currentWorkspace.cluster.playerTitle
+    try {
+      safePlayerTitle = validText(playerTitle.value, 'Player-facing title', maxNameLength)
+    } catch {
+      // Keep the applied title while other valid chart fields remain available to the preview.
+    }
+
+    const safeClusterName = safeName(clusterName.value, 'Jump Cluster name', currentWorkspace.cluster.name)
+    const safeSystemName = safeName(systemName.value, 'Star system name', system.name)
+    const safePublication = isPublicationMode(publication.value) ? publication.value : system.publication
+    if (safeClusterName === currentWorkspace.cluster.name
+      && safeSystemName === system.name
+      && safePlayerTitle === currentWorkspace.cluster.playerTitle
+      && safePublication === system.publication) return null
+
+    return updateChartDetails(currentWorkspace, active.systemId, {
+      clusterName: safeClusterName,
+      systemName: safeSystemName,
+      playerTitle: safePlayerTitle,
+      publication: safePublication,
+    })
+  }
+
   /** Restores committed chart details for the captured system and discards the session. */
   function discard(expectedId?: number): void {
     const active = session.value
@@ -285,6 +323,7 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
     draftSystemName,
     saveMessage,
     beginAccepted,
+    projectDraft,
     apply,
     submit,
     discard,
