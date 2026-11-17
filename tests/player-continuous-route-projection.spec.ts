@@ -64,6 +64,7 @@ function publicDocument(): PlayerClusterDocument {
         id: 'route-2',
         jumpLevel: 2,
         fromSystemId: 'system-1',
+        fromPointId: 'object-1',
         destination: { kind: 'unknown', position: { x: 340, y: 120 }, label: 'Unknown destination' },
       },
     ],
@@ -96,22 +97,29 @@ test('public route endpoints attach only to independently Revealed Jump Points a
 
 test('anonymous public destinations retain exact authorized geometry and generic labels @pure', () => {
   const document = publicDocument()
-  const descriptors = projectPlayerContinuousRouteEndpoints(
+  const systems = projectPlayerContinuousMap(document).systems
+  const overview = projectPlayerContinuousRouteEndpoints(
     document,
-    projectPlayerContinuousMap(document).systems,
-    new Set(['system-1']),
+    systems,
+    new Set(),
   )
+  const originDetailed = projectPlayerContinuousRouteEndpoints(document, systems, new Set(['system-1']))
 
-  expect(descriptors[1]).toMatchObject({
+  expect(overview[1]).toMatchObject({
     start: { x: 100, y: 200 },
     end: { x: 340, y: 120 },
-    originLabel: 'Vesper',
+    originLabel: 'North Aperture (Vesper)',
     destinationLabel: 'Unknown destination',
     destinationCaption: 'Unknown destination',
-    accessibleLabel: 'Jump Level 2 from Vesper to Unknown destination',
+    accessibleLabel: 'Jump Level 2 from North Aperture (Vesper) to Unknown destination',
     unresolved: true,
   })
-  expect(JSON.stringify(descriptors)).not.toContain('stationId')
+  expect(originDetailed[1]).toMatchObject({
+    start: { x: 60, y: 184 },
+    end: { x: 340, y: 120 },
+    unresolved: true,
+  })
+  expect(JSON.stringify(originDetailed[1])).not.toContain('stationId')
 })
 
 test('invalid public endpoint references fail closed to the revealed system anchor @pure', () => {

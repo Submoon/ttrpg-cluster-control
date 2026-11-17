@@ -37,7 +37,7 @@ export function projectPlayerContinuousRouteEndpoints(
 
     if (route.destination.kind === 'unknown') {
       const destination = route.destination
-      return [descriptor(route, originProjection.anchor, destination.position, null, originLabel,
+      return [descriptor(route, originPoint?.position ?? originProjection.anchor, destination.position, null, originLabel,
         'Unknown destination', true)]
     }
 

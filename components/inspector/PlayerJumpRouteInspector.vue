@@ -15,7 +15,7 @@
         </div>
       </dl>
       <p v-if="props.route.unresolved" class="player-jump-route-unknown">
-        The route continues to an unknown destination beyond the known Jump Cluster.
+        The destination is not identified in the player view.
       </p>
     </div>
     <footer class="player-jump-route-inspector-footer" aria-label="Jump Route actions">
