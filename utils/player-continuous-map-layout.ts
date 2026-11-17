@@ -3,6 +3,7 @@ import type { PlayerInspectionTarget } from './player-inspection'
 import type { MapViewport, SvgViewportRect } from './map-zoom'
 import type { PlayerContinuousSystemProjection } from './player-continuous-map-projection'
 import { fitMapViewport, MAP_ZOOM_MAX_SCALE } from './map-zoom'
+import { continuousMapDetailScale } from './continuous-map-projection'
 import { PLAYER_DETAIL_HIDE_PIXELS, PLAYER_DETAIL_REVEAL_PIXELS } from './player-continuous-map-projection'
 
 export interface PlayerContinuousNameLabel {
@@ -205,7 +206,7 @@ export function playerContinuousTargetMinimumScale(
   const threshold = isDetailed ? PLAYER_DETAIL_HIDE_PIXELS : PLAYER_DETAIL_REVEAL_PIXELS
   const extent = Math.max(envelope.width, envelope.height)
   if (!Number.isFinite(extent) || extent <= 0) return undefined
-  return Math.min(MAP_ZOOM_MAX_SCALE, threshold / (extent * pixelScale))
+  return Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(envelope, pixelScale, threshold))
 }
 
 function namePlacementOffsets(widthPixels: number): Array<{ x: number; y: number }> {

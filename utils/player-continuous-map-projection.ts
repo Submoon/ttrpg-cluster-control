@@ -2,7 +2,7 @@
 import type { PlayerClusterDocument, PlayerSystemMarker } from '../domain/player-projection'
 import type { Point } from '../domain/workspace-model'
 import type { SvgViewportRect } from './map-zoom'
-import { projectContinuousSystemGeometry, type ContinuousWardenSystemProjection } from './continuous-map-projection'
+import { continuousMapDetailScale, projectContinuousSystemGeometry, type ContinuousWardenSystemProjection } from './continuous-map-projection'
 import { playerClusterGeometry, type PlayerRouteGeometry } from './player-cluster-geometry'
 import { CLUSTER_ROUTE_PRESENTATION, clusterRoutePresentationLabel, clusterRoutePresentationLabelWidth } from './cluster-route-presentation'
 
@@ -27,17 +27,20 @@ export const PLAYER_DETAIL_HIDE_PIXELS = 210
 /** Applies each Revealed system's own public envelope threshold with a stable collapse band. */
 export function playerContinuousDetailSystemIds(
   systems: readonly PlayerContinuousSystemProjection[],
-  screenPixelsPerSceneUnit: number,
+  cameraScale: number,
+  svgPixelScale: number,
   currentlyDetailed: ReadonlySet<string>,
 ): Set<string> {
   const next = new Set<string>()
-  if (!Number.isFinite(screenPixelsPerSceneUnit) || screenPixelsPerSceneUnit <= 0) return next
+  if (!(Number.isFinite(cameraScale) && cameraScale > 0 && Number.isFinite(svgPixelScale) && svgPixelScale > 0)) {
+    return next
+  }
 
   for (const system of systems) {
     const envelope = system.geometry?.envelope
     if (!envelope) continue
     const threshold = currentlyDetailed.has(system.id) ? PLAYER_DETAIL_HIDE_PIXELS : PLAYER_DETAIL_REVEAL_PIXELS
-    if (Math.max(envelope.width, envelope.height) * screenPixelsPerSceneUnit >= threshold) next.add(system.id)
+    if (cameraScale >= continuousMapDetailScale(envelope, svgPixelScale, threshold)) next.add(system.id)
   }
   return next
 }

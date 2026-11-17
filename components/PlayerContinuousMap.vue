@@ -367,7 +367,8 @@ function updateDetailReveal(nextCamera: { x: number; y: number; k: number }): vo
   const current = detailSystemIds.value
   detailSystemIds.value = playerContinuousDetailSystemIds(
     projection.value.systems,
-    nextCamera.k * svgPixelScale.value,
+    nextCamera.k,
+    svgPixelScale.value,
     current,
   )
 }

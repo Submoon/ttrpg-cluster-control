@@ -268,10 +268,10 @@ test('player continuous target Center preserves fitting zoom and expands only fo
 
 test('player system detail uses independent public envelope thresholds with collapse hysteresis @pure', () => {
   const projection = projectPlayerContinuousMap(publicDocument())
-  const fitDetail = playerContinuousDetailSystemIds(projection.systems, 1, new Set())
-  const revealedDetail = playerContinuousDetailSystemIds(projection.systems, 2.5, new Set())
-  const retainedDetail = playerContinuousDetailSystemIds(projection.systems, 1.58, new Set(['system-3']))
-  const collapsedDetail = playerContinuousDetailSystemIds(projection.systems, 1.58, new Set())
+  const fitDetail = playerContinuousDetailSystemIds(projection.systems, 1, 1, new Set())
+  const revealedDetail = playerContinuousDetailSystemIds(projection.systems, 2.5, 1, new Set())
+  const retainedDetail = playerContinuousDetailSystemIds(projection.systems, 1.58, 1, new Set(['system-3']))
+  const collapsedDetail = playerContinuousDetailSystemIds(projection.systems, 1.58, 1, new Set())
 
   expect(fitDetail).not.toContain('system-3')
   expect(revealedDetail).toContain('system-3')
@@ -279,4 +279,17 @@ test('player system detail uses independent public envelope thresholds with coll
   expect(collapsedDetail).not.toContain('system-3')
   expect(revealedDetail).not.toContain('system-1')
   expect(revealedDetail).not.toContain('system-2')
+})
+
+test('player Center and detail agree at a fractional CSS scale @pure', () => {
+  const source = projectPlayerContinuousMap(publicDocument()).systems[2]
+  if (!source?.geometry) throw new Error('The public fixture system has no interior.')
+  const system = {
+    ...source,
+    geometry: { ...source.geometry, envelope: { x: 0, y: 0, width: 183, height: 120 } },
+  }
+  const svgPixelScale = 1280 / 960
+  const requiredScale = playerContinuousTargetMinimumScale(system, svgPixelScale, false)
+  if (requiredScale === undefined) throw new Error('The public system cannot be framed.')
+  expect(playerContinuousDetailSystemIds([system], requiredScale, svgPixelScale, new Set())).toContain(system.id)
 })
