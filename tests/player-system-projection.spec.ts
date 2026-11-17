@@ -124,6 +124,43 @@ test('object disclosure modes are allowlisted and remain saved when the system g
   expect(json).not.toMatch(/SECRET|PRIVATE/)
 })
 
+test('per-object marker colors project only for Known and Revealed objects @pure', () => {
+  const workspace = createLocalWorkspace('Private Cluster', 'Revealed System')
+  const primary = workspace.cluster.systems[0]!.objects[0]!
+  const hiddenHost = Object.assign({ ...primary, publication: 'hidden' as const }, {
+    markerColor: '#AABBCC',
+  })
+  const orbit: Orbit = { id: 'PRIVATE-ORBIT-ID', order: 1, hostId: hiddenHost.id }
+  const known = Object.assign(object(
+    'PRIVATE-KNOWN-ID',
+    'known-type',
+    { kind: 'orbit', orbitId: orbit.id },
+    { subtype: 'moon' },
+  ), { markerColor: '#a1B2c3' })
+  const revealed = Object.assign(object(
+    'PRIVATE-REVEALED-ID',
+    'revealed',
+    { kind: 'system', x: 0.7, y: 0.5 },
+    { family: 'Phenomenon', subtype: 'anomaly', name: 'Public Anomaly' },
+  ), { markerColor: '#Ff00aA' })
+  const system: StarSystem = {
+    ...workspace.cluster.systems[0]!,
+    publication: 'revealed',
+    objects: [hiddenHost, known, revealed],
+    orbits: [orbit],
+  }
+  const marker = projectPlayerCluster(withSystem(workspace, system)).systems[0]
+  if (!marker || marker.disclosure !== 'revealed') throw new Error('Expected a revealed system marker.')
+
+  expect(marker.map.objects).toMatchObject([
+    { disclosure: 'unknown', label: 'Unknown presence' },
+    { disclosure: 'known-type', markerColor: '#a1B2c3' },
+    { disclosure: 'revealed', label: 'Public Anomaly', markerColor: '#Ff00aA' },
+  ])
+  expect(marker.map.objects[0]).not.toHaveProperty('markerColor')
+  expect(JSON.stringify(marker.map.objects[0])).not.toContain('#AABBCC')
+})
+
 test('published objects retain full-source default geometry and only their required host chain @pure', () => {
   const workspace = createLocalWorkspace('Private Cluster', 'Revealed System')
   const primary = workspace.cluster.systems[0]!.objects[0]!

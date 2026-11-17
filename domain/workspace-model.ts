@@ -87,6 +87,8 @@ export type ObjectPlacement =
 export interface SystemObject {
   id: string
   publication: PublicationMode
+  /** Optional per-object glyph fill; absence retains the map's current theme and type styling. */
+  markerColor?: string
   family: ObjectFamily
   subtype: string
   locationKey: string
@@ -238,6 +240,8 @@ export interface PreparedJsonImport {
 /** Partial fields accepted by the object-edit command; omitted fields retain their current values. */
 export interface SystemObjectChanges {
   publication?: PublicationMode
+  /** Null removes the saved override; omission preserves it. */
+  markerColor?: string | null
   playerText?: string
   playerFieldMasks?: string[]
   locationKey?: string

@@ -3,7 +3,9 @@ import { expect, preparedCampaignTest as campaignTest } from './fixtures'
 
 
 import {
+  captureMapExportBlobs,
   clickDockAction,
+  downloadImage,
   setWorkspaceMapMode,
 } from './helpers'
 
@@ -12,7 +14,10 @@ campaignTest('invalid route edits focus the validation summary and Stay preserve
   await setWorkspaceMapMode(page, 'Select')
 
   const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
-  const routeMark = clusterMap.getByRole('button', { name: /Jump Level 1.*Vesper Departure.*Harrow Arrival/ })
+  const initialRoute = clusterMap.getByRole('button', { name: /Jump Level 1.*Vesper Departure.*Harrow Arrival/ })
+  const routeId = await initialRoute.getAttribute('data-route-id')
+  if (!routeId) throw new Error('The selected route mark has no route identity.')
+  const routeMark = clusterMap.locator(`.cluster-route[data-route-id="${routeId}"]`)
   await routeMark.click()
 
   const inspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
@@ -31,6 +36,7 @@ campaignTest('invalid route edits focus the validation summary and Stay preserve
   await page.keyboard.press('Control+A')
   await page.keyboard.type('12')
   await expect(jumpLevel).toHaveValue('12')
+  await expect(routeMark).toHaveAccessibleName(/Jump Level 12.*Vesper Departure.*Harrow Arrival/)
   await expect(jumpLevel).toBeFocused()
 
   await jumpLevel.fill('0')
@@ -46,4 +52,27 @@ campaignTest('invalid route edits focus the validation summary and Stay preserve
   await expect(inspector.getByRole('heading', { name: 'Edit Jump Route' })).toBeVisible()
   await expect(jumpLevel).toHaveValue('0')
   await expect(validation).toContainText('Jump level must be a positive integer.')
+  await expect(routeMark).toHaveAccessibleName(/Jump Level 1.*Vesper Departure.*Harrow Arrival/)
+
+  await inspector.getByLabel('Route destination', { exact: true }).click()
+  await page.getByRole('option', { name: 'Unresolved external exit', exact: true }).click()
+  await inspector.getByLabel('Unknown destination label', { exact: true }).fill('Beyond Kestrel')
+  await expect(routeMark).toHaveAccessibleName(/Jump Level 1.*Vesper Departure.*Beyond Kestrel/)
+  await expect(routeMark.locator('.cluster-exit-mark')).toBeVisible()
+
+  await captureMapExportBlobs(page)
+  const exported = await downloadImage(page, 'image/svg+xml')
+  if (!exported.text) throw new Error('The Warden SVG did not contain a map.')
+  const exportedRoute = await page.evaluate(({ text, id }) => {
+    const svg = new DOMParser().parseFromString(text, 'image/svg+xml')
+    const mark = svg.querySelector(`.cluster-route[data-route-id="${id}"]`)
+    return { label: mark?.getAttribute('aria-label'), hasExit: Boolean(mark?.querySelector('.cluster-exit-mark')) }
+  }, { text: exported.text, id: routeId })
+  expect(exportedRoute.label).toMatch(/Jump Level 1.*Vesper Departure.*Harrow Arrival/)
+  expect(exportedRoute.hasExit).toBe(false)
+  await expect(routeMark.locator('.cluster-exit-mark')).toBeVisible()
+
+  await inspector.getByRole('button', { name: 'Discard changes', exact: true }).click()
+  await expect(routeMark).toHaveAccessibleName(/Jump Level 1.*Vesper Departure.*Harrow Arrival/)
+  await expect(routeMark.locator('.cluster-exit-mark')).toHaveCount(0)
 })

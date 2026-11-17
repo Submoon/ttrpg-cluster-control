@@ -1,14 +1,14 @@
 <template>
-  <section v-if="selectedOrbit" class="entity-inspector" aria-label="Orbit inspector">
+  <section v-if="selectedOrbit && presentedOrbit" class="entity-inspector" aria-label="Orbit inspector">
     <header class="entity-inspector-header">
       <div class="min-w-0">
         <p class="section-kicker">SYSTEM STRUCTURE</p>
-        <h2 class="orbit-title mt-2 mb-1">Orbit {{ selectedOrbit.order }}</h2>
+        <h2 class="orbit-title mt-2 mb-1">Orbit {{ presentedOrbit.order }}</h2>
         <p class="entity-inspector-subtitle m-0">
           <template v-if="isAttachmentDraft">Proposed host · {{ proposedHostLabel }}</template>
-          <template v-else-if="selectedOrbit.hostId === null">Unoccupied center · unkeyed placement</template>
+          <template v-else-if="presentedOrbit.hostId === null">Unoccupied center · unkeyed placement</template>
           <template v-else>
-            Hosted by {{ selectedSystem?.objects.find(object => object.id === selectedOrbit?.hostId)?.name ?? 'unknown object' }}
+            Hosted by {{ (props.draftSystem ?? selectedSystem)?.objects.find(object => object.id === presentedOrbit?.hostId)?.name ?? 'unknown object' }}
           </template>
         </p>
       </div>
@@ -295,6 +295,8 @@ const props = defineProps<{
   workspace: LocalWorkspace
   selectedSystem?: StarSystem
   selectedOrbit?: Orbit
+  draftSystem?: StarSystem
+  draftOrbit?: Orbit
   session: Extract<EntityInspectorSession, { kind: 'orbit' }> | null
   hasModifiedEntitySession: boolean
   hasOrbitPlacementPreview: boolean
@@ -325,6 +327,7 @@ const emit = defineEmits<{
 
 const selectedSystem = computed(() => props.selectedSystem)
 const selectedOrbit = computed(() => props.selectedOrbit)
+const presentedOrbit = computed(() => props.draftOrbit ?? props.selectedOrbit)
 const orbitSession = computed(() => {
   const session = props.session
   if (!session || session.kind !== 'orbit' || session.targetId !== selectedOrbit.value?.id) return null

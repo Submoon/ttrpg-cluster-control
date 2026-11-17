@@ -81,6 +81,30 @@ function routeDraft(route: NonNullable<LocalWorkspace['cluster']['routes'][numbe
   }
 }
 
+function replaceRouteInWorkspace(
+  workspace: LocalWorkspace,
+  route: LocalWorkspace['cluster']['routes'][number],
+): LocalWorkspace {
+  const routes = workspace.cluster.routes.some(candidate => candidate.id === route.id)
+    ? workspace.cluster.routes.map(candidate => candidate.id === route.id ? route : candidate)
+    : [...workspace.cluster.routes, route]
+  const unresolvedExitPositions = { ...(workspace.layout.unresolvedExitPositions ?? {}) }
+  if (route.toPointId !== null) delete unresolvedExitPositions[route.id]
+  return {
+    ...workspace,
+    cluster: { ...workspace.cluster, routes },
+    layout: { ...workspace.layout, unresolvedExitPositions },
+  }
+}
+
+function validUnresolvedExit(value: string): string | null {
+  try {
+    return validText(value, 'Unresolved exit', maxNameLength)
+  } catch {
+    return null
+  }
+}
+
 /** Keeps route form values alive above the Inspector and validates before applying or finishing once. */
 export function useRouteInspectorSession({ workspace, mutations }: RouteInspectorSessionOptions) {
   const session = ref<RouteInspectorSession | null>(null)
@@ -228,6 +252,73 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     if (session.value && (id === undefined || session.value.id === id)) session.value = null
   }
 
+  /** Projects valid values for an existing route; route creation remains an explicit Add workflow. */
+  function projectDraft(currentWorkspace: LocalWorkspace): LocalWorkspace | null {
+    const active = session.value
+    if (!active || active.routeId === null || currentWorkspace.cluster.id !== active.clusterId) return null
+    const currentRoute = currentWorkspace.cluster.routes.find(route => route.id === active.routeId)
+    if (!currentRoute) return null
+
+    const points = jumpPointsInCluster(currentWorkspace.cluster)
+    const hasPoint = (pointId: string): boolean => points.some(({ point }) => point.id === pointId)
+    const draftFromIsValid = hasPoint(active.draft.fromPointId)
+    const draftDestination = active.draft.destination === 'point'
+      ? (active.draft.toPointId && hasPoint(active.draft.toPointId)
+          ? { toPointId: active.draft.toPointId, unresolvedExit: '' }
+          : null)
+      : active.draft.destination === 'external'
+        ? (() => {
+            const unresolvedExit = validUnresolvedExit(active.draft.unresolvedExit)
+            return unresolvedExit === null ? null : { toPointId: null, unresolvedExit }
+          })()
+        : null
+
+    let fromPointId = draftFromIsValid ? active.draft.fromPointId : currentRoute.fromPointId
+    let destination = draftDestination ?? {
+      toPointId: currentRoute.toPointId,
+      unresolvedExit: currentRoute.toPointId === null ? currentRoute.unresolvedExit : '',
+    }
+    if (destination.toPointId === fromPointId) {
+      const currentDestination = {
+        toPointId: currentRoute.toPointId,
+        unresolvedExit: currentRoute.toPointId === null ? currentRoute.unresolvedExit : '',
+      }
+      if (currentDestination.toPointId !== fromPointId) destination = currentDestination
+      else if (currentRoute.fromPointId !== fromPointId) fromPointId = currentRoute.fromPointId
+      else destination = currentDestination
+    }
+
+    const parsedLevel = Number(active.draft.jumpLevel)
+    const jumpLevel = isJumpLevel(parsedLevel) ? parsedLevel : currentRoute.jumpLevel
+    const playerShared = typeof active.draft.playerShared === 'boolean'
+      ? active.draft.playerShared
+      : currentRoute.playerShared
+    try {
+      const updatedRoute = updateJumpRoute(
+        currentWorkspace.cluster,
+        currentRoute.id,
+        jumpLevel,
+        fromPointId,
+        destination.toPointId,
+        destination.unresolvedExit,
+        playerShared,
+      )
+      const hasRouteChange = updatedRoute.jumpLevel !== currentRoute.jumpLevel
+        || updatedRoute.fromPointId !== currentRoute.fromPointId
+        || updatedRoute.toPointId !== currentRoute.toPointId
+        || updatedRoute.unresolvedExit !== currentRoute.unresolvedExit
+        || updatedRoute.playerShared !== currentRoute.playerShared
+        || updatedRoute.name !== currentRoute.name
+      const hasStaleExitPosition = updatedRoute.toPointId !== null
+        && Object.prototype.hasOwnProperty.call(currentWorkspace.layout.unresolvedExitPositions ?? {}, currentRoute.id)
+      return hasRouteChange || hasStaleExitPosition
+        ? replaceRouteInWorkspace(currentWorkspace, updatedRoute)
+        : null
+    } catch {
+      return null
+    }
+  }
+
   function cancelRouteCreation(): void {
     if (session.value?.routeId === null) session.value = null
   }
@@ -294,16 +385,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
             active.draft.unresolvedExit, active.draft.playerShared)
         : createJumpRoute(current.cluster, jumpLevel, active.draft.fromPointId, toPointId,
             active.draft.unresolvedExit, active.draft.playerShared)
-      const routes = current.cluster.routes.some(candidate => candidate.id === route.id)
-        ? current.cluster.routes.map(candidate => candidate.id === route.id ? route : candidate)
-        : [...current.cluster.routes, route]
-      const unresolvedExitPositions = { ...(current.layout.unresolvedExitPositions ?? {}) }
-      if (toPointId !== null) delete unresolvedExitPositions[route.id]
-      const nextWorkspace: LocalWorkspace = {
-        ...current,
-        cluster: { ...current.cluster, routes },
-        layout: { ...current.layout, unresolvedExitPositions },
-      }
+      const nextWorkspace = replaceRouteInWorkspace(current, route)
       const result = await mutations.execute({
         action: {
           kind: active.routeId === null ? 'create' : 'update',
@@ -368,6 +450,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     offerRouteSystems,
     chooseRoutePoint,
     updateRouteInput,
+    projectDraft,
     applyRouteSession,
     discardRouteSession,
     endCleanHistorySession,
