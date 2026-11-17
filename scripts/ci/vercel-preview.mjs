@@ -94,11 +94,11 @@ async function fetchJson(url, fetchImpl, deadline, timeoutError) {
     throw new Error(`GitHub API request failed while resolving the Vercel Preview (HTTP ${response.status}).`)
   }
 
-  let body
-  try {
-    body = await response.json()
-  } catch (error) {
+  const body = await response.json().catch(error => {
     if (isTimeout(error)) throw timeoutError()
+    return undefined
+  })
+  if (body === undefined) {
     throw new Error('GitHub API returned an invalid response while resolving the Vercel Preview.')
   }
   if (Date.now() >= deadline) throw timeoutError()
