@@ -5,6 +5,7 @@ import {
   createSystemObject,
   exportStarSystem,
 } from '../domain/workspace'
+import { clusterSystemPosition } from '../utils/cluster-map-geometry'
 import {
   abortNextWorkspaceWrite,
   waitForWorkspaceSaved,
@@ -21,6 +22,7 @@ import {
   reviewStarSystemImport,
   setJsonFile,
   setHeaderMapActionsOpen,
+  workspaceZoomControls,
 } from './helpers'
 
 function incomingSystem(): {
@@ -185,14 +187,8 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   await expect(placement).toBeVisible()
   await expect(page.locator('.continuous-warden-system-anchor[data-system-id]')).toHaveCount(2)
   await expect(undo).toBeDisabled()
-  await map.focus()
-  const mapBounds = await map.boundingBox()
-  if (!mapBounds) throw new Error('The continuous Cluster map is not visible.')
-  await page.mouse.move(mapBounds.x + mapBounds.width * 0.12, mapBounds.y + mapBounds.height * 0.32)
-  await page.mouse.down()
   await page.keyboard.press('Escape')
   await expect(placement).toBeHidden()
-  await page.mouse.up()
   await expect(page.locator('.continuous-warden-system-anchor[data-system-id]')).toHaveCount(2)
   await expect(undo).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Add to map', exact: true })).toHaveAttribute('aria-pressed', 'true')
@@ -207,6 +203,56 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   const persistedOrbit = persistedSystem?.orbits[0]
   expect(persistedOrbit && persisted.layout.orbitRadii?.[persistedOrbit.id]).toEqual({ horizontal: 4200, vertical: 1900 })
   expect(persistedOrbit && persisted.layout.orbitRotations?.[persistedOrbit.id]).toBe(31)
+})
+
+test('canceling a held import placement click leaves Add ready for the next click', async ({ page }) => {
+  await page.goto('/?map=continuous')
+  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
+  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await waitForWorkspaceSaved(page)
+  await returnToClusterMap(page)
+
+  await (await dockAction(page, 'Add star system')).click()
+  await setJsonFile(await openStarSystemImportPicker(page), 'incoming-reach-copy.json', incomingSystem().content)
+  const placement = page.getByRole('group', { name: 'Standalone star system placement controls', exact: true })
+  await expect(placement).toBeVisible()
+
+  const map = page.locator('svg.continuous-warden-map-svg')
+  const anchorMarks = map.locator('.continuous-warden-system-anchor[data-system-id]')
+  const safeCandidates = [{ x: 0.75, y: 0.65 }, { x: 0.64, y: 0.5 }, { x: 0.75, y: 0.35 }]
+    .map(position => clusterSystemPosition({ candidate: position }, 'candidate'))
+  const clearContactPoint = () => map.evaluate((element, candidates) => {
+    const transform = element.querySelector<SVGGElement>('.cluster-map-content')?.getScreenCTM()
+    if (!transform) throw new Error('The map must expose its current scene transform.')
+    for (const candidate of candidates) {
+      const screen = new DOMPoint(candidate.x, candidate.y).matrixTransform(transform)
+      const x = Math.round(screen.x)
+      const y = Math.round(screen.y)
+      if (document.elementFromPoint(x, y) === element) return { x, y }
+    }
+    return null
+  }, safeCandidates)
+  const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out', exact: true })
+  let contact = await clearContactPoint()
+  for (let step = 0; !contact && step < 12 && !await zoomOut.isDisabled(); step += 1) {
+    await zoomOut.click()
+    contact = await clearContactPoint()
+  }
+  if (!contact) throw new Error('The held pointer must reach clear map space.')
+
+  await map.focus()
+  await page.mouse.move(contact.x, contact.y)
+  await page.mouse.down()
+  await page.keyboard.press('Escape')
+  await expect(placement).toBeHidden()
+  await page.mouse.up()
+  await expect(anchorMarks).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Add to map', exact: true })).toHaveAttribute('aria-pressed', 'true')
+
+  await page.mouse.click(contact.x, contact.y)
+  await expect(anchorMarks).toHaveCount(2)
+  await waitForWorkspaceSaved(page)
 })
 
 test('an applied import closes review before save failure and Retry persists the copy without clearing an unrelated draft', async ({ page }) => {
