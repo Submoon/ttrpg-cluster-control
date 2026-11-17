@@ -10,7 +10,7 @@ export interface EditorUiSelection {
   clusterSelectedSystemId: string | null
   inspectedClusterSystemId: string | null
   selectedObjectId: string | null
-  /** Transient map selection when more than one object is selected. */
+  /** Transient membership; continuous-map selection can retain one member while the Warden toggles it. */
   selectedObjectIds: string[]
   selectedOrbitId: string | null
   selectedRouteId: string | null

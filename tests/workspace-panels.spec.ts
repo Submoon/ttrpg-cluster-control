@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from './fixtures'
-import { activeWorkspaceFeedback, type ExportedMap, waitForWorkspaceSaved, openMapFilesSection, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
+import { activeWorkspaceFeedback, type ExportedMap, waitForWorkspaceSaved, waitForWorkspaceStartup, openMapFilesSection, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation, workspaceZoomControls } from './helpers'
 
 async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }, systemName = 'Vesper'): Promise<void> {
   await page.setViewportSize(viewport)
@@ -265,6 +265,36 @@ test('touch long press keeps focus inside the compact inspector after the touch 
     const preview = await openPlayerPreview(page)
     await preview.getByRole('button', { name: 'Close player preview', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Map files', exact: true })).toBeFocused()
+
+    await page.goto('/?map=continuous')
+    await waitForWorkspaceStartup(page)
+    const continuousMap = page.getByRole('group', { name: 'Kestrel Reach continuous map', exact: true })
+    await setWorkspaceMapMode(page, 'Select')
+    const continuousObject = continuousMap.locator('.continuous-warden-object[data-object-id]').first()
+    const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
+    for (let step = 0; step < 12 && await continuousObject.count() === 0; step += 1) await zoomIn.click()
+    await expect(continuousObject).toBeVisible()
+    const inspectorPanel = page.locator('#workspace-inspector-panel')
+    const closeInspectorPanel = page.getByRole('button', { name: 'Close inspector panel', exact: true })
+    if (await closeInspectorPanel.isVisible()) await closeInspectorPanel.click()
+    await expect(inspectorPanel).toBeHidden()
+    const objectBounds = await continuousObject.boundingBox()
+    if (!objectBounds) throw new Error('The continuous map object has no touch target.')
+    const objectId = await continuousObject.getAttribute('data-object-id')
+    if (!objectId) throw new Error('The continuous map object has no selection identity.')
+    const objectPoint = { x: objectBounds.x + objectBounds.width / 2, y: objectBounds.y + objectBounds.height / 2 }
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ id: 1, x: objectPoint.x, y: objectPoint.y, radiusX: 2, radiusY: 2, force: 1 }],
+    })
+    const selectedObject = continuousMap.locator(`.continuous-warden-object[data-object-id="${objectId}"]`)
+    await expect(selectedObject).toHaveAttribute('aria-pressed', 'true')
+    // Keep the individual selection hold beyond both compatibility-click suppression timers.
+    await page.waitForTimeout(1_200)
+    await expect(inspectorPanel).toBeHidden()
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await expect(selectedObject).toHaveAttribute('aria-pressed', 'true')
+    await expect(inspectorPanel).toBeHidden()
   } finally {
     await cdp.detach()
   }

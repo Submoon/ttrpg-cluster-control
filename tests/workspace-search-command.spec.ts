@@ -204,9 +204,45 @@ test('continuous object group membership crosses systems while Inspector focus a
     expect(harness.workflows.inspector.entitySession.value?.id).toBe(draft.id)
 
     expect(await harness.workflows.navigation.inspectContinuousTarget(sourceTarget)).toBe(true)
-    expect(harness.store.selectedObjectIds).toEqual([])
+    expect(harness.store.selectedObjectIds).toEqual([sourceMember.id])
     expect(harness.store.inspectedTarget).toEqual(sourceTarget)
     expect(harness.workflows.inspector.entitySession.value?.id).toBe(draft.id)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('continuous toggles keep an explicitly empty selection separate from Inspector focus @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), 'Altair', undefined, false, true)
+  try {
+    const [sourceSystem, remoteSystem] = harness.workspace.value.cluster.systems
+    const sourceObject = sourceSystem?.objects[0]
+    if (!sourceSystem || !remoteSystem || !sourceObject) throw new Error('Expected two systems and a focused object.')
+    const sourceMember = { ...sourceObject, id: 'toggle-focus-member', name: 'Focused member' }
+    const remoteMember = { ...sourceObject, id: 'toggle-remote-member', name: 'Remote member' }
+    sourceSystem.objects = [sourceMember]
+    remoteSystem.objects = [remoteMember]
+    harness.store.setSelection({ activeView: 'cluster' })
+    const focusedTarget = { kind: 'object' as const, systemId: sourceSystem.id, objectId: sourceMember.id }
+    expect(await harness.workflows.navigation.inspectContinuousTarget(focusedTarget)).toBe(true)
+    expect(harness.store.selectedObjectIds).toEqual([sourceMember.id])
+
+    await harness.workflows.navigation.toggleObjectSelection(remoteMember.id)
+    expect(harness.store.selectedObjectIds).toEqual([sourceMember.id, remoteMember.id])
+    await harness.workflows.navigation.toggleObjectSelection(sourceMember.id)
+    expect(harness.store.selectedObjectIds).toEqual([remoteMember.id])
+    await harness.workflows.navigation.toggleObjectSelection(remoteMember.id)
+    expect(harness.store.selectedObjectIds).toEqual([])
+    expect(harness.store.selectedObjectId).toBe(sourceMember.id)
+    await harness.workflows.navigation.toggleObjectSelection(remoteMember.id)
+    expect(harness.store.selectedObjectIds).toEqual([remoteMember.id])
+
+    expect(await harness.workflows.navigation.inspectContinuousTarget(focusedTarget)).toBe(true)
+    expect(harness.store.selectedObjectIds).toEqual([sourceMember.id])
+    await harness.workflows.navigation.toggleObjectSelection(sourceMember.id)
+    expect(harness.store.selectedObjectIds).toEqual([])
+    await harness.workflows.navigation.toggleObjectSelection(remoteMember.id)
+    expect(harness.store.selectedObjectIds).toEqual([remoteMember.id])
   } finally {
     harness.dispose()
   }
@@ -1367,7 +1403,7 @@ test('removing a captured object while its map is ready restores only the still-
       action: { kind: 'delete', label: 'Delete Fading World', target: { kind: 'object', id: targetObject.id, systemId: system.id } },
       prepare: current => planMapEntityDeletion(current, { kind: 'object', systemId: system.id, objectId: targetObject.id }).workspace,
     })
-    expect(deletion.status).toBe('applied')
+    expect(deletion.status, JSON.stringify(deletion)).toBe('applied')
     expect(harness.store.selectedObjectId).toBeNull()
     ready.resolve(true)
 
@@ -1383,6 +1419,107 @@ test('removing a captured object while its map is ready restores only the still-
     expect(focusCount).toBe(0)
   } finally {
     ready.resolve(false)
+    harness.dispose()
+  }
+})
+
+test('continuous Search rollback keeps selected members whose original focused owner was deleted @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), 'Altair', undefined, false, true)
+  const ready = deferred<boolean>()
+  let readyWaits = 0
+  try {
+    const [focusedSystem, memberSystem] = harness.workspace.value.cluster.systems
+    const focusedObject = focusedSystem?.objects[0]
+    if (!focusedSystem || !memberSystem || !focusedObject) throw new Error('Expected a focused system and a group member owner.')
+    const memberB = { ...focusedObject, id: 'search-rollback-group-b', name: 'Member B' }
+    const thirdSystem = {
+      ...focusedSystem,
+      id: 'search-rollback-third-system',
+      name: 'Rigel',
+      objects: [{ ...focusedObject, id: 'search-rollback-group-c', name: 'Member C' }],
+      orbits: [],
+    }
+    memberSystem.objects = [memberB]
+    harness.workspace.value.cluster.systems.push(thirdSystem)
+    harness.workspace.value.layout.systemPositions[thirdSystem.id] = { x: 0.82, y: 0.52 }
+    harness.store.setSelection({ activeView: 'cluster' })
+    expect(await harness.workflows.navigation.inspectContinuousTarget({
+      kind: 'object', systemId: focusedSystem.id, objectId: focusedObject.id,
+    })).toBe(true)
+    expect(await harness.workflows.navigation.replaceObjectSelection([memberB.id, thirdSystem.objects[0]!.id])).toBe(true)
+    expect(harness.store.selectedObjectIds).toEqual([memberB.id, thirdSystem.objects[0]!.id])
+
+    harness.workflows.mapControls.clusterMapRef.value = createMapHandle({
+      whenReady: () => {
+        readyWaits += 1
+        return ready.promise
+      },
+      frameSearchTarget: () => true,
+      focusMap: () => undefined,
+    })
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = focusedSystem.name
+    const result = search.results.value.find(candidate => candidate.target.kind === 'system'
+      && candidate.target.systemId === focusedSystem.id)
+    if (!result || result.target.kind !== 'system') throw new Error('The focused owner did not produce a system search result.')
+
+    const reveal = search.reveal(result.target)
+    await expect.poll(() => readyWaits).toBe(1)
+    const deletion = await harness.history.execute({
+      action: {
+        kind: 'delete',
+        label: `Delete ${focusedSystem.name}`,
+        target: { kind: 'system', id: focusedSystem.id },
+        parent: { kind: 'cluster', id: harness.workspace.value.cluster.id },
+      },
+      prepare: current => planMapEntityDeletion(current, { kind: 'system', systemId: focusedSystem.id }).workspace,
+    })
+    expect(deletion.status, JSON.stringify(deletion)).toBe('applied')
+    ready.resolve(true)
+
+    expect(await reveal).toEqual({ status: 'rejected', reason: 'unavailable' })
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.store.inspectedTarget).toBeNull()
+    expect(harness.store.selectedSystemId).toBe(memberSystem.id)
+    expect(harness.store.selectedObjectId).toBeNull()
+    expect(harness.store.selectedObjectIds).toEqual([memberB.id, thirdSystem.objects[0]!.id])
+  } finally {
+    ready.resolve(false)
+    harness.dispose()
+  }
+})
+
+test('continuous membership survives deletion of the focused owner @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), 'Altair', undefined, false, true)
+  try {
+    const [focusedSystem, remainingSystem] = harness.workspace.value.cluster.systems
+    const focusedObject = focusedSystem?.objects[0]
+    if (!focusedSystem || !remainingSystem || !focusedObject) throw new Error('Expected two systems and a focused object.')
+    const memberB = { ...focusedObject, id: 'deleted-focus-member-b', name: 'Member B' }
+    const memberC = { ...focusedObject, id: 'deleted-focus-member-c', name: 'Member C', locationKey: 'B' }
+    remainingSystem.objects = [memberB, memberC]
+    harness.store.setSelection({ activeView: 'cluster' })
+    expect(await harness.workflows.navigation.inspectContinuousTarget({
+      kind: 'object', systemId: focusedSystem.id, objectId: focusedObject.id,
+    })).toBe(true)
+    expect(await harness.workflows.navigation.replaceObjectSelection([memberB.id, memberC.id])).toBe(true)
+
+    const deletion = await harness.history.execute({
+      action: {
+        kind: 'delete',
+        label: `Delete ${focusedSystem.name}`,
+        target: { kind: 'system', id: focusedSystem.id },
+        parent: { kind: 'cluster', id: harness.workspace.value.cluster.id },
+      },
+      prepare: current => planMapEntityDeletion(current, { kind: 'system', systemId: focusedSystem.id }).workspace,
+    })
+    expect(deletion.status, JSON.stringify(deletion)).toBe('applied')
+    expect(harness.store.selectedSystemId).toBe(remainingSystem.id)
+    expect(harness.store.inspectedTarget).toBeNull()
+    expect(harness.store.selectedObjectId).toBeNull()
+    expect(harness.store.selectedObjectIds).toEqual([memberB.id, memberC.id])
+  } finally {
     harness.dispose()
   }
 })
