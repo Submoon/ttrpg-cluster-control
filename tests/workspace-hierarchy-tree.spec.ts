@@ -5,6 +5,7 @@ import {
   type DownloadWindow,
   downloadJson,
   type ExportedMap,
+  openMapFilesSection,
   openWorkspaceHierarchy,
   openWorkspaceZoomNavigation,
   returnToClusterMap,
