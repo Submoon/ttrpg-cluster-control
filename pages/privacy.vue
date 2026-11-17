@@ -6,10 +6,10 @@
       <header class="privacy-header">
         <p class="privacy-kicker">TTRPG CLUSTER CONTROL</p>
         <h1 id="privacy-title">Privacy policy</h1>
-        <p class="privacy-updated">Last updated November 14, 2026</p>
+        <p class="privacy-updated">Last updated November 17, 2026</p>
         <p>
           This policy explains how this browser-based campaign mapping app handles workspace data,
-          optional Google Drive backups, and player-facing exports.
+          optional Google Drive and Dropbox backups, and player-facing exports.
         </p>
       </header>
 
@@ -26,6 +26,27 @@
           Browser site data can be cleared through your browser settings. Clearing this site's data may
           erase both local workspace copies. The browser also stores the selected light or dark theme
           preference locally.
+        </p>
+      </section>
+
+      <section aria-labelledby="dropbox-title">
+        <h2 id="dropbox-title">Optional Dropbox backups</h2>
+        <p>
+          When you choose a Dropbox backup or restore, your browser connects directly to Dropbox.
+          The app creates dated Jump Cluster JSON files in its dedicated Dropbox App Folder and
+          accesses file metadata to list and verify those backups. A complete backup can include GM
+          notes, player publication settings, Fields, and saved layout.
+        </p>
+        <p>
+          Dropbox authorization starts when you choose a Dropbox action. The app holds the
+          short-lived access token and Dropbox account identifier in page memory. If Dropbox cannot
+          confirm an upload, the app may check the metadata and contents of the intended file in the
+          same account before retrying. Reloading the page clears those credentials.
+        </p>
+        <p>
+          You manage your saved files and any sharing you configure in Dropbox. See the
+          <a href="https://www.dropbox.com/privacy">Dropbox Privacy Policy</a> for how Dropbox
+          handles data in your account.
         </p>
       </section>
 
@@ -83,8 +104,8 @@
           The public site is hosted by Vercel. Vercel delivers the site and may process request or
           diagnostic information under its
           <a href="https://vercel.com/legal/privacy-notice">Privacy Notice</a>. The app's workspace
-          editing and Google Drive backup operations run in your browser; workspace content is not
-          uploaded to a TTRPG Cluster Control application server.
+          editing and backup operations run in your browser. Your browser transfers cloud backups
+          directly to the storage provider you select.
         </p>
       </section>
 
@@ -139,7 +160,7 @@ defineOptions({ name: 'PrivacyPolicyPage' })
 
 useSeoMeta({
   title: 'Privacy policy | TTRPG Cluster Control',
-  description: 'How TTRPG Cluster Control handles local workspace data, Google Drive backups, and player exports.',
+  description: 'How TTRPG Cluster Control handles local workspace data, cloud backups, and player exports.',
 })
 </script>
 

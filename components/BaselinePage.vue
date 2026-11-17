@@ -12,6 +12,9 @@
       <p v-if="cloudBackupMessage && !googleDriveBackupDialogOpen" class="feedback m-0 break-words" role="status">
         {{ cloudBackupMessage }}
       </p>
+      <p v-if="dropboxBackupMessage && !dropboxBackupDialogOpen" class="feedback m-0 break-words" role="status">
+        {{ dropboxBackupMessage }}
+      </p>
       <p
         v-if="activeView === 'system' && mapMode === 'move' && selectedObjectIds.length > 1 && moveSelectionError"
         class="feedback m-0 error-text"
@@ -203,6 +206,19 @@
                 </div>
               </template>
             </UModal>
+            <DropboxBackupDialog
+              v-model:open="dropboxBackupDialogOpen"
+              :message="dropboxBackupMessage"
+              :button-label="dropboxBackup.buttonLabel.value"
+              :busy="dropboxBackup.busy.value"
+              :can-cancel="dropboxBackup.canCancel.value"
+              :can-start-new="dropboxBackup.state.value === 'retry'"
+              :restore-in-progress="workspaceRestoreLoading"
+              :restore-focus="restoreBackupDialogFocus"
+              @activate="dropboxBackup.activate"
+              @cancel="dropboxBackup.cancelBeforeUpload"
+              @start-new="dropboxBackup.startNewBackup"
+            />
             <GoogleDriveRestoreButton
               ref="googleDriveRestoreButton"
               :controller="googleDriveRestore"
@@ -606,7 +622,7 @@
 /**
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from 'vue'
 import type { DropdownMenuItem } from '@nuxt/ui'
 import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type ObjectFamily, type Point } from '../domain/workspace'
 import type { CurrentPlayerMapScene } from '../domain/player-scene'
@@ -618,6 +634,8 @@ import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
 import { useWorkspaceRestore } from '../composables/useWorkspaceRestore'
+import { useDropboxBackup } from '../composables/useDropboxBackup'
+import { useDropboxSignIn } from '../composables/useDropboxSignIn'
 import { useGoogleDriveRestore } from '../composables/useGoogleDriveRestore'
 import { useGoogleDriveSignIn } from '../composables/useGoogleDriveSignIn'
 import { usePlayerFileExports } from '../composables/usePlayerFileExports'
@@ -635,6 +653,7 @@ import WorkspaceRestoreReview from './WorkspaceRestoreReview.vue'
 import WorkspaceFeedback from './WorkspaceFeedback.vue'
 import PlayerViewPreviewDialog from './PlayerViewPreviewDialog.vue'
 import WorkspaceMapChrome from './WorkspaceMapChrome.vue'
+import DropboxBackupDialog from './DropboxBackupDialog.vue'
 import GoogleDriveBackupButton from './GoogleDriveBackupButton.vue'
 import GoogleDriveRestoreButton from './GoogleDriveRestoreButton.vue'
 import WorkspaceMapHelp from './WorkspaceMapHelp.vue'
@@ -676,6 +695,24 @@ const cloudBackupMessage = computed(() => googleDriveBackup.message.value
 watch(googleDriveBackup.lastSaved, () => {
   toast.add({ title: 'Backed up to Google Drive', color: 'success', icon: 'i-lucide-check' })
   googleDriveBackupDialogOpen.value = false
+})
+const dropboxSignIn = useDropboxSignIn()
+const dropboxBackup = useDropboxBackup(() => workspace.value, dropboxSignIn)
+const dropboxBackupDialogOpen = ref(false)
+const dropboxBackupMessage = computed(() => dropboxBackup.message.value
+  || (dropboxBackup.busy.value ? 'Dropbox backup is in progress.' : ''))
+watch(dropboxBackupDialogOpen, open => {
+  if (!open) dropboxBackup.discardPrepared()
+})
+watch(dropboxBackup.lastSaved, receipt => {
+  if (!receipt) return
+  toast.add({
+    title: 'Backed up to Dropbox',
+    description: `${receipt.name} in this app’s Dropbox App Folder`,
+    color: 'success',
+    icon: 'i-lucide-check',
+  })
+  dropboxBackupDialogOpen.value = false
 })
 const runtimeConfig = useRuntimeConfig()
 const editorUi = useEditorUiStore()
@@ -1583,12 +1620,23 @@ const cloudBackupItems = computed<DropdownMenuItem[]>(() => {
     icon: 'i-lucide-cloud-upload',
     googleDrive: true,
     disabled: googleDriveBackup.busy.value
+      || dropboxBackup.busy.value
       || googleDriveRestore.busy.value
       || googleDriveRestore.dialogOpen.value
       || !googleDriveSignIn.ready.value,
     onSelect: (event) => {
       event.preventDefault()
-      void openGoogleDriveBackupDialog()
+      void openBackupDialog(googleDriveBackupDialogOpen)
+    },
+  }, {
+    label: 'Back up Jump Cluster to Dropbox',
+    description: dropboxBackupMessage.value || dropboxSignIn.message.value || undefined,
+    icon: 'i-lucide-cloud-upload',
+    disabled: dropboxBackup.busy.value || googleDriveBackup.busy.value
+      || workspaceRestoreLoading.value || !dropboxSignIn.ready.value,
+    onSelect: (event) => {
+      event.preventDefault()
+      void openBackupDialog(dropboxBackupDialogOpen, dropboxBackup)
     },
   }]
 
@@ -1598,6 +1646,13 @@ const cloudBackupItems = computed<DropdownMenuItem[]>(() => {
       icon: 'i-lucide-circle-x',
       googleDrive: true,
       onSelect: () => googleDriveBackup.cancelBeforeUpload(),
+    })
+  }
+  if (dropboxBackup.canCancel.value) {
+    items.push({
+      label: 'Cancel Dropbox backup',
+      icon: 'i-lucide-circle-x',
+      onSelect: () => dropboxBackup.cancelBeforeUpload(),
     })
   }
 
@@ -1617,6 +1672,7 @@ const cloudRestoreItems = computed<DropdownMenuItem[]>(() => {
     disabled: googleDriveRestore.dialogOpen.value
       || googleDriveRestore.busy.value
       || googleDriveBackup.busy.value
+      || dropboxBackup.busy.value
       || !googleDriveSignIn.ready.value,
     onSelect: () => googleDriveRestoreButton.value?.activateFrom(
       workspaceMapChrome.value?.mapFilesTriggerElement() ?? null,
@@ -1652,22 +1708,28 @@ const cloudRestoreItems = computed<DropdownMenuItem[]>(() => {
   return items
 })
 
-async function openGoogleDriveBackupDialog(): Promise<void> {
+async function openBackupDialog(
+  dialog: Ref<boolean>,
+  snapshot?: { prepare(): boolean; discardPrepared(): void },
+): Promise<void> {
   const chrome = workspaceMapChrome.value
   const startingWorkspace = workspace.value
   const startingView = activeView.value
   const startingSystemId = selectedSystemId.value
   const trigger = chrome?.mapFilesTriggerElement() ?? null
-  if (!chrome || !startingWorkspace || !trigger) return
+  if (!chrome || !startingWorkspace || !trigger || (snapshot && !snapshot.prepare())) return
 
-  if (!await chrome.closeMapFilesForDialog()) return
-  if (workspaceMapChrome.value !== chrome
+  const closed = await chrome.closeMapFilesForDialog()
+  if (!closed || workspaceMapChrome.value !== chrome
     || workspace.value !== startingWorkspace
     || activeView.value !== startingView
     || selectedSystemId.value !== startingSystemId
-    || chrome.mapFilesTriggerElement() !== trigger) return
+    || chrome.mapFilesTriggerElement() !== trigger) {
+    snapshot?.discardPrepared()
+    return
+  }
 
-  googleDriveBackupDialogOpen.value = true
+  dialog.value = true
 }
 
 function restoreBackupDialogFocus(event: Event): void {
