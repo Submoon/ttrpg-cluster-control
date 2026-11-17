@@ -54,7 +54,7 @@ export interface EditorCommandContext {
     changeMode(mode: MapInteractionMode, isCurrent?: () => boolean): void
   }
   move: {
-    beginSelectedObjectDrag(anchorId: string): SelectedObjectDrag | null
+    beginSelectedObjectDrag(anchorId: string, continuousSystemScales?: ReadonlyMap<string, number>): SelectedObjectDrag | null
   }
   publication: {
     set(request: PublicationRequest): Promise<WorkspaceMutationResult>

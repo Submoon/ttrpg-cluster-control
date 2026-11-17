@@ -173,6 +173,45 @@ test('continuous map inspection selects an object without changing its cluster m
   }
 })
 
+test('continuous object group membership crosses systems while Inspector focus and draft stay owned @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), 'Altair', undefined, false, true)
+  try {
+    const [sourceSystem, remoteSystem] = harness.workspace.value.cluster.systems
+    const sourceObject = sourceSystem?.objects[0]
+    if (!sourceSystem || !remoteSystem || !sourceObject) throw new Error('Expected two systems and a source object.')
+    const sourceMember = { ...sourceObject, id: 'group-source-member', name: 'Source member' }
+    const remoteMember = { ...sourceObject, id: 'group-remote-member', name: 'Remote member' }
+    sourceSystem.objects = [sourceMember]
+    remoteSystem.objects = [remoteMember]
+    harness.store.setSelection({ activeView: 'cluster' })
+    const sourceTarget = { kind: 'object' as const, systemId: sourceSystem.id, objectId: sourceMember.id }
+    expect(await harness.workflows.navigation.inspectContinuousTarget(sourceTarget)).toBe(true)
+    await harness.workflows.inspector.beginObjectEdit()
+    const draft = harness.workflows.inspector.entitySession.value
+    if (!draft || draft.kind !== 'object') throw new Error('The focused object draft was not created.')
+    draft.draft.name = 'Unapplied group-safe draft'
+
+    await harness.workflows.navigation.toggleObjectSelection(remoteMember.id)
+    expect(harness.store.selectedObjectIds).toEqual([sourceMember.id, remoteMember.id])
+    expect(harness.store.inspectedTarget).toEqual(sourceTarget)
+    expect(harness.workflows.inspector.entitySession.value?.id).toBe(draft.id)
+    expect(harness.workflows.inspector.hasModifiedEntitySession.value).toBe(true)
+
+    await harness.workflows.navigation.toggleObjectSelection(sourceMember.id)
+    expect(harness.store.selectedObjectIds).toEqual([remoteMember.id])
+    expect(harness.store.selectedObjectId).toBe(sourceMember.id)
+    expect(harness.store.inspectedTarget).toEqual(sourceTarget)
+    expect(harness.workflows.inspector.entitySession.value?.id).toBe(draft.id)
+
+    expect(await harness.workflows.navigation.inspectContinuousTarget(sourceTarget)).toBe(true)
+    expect(harness.store.selectedObjectIds).toEqual([])
+    expect(harness.store.inspectedTarget).toEqual(sourceTarget)
+    expect(harness.workflows.inspector.entitySession.value?.id).toBe(draft.id)
+  } finally {
+    harness.dispose()
+  }
+})
+
 test('continuous map removes Navigate from map tool shortcuts @pure', () => {
   expect(mapModeForShortcut('n', false)).toBe('navigate')
   expect(mapModeForShortcut('n', true)).toBeNull()

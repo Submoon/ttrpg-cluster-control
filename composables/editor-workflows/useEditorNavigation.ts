@@ -210,6 +210,19 @@ export function useEditorNavigation(options: {
       }
       return
     }
+    if (continuousMap.value && store.activeView === 'cluster') {
+      const objects = workspace.value?.cluster.systems.flatMap(system => system.objects) ?? []
+      const objectIds = new Set(objects.map(object => object.id))
+      const orbits = workspace.value?.cluster.systems.flatMap(system => system.orbits) ?? []
+      const orbitIds = new Set(orbits.map(orbit => orbit.id))
+      const next: Partial<EditorUiSelection> = {}
+      if (store.selectedObjectId && !objectIds.has(store.selectedObjectId)) next.selectedObjectId = null
+      const survivingObjectIds = store.selectedObjectIds.filter(id => objectIds.has(id))
+      if (survivingObjectIds.length !== store.selectedObjectIds.length) next.selectedObjectIds = survivingObjectIds
+      if (store.selectedOrbitId && !orbitIds.has(store.selectedOrbitId)) next.selectedOrbitId = null
+      if (Object.keys(next).length) setSelection(next)
+      return
+    }
     const next: Partial<EditorUiSelection> = {}
     if (store.selectedObjectId && !currentSystem.objects.some(object => object.id === store.selectedObjectId)) next.selectedObjectId = null
     const survivingObjectIds = store.selectedObjectIds.filter(id => currentSystem.objects.some(object => object.id === id))
@@ -354,6 +367,10 @@ export function useEditorNavigation(options: {
     if (JSON.stringify(store.inspectedTarget) === JSON.stringify(target)) {
       if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return false
       if (!ownsRequest()) return false
+      if (target.kind === 'object' && store.selectedObjectIds.length > 0) {
+        setSelection({ selectedObjectIds: [] })
+        storeCurrentSelection()
+      }
       if (openInspector) viewport.requestPanel('inspector')
       return true
     }
@@ -426,14 +443,30 @@ export function useEditorNavigation(options: {
     const currentWorkspace = workspace.value
     const clusterId = currentWorkspace?.cluster.id
     const systemId = store.selectedSystemId
-    if (!clusterId || store.activeView !== 'system' || !systemId) return false
-    const entrySystem = currentWorkspace.cluster.systems.find(system => system.id === systemId)
-    if (!entrySystem) return false
-    const availableIds = new Set(entrySystem.objects.map(object => object.id))
+    const continuousSelection = continuousMap.value && store.activeView === 'cluster'
+    if (!clusterId || (store.activeView !== 'system' && !continuousSelection)) return false
+    const entrySystem = systemId
+      ? currentWorkspace.cluster.systems.find(system => system.id === systemId)
+      : undefined
+    if (!continuousSelection && !entrySystem) return false
+    const availableIds = new Set(continuousSelection
+      ? currentWorkspace.cluster.systems.flatMap(system => system.objects.map(object => object.id))
+      : entrySystem!.objects.map(object => object.id))
     const nextIds = [...new Set(objectIds)].filter(id => availableIds.has(id))
     const currentIds = currentObjectSelection()
     if (currentIds.length === nextIds.length && currentIds.every((id, index) => id === nextIds[index])) return isCurrent()
     if (nextIds.length === 0 && currentIds.length === 0) return false
+
+    if (continuousSelection) {
+      if (!isCurrent() || store.activeView !== 'cluster' || store.mapMode !== entryMode
+        || workspace.value?.id !== currentWorkspace.id || workspace.value?.cluster.id !== clusterId
+        || nextIds.some(id => !workspace.value.cluster.systems.some(system => system.objects.some(object => object.id === id)))) return false
+      // Continuous-map group membership is independent from Inspector focus and keeps its draft open.
+      setSelection({ selectedObjectIds: nextIds })
+      storeCurrentSelection()
+      editorError.value = ''
+      return true
+    }
 
     const startingStamp = navigationContextStamp()
     const startingSessionId = chart.session.value?.id ?? null
@@ -482,17 +515,22 @@ export function useEditorNavigation(options: {
     await replaceObjectSelection(nextIds)
   }
 
-  /** Clears a multiple selection only while an active-system Move drag owns an outside object. */
+  /** Clears a multi-object selection only while its owning map's Move drag owns an outside object. */
   function clearObjectSelectionForMove(expectedObjectIds: readonly string[]): boolean {
-    if (store.activeView !== 'system' || store.mapMode !== 'move'
+    const continuousSelection = continuousMap.value && store.activeView === 'cluster'
+    if ((store.activeView !== 'system' && !continuousSelection) || store.mapMode !== 'move'
       || store.selectedObjectIds.length < 2
       || store.selectedObjectIds.length !== expectedObjectIds.length
       || !expectedObjectIds.every((id, index) => store.selectedObjectIds[index] === id)) return false
     const currentWorkspace = workspace.value
-    const systemId = store.selectedSystemId
-    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
-    if (!system || store.selectedObjectIds.some(id => !system.objects.some(object => object.id === id))) return false
-    setSelection({ selectedObjectId: null, selectedObjectIds: [] })
+    if (!currentWorkspace) return false
+    const availableIds = new Set(continuousSelection
+      ? currentWorkspace.cluster.systems.flatMap(system => system.objects.map(object => object.id))
+      : currentWorkspace.cluster.systems.find(candidate => candidate.id === store.selectedSystemId)?.objects.map(object => object.id) ?? [])
+    if (store.selectedObjectIds.some(id => !availableIds.has(id))) return false
+    setSelection(continuousSelection
+      ? { selectedObjectIds: [] }
+      : { selectedObjectId: null, selectedObjectIds: [] })
     storeCurrentSelection()
     editorError.value = ''
     return true
@@ -653,9 +691,13 @@ export function useEditorNavigation(options: {
     if (store.selectedObjectId && removedObjects.has(store.selectedObjectId)) next.selectedObjectId = null
     const survivingObjectIds = store.selectedObjectIds.filter(id => !removedObjects.has(id))
     if (survivingObjectIds.length !== store.selectedObjectIds.length) {
-      next.selectedObjectIds = survivingObjectIds.length > 1 ? survivingObjectIds : []
-      if (survivingObjectIds.length === 1) next.selectedObjectId = survivingObjectIds[0]!
-      else if (survivingObjectIds.length === 0) next.selectedObjectId = null
+      if (continuousMap.value && store.activeView === 'cluster') {
+        next.selectedObjectIds = survivingObjectIds
+      } else {
+        next.selectedObjectIds = survivingObjectIds.length > 1 ? survivingObjectIds : []
+        if (survivingObjectIds.length === 1) next.selectedObjectId = survivingObjectIds[0]!
+        else if (survivingObjectIds.length === 0) next.selectedObjectId = null
+      }
     }
     if (store.selectedOrbitId && removedOrbits.has(store.selectedOrbitId)) next.selectedOrbitId = null
     if (store.selectedRouteId && removedRoutes.has(store.selectedRouteId)) next.selectedRouteId = null
