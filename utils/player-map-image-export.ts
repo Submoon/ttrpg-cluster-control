@@ -23,11 +23,13 @@ const scenePadding = 24
 const titleBandHeight = 48
 const titleFontSize = 20
 
-interface PlayerMapPaint {
+export interface PlayerMapPaint {
   mapBackground: string
   mapCard: string
   mapLabelBorder: string
   mapInstallation: string
+  mapOrbit: string
+  mapSelected: string
   panelBackground: string
   line: string
   lineSoft: string
@@ -60,6 +62,8 @@ const lightPrintPaint: PlayerMapPaint = {
   mapCard: '#fffefa',
   mapLabelBorder: '#718077',
   mapInstallation: '#2e674b',
+  mapOrbit: '#596a60',
+  mapSelected: '#8f4a18',
   panelBackground: '#fffefa',
   line: '#796e5d',
   lineSoft: '#ded8ca',
@@ -78,6 +82,8 @@ const darkFallbackPaint: PlayerMapPaint = {
   mapCard: '#142225',
   mapLabelBorder: '#607477',
   mapInstallation: '#81b19a',
+  mapOrbit: '#7f9294',
+  mapSelected: '#ffc087',
   panelBackground: '#121c1e',
   line: '#65787a',
   lineSoft: '#293a3d',
@@ -121,7 +127,7 @@ function isFeatureless(scene: CurrentPlayerMapScene): boolean {
     : scene.document.objects.length === 0 && scene.document.orbits.length === 0
 }
 
-function playerMapPaint(palette: MapImagePalette): PlayerMapPaint {
+export function playerMapPaint(palette: MapImagePalette): PlayerMapPaint {
   if (palette === 'print-light') return lightPrintPaint
   if (typeof document === 'undefined') return lightPrintPaint
 
@@ -136,6 +142,8 @@ function playerMapPaint(palette: MapImagePalette): PlayerMapPaint {
     mapCard: read(CLUSTER_ROUTE_PAINT_VARIABLES.endpointFill, fallback.mapCard),
     mapLabelBorder: read(CLUSTER_ROUTE_PAINT_VARIABLES.labelBorder, fallback.mapLabelBorder),
     mapInstallation: read('--map-installation', fallback.mapInstallation),
+    mapOrbit: read('--map-orbit', fallback.mapOrbit),
+    mapSelected: read('--map-selected', fallback.mapSelected),
     panelBackground: read('--panel-bg', fallback.panelBackground),
     line: read('--line', fallback.line),
     lineSoft: read('--line-soft', fallback.lineSoft),

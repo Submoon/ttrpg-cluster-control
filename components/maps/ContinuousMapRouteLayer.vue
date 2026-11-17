@@ -1,5 +1,5 @@
 <template>
-  <g class="continuous-map-route-layer continuous-warden-route-layer" :class="{ 'is-move-enabled': moveEnabled }">
+  <g ref="layerElement" class="continuous-map-route-layer continuous-warden-route-layer" :class="{ 'is-move-enabled': moveEnabled }">
     <g
       v-for="mark in paintedMarks"
       :key="mark.id"
@@ -29,14 +29,14 @@
         <text class="cluster-route-label" dy="0.34em">{{ mark.label.text }}</text>
       </g>
       <text
-        v-if="mark.destinationCaption"
+        v-if="mark.destinationCaption && !destinationsInForeground"
         class="cluster-route-destination-caption"
         :transform="`translate(${mark.geometry.end.x} ${mark.geometry.end.y}) scale(${1 / scenePixelScale})`"
         x="8"
         y="4"
         aria-hidden="true"
       >{{ mark.destinationCaption }}</text>
-      <template v-if="mark.unresolved">
+      <template v-if="mark.unresolved && !destinationsInForeground">
         <circle
           class="cluster-exit-hit-target"
           :cx="mark.geometry.end.x"
@@ -57,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, shallowRef, useTemplateRef, watch } from 'vue'
 import type { Point } from '../../domain/workspace'
 import { continuousMapRouteCurve, type ContinuousMapRouteGeometry } from '../../utils/continuous-map-route-geometry'
 import { CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS, placeContinuousMapRouteLabels } from '../../utils/continuous-map-route-labels'
@@ -82,9 +82,11 @@ const props = defineProps<{
   svgPixelScale: number
   labelObstacles?: readonly SvgViewportRect[]
   moveEnabled?: boolean
+  destinationsInForeground?: boolean
 }>()
 
 const TRANSITION_DURATION_MS = 140
+const layerElement = useTemplateRef<SVGGElement>('layerElement')
 const animated = shallowRef<ReadonlyMap<string, ContinuousMapRouteGeometry>>(new Map())
 let frame: number | undefined
 
@@ -134,6 +136,11 @@ function routeIdAtStroke(event: MouseEvent): string | undefined {
   return nearestContinuousMapRouteHit(point, candidates, Math.hypot(matrix.a, matrix.b))
 }
 
+function focusRoute(id: string): void {
+  layerElement.value?.querySelector<SVGGElement>(`.cluster-route[data-route-id="${CSS.escape(id)}"]`)
+    ?.focus({ preventScroll: true })
+}
+
 watch(
   [() => props.geometries, () => props.detailSystemIds],
   ([next, nextDetail], [previous, previousDetail]) => {
@@ -179,7 +186,7 @@ watch(
 )
 
 onBeforeUnmount(stopAnimation)
-defineExpose({ routeIdAtStroke })
+defineExpose({ routeIdAtStroke, focusRoute })
 </script>
 
 <style scoped>
