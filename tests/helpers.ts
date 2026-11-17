@@ -317,6 +317,35 @@ export type ExportedMap<Route = JumpRoute> = {
 
 export type ScreenPoint = { x: number; y: number }
 
+/** Finds a real hit on the object, including a visible rim when its center is covered. */
+export async function exposedContinuousObjectHitPoint(
+  object: import('@playwright/test').Locator,
+): Promise<ScreenPoint | null> {
+  return object.locator('.continuous-warden-object-hit-target').evaluate(circle => {
+    if (!(circle instanceof SVGCircleElement)) return null
+    const owner = circle.closest('.continuous-warden-object')
+    const matrix = circle.getScreenCTM()
+    if (!owner || !matrix || getComputedStyle(circle).visibility === 'hidden') return null
+    const center = new DOMPoint(circle.cx.baseVal.value, circle.cy.baseVal.value)
+    const radius = circle.r.baseVal.value
+    const pixels = [center]
+    for (const fraction of [.45, .68, .87]) {
+      for (let index = 0; index < 16; index += 1) {
+        const angle = index * Math.PI / 8
+        pixels.push(new DOMPoint(
+          center.x + Math.cos(angle) * radius * fraction,
+          center.y + Math.sin(angle) * radius * fraction,
+        ))
+      }
+    }
+    for (const pixel of pixels) {
+      const { x, y } = pixel.matrixTransform(matrix)
+      if (document.elementFromPoint(x, y)?.closest('.continuous-warden-object') === owner) return { x, y }
+    }
+    return null
+  })
+}
+
 type AffineTransform = Readonly<{
   a: number
   b: number

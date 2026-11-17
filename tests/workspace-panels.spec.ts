@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
-import { expect, test, type Page } from './fixtures'
-import { activeWorkspaceFeedback, type ExportedMap, waitForWorkspaceSaved, openMapFilesSection, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation } from './helpers'
+import { expect, test, type Locator, type Page } from './fixtures'
+import { activeWorkspaceFeedback, exposedContinuousObjectHitPoint, type ExportedMap, waitForWorkspaceSaved, waitForWorkspaceStartup, openMapFilesSection, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation, workspaceZoomControls } from './helpers'
 
 async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }, systemName = 'Vesper'): Promise<void> {
   await page.setViewportSize(viewport)
@@ -265,6 +265,53 @@ test('touch long press keeps focus inside the compact inspector after the touch 
     const preview = await openPlayerPreview(page)
     await preview.getByRole('button', { name: 'Close player preview', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Map files', exact: true })).toBeFocused()
+
+    await page.goto('/?map=continuous')
+    await waitForWorkspaceStartup(page)
+    const continuousMap = page.getByRole('group', { name: 'Kestrel Reach continuous map', exact: true })
+    await setWorkspaceMapMode(page, 'Select')
+    const inspectorPanel = page.locator('#workspace-inspector-panel')
+    const closeInspectorPanel = page.getByRole('button', { name: 'Close inspector panel', exact: true })
+    if (await closeInspectorPanel.isVisible()) await closeInspectorPanel.click()
+    await expect(inspectorPanel).toBeHidden()
+    const continuousObjects = continuousMap.locator(
+      '.continuous-warden-object[data-system-id][data-object-id]',
+    )
+    const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
+    let continuousObject: Locator | null = null
+    let objectPoint: { x: number; y: number } | null = null
+    for (let step = 0; step <= 12 && !objectPoint; step += 1) {
+      for (let index = 0; index < await continuousObjects.count(); index += 1) {
+        const candidate = continuousObjects.nth(index)
+        const exposedPoint = await exposedContinuousObjectHitPoint(candidate)
+        if (!exposedPoint) continue
+        continuousObject = candidate
+        objectPoint = exposedPoint
+        break
+      }
+      if (!objectPoint && step < 12) await zoomIn.click()
+    }
+    if (!continuousObject || !objectPoint) {
+      throw new Error('No visible continuous map object has an exposed, owner-qualified touch target.')
+    }
+    await expect(continuousObject).toBeVisible()
+    const objectId = await continuousObject.getAttribute('data-object-id')
+    const systemId = await continuousObject.getAttribute('data-system-id')
+    if (!objectId || !systemId) throw new Error('The continuous map object has no owner-qualified selection identity.')
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ id: 1, x: objectPoint.x, y: objectPoint.y, radiusX: 2, radiusY: 2, force: 1 }],
+    })
+    const selectedObject = continuousMap.locator(
+      `.continuous-warden-object[data-system-id="${systemId}"][data-object-id="${objectId}"]`,
+    )
+    await expect(selectedObject).toHaveAttribute('aria-pressed', 'true')
+    // Keep the individual selection hold beyond both compatibility-click suppression timers.
+    await page.waitForTimeout(1_200)
+    await expect(inspectorPanel).toBeHidden()
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await expect(selectedObject).toHaveAttribute('aria-pressed', 'true')
+    await expect(inspectorPanel).toBeHidden()
   } finally {
     await cdp.detach()
   }
