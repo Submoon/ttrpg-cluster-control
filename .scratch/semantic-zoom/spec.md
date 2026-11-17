@@ -24,7 +24,7 @@ The application baseline after fetching was `dc5edb282087458c1bc6dd26287c96a9746
 
 During implementation on 2026-11-16, both `main` and `origin/main` advanced to `88d84f1749c7615b6dc5179f2bd4f24040d79f6a`. Tickets 09 and 10 were first verified against the original application baseline. The integration branch merged the updated main at `45c78ffb89bd6fab5b2973f84ec962ac45cb797c`; the updated application and dependency lock apply to subsequent integrated verification.
 
-On 2026-11-17, the Preview preparation fetch advanced `origin/main` to `686ea383`, and local `main` was fast-forwarded to match. The existing isolated ticket candidates still use the integrated `88d84f17` application baseline. Reconcile the newer marker colors, Warden draft presentation, and Dropbox backup and restore on the integrated candidate before final activation and verification.
+On 2026-11-17, the Preview preparation fetch advanced `origin/main` to `686ea383378184778711af552db589f6cfa14037`. Local `main` was fast-forwarded to match. The integration branch incorporated that application baseline at `6dbf693c6aa5f255f14c91a2a1ef91e9c2944892`, retaining marker colors, Warden draft presentation, and Dropbox backup and restore for the final qualification. Earlier isolated ticket checks used the integrated `88d84f17` baseline.
 
 ## User Stories
 
