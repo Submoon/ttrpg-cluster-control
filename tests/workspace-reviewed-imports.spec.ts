@@ -81,7 +81,7 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   await resolveImportReview(review, 'confirm')
   await expect(review).toBeHidden()
   await setHeaderMapActionsOpen(page, false)
-  await expect(context.getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
+  await expect(context.getByRole('heading', { name: 'Unapplied Reach', exact: true })).toBeVisible()
   await waitForWorkspaceSaved(page)
   const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft' })
   await expect(resumeDraft).toBeVisible()
@@ -91,6 +91,7 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   await hideWorkspaceInspector(page)
 
   const exported = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(exported.cluster?.name).toBe('Kestrel Reach')
   expect(exported.cluster?.systems.map(system => system.name)).toEqual(['Vesper', 'Incoming Vesper'])
   const importedSystem = exported.cluster?.systems.find(system => system.name === 'Incoming Vesper')
   expect(importedSystem?.id).not.toBe(incoming.systemId)
