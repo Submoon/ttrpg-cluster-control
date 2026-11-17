@@ -23,6 +23,16 @@
         Zoom continuously to reveal each system interior independently. In Move, drag a system anchor or name to update its Cluster position.
       </desc>
       <g class="cluster-map-content" :transform="cameraTransform">
+        <ContinuousWardenRouteLayer
+          :routes="routeMarks"
+          :geometries="routeGeometries"
+          :detail-system-ids="ready ? detailSystemIds : undefined"
+          :selected-route-id="selectedRouteId"
+          :viewport="viewport"
+          :viewport-rect="svgViewport"
+          :svg-pixel-scale="svgPixelScale"
+          :label-obstacles="routeLabelObstacles"
+        />
         <g class="cluster-map-items">
           <g
             v-for="projection in projections"
@@ -157,7 +167,7 @@
 /** Warden continuous scene with one D3 camera and independent system-envelope reveal. */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
-import type { JumpCluster, Point, StarSystem } from '../domain/workspace'
+import { jumpPointsInCluster, type JumpCluster, type Point, type StarSystem } from '../domain/workspace'
 import type { MapHistoryTarget, MapInteractionMode } from '../composables/editor-workflows/types'
 import type { InspectedMapTarget } from '../stores/editor-ui'
 import { initialClusterSystemPosition } from '../domain/workspace-cluster'
@@ -180,7 +190,9 @@ import {
   unprojectWardenClusterAnchor,
   type ContinuousWardenSystemProjection,
 } from '../utils/continuous-map-projection'
-import { clusterSystemPosition } from '../utils/cluster-map-geometry'
+import { clusterRouteLabel, clusterSystemPosition } from '../utils/cluster-map-geometry'
+import { buildContinuousWardenRouteGeometries } from '../utils/continuous-warden-routes'
+import { centerContinuousMapRouteViewport, revealContinuousMapRouteViewport } from '../utils/continuous-map-route-viewport'
 import {
   centerMapTargetViewport,
   minimumHistoryRevealViewport,
@@ -192,6 +204,7 @@ import { createMapTouchNavigation } from './maps/map-touch-navigation'
 import { exportMapImage, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
 import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
+import ContinuousWardenRouteLayer from './maps/ContinuousWardenRouteLayer.vue'
 
 const DETAIL_REVEAL_PIXELS = 250
 const DETAIL_HIDE_PIXELS = 210
@@ -199,14 +212,18 @@ const MINIMUM_FIT_PADDING = 48
 const SYSTEM_NAME_FONT_PIXELS = 18
 const SYSTEM_NAME_HEIGHT_PIXELS = 28
 const SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS = 8
+const ROUTE_REVEAL_PADDING_PIXELS = 14
+const OVERVIEW_DETAIL_SYSTEM_IDS: ReadonlySet<string> = new Set()
 
 const props = defineProps<{
   cluster: JumpCluster
   systemPositions: Readonly<Record<string, Point>>
+  unresolvedExitPositions?: Readonly<Record<string, Point>>
   objectAngles: Readonly<Record<string, number>>
   orbitRadii: Readonly<Record<string, { horizontal: number; vertical: number }>>
   orbitRotations: Readonly<Record<string, number>>
   selectedSystemId: string | null
+  selectedRouteId: string | null
   inspectedTarget: InspectedMapTarget | null
   mode: MapInteractionMode
   clusterAddType: 'system' | 'route' | null
@@ -222,6 +239,7 @@ const emit = defineEmits<{
   'activate-system': [id: string]
   'select-object': [systemId: string, objectId: string]
   'select-orbit': [systemId: string, orbitId: string]
+  'select-route': [routeId: string]
   'cluster-target': [point: Point, systemIds: string[]]
   'move-system': [id: string, position: Point]
   'move-target': [point: Point]
@@ -232,6 +250,7 @@ const emit = defineEmits<{
 const svgElement = ref<SVGSVGElement | null>(null)
 const viewport = ref<MapViewport>({ x: 0, y: 0, k: 1 })
 const previewPositions = ref(new Map<string, Point>())
+const exitPositionOverrides = ref(new Map<string, Point>())
 const previewVersions = ref(new Map<string, number>())
 const detailSystemIds = ref(new Set<string>())
 const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
@@ -269,6 +288,36 @@ const projections = computed(() => props.cluster.systems.map((system, index) => 
   systemGeometry.value,
 )))
 
+const routeMarks = computed(() => {
+  const jumpPoints = new Map(jumpPointsInCluster(props.cluster).map(reference => [reference.point.id, reference]))
+  return props.cluster.routes.map(route => {
+    const endpointLabel = clusterRouteLabel(route, props.cluster, jumpPoints)
+    return {
+      id: route.id,
+      jumpLevel: route.jumpLevel,
+      accessibleLabel: route.name ? `${endpointLabel}, ${route.name}` : endpointLabel,
+      unresolved: route.toSystemId === null,
+    }
+  })
+})
+
+const routeAnchorOverrides = computed(() => new Map(projections.value.flatMap(projection =>
+  previewPositions.value.has(projection.id) ? [[projection.id, anchorFor(projection)] as const] : [],
+)))
+
+function routesAtDetail(detail: ReadonlySet<string>) {
+  return buildContinuousWardenRouteGeometries({
+    routes: props.cluster.routes,
+    projections: projections.value,
+    detailSystemIds: detail,
+    anchorOverrides: routeAnchorOverrides.value,
+    unresolvedExitPositions: props.unresolvedExitPositions,
+    exitPositionOverrides: exitPositionOverrides.value,
+  })
+}
+
+const routeGeometries = computed(() => routesAtDetail(detailSystemIds.value))
+
 const sceneBounds = computed<SvgViewportRect | null>(() => {
   if (projections.value.length === 0) return null
   let left = Number.POSITIVE_INFINITY
@@ -281,6 +330,12 @@ const sceneBounds = computed<SvgViewportRect | null>(() => {
     top = Math.min(top, projection.envelope.y + delta.y)
     right = Math.max(right, projection.envelope.x + delta.x + projection.envelope.width)
     bottom = Math.max(bottom, projection.envelope.y + delta.y + projection.envelope.height)
+  }
+  for (const { bounds } of routesAtDetail(OVERVIEW_DETAIL_SYSTEM_IDS).values()) {
+    left = Math.min(left, bounds.x)
+    top = Math.min(top, bounds.y)
+    right = Math.max(right, bounds.x + bounds.width)
+    bottom = Math.max(bottom, bounds.y + bounds.height)
   }
   return [left, top, right, bottom].every(Number.isFinite)
     ? { x: left - MINIMUM_FIT_PADDING, y: top - MINIMUM_FIT_PADDING, width: right - left + MINIMUM_FIT_PADDING * 2, height: bottom - top + MINIMUM_FIT_PADDING * 2 }
@@ -471,6 +526,13 @@ function localObject(projectionId: string, objectId: string): StarSystem['object
   return props.cluster.systems.find(system => system.id === projectionId)?.objects.find(object => object.id === objectId)
 }
 
+const routeLabelObstacles = computed(() => nameLabels.value.map(label => ({
+  x: label.x - label.width / 2,
+  y: label.y,
+  width: label.width,
+  height: label.height,
+})))
+
 function objectGlyph(projectionId: string, objectId: string): string {
   const object = localObject(projectionId, objectId)
   if (!object) return '◇'
@@ -500,8 +562,7 @@ function orbitLabel(systemId: string, orbitId: string): string {
   return orbit ? `Select Orbit ${orbit.order}` : 'Select Orbit'
 }
 
-function updateDetailReveal(cameraScale: number): void {
-  if (!cameraInitialized) return
+function detailSystemIdsAtScale(cameraScale: number): Set<string> {
   const current = detailSystemIds.value
   const next = new Set<string>()
   for (const projection of projections.value) {
@@ -510,6 +571,13 @@ function updateDetailReveal(cameraScale: number): void {
       next.add(projection.id)
     }
   }
+  return next
+}
+
+function updateDetailReveal(cameraScale: number): void {
+  if (!cameraInitialized) return
+  const current = detailSystemIds.value
+  const next = detailSystemIdsAtScale(cameraScale)
   if (next.size !== current.size || [...next].some(id => !current.has(id))) {
     preserveFocusBeforeDetailCollapse(next)
     detailSystemIds.value = next
@@ -709,6 +777,7 @@ function centerInspectedTarget(target: InspectedMapTarget, usableRect?: SvgViewp
     return true
   }
   if (target.kind === 'system') return frameSystem(target.systemId, usableRect)
+  if (target.kind === 'route') return frameRoute(target.routeId, usableRect, true)
   if (target.kind === 'object' || target.kind === 'orbit') {
     return frameEntityTarget(
       target.systemId,
@@ -719,6 +788,27 @@ function centerInspectedTarget(target: InspectedMapTarget, usableRect?: SvgViewp
     )
   }
   return false
+}
+
+function frameRoute(routeId: string, usableRect: SvgViewportRect | undefined, center: boolean): boolean {
+  const element = svgElement.value
+  const route = props.cluster.routes.find(candidate => candidate.id === routeId)
+  const geometry = routeGeometries.value.get(routeId)
+  if (!element || !zoomBehavior || !route || !geometry) return false
+  const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
+  if (!rect) return false
+  const current = getViewport()
+  const options = { current, usableRect: rect, padding: ROUTE_REVEAL_PADDING_PIXELS / svgPixelScale.value }
+  const next = center
+    ? centerContinuousMapRouteViewport({
+        ...options,
+        geometryAt: scale => scale === current.k ? geometry : routesAtDetail(detailSystemIdsAtScale(scale)).get(routeId),
+      })
+    : revealContinuousMapRouteViewport({ ...options, geometry, unresolved: route.toSystemId === null })
+  if (!next) return false
+  if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
+    || next.k !== current.k) setViewport(next)
+  return true
 }
 
 function prepareSearchLocator(objectId: string): () => void {
@@ -750,7 +840,7 @@ watch(() => props.inspectedTarget, (target) => {
 
 function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportRect): boolean {
   if (!usableRect) return false
-  if (target.kind === 'route') return false
+  if (target.kind === 'route') return frameRoute(target.id, usableRect, false)
   const systemId = target.kind === 'system' ? target.id : target.systemId
   const projection = projections.value.find(candidate => candidate.id === systemId)
   const element = svgElement.value
@@ -883,6 +973,11 @@ function orbitTargetAtTarget(target: EventTarget | null): { systemId: string; or
   return systemId && orbitId ? { systemId, orbitId } : null
 }
 
+function routeIdAtTarget(target: EventTarget | null): string | null {
+  if (!(target instanceof Element)) return null
+  return target.closest('.cluster-route[data-route-id]')?.getAttribute('data-route-id') ?? null
+}
+
 function onPointerDownCapture(event: PointerEvent): void {
   if (event.button !== 0 || props.mode !== 'move' || props.moveTargeting || props.clusterMoveTargeting || props.clusterAddType !== null) return
   const systemId = systemIdAtTarget(event.target)
@@ -987,6 +1082,13 @@ function onClickCapture(event: MouseEvent): void {
     emit('cluster-target', normalized, systemIds)
     return
   }
+  const routeId = routeIdAtTarget(event.target)
+  if (routeId) {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('select-route', routeId)
+    return
+  }
   const objectTarget = objectTargetAtTarget(event.target)
   if (objectTarget) {
     event.preventDefault()
@@ -1012,9 +1114,10 @@ function onKeydownCapture(event: KeyboardEvent): void {
   const objectTarget = objectTargetAtTarget(event.target)
   const orbitTarget = orbitTargetAtTarget(event.target)
   const systemId = systemIdAtTarget(event.target)
+  const routeId = routeIdAtTarget(event.target)
   const action = continuousMapKeyboardIntent({
     key: event.key,
-    targetKind: objectTarget ? 'object' : orbitTarget ? 'orbit' : systemId ? 'system' : 'map',
+    targetKind: routeId ? 'route' : objectTarget ? 'object' : orbitTarget ? 'orbit' : systemId ? 'system' : 'map',
     addArmed: props.clusterAddType !== null,
     chooserOpen: props.clusterChooserOpen,
     moveTargeting: props.moveTargeting,
@@ -1023,7 +1126,8 @@ function onKeydownCapture(event: KeyboardEvent): void {
   if (!action) return
 
   if (action === 'add-target' || action === 'move-target') {
-    const scenePoint = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget)
+    const routeGeometry = routeId ? routeGeometries.value.get(routeId) : undefined
+    const scenePoint = routeGeometry?.midpoint ?? keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget)
     if (!scenePoint) return
     event.preventDefault()
     event.stopPropagation()
@@ -1046,6 +1150,12 @@ function onKeydownCapture(event: KeyboardEvent): void {
     return
   }
 
+  if (action === 'inspect-route' && routeId) {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('select-route', routeId)
+    return
+  }
   if (action === 'inspect-object' && objectTarget) {
     event.preventDefault()
     event.stopPropagation()
@@ -1116,6 +1226,13 @@ function setClusterSystemPositionPreview(systemId: string, position: Point | nul
 
 function getClusterSystemPositionPreviewVersion(systemId: string): number {
   return previewVersions.value.get(systemId) ?? 0
+}
+
+function setUnresolvedExitPositionPreview(routeId: string, position: Point | null): void {
+  const next = new Map(exitPositionOverrides.value)
+  if (position) next.set(routeId, position)
+  else next.delete(routeId)
+  exitPositionOverrides.value = next
 }
 
 function exportImage(format: MapImageFormat, palette: MapImagePalette = 'active'): Promise<Blob> {
@@ -1249,6 +1366,7 @@ defineExpose({
   endTouchNavigation,
   setClusterSystemPositionPreview,
   getClusterSystemPositionPreviewVersion,
+  setUnresolvedExitPositionPreview,
   whenReady: () => readiness,
 })
 </script>

@@ -283,7 +283,7 @@
             <WorkspaceZoomControls
               :zoom-level="zoomLevel"
               :minimum-zoom-level="minimumZoomLevel"
-              :center-available="continuousMapEnabled && inspectedTarget !== null && inspectedTarget.kind !== 'route'"
+              :center-available="continuousMapEnabled && inspectedTarget !== null"
               :compact-modal-open="compactPanelOpen"
               @zoom-by="zoomActiveMap"
               @zoom-to="setViewportPercentage"

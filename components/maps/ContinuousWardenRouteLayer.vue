@@ -65,7 +65,7 @@ interface RouteMark {
 const props = defineProps<{
   routes: readonly RouteMark[]
   geometries: ReadonlyMap<string, ContinuousMapRouteGeometry>
-  detailSystemIds: ReadonlySet<string>
+  detailSystemIds?: ReadonlySet<string>
   selectedRouteId: string | null
   viewport: MapViewport
   viewportRect: SvgViewportRect
@@ -110,7 +110,7 @@ watch(
   ([next, nextDetail], [previous, previousDetail]) => {
     const displayed = animated.value
     stopAnimation()
-    if (nextDetail === previousDetail || typeof window === 'undefined'
+    if (!previousDetail || !nextDetail || nextDetail === previousDetail || typeof window === 'undefined'
       || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
 
     const motions = [...next].flatMap(([id, to]) => {

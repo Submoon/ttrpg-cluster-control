@@ -5,6 +5,7 @@
         <span class="section-kicker">JUMP ROUTE / SELECTED</span>
         <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">SYSTEM CONNECTIONS</span>
         <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">Jump Level {{ selectedRoute.jumpLevel }}</h2>
+        <p v-if="selectedRoute.name" class="inspector-intro [overflow-wrap:anywhere]">{{ selectedRoute.name }}</p>
         <p class="inspector-intro mb-[1em]">
           Routes connect systems directly. Local Jump Points are optional; Stations remain separate physical locations.
         </p>

@@ -34,6 +34,7 @@
       ref="continuousWardenMapRef"
       :cluster="props.workspace.cluster"
       :system-positions="props.workspace.layout.systemPositions"
+      :unresolved-exit-positions="props.workspace.layout.unresolvedExitPositions"
       :object-angles="props.workspace.layout.objectAngles"
       :orbit-radii="props.workspace.layout.orbitRadii"
       :orbit-rotations="props.workspace.layout.orbitRotations"
@@ -41,6 +42,7 @@
         ? props.inspectedTarget.systemId
         : props.selectedSystemId"
       :inspected-target="props.inspectedTarget ?? null"
+      :selected-route-id="props.selectedRouteId"
       :mode="props.mode"
       :cluster-add-type="props.clusterAddType ?? null"
       :cluster-chooser-open="props.clusterChooserOpen ?? false"
@@ -52,6 +54,7 @@
       @activate-system="handleSystemActivation"
       @select-object="(systemId, objectId) => emit('select-continuous-object', systemId, objectId)"
       @select-orbit="(systemId, orbitId) => emit('select-continuous-orbit', systemId, orbitId)"
+      @select-route="handleRouteSelection"
       @cluster-target="forwardClusterTarget"
       @move-target="forwardMoveTarget"
       @move-system="forwardMoveSystem"
@@ -1451,7 +1454,7 @@ defineExpose({
     return continuousWardenMapRef.value?.getClusterSystemPositionPreviewVersion(systemId)
   },
   setUnresolvedExitPositionPreview: (routeId: string, position: Point | null) => {
-    if (props.activeView === 'cluster') clusterMapRef.value?.setUnresolvedExitPositionPreview(routeId, position)
+    if (props.activeView === 'cluster') currentClusterMap()?.setUnresolvedExitPositionPreview(routeId, position)
   },
   setObjectPlacementPreview: (objectId: string, scenePoint: Point | null) => {
     if (props.activeView === 'system') systemMapRef.value?.setObjectPlacementPreview(objectId, scenePoint)
