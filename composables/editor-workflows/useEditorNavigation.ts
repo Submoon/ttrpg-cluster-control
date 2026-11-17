@@ -207,13 +207,13 @@ export function useEditorNavigation(options: {
   })
 
   /** Formats route endpoints with explicit unresolved and missing-reference fallbacks. */
-  function routeEndpointSummary(routeValue: JumpRoute): string {
-    const origin = jumpPoints.value.find(({ point }) => point.id === routeValue.fromPointId)
+  function routeEndpointSummary(routeValue: JumpRoute, points = jumpPoints.value): string {
+    const origin = points.find(({ point }) => point.id === routeValue.fromPointId)
     let destination: string
     if (routeValue.toPointId === null) {
       destination = `Unknown destination: ${routeValue.unresolvedExit}`
     } else {
-      const reference = jumpPoints.value.find(({ point }) => point.id === routeValue.toPointId)
+      const reference = points.find(({ point }) => point.id === routeValue.toPointId)
       destination = reference ? `${reference.point.name} (${reference.system.name})` : 'Missing Jump Point'
     }
     const originName = origin ? `${origin.point.name} (${origin.system.name})` : 'Missing Jump Point'

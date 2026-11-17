@@ -1,10 +1,11 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import type { EditorWorkflowOptions, ObjectInspectorFocusRequest } from './editor-workflows/types'
+import type { EditorWorkflowOptions, EntityCommand, ObjectInspectorFocusRequest } from './editor-workflows/types'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useClusterSystemPlacement } from './editor-workflows/useClusterSystemPlacement'
 import { useClusterWorkflows } from './editor-workflows/useClusterWorkflows'
 import { useChartNamesSession } from './editor-workflows/useChartNamesSession'
 import { useContinuousOrbitAdjustments } from './editor-workflows/continuous-orbit-adjustments'
+import { draftPlacementGuard } from './editor-workflows/draft-placement-guards'
 import { useEditorMapControls } from './editor-workflows/useEditorMapControls'
 import { useEditorNavigation } from './editor-workflows/useEditorNavigation'
 import { useEditorTransitions } from './editor-workflows/useEditorTransitions'
@@ -96,6 +97,30 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     beforeWorkspaceOperation,
   })
 
+  /** A detached, read-only Warden view composed from the applied snapshot and current edit sessions. */
+  const wardenDraftWorkspace = computed(() => {
+    const applied = workspace.value
+    if (!applied) return null
+    let projected = applied
+    for (const projectDraft of [entity.projectDraft, route.projectDraft, charts.projectDraft]) {
+      const next = projectDraft(projected)
+      if (next) projected = next
+    }
+    return projected === applied ? null : projected
+  })
+  const placementGuard = computed(() => {
+    const applied = workspace.value
+    const draft = wardenDraftWorkspace.value
+    const system = selectedSystemForChart.value
+    const projected = draft?.cluster.systems.find(candidate => candidate.id === system?.id)
+    if (!applied || !draft || !system || !projected) return null
+    if (projected === system && applied.layout === draft.layout) return null
+    return draftPlacementGuard(system, applied.layout, projected, draft.layout)
+  })
+  function isEntityCommandBlocked(command: EntityCommand): boolean {
+    return entity.isEntityCommandBlocked(command) || (placementGuard.value?.(command) ?? false)
+  }
+
   async function applyEntitySession(sessionId?: number): Promise<boolean> {
     const submittedSession = entity.entitySession.value
     const expectedId = sessionId ?? submittedSession?.id
@@ -182,7 +207,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     chart: charts,
     transitions,
     viewport,
-    entity,
+    entity: { ...entity, isEntityCommandBlocked },
     route,
     editorError,
     beforeWorkspaceOperation,
@@ -410,6 +435,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   }
 
   return {
+    wardenDraftWorkspace,
     move: {
       ...move,
       error: computed(() => collectiveMoveError.value),
@@ -441,7 +467,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       entitySession: entity.entitySession,
       hasModifiedEntitySession: entity.hasModifiedEntitySession,
       orbitPlacementPreview: entity.orbitPlacementPreview,
-      isEntityCommandBlocked: entity.isEntityCommandBlocked,
+      isEntityCommandBlocked,
       resumeEntitySession: navigation.resumeEntitySession,
       beginObjectEdit: map.beginObjectEdit,
       beginOrbitEdit: map.beginOrbitEdit,

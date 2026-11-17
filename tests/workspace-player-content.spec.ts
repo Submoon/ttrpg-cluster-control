@@ -15,11 +15,13 @@ import {
   waitForWorkspaceSaved,
 } from './helpers'
 
-test('a Warden publishes committed Player text while keeping drafts and GM notes private', async ({ page, context }) => {
+test('a Warden shares applied player text and marker color while keeping drafts and GM notes private', async ({ page, context }) => {
   test.setTimeout(45_000)
   const publicText = 'A sheltered landing basin.'
   const privateNotes = 'GM ONLY: smuggler entrance'
   const unappliedText = 'UNAPPLIED: secret tunnel'
+  const markerColor = '#a151bf'
+  const markerFill = 'rgb(161, 81, 191)'
   const { systemName } = await createSingleSystemWorkspace(page)
   await addCatalogueObject(page, 'planet')
 
@@ -29,6 +31,13 @@ test('a Warden publishes committed Player text while keeping drafts and GM notes
   const playerText = inspector.getByLabel('Player text', { exact: true })
   await playerText.fill(publicText)
   await inspector.getByLabel('GM notes', { exact: true }).fill(privateNotes)
+  const colorButton = inspector.getByRole('button', { name: /^Marker color:/ })
+  await colorButton.click()
+  const hexColor = inspector.getByLabel('Hex color', { exact: true })
+  await hexColor.fill(markerColor)
+  await expect(colorButton).toHaveAccessibleName(`Marker color: ${markerColor}`)
+  await page.keyboard.press('Escape')
+  await expect(colorButton).toBeFocused()
   await saveMapObject(page)
   await waitForWorkspaceSaved(page)
 
@@ -65,17 +74,26 @@ test('a Warden publishes committed Player text while keeping drafts and GM notes
   await editMapObject(page)
   await expect(inspector.getByLabel('GM notes', { exact: true })).toHaveValue(privateNotes)
   await playerText.fill(unappliedText)
+  await colorButton.click()
+  await hexColor.fill('#22664c')
+  await page.keyboard.press('Escape')
+  await expect(colorButton).toHaveAccessibleName('Marker color: #22664c')
+  const wardenMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
+  const wardenMarker = wardenMap.getByRole('button', { name: /Select .*Pilgrim World/ })
+  await expect(wardenMarker.locator('.system-object-glyph')).toHaveCSS('fill', 'rgb(34, 102, 76)')
   const preview = await openPlayerPreview(page)
   await preview.getByRole('button', { name: `Open ${systemName} system preview`, exact: true }).click()
+  const previewMarker = preview.getByRole('button', { name: 'Inspect Pilgrim World', exact: true })
+  const previewGlyph = previewMarker.locator('.player-system-object-glyph')
+  await expect(previewGlyph).toHaveCSS('fill', markerFill)
   await preview.getByRole('button', { name: 'Filters', exact: true }).click()
   const previewFilters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
   await previewFilters.getByRole('checkbox', { name: 'Planet', exact: true }).check()
   await expect(preview.getByRole('button', { name: 'Filters (1 active criterion)', exact: true })).toBeVisible()
-  await expect(preview.getByRole('button', { name: 'Inspect Pilgrim World', exact: true }))
-    .not.toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(previewMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
   await previewFilters.getByRole('button', { name: 'Close filters', exact: true }).click()
-  await preview.getByRole('button', { name: 'Inspect Pilgrim World', exact: true })
-    .locator('.player-system-object-hit-target').click()
+  await previewMarker.locator('.player-system-object-hit-target').click()
+  await expect(previewGlyph).toHaveCSS('fill', markerFill)
   await expect(preview.getByRole('region', { name: 'Player object details' })).toContainText(publicText)
   await expect(preview).not.toContainText(privateNotes)
   await expect(preview).not.toContainText(unappliedText)
@@ -97,6 +115,7 @@ test('a Warden publishes committed Player text while keeping drafts and GM notes
     disclosure: 'revealed',
     label: 'Pilgrim World',
     playerText: publicText,
+    markerColor,
   }))
   expect(json).not.toContain(privateNotes)
   expect(json).not.toContain(unappliedText)
@@ -121,4 +140,5 @@ test('a Warden publishes committed Player text while keeping drafts and GM notes
   await expect(view).toBeFocused()
   await setHeaderMapActionsOpen(page, false)
   await expect(playerText).toHaveValue(unappliedText)
+  await expect(colorButton).toHaveAccessibleName('Marker color: #22664c')
 })
