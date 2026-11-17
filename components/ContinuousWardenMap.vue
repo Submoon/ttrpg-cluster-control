@@ -186,7 +186,12 @@ import {
 } from '../utils/continuous-map-projection'
 import { applySelectedObjectTranslation, planSelectedObjectTranslation } from '../utils/selected-object-placement'
 import { creationCandidatesAtPoint, toNormalizedMapPoint, type SystemMapGeometry } from '../utils/system-map-geometry'
-import { resolveContinuousObjectOwnerIds, type ContinuousObjectAddOwner, type ContinuousObjectAddTarget } from '../utils/continuous-map-editing'
+import {
+  continuousOrbitAddKeyboardPoint,
+  resolveContinuousObjectOwnerResolution,
+  type ContinuousObjectAddOwner,
+  type ContinuousObjectAddTarget,
+} from '../utils/continuous-map-editing'
 import { clusterSystemPosition } from '../utils/cluster-map-geometry'
 import {
   centerMapTargetViewport,
@@ -218,6 +223,8 @@ const props = defineProps<{
   inspectedTarget: InspectedMapTarget | null
   mode: MapInteractionMode
   creationType: SystemCreationType | null
+  creationOtherType: string | null
+  objectAddPinnedOwnerId: string | null
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
   clusterAddType: 'system' | 'route' | null
   clusterChooserOpen: boolean
@@ -939,7 +946,11 @@ function systemMapGeometry(workspace: LocalWorkspace): SystemMapGeometry {
   }
 }
 
-function addOwnersAtPoint(point: Point, subtype: CatalogueSubtype, definiteOwnerId: string | null): ContinuousObjectAddOwner[] {
+function addOwnersAtPoint(
+  point: Point,
+  subtype: CatalogueSubtype,
+  definiteOwnerId: string | null,
+): { owners: ContinuousObjectAddOwner[]; requiresOwnerChoice: boolean } {
   const systems = projections.value.map(projection => ({
     id: projection.id,
     envelope: {
@@ -949,9 +960,9 @@ function addOwnersAtPoint(point: Point, subtype: CatalogueSubtype, definiteOwner
       height: projection.envelope.height,
     },
   }))
-  const systemIds = resolveContinuousObjectOwnerIds(point, systems, definiteOwnerId)
+  const ownerResolution = resolveContinuousObjectOwnerResolution(point, systems, definiteOwnerId)
   const geometry = systemMapGeometry(props.workspace)
-  return systemIds.flatMap(systemId => {
+  const owners = ownerResolution.systemIds.flatMap(systemId => {
     const projection = projections.value.find(candidate => candidate.id === systemId)
     const system = props.cluster.systems.find(candidate => candidate.id === systemId)
     if (!projection || !system) return []
@@ -964,6 +975,7 @@ function addOwnersAtPoint(point: Point, subtype: CatalogueSubtype, definiteOwner
         : candidate)
     return [{ systemId, candidates }]
   })
+  return { owners, requiresOwnerChoice: ownerResolution.requiresOwnerChoice }
 }
 
 function offerObjectAdd(point: Point, target: EventTarget | null): void {
@@ -971,19 +983,23 @@ function offerObjectAdd(point: Point, target: EventTarget | null): void {
   if (type?.kind !== 'object') return
   const object = objectTargetAtTarget(target)
   const orbit = orbitTargetAtTarget(target)
-  const directSystemId = object?.systemId ?? orbit?.systemId ?? systemIdAtTarget(target)
-  const directTarget = object
-    ? { kind: 'object' as const, id: object.objectId }
-    : orbit
-      ? { kind: 'orbit' as const, id: orbit.orbitId }
-      : directSystemId
-        ? { kind: 'system' as const, id: directSystemId }
+  const hitOwnerId = object?.systemId ?? orbit?.systemId ?? null
+  const pinnedOwnerId = props.objectAddPinnedOwnerId
+  const directTarget = pinnedOwnerId && hitOwnerId && pinnedOwnerId !== hitOwnerId
+    ? null
+    : object
+      ? { kind: 'object' as const, id: object.objectId }
+      : orbit
+        ? { kind: 'orbit' as const, id: orbit.orbitId }
         : null
+  const ownerResolution = addOwnersAtPoint(point, type.subtype, pinnedOwnerId ?? hitOwnerId)
   emit('continuous-object-add-target', {
     subtype: type.subtype,
     workspaceSnapshot: props.workspace,
     directTarget,
-    owners: addOwnersAtPoint(point, type.subtype, directSystemId),
+    ...(type.subtype === 'other' && props.creationOtherType ? { otherType: props.creationOtherType } : {}),
+    requiresOwnerChoice: ownerResolution.requiresOwnerChoice,
+    owners: ownerResolution.owners,
   })
 }
 
@@ -1233,7 +1249,7 @@ function onKeydownCapture(event: KeyboardEvent): void {
   if (props.creationType?.kind === 'object'
     && (event.key === 'Enter' || event.key === ' ')
     && !props.clusterChooserOpen && !props.moveTargeting && !props.clusterMoveTargeting) {
-    const point = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget)
+    const point = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget, true)
     if (point) {
       event.preventDefault()
       event.stopPropagation()
@@ -1298,6 +1314,7 @@ function keyboardTargetScenePoint(
   systemId: string | null,
   objectTarget: { systemId: string; objectId: string } | null,
   orbitTarget: { systemId: string; orbitId: string } | null,
+  forObjectAdd = false,
 ): Point | null {
   if (systemId) {
     const projection = projections.value.find(candidate => candidate.id === systemId)
@@ -1317,7 +1334,10 @@ function keyboardTargetScenePoint(
   if (orbitTarget && orbitProjection) {
     const orbit = orbitProjection.orbits.find(candidate => candidate.id === orbitTarget.orbitId)
     const delta = anchorDelta(orbitProjection)
-    if (orbit) return { x: orbit.sceneCenter.x + delta.x, y: orbit.sceneCenter.y + delta.y }
+    if (orbit) {
+      if (forObjectAdd) return continuousOrbitAddKeyboardPoint(orbit, delta)
+      return { x: orbit.sceneCenter.x + delta.x, y: orbit.sceneCenter.y + delta.y }
+    }
   }
   if (!(target instanceof SVGSVGElement) || target !== svgElement.value) return null
   const current = getViewport()

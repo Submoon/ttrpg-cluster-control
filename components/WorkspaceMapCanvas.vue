@@ -44,6 +44,8 @@
       :inspected-target="props.inspectedTarget ?? null"
       :mode="props.mode"
       :creation-type="props.creationType ?? null"
+      :creation-other-type="props.creationOtherType ?? null"
+      :object-add-pinned-owner-id="props.objectAddPinnedOwnerId ?? null"
       :is-entity-command-blocked="props.isEntityCommandBlocked"
       :cluster-add-type="props.clusterAddType ?? null"
       :cluster-chooser-open="props.clusterChooserOpen ?? false"
@@ -197,6 +199,8 @@ const props = defineProps<{
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
   feedbackElement?: HTMLElement | null
   creationType?: SystemCreationType | null
+  creationOtherType?: string | null
+  objectAddPinnedOwnerId?: string | null
   creationPreview?: SystemCreationPreview | null
   creationChooserOpen?: boolean
   clusterAddType?: 'system' | 'route' | null
