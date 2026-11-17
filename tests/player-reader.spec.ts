@@ -369,6 +369,7 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   legacyShareUrl.searchParams.set('map', 'continuous')
   legacyShareUrl.hash = `player=1.gzip.${gzipSync(Buffer.from(JSON.stringify({
     ...document,
+    version: 1,
     routes: [legacyLoop],
   }), 'utf8')).toString('base64url')}`
   await page.setViewportSize({ width: 1280, height: 800 })

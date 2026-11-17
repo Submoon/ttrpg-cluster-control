@@ -78,6 +78,7 @@ test('compressed player links round-trip canonical public data without extension
 test('legacy player links drop resolved same-system loops while retaining anonymous routes @pure', async () => {
   const legacyDocument = {
     ...publicDocument,
+    version: 1,
     systems: [
       ...publicDocument.systems,
       {
@@ -107,6 +108,7 @@ test('legacy player links drop resolved same-system loops while retaining anonym
 
   const decoded = await decodePlayerShareFragment(originalFragment)
 
+  expect(decoded.version).toBe(2)
   expect(decoded.routes).toEqual([legacyDocument.routes[1]])
   expect(originalFragment).toContain('player=1.gzip.')
   expect(decoded.systems).toEqual(legacyDocument.systems)
