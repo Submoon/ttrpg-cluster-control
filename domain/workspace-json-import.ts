@@ -10,6 +10,7 @@ import type {
   JsonImportSummary,
   LocalWorkspace,
   Orbit,
+  Point,
   PreparedJsonImport,
   StarSystem,
   StarSystemExport,
@@ -24,7 +25,7 @@ import {
   withoutLegacyObjectApplicabilityTargets,
 } from './workspace-schema'
 import { minimumOrbitRadius, normalizeOrbitRadii, normalizeOrbitRotations, orbitRadiiMeetMinimum } from './workspace-orbits'
-import { isObjectFieldSettings, isRecord, objectFieldValidationError } from './workspace-validation'
+import { isObjectFieldSettings, isPoint, isRecord, objectFieldValidationError } from './workspace-validation'
 
 type ImportableMap =
   | (Omit<JumpClusterExport, 'version'> & { version: 1 | 2 | 3 | 4 | 5 })
@@ -380,10 +381,15 @@ export function restoreJumpClusterBackup(value: unknown): LocalWorkspace {
  * Explicit applicability scopes are unioned, while an undefined/global scope dominates the union.
  * @param workspace Current workspace into which the copy would be added.
  * @param value Parsed JSON candidate.
+ * @param standaloneAnchor Optional Cluster position for an imported standalone system.
  * @returns Proposed next workspace, IDs of added systems, and an informational collision/match summary.
  * @throws If the export is invalid, same-name custom fields conflict, or the proposed workspace fails validation.
  */
-export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): PreparedJsonImport {
+export function prepareJsonImport(
+  workspace: LocalWorkspace,
+  value: unknown,
+  standaloneAnchor?: Point,
+): PreparedJsonImport {
   const map = prepareImportedMap(value)
   if (!isImportedMap(map)) {
     throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
@@ -554,9 +560,9 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
     if (!addedSystemId) {
       throw new Error('The imported star system is missing.')
     }
-    layout.systemPositions[addedSystemId] = initialClusterSystemPosition(
-      workspace.cluster.systems.length,
-    )
+    const anchor = standaloneAnchor ?? initialClusterSystemPosition(workspace.cluster.systems.length)
+    if (!isPoint(anchor)) throw new Error('Choose a finite Cluster position for the imported star system.')
+    layout.systemPositions[addedSystemId] = { x: anchor.x, y: anchor.y }
   }
   const importedOrbitRadii = normalizeOrbitRadii(
     map.layout.orbitRadii,
