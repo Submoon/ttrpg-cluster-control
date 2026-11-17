@@ -1,6 +1,6 @@
 ---
 title: "Draw and inspect Jump Routes through semantic zoom"
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
