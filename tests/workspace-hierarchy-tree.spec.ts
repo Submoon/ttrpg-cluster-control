@@ -4,6 +4,7 @@ import {
   captureMapExportBlobs,
   type DownloadWindow,
   downloadJson,
+  exposedContinuousObjectHitPoint,
   type ExportedMap,
   openMapFilesSection,
   openWorkspaceHierarchy,
@@ -36,32 +37,7 @@ function expectPositionNear(
 
 function hierarchyObjectName(name: string, owner: string): RegExp {
   const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`^${escape(name)}.*${escape(owner)}`)
-}
-
-async function exposedObjectHitPoint(mark: Locator): Promise<{ x: number; y: number } | null> {
-  return mark.locator('.continuous-warden-object-hit-target').evaluate(circle => {
-    const owner = circle.closest('.continuous-warden-object')
-    const matrix = circle.getScreenCTM()
-    if (!owner || !matrix || getComputedStyle(circle).visibility === 'hidden') return null
-    const bounds = circle.getBBox()
-    const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
-    const radius = Math.min(bounds.width, bounds.height) * 0.42
-    const candidates = [0, 8, 12, radius].flatMap(distance => distance === 0
-      ? [center]
-      : Array.from({ length: 16 }, (_, index) => {
-          const angle = index * Math.PI / 8
-          return { x: center.x + Math.cos(angle) * distance, y: center.y + Math.sin(angle) * distance }
-        }))
-    for (const candidate of candidates) {
-      const point = new DOMPoint(candidate.x, candidate.y).matrixTransform(matrix)
-      const hit = document.elementFromPoint(point.x, point.y)
-      if (hit instanceof Element && hit.closest('.continuous-warden-object') === owner) {
-        return { x: point.x, y: point.y }
-      }
-    }
-    return null
-  })
+  return new RegExp(`${escape(name)}.*${escape(owner)}`)
 }
 
 async function visibleIndicatorObjectIds(indicators: Locator): Promise<string[]> {
@@ -631,11 +607,19 @@ test('continuous Warden group movement previews and commits across owning system
     name: hierarchyObjectName(otherOwnerObject.name, otherOwner.name),
   })
   await sourceRow.click()
+  await workspaceZoomControls(page).getByRole('button', { name: 'Center selected target', exact: true }).click()
   const sameOwnerMark = continuousMap.locator(
     `.continuous-warden-object[data-system-id="${sourceOwner.id}"][data-object-id="${sameOwnerObject.id}"]`,
   )
   await expect(sameOwnerMark).toBeVisible()
-  await sameOwnerMark.click({ modifiers: ['Shift'] })
+  const modifierHit = await exposedContinuousObjectHitPoint(sameOwnerMark)
+  if (!modifierHit) throw new Error('The second same-system object has no exposed hit target.')
+  await page.keyboard.down('Shift')
+  try {
+    await page.mouse.click(modifierHit.x, modifierHit.y)
+  } finally {
+    await page.keyboard.up('Shift')
+  }
   await otherOwnerRow.click({ modifiers: ['Shift'] })
   await expect(sourceRow).toHaveAttribute('aria-selected', 'true')
   await expect(otherOwnerRow).toHaveAttribute('aria-selected', 'true')
@@ -647,7 +631,7 @@ test('continuous Warden group movement previews and commits across owning system
   )
   await expect(sourceMark).toBeVisible()
   const originalTransform = await sourceMark.getAttribute('transform')
-  const start = await exposedObjectHitPoint(sourceMark)
+  const start = await exposedContinuousObjectHitPoint(sourceMark)
   if (!originalTransform || !start) throw new Error('The selected Warden group anchor has no exposed hit target.')
   const moveSelectedGroup = async () => {
     await page.mouse.move(start.x, start.y)

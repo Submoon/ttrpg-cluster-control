@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Locator, type Page } from './fixtures'
-import { activeWorkspaceFeedback, type ExportedMap, waitForWorkspaceSaved, waitForWorkspaceStartup, openMapFilesSection, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation, workspaceZoomControls } from './helpers'
+import { activeWorkspaceFeedback, exposedContinuousObjectHitPoint, type ExportedMap, waitForWorkspaceSaved, waitForWorkspaceStartup, openMapFilesSection, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation, workspaceZoomControls } from './helpers'
 
 async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }, systemName = 'Vesper'): Promise<void> {
   await page.setViewportSize(viewport)
@@ -10,31 +10,6 @@ async function createWorkspace(page: Page, viewport = { width: 1440, height: 960
   await page.getByLabel('First star system').fill(systemName)
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
-}
-
-async function exposedContinuousObjectHitPoint(mark: Locator): Promise<{ x: number; y: number } | null> {
-  return mark.locator('.continuous-warden-object-hit-target').evaluate(circle => {
-    const owner = circle.closest('.continuous-warden-object')
-    const matrix = circle.getScreenCTM()
-    if (!owner || !matrix || getComputedStyle(circle).visibility === 'hidden') return null
-    const bounds = circle.getBBox()
-    const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
-    const radius = Math.min(bounds.width, bounds.height) * 0.42
-    const candidates = [0, 8, 12, radius].flatMap(distance => distance === 0
-      ? [center]
-      : Array.from({ length: 16 }, (_, index) => {
-          const angle = index * Math.PI / 8
-          return { x: center.x + Math.cos(angle) * distance, y: center.y + Math.sin(angle) * distance }
-        }))
-    for (const candidate of candidates) {
-      const point = new DOMPoint(candidate.x, candidate.y).matrixTransform(matrix)
-      const hit = document.elementFromPoint(point.x, point.y)
-      if (hit instanceof Element && hit.closest('.continuous-warden-object') === owner) {
-        return { x: point.x, y: point.y }
-      }
-    }
-    return null
-  })
 }
 
 async function expectCompactPanel(
