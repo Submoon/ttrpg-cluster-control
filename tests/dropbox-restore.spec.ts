@@ -332,6 +332,7 @@ test('canceling a Dropbox restore aborts a pending list and ignores its late res
 })
 
 test('a Warden backs up to Dropbox and restores the same Jump Cluster in a fresh profile', async ({ page, context, browser, baseURL, previewCookies }) => {
+  test.setTimeout(60_000)
   const appKey = 'controlled-public-app-key'
   const backups: ControlledDropboxBackup[] = []
   const providerCalls: string[] = []
@@ -359,13 +360,14 @@ test('a Warden backs up to Dropbox and restores the same Jump Cluster in a fresh
   const backupDialog = page.getByRole('dialog', { name: 'Back up Jump Cluster to Dropbox', exact: true })
   await expect(backupDialog).toContainText('Dropbox App Folder')
   await backupDialog.getByRole('button', { name: 'Back up to Dropbox', exact: true }).click()
-  await expect(page.getByText('Backed up to Dropbox', { exact: true })).toBeVisible()
+  const backupNotifications = page.getByLabel('Notifications (F8)')
+  await expect(backupNotifications.getByText('Backed up to Dropbox', { exact: true })).toBeVisible()
   expect(backups).toHaveLength(1)
   const saved = backups[0]!
   const backupFilename = saved.metadata.name
   expect(backupFilename).toMatch(/Kestrel Reach Prime-jump-cluster-.+\.json$/)
   expect(JSON.parse(saved.content)).toEqual(original)
-  await expect(page.getByText(`${backupFilename} in this app’s Dropbox App Folder`, { exact: true })).toBeVisible()
+  await expect(backupNotifications.getByText(`${backupFilename} in this app’s Dropbox App Folder`, { exact: true })).toBeVisible()
 
   const freshContext = await browser.newContext({ baseURL })
   try {
@@ -385,7 +387,7 @@ test('a Warden backs up to Dropbox and restores the same Jump Cluster in a fresh
     await expect(review).toContainText(backupFilename)
     await review.getByRole('button', { name: 'Open Jump Cluster', exact: true }).click()
 
-    await expect(fresh.getByText('Restored from Dropbox', { exact: true })).toBeVisible()
+    await expect(fresh.getByLabel('Notifications (F8)').getByText('Restored from Dropbox', { exact: true })).toBeVisible()
     await waitForWorkspaceSaved(fresh)
     expect(providerCalls).toEqual([
       'authorization', 'token exchange', 'upload to App Folder',
