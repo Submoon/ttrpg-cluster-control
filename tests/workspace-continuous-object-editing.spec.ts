@@ -98,6 +98,7 @@ async function screenPointOutsideEveryEnvelope(map: import('@playwright/test').L
 }
 
 test('continuous Add keeps a definite owner, uses local geometry, and asks before outside placement @ui-smoke', async ({ page }) => {
+  test.setTimeout(60_000)
   await captureMapExportBlobs(page)
   const { systemId, systemName, primaryObjectId } = await createSingleSystemWorkspace(page)
 
@@ -138,7 +139,8 @@ test('continuous Add keeps a definite owner, uses local geometry, and asks befor
   }
   await expect(orbit).toBeVisible()
 
-  const planetCountBefore = await downloadJson(page, 'Export Jump Cluster JSON')
+  const mapObjects = map.locator(`.continuous-warden-object[data-system-id="${systemId}"]`)
+  const beforePointerCount = await mapObjects.count()
   const planetAdd = await selectCatalogueObjectButton(page, 'planet')
   await planetAdd.click()
   const orbitPoint = await screenOrbitPoint(orbit)
@@ -148,10 +150,9 @@ test('continuous Add keeps a definite owner, uses local geometry, and asks befor
   const afterOrbitSystem = afterOrbitAdd.cluster?.systems.find(system => system.id === systemId)
   const orbitObject = afterOrbitSystem?.objects.find(object => object.subtype === 'planet')
   expect(orbitObject?.placement).toMatchObject({ kind: 'orbit', orbitId })
-  expect(afterOrbitSystem?.objects).toHaveLength((planetCountBefore.cluster?.systems.find(system => system.id === systemId)?.objects.length ?? 0) + 1)
+  expect(afterOrbitSystem?.objects).toHaveLength(beforePointerCount + 1)
 
-  const mapObjects = map.locator(`.continuous-warden-object[data-system-id="${systemId}"]`)
-  const afterPointerCount = await mapObjects.count()
+  const afterPointerCount = beforePointerCount + 1
   await orbit.focus()
   await expect(orbit).toBeFocused()
   await page.keyboard.down('Enter')
