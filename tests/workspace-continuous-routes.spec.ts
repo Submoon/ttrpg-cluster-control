@@ -148,8 +148,9 @@ test('continuous routes support clipped selection, guarded inspection and author
   await waitForWorkspaceSaved(page)
 
   const exit = map.getByRole('button', { name: /route from Vesper Prime to unknown destination: Far survey/ })
-  await exit.press('Enter')
   await setWorkspaceMapMode(page, 'Move')
+  await exit.press('Enter')
+  await expect(exit).toHaveAttribute('aria-pressed', 'true')
   const marker = exit.locator('.cluster-exit-mark')
   const originalX = Number(await marker.getAttribute('cx'))
   await page.getByRole('button', { name: 'Move on map', exact: true }).click()
