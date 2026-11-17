@@ -39,12 +39,57 @@ function hierarchyObjectName(name: string, owner: string): RegExp {
   return new RegExp(`^${escape(name)}.*${escape(owner)}`)
 }
 
+async function exposedObjectHitPoint(mark: Locator): Promise<{ x: number; y: number } | null> {
+  return mark.locator('.continuous-warden-object-hit-target').evaluate(circle => {
+    const owner = circle.closest('.continuous-warden-object')
+    const matrix = circle.getScreenCTM()
+    if (!owner || !matrix || getComputedStyle(circle).visibility === 'hidden') return null
+    const bounds = circle.getBBox()
+    const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+    const radius = Math.min(bounds.width, bounds.height) * 0.42
+    const candidates = [0, 8, 12, radius].flatMap(distance => distance === 0
+      ? [center]
+      : Array.from({ length: 16 }, (_, index) => {
+          const angle = index * Math.PI / 8
+          return { x: center.x + Math.cos(angle) * distance, y: center.y + Math.sin(angle) * distance }
+        }))
+    for (const candidate of candidates) {
+      const point = new DOMPoint(candidate.x, candidate.y).matrixTransform(matrix)
+      const hit = document.elementFromPoint(point.x, point.y)
+      if (hit instanceof Element && hit.closest('.continuous-warden-object') === owner) {
+        return { x: point.x, y: point.y }
+      }
+    }
+    return null
+  })
+}
+
 async function visibleIndicatorObjectIds(indicators: Locator): Promise<string[]> {
   const ids = await indicators.evaluateAll(marks => marks.map(mark => mark.getAttribute('data-selection-object-id')))
   return ids.map((id) => {
     if (!id) throw new Error('A visible selection indicator has no object identity.')
     return id
   }).sort()
+}
+
+async function downloadJsonFromFile(
+  page: import('@playwright/test').Page,
+  buttonName: 'Export Jump Cluster JSON' | 'Export star system JSON',
+): Promise<ExportedMap> {
+  const itemName = buttonName === 'Export Jump Cluster JSON'
+    ? 'Download private Jump Cluster JSON'
+    : 'Download private Star System JSON'
+  const downloads = await openMapFilesSection(page, 'Download or back up')
+  try {
+    const downloadPromise = page.waitForEvent('download')
+    await downloads.getByRole('menuitem', { name: itemName, exact: true }).click()
+    const download = await downloadPromise
+    const json = await readFile(await download.path(), 'utf8')
+    await page.evaluate(() => (window as DownloadWindow).__mapExportBlobs?.splice(0))
+    return JSON.parse(json) as ExportedMap
+  } finally {
+    await setHeaderMapActionsOpen(page, false)
+  }
 }
 
 test('multi-select objects and preserve Hierarchy keyboard behavior through reflow', async ({
@@ -552,27 +597,24 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await returnToClusterMap(page)
   const restoredHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   await restoredHierarchy.getByRole('button', { name: 'Open Vesper Prime system map', exact: true }).click()
-  expect(await downloadJson(page, 'Export star system JSON')).toEqual(moved)
+  expect(await downloadJsonFromFile(page, 'Export star system JSON')).toEqual(moved)
+})
 
+test('continuous Warden group movement previews and commits across owning systems', async ({
+  campaignWorkspacePage: page,
+}) => {
+  test.setTimeout(60_000)
+  await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/?map=continuous')
   await waitForWorkspaceStartup(page)
-  const clusterFiles = await openMapFilesSection(page, 'Download or back up')
-  let clusterBeforeGroupMove: ExportedMap
-  try {
-    const downloadPromise = page.waitForEvent('download')
-    await clusterFiles.getByRole('menuitem', { name: 'Download private Jump Cluster JSON', exact: true }).click()
-    const download = await downloadPromise
-    clusterBeforeGroupMove = JSON.parse(await readFile(await download.path(), 'utf8')) as ExportedMap
-    await page.evaluate(() => (window as DownloadWindow).__mapExportBlobs?.splice(0))
-  } finally {
-    await setHeaderMapActionsOpen(page, false)
-  }
+  const clusterBeforeGroupMove = await downloadJsonFromFile(page, 'Export Jump Cluster JSON')
   const cluster = clusterBeforeGroupMove.cluster
   if (!cluster) throw new Error('The continuous Warden map did not export a Jump Cluster.')
-  const sourceOwner = cluster.systems.find(candidate => candidate.id === system.id)
-  const sourceObject = sourceOwner?.objects.find(candidate => candidate.id === iriaId)
-  const sameOwnerObject = sourceOwner?.objects.find(candidate => candidate.id === groupDepartureId)
-  const otherOwner = cluster.systems.find(candidate => candidate.id !== system.id && candidate.objects.length > 0)
+  const sourceOwner = cluster.systems.find(candidate => candidate.objects.length > 1)
+  const sourceObject = sourceOwner?.objects.find(candidate => candidate.placement.kind === 'system')
+    ?? sourceOwner?.objects[0]
+  const sameOwnerObject = sourceOwner?.objects.find(candidate => candidate.id !== sourceObject?.id)
+  const otherOwner = cluster.systems.find(candidate => candidate.id !== sourceOwner?.id && candidate.objects.length > 0)
   const otherOwnerObject = otherOwner?.objects.find(candidate => candidate.placement.kind === 'system')
     ?? otherOwner?.objects[0]
   if (!sourceOwner || !sourceObject || !sameOwnerObject || !otherOwner || !otherOwnerObject) {
@@ -605,9 +647,8 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   )
   await expect(sourceMark).toBeVisible()
   const originalTransform = await sourceMark.getAttribute('transform')
-  const startBounds = await sourceMark.boundingBox()
-  if (!originalTransform || !startBounds) throw new Error('The selected Warden group anchor is not measurable.')
-  const start = { x: startBounds.x + startBounds.width / 2, y: startBounds.y + startBounds.height / 2 }
+  const start = await exposedObjectHitPoint(sourceMark)
+  if (!originalTransform || !start) throw new Error('The selected Warden group anchor has no exposed hit target.')
   const moveSelectedGroup = async () => {
     await page.mouse.move(start.x, start.y)
     await page.mouse.down()
@@ -620,13 +661,13 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await page.keyboard.press('Escape')
   await page.mouse.up()
   await expect(sourceMark).toHaveAttribute('transform', originalTransform)
-  expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(clusterBeforeGroupMove)
+  expect(await downloadJsonFromFile(page, 'Export Jump Cluster JSON')).toEqual(clusterBeforeGroupMove)
 
   await moveSelectedGroup()
   await expect(page.getByRole('status').filter({ hasText: /Moving 3 selected objects/ })).toBeVisible()
   await page.mouse.up()
   await waitForWorkspaceSaved(page)
-  const clusterAfterGroupMove = await downloadJson(page, 'Export Jump Cluster JSON')
+  const clusterAfterGroupMove = await downloadJsonFromFile(page, 'Export Jump Cluster JSON')
   const movedOwner = clusterAfterGroupMove.cluster?.systems.find(candidate => candidate.id === otherOwner.id)
   const movedAcrossSystemObject = movedOwner?.objects.find(candidate => candidate.id === otherOwnerObject.id)
   const groupObjectState = (snapshot: typeof clusterBeforeGroupMove, ownerId: string, objectId: string) => {

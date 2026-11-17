@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { expect, test, type Page } from './fixtures'
+import { expect, test, type Locator, type Page } from './fixtures'
 import { activeWorkspaceFeedback, type ExportedMap, waitForWorkspaceSaved, waitForWorkspaceStartup, openMapFilesSection, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation, workspaceZoomControls } from './helpers'
 
 async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }, systemName = 'Vesper'): Promise<void> {
@@ -10,6 +10,31 @@ async function createWorkspace(page: Page, viewport = { width: 1440, height: 960
   await page.getByLabel('First star system').fill(systemName)
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
+}
+
+async function exposedContinuousObjectHitPoint(mark: Locator): Promise<{ x: number; y: number } | null> {
+  return mark.locator('.continuous-warden-object-hit-target').evaluate(circle => {
+    const owner = circle.closest('.continuous-warden-object')
+    const matrix = circle.getScreenCTM()
+    if (!owner || !matrix || getComputedStyle(circle).visibility === 'hidden') return null
+    const bounds = circle.getBBox()
+    const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+    const radius = Math.min(bounds.width, bounds.height) * 0.42
+    const candidates = [0, 8, 12, radius].flatMap(distance => distance === 0
+      ? [center]
+      : Array.from({ length: 16 }, (_, index) => {
+          const angle = index * Math.PI / 8
+          return { x: center.x + Math.cos(angle) * distance, y: center.y + Math.sin(angle) * distance }
+        }))
+    for (const candidate of candidates) {
+      const point = new DOMPoint(candidate.x, candidate.y).matrixTransform(matrix)
+      const hit = document.elementFromPoint(point.x, point.y)
+      if (hit instanceof Element && hit.closest('.continuous-warden-object') === owner) {
+        return { x: point.x, y: point.y }
+      }
+    }
+    return null
+  })
 }
 
 async function expectCompactPanel(
@@ -270,31 +295,34 @@ test('touch long press keeps focus inside the compact inspector after the touch 
     await waitForWorkspaceStartup(page)
     const continuousMap = page.getByRole('group', { name: 'Kestrel Reach continuous map', exact: true })
     await setWorkspaceMapMode(page, 'Select')
-    const continuousObject = continuousMap.locator(
-      '.continuous-warden-object[data-system-id][data-object-id]',
-    ).first()
-    const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
-    for (let step = 0; step < 12 && await continuousObject.count() === 0; step += 1) await zoomIn.click()
-    await expect(continuousObject).toBeVisible()
     const inspectorPanel = page.locator('#workspace-inspector-panel')
     const closeInspectorPanel = page.getByRole('button', { name: 'Close inspector panel', exact: true })
     if (await closeInspectorPanel.isVisible()) await closeInspectorPanel.click()
     await expect(inspectorPanel).toBeHidden()
+    const continuousObjects = continuousMap.locator(
+      '.continuous-warden-object[data-system-id][data-object-id]',
+    )
+    const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
+    let continuousObject: Locator | null = null
+    let objectPoint: { x: number; y: number } | null = null
+    for (let step = 0; step <= 12 && !objectPoint; step += 1) {
+      for (let index = 0; index < await continuousObjects.count(); index += 1) {
+        const candidate = continuousObjects.nth(index)
+        const exposedPoint = await exposedContinuousObjectHitPoint(candidate)
+        if (!exposedPoint) continue
+        continuousObject = candidate
+        objectPoint = exposedPoint
+        break
+      }
+      if (!objectPoint && step < 12) await zoomIn.click()
+    }
+    if (!continuousObject || !objectPoint) {
+      throw new Error('No visible continuous map object has an exposed, owner-qualified touch target.')
+    }
+    await expect(continuousObject).toBeVisible()
     const objectId = await continuousObject.getAttribute('data-object-id')
     const systemId = await continuousObject.getAttribute('data-system-id')
     if (!objectId || !systemId) throw new Error('The continuous map object has no owner-qualified selection identity.')
-    const objectPoint = await continuousObject.evaluate(object => {
-      const glyph = object.querySelector<SVGTextElement>('.continuous-warden-object-glyph')
-      const matrix = glyph?.getScreenCTM()
-      if (!glyph || !matrix || getComputedStyle(glyph).visibility === 'hidden') {
-        throw new Error('The continuous object glyph has no visible screen position.')
-      }
-      const point = new DOMPoint(0, 0).matrixTransform(matrix)
-      const hit = document.elementFromPoint(point.x, point.y)
-      const owner = hit instanceof Element ? hit.closest('.continuous-warden-object') : null
-      if (owner !== object) throw new Error('The rendered glyph does not hit its owning continuous map object.')
-      return { x: point.x, y: point.y }
-    })
     await cdp.send('Input.dispatchTouchEvent', {
       type: 'touchStart',
       touchPoints: [{ id: 1, x: objectPoint.x, y: objectPoint.y, radiusX: 2, radiusY: 2, force: 1 }],
