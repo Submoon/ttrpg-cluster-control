@@ -12,7 +12,7 @@ import {
 type LocalPoint = { x: number; y: number }
 
 async function prepareContinuousOrbitMap(page: import('@playwright/test').Page) {
-  const { clusterName, primaryObjectId } = await createSingleSystemWorkspace(page, {
+  const { clusterName, primaryObjectId, systemName } = await createSingleSystemWorkspace(page, {
     viewport: { width: 1440, height: 960 },
   })
   const orbitId = await clickDockAction(page, 'Add orbit', {
@@ -32,7 +32,7 @@ async function prepareContinuousOrbitMap(page: import('@playwright/test').Page) 
     await zoomIn.click()
   }
   await expect(orbit).toHaveCount(1)
-  return { map, orbit, orbitId, primaryObjectId }
+  return { map, orbit, orbitId, primaryObjectId, systemName }
 }
 
 async function orbitClientPoint(
@@ -71,8 +71,9 @@ function objectLocalPosition(transform: string | null): LocalPoint {
 }
 
 test('continuous precise Free placement stays exact beside an Orbit and commits to its inspected owner', async ({ page }) => {
-  const { map, orbitId, primaryObjectId } = await prepareContinuousOrbitMap(page)
+  const { map, orbitId, primaryObjectId, systemName } = await prepareContinuousOrbitMap(page)
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  await hierarchy.getByRole('button', { name: `Inspect ${systemName}`, exact: true }).click()
   const primaryObject = hierarchy.locator(`[data-object-id="${primaryObjectId}"]`)
   await expect(primaryObject).toBeVisible()
   await primaryObject.click()
@@ -133,4 +134,16 @@ test('continuous Orbit resize rolls back on Escape and accepts the next pointer 
   await expect.poll(async () => Number(await ring.getAttribute('rx')))
     .toBeGreaterThan(initialRadius)
   await waitForWorkspaceSaved(page)
+
+  await resize.focus()
+  await expect(resize).toBeFocused()
+  const mapBounds = await map.boundingBox()
+  if (!mapBounds) throw new Error('The continuous map is not visible.')
+  await page.mouse.move(mapBounds.x + mapBounds.width / 2, mapBounds.y + mapBounds.height / 2)
+  await page.mouse.wheel(0, 1800)
+  await expect(resize).toHaveCount(0)
+  await expect.poll(() => map.evaluate(element => {
+    const focused = document.activeElement
+    return focused === element || (element.contains(focused) && focused?.classList.contains('continuous-warden-name-target'))
+  })).toBe(true)
 })

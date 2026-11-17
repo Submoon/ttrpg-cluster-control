@@ -25,12 +25,12 @@ export function useMapInteractionCoordinator(options: {
   const { workspace, store, selectedSystem, entity, navigation, placement, creation, viewport, beginOrbitEdit, continuousMap } = options
   let objectMoveCandidateRequestId = 0
   let orbitCenterCandidateRequestId = 0
-  let expectedContinuousOrbitCandidate: ExpectedContinuousOrbitHandoff | null = null
+  let expectedContinuousOrbitCandidate: (ExpectedContinuousOrbitHandoff & { requestId: number }) | null = null
 
   watch([() => workspace.value?.id, () => workspace.value?.cluster.id, () => store.activeView, () => store.selectedSystemId,
     () => store.mapMode, () => store.inspectedTarget], () => {
     const expected = expectedContinuousOrbitCandidate
-    if (expected && isExpectedContinuousOrbitHandoff(expected, {
+    if (expected && expected.requestId === orbitCenterCandidateRequestId && isExpectedContinuousOrbitHandoff(expected, {
       continuousMap: continuousMap?.value === true,
       activeView: store.activeView,
       mapMode: store.mapMode,
@@ -107,7 +107,8 @@ export function useMapInteractionCoordinator(options: {
     }
 
     if (continuousOwner) {
-      expectedContinuousOrbitCandidate = {
+      const expected = {
+        requestId,
         workspaceId,
         clusterId,
         systemId,
@@ -115,23 +116,20 @@ export function useMapInteractionCoordinator(options: {
         startingSelectedSystemId: store.selectedSystemId,
         startingInspectedTarget: store.inspectedTarget,
       }
-      const inspected = await navigation.inspectContinuousTarget({ kind: 'orbit', systemId, orbitId }, false)
-      if (!inspected) {
-        expectedContinuousOrbitCandidate = null
-        return
+      expectedContinuousOrbitCandidate = expected
+      try {
+        const ownsHandoff = (): boolean => requestId === orbitCenterCandidateRequestId
+          && expectedContinuousOrbitCandidate === expected
+        if (!await navigation.inspectContinuousTarget({ kind: 'orbit', systemId, orbitId }, false, ownsHandoff)) return
+      } finally {
+        if (expectedContinuousOrbitCandidate === expected) expectedContinuousOrbitCandidate = null
       }
     } else {
       await navigation.selectOrbit(orbitId, false)
     }
-    if (!matchesCurrentContext() || store.selectedOrbitId !== orbitId || !sourceIsUnchanged()) {
-      if (continuousOwner) expectedContinuousOrbitCandidate = null
-      return
-    }
+    if (!matchesCurrentContext() || store.selectedOrbitId !== orbitId || !sourceIsUnchanged()) return
     const selectedSession = entity.entitySession.value
-    if (selectedSession && !(selectedSession.kind === 'orbit' && selectedSession.targetId === orbitId)) {
-      if (continuousOwner) expectedContinuousOrbitCandidate = null
-      return
-    }
+    if (selectedSession && !(selectedSession.kind === 'orbit' && selectedSession.targetId === orbitId)) return
 
     const sessionIdBeforeBegin = entity.entitySession.value?.id ?? null
     await beginOrbitEdit()
@@ -141,28 +139,14 @@ export function useMapInteractionCoordinator(options: {
         && newlyStarted.targetId === orbitId && !entity.hasModifiedEntitySession.value) {
         entity.discardEntitySession(newlyStarted.id)
       }
-      if (continuousOwner) expectedContinuousOrbitCandidate = null
       return
     }
-    if (!matchesCurrentContext() || store.selectedOrbitId !== orbitId || !sourceIsUnchanged()) {
-      if (continuousOwner) expectedContinuousOrbitCandidate = null
-      return
-    }
+    if (!matchesCurrentContext() || store.selectedOrbitId !== orbitId || !sourceIsUnchanged()) return
     const session = entity.entitySession.value
-    if (!session || session.kind !== 'orbit' || session.targetId !== orbitId || session.initial.orbit.hostId !== null) {
-      if (continuousOwner) expectedContinuousOrbitCandidate = null
-      return
-    }
-    if (startingSession?.kind === 'orbit' && startingSession.targetId === orbitId && session.id !== startingSession.id) {
-      if (continuousOwner) expectedContinuousOrbitCandidate = null
-      return
-    }
-    if (!entity.offerOrbitCenterCandidates(session.id, candidates)) {
-      if (continuousOwner) expectedContinuousOrbitCandidate = null
-      return
-    }
+    if (!session || session.kind !== 'orbit' || session.targetId !== orbitId || session.initial.orbit.hostId !== null) return
+    if (startingSession?.kind === 'orbit' && startingSession.targetId === orbitId && session.id !== startingSession.id) return
+    if (!entity.offerOrbitCenterCandidates(session.id, candidates)) return
     viewport.requestPanel('inspector')
-    if (continuousOwner) expectedContinuousOrbitCandidate = null
   }
 
   return { handleObjectMoveCandidates, handleOrbitCenterCandidates }

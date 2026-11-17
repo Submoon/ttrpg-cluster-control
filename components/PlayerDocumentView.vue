@@ -31,6 +31,7 @@
             ref="systemMapHandle"
             :document="props.document"
             :selected-system-id="selectedSystemId"
+            :selected-route-id="selectedRouteId"
             :selected-object-id="selectedObjectId"
             :selected-orbit-id="selectedOrbitId"
             :search-locator-object-id="searchLocatorObjectId"
@@ -41,6 +42,7 @@
             @select-system="selectPublicSystem"
             @inspect-object="inspectContinuousObject"
             @inspect-orbit="inspectContinuousOrbit"
+            @inspect-route="inspectContinuousRoute"
             @map-interaction="handlePlayerMapInteraction"
           />
           <template v-else>
@@ -161,7 +163,12 @@
       </template>
       <template #inspector>
         <div class="player-workspace-inspector">
-          <template v-if="selectedSystem">
+          <PlayerJumpRouteInspector
+            v-if="selectedRoute"
+            :route="selectedRoute"
+            @center="centerSelectedRoute"
+          />
+          <template v-else-if="selectedSystem">
             <header class="player-workspace-inspector-heading">
               <span class="section-kicker">PLAYER-VISIBLE SYSTEM</span>
               <h2>{{ selectedSystem.label }}</h2>
@@ -275,6 +282,7 @@
             ref="systemMapHandle"
             :document="props.document"
             :selected-system-id="selectedSystemId"
+            :selected-route-id="selectedRouteId"
             :selected-object-id="selectedObjectId"
             :selected-orbit-id="selectedOrbitId"
             :search-locator-object-id="searchLocatorObjectId"
@@ -284,6 +292,7 @@
             @select-system="selectPublicSystem"
             @inspect-object="inspectContinuousObject"
             @inspect-orbit="inspectContinuousOrbit"
+            @inspect-route="inspectContinuousRoute"
             @map-interaction="handlePlayerMapInteraction"
           />
           <template v-else>
@@ -331,7 +340,12 @@
             />
           </section>
           <section v-show="inspectorVisible" class="player-inline-panel" aria-label="Player details">
-            <template v-if="selectedSystem">
+            <PlayerJumpRouteInspector
+              v-if="selectedRoute"
+              :route="selectedRoute"
+              @center="centerSelectedRoute"
+            />
+            <template v-else-if="selectedSystem">
               <header class="player-workspace-inspector-heading">
                 <span class="section-kicker">PLAYER-VISIBLE SYSTEM</span>
                 <h2>{{ selectedSystem.label }}</h2>
@@ -394,7 +408,10 @@ import PlayerObjectInspector from './PlayerObjectInspector.vue'
 import PlayerOrbitInspector from './PlayerOrbitInspector.vue'
 import MapEditorLayout from './MapEditorLayout.vue'
 import PlayerMapTools from './PlayerMapTools.vue'
+import PlayerJumpRouteInspector from './inspector/PlayerJumpRouteInspector.vue'
 import WorkspaceHeader from './WorkspaceHeader.vue'
+import { projectPlayerContinuousMap } from '../utils/player-continuous-map-projection'
+import { projectPlayerContinuousRouteEndpoints, type PlayerContinuousRouteDescriptor } from '../utils/player-continuous-route-projection'
 
 const props = withDefaults(defineProps<{
   document: PlayerClusterDocument
@@ -417,6 +434,7 @@ interface PlayerSystemMapHandle {
   revealTarget(target: PlayerInspectionTarget, expectedDocument: PlayerSystemDocument): boolean
   fitPlayerMap?(): boolean
   centerSystem?(systemId: string, expectedClusterDocument: PlayerClusterDocument): boolean
+  centerRoute?(routeId: string, expectedClusterDocument: PlayerClusterDocument): boolean
 }
 interface PendingReveal {
   clusterDocument: PlayerClusterDocument
@@ -446,6 +464,8 @@ const selectedTypeFilters = ref<string[]>([])
 const selectedFieldConditions = ref<FieldCondition[]>([])
 const selectedSystemId = ref<string | null>(null)
 const selectedTarget = shallowRef<PlayerInspectionTarget | null>(null)
+const selectedRouteId = ref<string | null>(null)
+const selectedRouteDocument = shallowRef<PlayerClusterDocument | null>(null)
 const clusterMarkerOpener = ref<FocusTarget | null>(null)
 const clusterMarkerSystemId = ref<string | null>(null)
 const cachedSystem = shallowRef<RevealedSystem | null>(null)
@@ -463,6 +483,13 @@ const selectedSystem = computed<RevealedSystem | null>(() =>
   props.document.systems.find(isSelectedRevealedSystem) ?? null,
 )
 const selectedSystemMarker = computed(() => props.document.systems.find(system => system.id === selectedSystemId.value) ?? null)
+const selectedRoute = computed<PlayerContinuousRouteDescriptor | null>(() => {
+  const routeId = selectedRouteId.value
+  if (!routeId || selectedRouteDocument.value !== props.document || selectedSystemId.value !== null) return null
+  const projection = projectPlayerContinuousMap(props.document)
+  return projectPlayerContinuousRouteEndpoints(props.document, projection.systems, new Set())
+    .find(route => route.id === routeId) ?? null
+})
 const continuousMap = computed(() => route.query.map === 'continuous')
 const searchResults = computed(() => searchPlayerDocument(props.document, searchQuery.value))
 const typeFilterOptions = computed(() => playerTypeFilterOptions(props.document))
@@ -551,6 +578,9 @@ watch(() => props.active, (active) => {
 watch(() => props.document, () => {
   mapReaderEpoch.value += 1
   resetDocumentView()
+}, { flush: 'sync' })
+watch(continuousMap, enabled => {
+  if (!enabled) clearSelectedRoute()
 }, { flush: 'sync' })
 watch([() => props.document, () => props.active, selectedSystemId], () => {
   mapVisit += 1
@@ -653,6 +683,7 @@ function resetDocumentView(): void {
   searchLocator.value = null
   selectedSystemId.value = null
   selectedTarget.value = null
+  clearSelectedRoute()
   clusterMarkerOpener.value = null
   clusterMarkerSystemId.value = null
   cachedSystem.value = null
@@ -771,6 +802,7 @@ async function openSystem(publicSystemId: string, origin: 'map' | 'search' = 'ma
   const request = ++requestNonce
   pendingReveal.value = null
   searchLocator.value = null
+  clearSelectedRoute()
   clusterMarkerOpener.value = origin === 'map' ? focusableElement(document.activeElement) : null
   clusterMarkerSystemId.value = system.id
   cachedSystem.value = system
@@ -794,6 +826,7 @@ function selectPublicSystem(publicSystemId: string): void {
   requestNonce += 1
   pendingReveal.value = null
   searchLocator.value = null
+  clearSelectedRoute()
   clusterMarkerOpener.value = focusableElement(document.activeElement)
   clusterMarkerSystemId.value = system.id
   cachedSystem.value = system.disclosure === 'revealed' ? system : null
@@ -812,6 +845,50 @@ function inspectContinuousOrbit(publicSystemId: string, publicOrbitId: string): 
   inspectOrbit(publicOrbitId)
 }
 
+function inspectContinuousRoute(publicRouteId: string): void {
+  if (!continuousMap.value || !isActive.value || !props.document.routes.some(route => route.id === publicRouteId)) return
+  requestNonce += 1
+  pendingReveal.value = null
+  lastRevealAttempt = ''
+  searchLocator.value = null
+  selectedSystemId.value = null
+  selectedTarget.value = null
+  cachedSystem.value = null
+  selectedRouteDocument.value = props.document
+  selectedRouteId.value = publicRouteId
+  clusterMarkerOpener.value = null
+  clusterMarkerSystemId.value = null
+  if (props.workspacePresentation && isCompactViewport.value) compactPanel.value = 'inspector'
+  else desktopInspectorVisible.value = true
+}
+
+async function centerSelectedRoute(): Promise<void> {
+  const source = props.document
+  const routeId = selectedRouteId.value
+  const map = systemMapHandle.value
+  const request = requestNonce
+  const isCurrent = () => !isDisposed && isActive.value && continuousMap.value
+    && props.document === source && selectedRouteDocument.value === source
+    && selectedRouteId.value === routeId && requestNonce === request
+    && systemMapHandle.value === map && !!selectedRoute.value
+  if (!routeId || !map || !isCurrent()) return
+
+  if (props.workspacePresentation && isCompactViewport.value && compactPanel.value === 'inspector') {
+    compactPanel.value = null
+    await nextTick()
+    await nextTick()
+    await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()))
+  }
+
+  if (!isCurrent()) return
+  if (map.centerRoute?.(routeId, source)) focusCurrentMap('.player-continuous-map-scene')
+}
+
+function clearSelectedRoute(): void {
+  selectedRouteId.value = null
+  selectedRouteDocument.value = null
+}
+
 async function backToCluster(): Promise<void> {
   const sourceDocument = props.document
   const system = selectedSystemMarker.value
@@ -819,6 +896,7 @@ async function backToCluster(): Promise<void> {
   const request = ++requestNonce
   pendingReveal.value = null
   searchLocator.value = null
+  clearSelectedRoute()
   selectedSystemId.value = null
   selectedTarget.value = null
   if (props.workspacePresentation && isCompactViewport.value) compactPanel.value = null
@@ -874,6 +952,7 @@ async function inspectTarget(target: PlayerInspectionTarget, fromSearch = false)
     : { kind: 'orbit', id: target.id }
   const request = ++requestNonce
   searchLocator.value = null
+  clearSelectedRoute()
   const nextPending: PendingReveal = {
     clusterDocument,
     system,

@@ -180,6 +180,45 @@ test('continuous map removes Navigate from map tool shortcuts @pure', () => {
   expect(mapModeForShortcut('m', true)).toBe('move')
 })
 
+test('only the newer continuous Orbit handoff can select its owner and offer host choices @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), 'Altair', undefined, false, true)
+  try {
+    const [source, destination] = harness.workspace.value.cluster.systems
+    const star = source?.objects[0]
+    if (!source || !destination || !star) throw new Error('Expected two systems and a primary star.')
+    const host = { ...star, id: 'candidate-altair-host' }
+    destination.objects.push(host)
+    const olderOrbit = createOrbit(destination, null)
+    destination.orbits.push(olderOrbit)
+    const newerOrbit = createOrbit(destination, null)
+    destination.orbits.push(newerOrbit)
+    harness.store.setSelection({ activeView: 'cluster' })
+    expect(await harness.workflows.navigation.inspectContinuousTarget({ kind: 'system', systemId: source.id })).toBe(true)
+    harness.store.setMode('move')
+    const candidates = [{
+      key: `host:${host.id}`,
+      label: `Center on ${host.name}`,
+      target: { kind: 'host' as const, objectId: host.id },
+      error: null,
+    }]
+
+    const selectCandidates = harness.workflows.placement.interactions.handleOrbitCenterCandidates
+    const superseded = selectCandidates(olderOrbit.id, candidates, destination.id)
+    const current = selectCandidates(newerOrbit.id, candidates, destination.id)
+    await Promise.all([superseded, current])
+
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'orbit', systemId: destination.id, orbitId: newerOrbit.id })
+    const session = harness.workflows.inspector.entitySession.value
+    expect(session).toMatchObject({
+      kind: 'orbit',
+      targetId: newerOrbit.id,
+      centerMoveCandidates: [{ key: candidates[0]!.key, target: candidates[0]!.target, error: null }],
+    })
+  } finally {
+    harness.dispose()
+  }
+})
+
 test('continuous Search reveals an object through the existing Cluster map handle @pure', async () => {
   const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
   try {

@@ -38,7 +38,7 @@ test('player projection emits only the marker information allowed by each public
 
   expect(document).toMatchObject({
     format: 'ttrpg-cluster-control-player',
-    version: 1,
+    version: 2,
     title: 'Player Jump Cluster',
     systems: [
       { id: 'system-1', disclosure: 'unknown', label: 'Unknown presence' },
