@@ -188,8 +188,23 @@ function buildTransferReview(
   }
 }
 
+interface TransferKeyValidationReview {
+  readonly branch: { readonly objectIds: readonly string[] }
+  readonly keyConflicts: readonly { readonly objectId: string }[]
+  readonly suggestedLocationKeys: ReadonlyMap<string, string>
+  readonly request: { readonly destinationSystemId: string }
+  readonly previewWorkspace: {
+    readonly cluster: {
+      readonly systems: readonly {
+        readonly id: string
+        readonly objects: readonly { readonly id: string; readonly locationKey: string }[]
+      }[]
+    }
+  }
+}
+
 function normalizedLocationKeys(
-  review: SystemObjectTransferReview,
+  review: TransferKeyValidationReview,
   locationKeys?: ReadonlyMap<string, string>,
 ): Map<string, string> {
   const keys = new Map<string, string>()
@@ -206,7 +221,7 @@ function normalizedLocationKeys(
  * Missing edits use their reviewed suggestion. Map semantics keep arbitrary supported IDs as data keys.
  */
 export function validateSystemObjectTransferKeys(
-  review: SystemObjectTransferReview,
+  review: TransferKeyValidationReview,
   locationKeys?: ReadonlyMap<string, string>,
 ): ReadonlyMap<string, string> {
   const issues = new Map<string, string>()

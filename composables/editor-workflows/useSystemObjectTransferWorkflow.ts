@@ -1,5 +1,6 @@
 /** Coordinates guarded review, map ownership, and one reversible transfer publication. */
 import { computed, readonly, ref, shallowRef } from 'vue'
+import type { Ref } from 'vue'
 import type { LocalWorkspace, SystemObjectTransferPlacement } from '../../domain/workspace'
 import { applySystemObjectTransfer, resolveSystemObjectBranch } from '../../domain/workspace'
 import { useSystemObjectTransferDraft } from '../useSystemObjectTransferDraft'
@@ -27,10 +28,10 @@ interface ActiveTransferSession {
   workspaceReference: LocalWorkspace
   appliedRevision: number
   draft: ReturnType<typeof useSystemObjectTransferDraft>
-  open: ReturnType<typeof ref<boolean>>
-  placingOnMap: ReturnType<typeof ref<boolean>>
-  confirming: ReturnType<typeof ref<boolean>>
-  error: ReturnType<typeof ref<string | null>>
+  open: Ref<boolean>
+  placingOnMap: Ref<boolean>
+  confirming: Ref<boolean>
+  error: Ref<string | null>
   mapPlacementOwner: TransferMapPlacementOwner | null
 }
 

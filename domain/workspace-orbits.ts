@@ -1,7 +1,7 @@
 /**
  * Orbit commands enforce host relationships and sibling order, and normalize older circle layouts.
  */
-import type { Orbit, OrbitRadii, Point, StarSystem, SystemObject } from './workspace-model'
+import type { ObjectPlacement, Orbit, OrbitRadii, Point, StarSystem, SystemObject } from './workspace-model'
 import { isRecord } from './workspace-validation'
 
 /**
@@ -94,7 +94,14 @@ export function minimumOrbitRadius(system: StarSystem, orbit: Orbit): number {
  * @param orbitId Proposed Orbit ID.
  * @returns False for a missing Orbit, invalid host chain, or recursive placement.
  */
-export function canPlaceObjectInOrbit(system: StarSystem, objectId: string, orbitId: string): boolean {
+export function canPlaceObjectInOrbit(
+  system: {
+    readonly objects: readonly { readonly id: string; readonly placement: ObjectPlacement }[]
+    readonly orbits: readonly { readonly id: string; readonly hostId: string | null }[]
+  },
+  objectId: string,
+  orbitId: string,
+): boolean {
   const orbit = system.orbits.find(candidate => candidate.id === orbitId)
   if (!orbit) {
     return false
