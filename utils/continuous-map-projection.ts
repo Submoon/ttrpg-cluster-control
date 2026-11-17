@@ -10,6 +10,15 @@ import {
 } from './system-map-geometry'
 import type { SvgViewportRect } from './map-zoom'
 
+/** Converts a semantic detail threshold in CSS pixels to a camera scale. */
+export function continuousMapDetailScale(
+  envelope: Pick<SvgViewportRect, 'width' | 'height'>,
+  svgPixelScale: number,
+  threshold: number,
+): number {
+  return threshold / (Math.max(envelope.width, envelope.height) * svgPixelScale)
+}
+
 /** Fixed local coordinate that is aligned to each system's legacy Cluster anchor. */
 export const CONTINUOUS_MAP_LOCAL_ORIGIN: Point = Object.freeze({ x: 480, y: 280 })
 /** A single conversion shared by every local system geometry value. */

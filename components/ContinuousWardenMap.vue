@@ -173,6 +173,7 @@ import {
 } from '../utils/map-zoom'
 import {
   clampWardenClusterAnchor,
+  continuousMapDetailScale,
   CONTINUOUS_MAP_LOCAL_ORIGIN,
   moveWardenClusterAnchorBySceneDelta,
   projectWardenSystem,
@@ -505,7 +506,7 @@ function updateDetailReveal(cameraScale: number): void {
   const next = new Set<string>()
   for (const projection of projections.value) {
     const threshold = current.has(projection.id) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS
-    if (Math.max(projection.envelope.width, projection.envelope.height) * cameraScale * svgPixelScale.value >= threshold) {
+    if (cameraScale >= continuousMapDetailScale(projection.envelope, svgPixelScale.value, threshold)) {
       next.add(projection.id)
     }
   }
@@ -619,8 +620,11 @@ function frameSystem(systemId: string, usableRect?: SvgViewportRect): boolean {
     x: projection.envelope.x + delta.x,
     y: projection.envelope.y + delta.y,
   }
-  const detailScaleFloor = (detailSystemIds.value.has(projection.id) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS)
-    / (Math.max(projection.envelope.width, projection.envelope.height) * svgPixelScale.value)
+  const detailScaleFloor = continuousMapDetailScale(
+    projection.envelope,
+    svgPixelScale.value,
+    detailSystemIds.value.has(projection.id) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS,
+  )
   const next = centerMapTargetViewport({
     current,
     targetBounds,
@@ -630,7 +634,7 @@ function frameSystem(systemId: string, usableRect?: SvgViewportRect): boolean {
   })
   if (!next) return false
   if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
-    || Math.abs(next.k - current.k) >= 0.0001) setViewport(next)
+    || next.k !== current.k) setViewport(next)
   return true
 }
 
@@ -668,7 +672,7 @@ function frameEntityTarget(
   const current = getViewport()
   const minimumScale = detailSystemIds.value.has(projection.id)
     ? undefined
-    : DETAIL_REVEAL_PIXELS / (Math.max(projection.envelope.width, projection.envelope.height) * svgPixelScale.value)
+    : continuousMapDetailScale(projection.envelope, svgPixelScale.value, DETAIL_REVEAL_PIXELS)
   const next = centerTarget
     ? centerMapTargetViewport({
         current,
@@ -686,7 +690,7 @@ function frameEntityTarget(
       })
   if (!next) return false
   if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
-    || Math.abs(next.k - current.k) >= 0.0001) setViewport(next)
+    || next.k !== current.k) setViewport(next)
   return true
 }
 
@@ -767,8 +771,7 @@ function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportR
     const halfWidth = Math.max(18, object.name.length * 3.6, object.locationKey.length * 2.8)
     bounds = { x: center.x - halfWidth, y: center.y - 27, width: halfWidth * 2, height: 54 }
     if (!detailSystemIds.value.has(projection.id)) {
-      minimumScale = DETAIL_REVEAL_PIXELS
-        / (Math.max(projection.envelope.width, projection.envelope.height) * svgPixelScale.value)
+      minimumScale = continuousMapDetailScale(projection.envelope, svgPixelScale.value, DETAIL_REVEAL_PIXELS)
     }
   } else if (target.kind === 'orbit') {
     const orbit = projection.orbits.find(candidate => candidate.id === target.id)
@@ -778,8 +781,7 @@ function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportR
     if (!orbitBounds) return false
     bounds = orbitBounds
     if (!detailSystemIds.value.has(projection.id)) {
-      minimumScale = DETAIL_REVEAL_PIXELS
-        / (Math.max(projection.envelope.width, projection.envelope.height) * svgPixelScale.value)
+      minimumScale = continuousMapDetailScale(projection.envelope, svgPixelScale.value, DETAIL_REVEAL_PIXELS)
     }
   } else {
     return false
@@ -794,7 +796,7 @@ function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportR
   })
   if (!next) return false
   if (Math.abs(next.x - current.x) < 0.01 && Math.abs(next.y - current.y) < 0.01
-    && Math.abs(next.k - current.k) < 0.0001) return true
+    && next.k === current.k) return true
   setViewport(next)
   return true
 }
