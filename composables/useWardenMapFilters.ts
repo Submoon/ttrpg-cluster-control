@@ -8,15 +8,23 @@ export interface UseWardenMapFiltersOptions {
   workspace: Ref<LocalWorkspace | null>
   selectedSystem: ComputedRef<StarSystem | null | undefined>
   activeView: ComputedRef<'cluster' | 'system'>
+  continuousMap?: ComputedRef<boolean>
   criteria: ComputedRef<WardenFilterCriteria>
   fieldOptions: ComputedRef<FieldFilterOption[]>
 }
 
 /** Projects accepted map criteria onto current-system opacity; criteria ownership stays elsewhere. */
-export function useWardenMapFilters({ workspace, selectedSystem, activeView, criteria, fieldOptions }: UseWardenMapFiltersOptions) {
+export function useWardenMapFilters({
+  workspace,
+  selectedSystem,
+  activeView,
+  continuousMap,
+  criteria,
+  fieldOptions,
+}: UseWardenMapFiltersOptions) {
   const compiledMatcher = computed(() => {
     const currentWorkspace = workspace.value
-    if (!currentWorkspace || activeView.value !== 'system') return null
+    if (!currentWorkspace || (activeView.value !== 'system' && !continuousMap?.value)) return null
     return createWardenObjectFilterMatcher(
       currentWorkspace,
       criteria.value.types,
@@ -28,9 +36,12 @@ export function useWardenMapFilters({ workspace, selectedSystem, activeView, cri
   })
   const dimmedObjectIds = computed<string[]>(() => {
     const matcher = compiledMatcher.value
-    const system = selectedSystem.value
-    if (!matcher || !system) return []
-    return system.objects.filter(object => !matcher(object)).map(object => object.id)
+    const currentWorkspace = workspace.value
+    if (!matcher || !currentWorkspace) return []
+    const objects = activeView.value === 'system'
+      ? selectedSystem.value?.objects ?? []
+      : currentWorkspace.cluster.systems.flatMap(system => system.objects)
+    return objects.filter(object => !matcher(object)).map(object => object.id)
   })
 
   return { dimmedObjectIds }

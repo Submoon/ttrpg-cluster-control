@@ -1,7 +1,7 @@
 /**
  * Browser file actions use domain codecs and import preparation; persistence and selection remain page-owned.
  */
-import { computed, readonly, ref, type Ref } from 'vue'
+import { computed, getCurrentScope, nextTick, onScopeDispose, readonly, ref, type Ref } from 'vue'
 import {
   exportJumpCluster,
   exportStarSystem,
@@ -14,6 +14,7 @@ import {
 } from '../domain/workspace'
 import { jsonImportReviewEffects } from '../domain/workspace-json-import'
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { MapImageScope } from '../utils/map-image-scope'
 import { downloadBlob, exportFileName } from '../utils/browser-download'
 import type { WorkspaceMutationExecutor } from './editor-workflows/workspace-mutations'
 
@@ -22,13 +23,21 @@ type MapKind = 'jump-cluster' | 'star-system'
 interface CurrentMapImage {
   map: MapImageExporter | null
   name: string | undefined
+  kind: MapKind
+  scope: MapImageScope | null
+  selectedSystemId: string | null
 }
 
 interface WorkspaceFileActionsOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   selectedSystem: Readonly<Ref<StarSystem | undefined>>
   mutations: WorkspaceMutationExecutor
-  getCurrentMapImage: (kind: MapKind) => CurrentMapImage | null
+  getCurrentMapImage: (
+    kind: MapKind,
+    scope: MapImageScope | null,
+    selectedSystemId: string | null,
+  ) => CurrentMapImage | null
+  getAppliedRevision?: () => number
   getFieldDefinitionImportConflict: (candidate: LocalWorkspace) => { message: string } | null
   resolveImportDefinitionChanges: (existingFieldIds: string[]) => Promise<boolean>
   beforeWorkspaceOperation?: () => Promise<boolean>
@@ -105,6 +114,7 @@ export function useWorkspaceFiles({
   selectedSystem,
   mutations,
   getCurrentMapImage,
+  getAppliedRevision = () => 0,
   getFieldDefinitionImportConflict,
   resolveImportDefinitionChanges,
   beforeWorkspaceOperation = async () => true,
@@ -121,10 +131,19 @@ export function useWorkspaceFiles({
   })
   const mutableStandaloneImportPlacement = ref<StandaloneImportPlacement | null>(null)
   let operationCounter = 0
+  let mapImageOperation = 0
+  let disposed = false
   let currentImportEpoch: ImportEpoch | null = null
   let importContent: unknown
   let importAnchor: Point | null = null
   let importReviewSignature = ''
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      disposed = true
+      mapImageOperation += 1
+    })
+  }
 
   const importReview = readonly(mutableImportReview)
   const standaloneImportPlacement = readonly(mutableStandaloneImportPlacement)
@@ -269,21 +288,58 @@ export function useWorkspaceFiles({
    */
   async function downloadMapImage(
     map: MapImageExporter | null,
-    name: string | undefined,
     kind: MapKind,
     format: MapImageFormat,
     palette: MapImagePalette = 'active',
+    scope: MapImageScope | null = null,
+    selectedSystemId: string | null = null,
   ): Promise<void> {
-    if (!map || !name) return
-    if (!await beforeWorkspaceOperation()) return
-    const current = getCurrentMapImage(kind)
-    if (!current?.map || current.map !== map || current.name !== name) return
+    if (disposed || !map) return
+    const initialWorkspace = workspace.value
+    const initialMap = getCurrentMapImage(kind, scope, selectedSystemId)
+    if (!initialWorkspace || !initialMap?.map || initialMap.map !== map
+      || initialMap.kind !== kind || initialMap.scope !== scope
+      || initialMap.selectedSystemId !== selectedSystemId) return
 
+    const activeOperation = ++mapImageOperation
+    exportError.value = ''
+    let appliedRevision: number | undefined
+    let imageContextKey: string | undefined
+    const isCurrent = (): boolean => {
+      const currentWorkspace = workspace.value
+      const currentMap = getCurrentMapImage(kind, scope, selectedSystemId)
+      return !disposed
+        && mapImageOperation === activeOperation
+        && currentWorkspace !== null
+        && currentWorkspace.id === initialWorkspace.id
+        && currentWorkspace.cluster.id === initialWorkspace.cluster.id
+        && currentMap?.map === map
+        && currentMap.kind === kind
+        && currentMap.scope === scope
+        && currentMap.selectedSystemId === selectedSystemId
+        && (appliedRevision === undefined || getAppliedRevision() === appliedRevision)
+        && (imageContextKey === undefined || map.getImageContextKey?.(scope) === imageContextKey)
+    }
     try {
-      downloadBlob(exportFileName(current.name, kind, format), await current.map.exportImage(format, palette))
+      if (!await beforeWorkspaceOperation() || !isCurrent()) return
+      await nextTick()
+      if (!isCurrent()) return
+      appliedRevision = getAppliedRevision()
+      imageContextKey = map.getImageContextKey?.(scope)
+      const current = getCurrentMapImage(kind, scope, selectedSystemId)
+      if (!current?.name || !isCurrent()) return
+      const image = await map.exportImage(format, palette, {
+        scope,
+        selectedSystemId,
+        isCurrent,
+      })
+      if (!image || !isCurrent()) return
+      await nextTick()
+      if (!isCurrent()) return
+      downloadBlob(exportFileName(current.name, kind, format), image)
       exportError.value = ''
     } catch (error) {
-      exportError.value = errorText(error)
+      if (isCurrent()) exportError.value = errorText(error)
     }
   }
 

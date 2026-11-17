@@ -40,8 +40,14 @@ test('image export aborts if the renderer changes while operation preflight is w
     workspace,
     selectedSystem: computed(() => workspace.value?.cluster.systems[0]),
     mutations,
-    getCurrentMapImage: kind => kind === 'star-system'
-      ? { map: currentMap, name: workspace.value?.cluster.systems[0]?.name }
+    getCurrentMapImage: (kind, scope, selectedSystemId) => kind === 'star-system'
+      ? {
+          map: currentMap,
+          name: workspace.value?.cluster.systems[0]?.name,
+          kind,
+          scope,
+          selectedSystemId,
+        }
       : null,
     getFieldDefinitionImportConflict: () => null,
     resolveImportDefinitionChanges: async () => true,
@@ -49,7 +55,7 @@ test('image export aborts if the renderer changes while operation preflight is w
   })
   currentMap = requestedMap
 
-  const pendingExport = files.downloadMapImage(requestedMap, 'Vesper', 'star-system', 'svg')
+  const pendingExport = files.downloadMapImage(requestedMap, 'star-system', 'svg')
   currentMap = replacementMap
   preflight.resolve(true)
   await pendingExport
