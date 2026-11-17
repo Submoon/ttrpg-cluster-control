@@ -16,6 +16,7 @@ import {
   updateCustomFieldApplicability,
   updateCustomFieldType,
   type LocalWorkspace,
+  type StarSystem,
 } from '../domain/workspace'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
 import type { WorkspaceHistoryCapacityDetails } from '../composables/editor-workflows/workspace-mutations'
@@ -168,7 +169,10 @@ test('legacy standalone placement reviews and applies the selected anchor with i
     const placement = harness.files.standaloneImportPlacement.value
     if (!placement) throw new Error('The legacy system should be available for placement.')
     expect(placement.system.id).not.toBe(standaloneSystem.id)
-    const projection = projectWardenSystem(placement.system, placement.anchor, placement.geometry)
+    const projectionSystem = JSON.parse(JSON.stringify(placement.system)) as StarSystem
+    const projectionAnchor = { ...placement.anchor }
+    const projectionGeometry = JSON.parse(JSON.stringify(placement.geometry)) as Parameters<typeof projectWardenSystem>[2]
+    const projection = projectWardenSystem(projectionSystem, projectionAnchor, projectionGeometry)
     expect(projection.envelope.width).toBeGreaterThan(1000)
     expect(placement.geometry.orbitRotations).toEqual({ [placement.system.orbits[0]!.id]: 31 })
     expect(Object.values(placement.geometry.orbitRadii)).toEqual([{ horizontal: 4200, vertical: 1900 }])

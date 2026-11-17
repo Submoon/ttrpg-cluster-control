@@ -267,6 +267,7 @@ const props = defineProps<{
   moveTargeting: boolean
   standaloneImportPlacementEnabled?: boolean
   standaloneImportPlacement?: StandaloneImportPlacementView | null
+  keyboardOwnedOverlayOpen?: boolean
   touchNavigation?: boolean
   initialViewport: MapViewport | null
   getUsableClientRect?: () => ClientRectBounds | undefined
@@ -335,10 +336,9 @@ const standaloneImportProjection = computed(() => {
       playerFieldMasks: [...object.playerFieldMasks],
       ...(object.customFieldValues ? { customFieldValues: { ...object.customFieldValues } } : {}),
     })),
-    orbits: placement.system.orbits.map(orbit => ({
-      ...orbit,
-      ...(orbit.center ? { center: { ...orbit.center } } : {}),
-    })),
+    orbits: placement.system.orbits.map(orbit => orbit.hostId === null
+      ? { ...orbit, center: { ...orbit.center } }
+      : { ...orbit, hostId: orbit.hostId }),
   }
   return projectWardenSystem(system, { ...placement.anchor }, {
     objectAngles: { ...placement.geometry.objectAngles },
@@ -683,6 +683,34 @@ function fitMap(usableRect?: SvgViewportRect): void {
   updateMinimumZoomScale(rect, true)
   const fitted = fitMapViewport(bounds, rect, minimumZoomScale.value)
   if (fitted) setViewport(fitted)
+}
+
+/** Frames only the detached imported projection inside the current unobstructed camera area. */
+function frameStandaloneImportPlacement(usableRect?: SvgViewportRect): boolean {
+  const projection = standaloneImportProjection.value
+  const element = svgElement.value
+  if (!projection || !element || !zoomBehavior) return false
+  const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
+  if (!rect) return false
+
+  zoomBehavior.extent(() => svgViewportExtent(rect))
+  updateMinimumZoomScale(rect, true)
+  const delta = anchorDelta(projection)
+  const bounds = {
+    ...projection.envelope,
+    x: projection.envelope.x + delta.x,
+    y: projection.envelope.y + delta.y,
+  }
+  const completeFit = fitMapViewport(bounds, rect, Number.MIN_VALUE)
+  if (!completeFit) return false
+
+  // A distant imported envelope can need a lower zoom floor than committed Cluster bounds.
+  minimumZoomScale.value = Math.min(minimumZoomScale.value, completeFit.k)
+  zoomBehavior.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
+  const fitted = fitMapViewport(bounds, rect, minimumZoomScale.value)
+  if (!fitted) return false
+  setViewport(fitted)
+  return true
 }
 
 function frameSystem(systemId: string, usableRect?: SvgViewportRect): boolean {
@@ -1102,6 +1130,7 @@ function onKeydownCapture(event: KeyboardEvent): void {
   const orbitTarget = orbitTargetAtTarget(event.target)
   const systemId = systemIdAtTarget(event.target)
   if (props.standaloneImportPlacementEnabled
+    && !props.keyboardOwnedOverlayOpen
     && (event.key === 'Enter' || event.key === ' ')
     && event.target instanceof SVGElement) {
     const element = svgElement.value
@@ -1345,6 +1374,7 @@ defineExpose({
   zoomBy,
   panBy,
   fitMap,
+  frameStandaloneImportPlacement,
   frameSystem,
   frameSearchTarget,
   centerInspectedTarget,
