@@ -10,7 +10,7 @@ import {
 
 const publicDocument: PlayerClusterDocument = {
   format: 'ttrpg-cluster-control-player',
-  version: 1,
+  version: 2,
   title: 'Pilgrim Reach',
   systems: [
     {
