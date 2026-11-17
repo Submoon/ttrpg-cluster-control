@@ -1,6 +1,6 @@
 ---
 title: "Select and move an object group across systems"
-status: blocked
+status: open
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
