@@ -342,6 +342,16 @@ export interface MapNavigationHandle extends MapImageExporter {
   getClusterSystemPositionPreviewVersion?(systemId: string): number | undefined
   /** Shows or clears a transient unresolved target in scene coordinates. */
   setUnresolvedExitPositionPreview?(routeId: string, position: Point | null): void
+  /** Shows or clears a precise object placement preview in its owning system's local scene. */
+  setObjectPlacementPreview?(objectId: string, scenePoint: Point | null, systemId?: string): void
+  /** Shows or clears an Orbit placement draft preview for its owning system. */
+  setOrbitPlacementPreview?(orbitId: string, preview: OrbitPlacementPreview | null, systemId?: string): void
+  /** Shows or clears a precise unoccupied Orbit-center preview in its owning system. */
+  setOrbitCenterMovePreview?(orbitId: string, scenePoint: Point | null, systemId?: string): void
+  /** Resolves a cluster-scene target into the owner's legacy system-map scene. */
+  toSystemScenePoint?(systemId: string, clusterPoint: Point): Point | null
+  /** Finds a clear normalized local center for detaching an Orbit from its host. */
+  getDetachedOrbitCenter?(orbitId: string, systemId?: string): Point | undefined
 }
 
 /** Session-only selection saved for one map visit. */
@@ -389,18 +399,18 @@ export interface MapVisitMemory {
 export interface SystemMapHandle extends MapNavigationHandle {
   focusMap(): void
   /** Shows or clears one transient existing-object placement preview in SVG scene coordinates. */
-  setObjectPlacementPreview(objectId: string, scenePoint: Point | null): void
+  setObjectPlacementPreview(objectId: string, scenePoint: Point | null, systemId?: string): void
   /** Shows or clears one transient proposed-host preview in SVG scene coordinates. */
-  setOrbitPlacementPreview(orbitId: string, preview: OrbitPlacementPreview | null): void
+  setOrbitPlacementPreview(orbitId: string, preview: OrbitPlacementPreview | null, systemId?: string): void
   /** Owns a center-move overlay independently from an Inspector's proposed-host preview. */
-  setOrbitCenterMovePreview(orbitId: string, scenePoint: Point | null): void
+  setOrbitCenterMovePreview(orbitId: string, scenePoint: Point | null, systemId?: string): void
   /**
    * Finds a clear normalized center for detaching this Orbit.
    * Clearance is checked against object positions and other unoccupied centers, not whole Orbit rings.
    * @param orbitId Hosted Orbit whose former center is being relocated.
    * @returns Normalized map coordinates, or undefined when no candidate passes the point-clearance checks.
    */
-  getDetachedOrbitCenter(orbitId: string): Point | undefined
+  getDetachedOrbitCenter(orbitId: string, systemId?: string): Point | undefined
   /** Resolves all named creation targets near a raw SVG scene point. */
   getCreationCandidates(point: Point, type: SystemCreationType): SystemCreationCandidate[]
 }

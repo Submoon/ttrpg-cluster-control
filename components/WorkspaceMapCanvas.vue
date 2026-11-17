@@ -45,6 +45,7 @@
       :mode="props.mode"
       :creation-type="props.creationType ?? null"
       :is-entity-command-blocked="props.isEntityCommandBlocked"
+      :orbit-adjustment-preview="matchingOrbitAdjustmentPreview"
       :cluster-add-type="props.clusterAddType ?? null"
       :cluster-chooser-open="props.clusterChooserOpen ?? false"
       :cluster-move-targeting="props.clusterMoveTargeting ?? false"
@@ -57,6 +58,8 @@
       @select-orbit="(systemId, orbitId) => emit('select-continuous-orbit', systemId, orbitId)"
       @cluster-target="forwardClusterTarget"
       @continuous-object-add-target="emit('continuous-object-add-target', $event)"
+      @orbit-adjustment="forwardOrbitAdjustment"
+      @entity-command-blocked="emit('entity-command-blocked', $event)"
       @move-object-in-system="forwardMoveObjectInSystem"
       @move-target="forwardMoveTarget"
       @move-system="forwardMoveSystem"
@@ -270,10 +273,14 @@ function noteManualCameraInteraction(): void {
 
 const matchingOrbitAdjustmentPreview = computed(() => {
   const preview = props.orbitAdjustmentPreview
-  const system = props.system
-  return props.activeView === 'system' && system && preview
-    && preview.identity.workspaceId === props.workspace.id
-    && preview.identity.systemId === system.id
+  if (!preview || preview.identity.workspaceId !== props.workspace.id) return null
+  if (props.activeView === 'system') {
+    return props.system?.id === preview.identity.systemId ? preview : null
+  }
+  const target = props.inspectedTarget
+  return props.continuousMap && target
+    && (target.kind === 'object' || target.kind === 'orbit' || target.kind === 'system')
+    && target.systemId === preview.identity.systemId
     ? preview
     : null
 })
@@ -800,7 +807,12 @@ function onKeyDownCapture(event: KeyboardEvent): void {
 }
 
 function onWindowKeyDownCapture(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || !selectionRectangleGesture) return
+  const ownsGesture = selectionRectangleGesture !== null
+    || editingGestureActive
+    || activePointerPan !== null
+    || touchPanStarted
+    || orbitInput.hasActivePointer()
+  if (event.key !== 'Escape' || !ownsGesture) return
   event.preventDefault()
   event.stopPropagation()
   event.stopImmediatePropagation()
@@ -1154,8 +1166,12 @@ function handleOrbitSelection(orbitId: string): void {
 
 /** Enriches one active-system Orbit input with the workspace identity owned by this map surface. */
 function forwardOrbitAdjustment(input: OrbitAdjustmentInput): void {
+  const target = props.inspectedTarget
+  const continuousOwnerMatches = props.activeView === 'cluster' && props.continuousMap
+    && target?.kind === 'orbit' && target.systemId === input.systemId
   const system = props.system
-  if (props.activeView !== 'system' || !system || system.id !== input.systemId) return
+  if (props.mode !== 'move' || !(props.activeView === 'system' && system?.id === input.systemId)
+    && !continuousOwnerMatches) return
   emit('orbit-adjustment', { ...input, workspaceId: props.workspace.id })
 }
 
@@ -1479,19 +1495,33 @@ defineExpose({
   setUnresolvedExitPositionPreview: (routeId: string, position: Point | null) => {
     if (props.activeView === 'cluster') clusterMapRef.value?.setUnresolvedExitPositionPreview(routeId, position)
   },
-  setObjectPlacementPreview: (objectId: string, scenePoint: Point | null) => {
-    if (props.activeView === 'system') systemMapRef.value?.setObjectPlacementPreview(objectId, scenePoint)
+  setObjectPlacementPreview: (objectId: string, scenePoint: Point | null, systemId?: string) => {
+    if (props.activeView === 'cluster' && props.continuousMap && systemId) {
+      continuousWardenMapRef.value?.setObjectPlacementPreview(systemId, objectId, scenePoint)
+    } else if (props.activeView === 'system') systemMapRef.value?.setObjectPlacementPreview(objectId, scenePoint)
   },
-  setOrbitPlacementPreview: (orbitId: string, preview: OrbitPlacementPreview | null) => {
-    if (props.activeView === 'system') systemMapRef.value?.setOrbitPlacementPreview(orbitId, preview)
+  setOrbitPlacementPreview: (orbitId: string, preview: OrbitPlacementPreview | null, systemId?: string) => {
+    if (props.activeView === 'cluster' && props.continuousMap && systemId) {
+      continuousWardenMapRef.value?.setOrbitPlacementPreview(systemId, orbitId, preview)
+    } else if (props.activeView === 'system') systemMapRef.value?.setOrbitPlacementPreview(orbitId, preview)
   },
-  setOrbitCenterMovePreview: (orbitId: string, scenePoint: Point | null) => {
-    if (props.activeView === 'system') systemMapRef.value?.setOrbitCenterMovePreview(orbitId, scenePoint)
+  setOrbitCenterMovePreview: (orbitId: string, scenePoint: Point | null, systemId?: string) => {
+    if (props.activeView === 'cluster' && props.continuousMap && systemId) {
+      continuousWardenMapRef.value?.setOrbitCenterMovePreview(systemId, orbitId, scenePoint)
+    } else if (props.activeView === 'system') systemMapRef.value?.setOrbitCenterMovePreview(orbitId, scenePoint)
   },
   startTouchNavigation: (event: TouchEvent) => currentMap()?.startTouchNavigation(event),
   moveTouchNavigation: (event: TouchEvent) => currentMap()?.moveTouchNavigation(event),
   endTouchNavigation: (event: TouchEvent) => currentMap()?.endTouchNavigation(event),
-  getDetachedOrbitCenter: (orbitId: string) => systemMapRef.value?.getDetachedOrbitCenter(orbitId),
+  toSystemScenePoint: (systemId: string, clusterPoint: Point) => props.activeView === 'cluster' && props.continuousMap
+    ? continuousWardenMapRef.value?.toSystemScenePoint(systemId, clusterPoint) ?? null
+    : props.activeView === 'system' && props.system?.id === systemId ? clusterPoint : null,
+  getDetachedOrbitCenter: (orbitId: string, systemId?: string) => {
+    if (props.activeView === 'cluster' && props.continuousMap && systemId) {
+      return continuousWardenMapRef.value?.getDetachedCenter(orbitId, systemId)
+    }
+    return systemMapRef.value?.getDetachedOrbitCenter(orbitId)
+  },
   getCreationCandidates: (point: Point, type: SystemCreationType) =>
     systemMapRef.value?.getCreationCandidates(point, type) ?? [],
 })

@@ -24,7 +24,7 @@ import type {
   EntityCommand,
   CommittedObjectPosition,
   SystemObjectMoveCandidate,
-  SystemMapHandle,
+  MapNavigationHandle,
   SystemObjectMoveDestinationOption,
   SystemObjectMovePreview,
   SystemObjectMoveTarget,
@@ -36,7 +36,8 @@ import { useEditorUiStore } from '../../stores/editor-ui'
 interface SystemObjectPlacementOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   creationActive: Readonly<ComputedRef<boolean>>
-  systemMapRef: Readonly<Ref<SystemMapHandle | null>>
+  systemMapRef: Readonly<Ref<MapNavigationHandle | null>>
+  continuousMap?: Readonly<Ref<boolean>>
   mutations: WorkspaceMutationExecutor
   isEntityCommandBlocked: (command: EntityCommand) => boolean
   beforeWorkspaceOperation: () => Promise<boolean>
@@ -221,14 +222,13 @@ export function useSystemObjectPlacement({
   workspace,
   creationActive,
   systemMapRef,
+  continuousMap,
   mutations,
   isEntityCommandBlocked,
   beforeWorkspaceOperation,
   createCommittedPositionAppliedHandler,
 }: SystemObjectPlacementOptions) {
   const store = useEditorUiStore()
-  const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
-  const selectedObject = computed(() => selectedSystem.value?.objects.find(object => object.id === store.selectedObjectId))
   const systemObjectMoveDestination = ref(FREE_SYSTEM_OBJECT_PLACEMENT)
   const systemObjectMoveCandidates = ref<SystemObjectMoveCandidate[]>([])
   const systemObjectMoveCandidateRequest = ref(0)
@@ -242,15 +242,34 @@ export function useSystemObjectPlacement({
   let preparedBaseline: PreparedPlacementBaseline | null = null
   let candidateBaselines = new Map<string, string>()
 
+  function continuousOwnerSelection(): { systemId: string; objectId: string } | null {
+    if (!continuousMap?.value || store.activeView !== 'cluster') return null
+    const target = store.inspectedTarget
+    return target?.kind === 'object'
+      ? { systemId: target.systemId, objectId: target.objectId }
+      : null
+  }
+
+  function currentOwnerSelection(): { systemId: string; objectId: string } | null {
+    const continuousTarget = continuousOwnerSelection()
+    if (continuousTarget) return continuousTarget
+    return store.activeView === 'system' && store.selectedSystemId && store.selectedObjectId
+      ? { systemId: store.selectedSystemId, objectId: store.selectedObjectId }
+      : null
+  }
+
+  function ownsCurrentSelection(systemId: string, objectId: string): boolean {
+    const selection = currentOwnerSelection()
+    return selection?.systemId === systemId && selection.objectId === objectId
+  }
+
   function currentObject(): CurrentObject | null {
     const currentWorkspace = workspace.value
-    const system = selectedSystem.value
-    const object = selectedObject.value
-    if (!currentWorkspace || !system || !object
-      || system.id !== store.selectedSystemId
-      || object.id !== store.selectedObjectId
-      || !currentWorkspace.cluster.systems.some(candidate => candidate.id === system.id)
-      || !system.objects.some(candidate => candidate.id === object.id)) return null
+    const selection = currentOwnerSelection()
+    if (!currentWorkspace || !selection) return null
+    const system = currentWorkspace.cluster.systems.find(candidate => candidate.id === selection.systemId)
+    const object = system?.objects.find(candidate => candidate.id === selection.objectId)
+    if (!system || !object) return null
     return { workspace: currentWorkspace, system, object }
   }
 
@@ -267,8 +286,7 @@ export function useSystemObjectPlacement({
     return null
   }
 
-  const systemObjectMoveAvailable = computed(() => store.activeView === 'system'
-    && store.mapMode === 'move'
+  const systemObjectMoveAvailable = computed(() => store.mapMode === 'move'
     && !creationActive.value
     && currentObject() !== null)
 
@@ -307,7 +325,7 @@ export function useSystemObjectPlacement({
 
   function clearPreview(): void {
     const preview = systemObjectMovePreview.value
-    if (preview) systemMapRef.value?.setObjectPlacementPreview(preview.objectId, null)
+    if (preview) systemMapRef.value?.setObjectPlacementPreview?.(preview.objectId, null, preview.systemId)
     systemObjectMovePreview.value = null
     preparedBaseline = null
   }
@@ -446,7 +464,7 @@ export function useSystemObjectPlacement({
       }
       preparedBaseline = { fingerprint }
       systemObjectMovePreview.value = preview
-      systemMapRef.value?.setObjectPlacementPreview(current.object.id, scenePoint)
+      systemMapRef.value?.setObjectPlacementPreview?.(current.object.id, scenePoint, current.system.id)
       return true
     } catch (error) {
       systemObjectMoveError.value = errorMessage(error)
@@ -511,7 +529,23 @@ export function useSystemObjectPlacement({
   }
 
   /** Projects a map destination into the selected relationship and previews its resolved scene position. */
+  function toOwnerLocalScenePoint(current: CurrentObject, point: Point): Point | null {
+    if (!continuousOwnerSelection()) return point
+    return systemMapRef.value?.toSystemScenePoint?.(current.system.id, point) ?? null
+  }
+
   function previewSystemObjectMoveAt(point: Point): boolean {
+    const current = currentObject()
+    if (!current) return false
+    const localPoint = toOwnerLocalScenePoint(current, point)
+    if (!localPoint) {
+      systemObjectMoveError.value = 'The owning system is no longer visible for this placement.'
+      return false
+    }
+    return previewSystemObjectMoveAtLocal(localPoint)
+  }
+
+  function previewSystemObjectMoveAtLocal(point: Point): boolean {
     clearPreview()
     clearMoveCandidates()
     systemObjectMoveError.value = ''
@@ -586,7 +620,7 @@ export function useSystemObjectPlacement({
       }
       return previewed
     }
-    return previewSystemObjectMoveAt({ x: current.x + delta.x, y: current.y + delta.y })
+    return previewSystemObjectMoveAtLocal({ x: current.x + delta.x, y: current.y + delta.y })
   }
 
   async function confirmSystemObjectMove(token: number): Promise<boolean> {
@@ -667,8 +701,8 @@ export function useSystemObjectPlacement({
         isCurrent: () => {
           if (systemObjectMovePreview.value?.token !== preview.token
             || creationActive.value
-            || store.activeView !== 'system'
-            || store.mapMode !== 'move') return false
+            || !systemObjectMoveAvailable.value
+            || !ownsCurrentSelection(preview.systemId, preview.objectId)) return false
           const latest = currentObject()
           if (!latest || latest.workspace.cluster.id !== preview.clusterId
             || latest.system.id !== preview.systemId || latest.object.id !== preview.objectId
@@ -718,7 +752,9 @@ export function useSystemObjectPlacement({
     }
   }
 
-  watch([workspace, () => store.activeView, () => store.mapMode, creationActive, () => store.selectedSystemId, () => store.selectedObjectId], () => {
+  watch([workspace, () => store.activeView, () => store.mapMode, creationActive,
+    () => store.selectedSystemId, () => store.selectedObjectId, () => store.inspectedTarget,
+    () => continuousMap?.value], () => {
     const current = currentObject()
     const nextOwnerKey = ownerKeyFor(current)
     if (nextOwnerKey !== ownerKey) {
@@ -754,7 +790,7 @@ export function useSystemObjectPlacement({
       }
       return
     }
-    if (store.activeView !== 'system' || store.mapMode !== 'move') {
+    if (!systemObjectMoveAvailable.value || !ownsCurrentSelection(preview.systemId, preview.objectId)) {
       clearPreview()
       clearMoveCandidates()
       systemObjectMoveError.value = ''
@@ -799,7 +835,11 @@ export function useSystemObjectPlacement({
         systemObjectMoveError.value = 'The object placement or Orbit geometry changed. Preview the position again.'
         return
       }
-      systemMapRef.value?.setObjectPlacementPreview(preview.objectId, scenePointForTarget(latest, preview.target))
+      systemMapRef.value?.setObjectPlacementPreview?.(
+        preview.objectId,
+        scenePointForTarget(latest, preview.target),
+        preview.systemId,
+      )
     })
   }, { flush: 'sync', immediate: true })
 

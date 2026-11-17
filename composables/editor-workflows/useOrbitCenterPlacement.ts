@@ -2,19 +2,21 @@
 import { computed, onBeforeUnmount, ref, watch, type ComputedRef, type Ref } from 'vue'
 import type { LocalWorkspace, Point, StarSystem, Orbit } from '../../domain/workspace'
 import { toNormalizedMapPoint } from '../../utils/system-map-geometry'
-import type { EntityCommand, OrbitCenterMovePreview, SystemMapHandle } from './types'
+import type { EntityCommand, OrbitCenterMovePreview, MapNavigationHandle } from './types'
 import { useEditorUiStore } from '../../stores/editor-ui'
 
 interface OrbitCenterPlacementOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   creationActive: Readonly<ComputedRef<boolean>>
-  systemMapRef: Readonly<Ref<SystemMapHandle | null>>
+  systemMapRef: Readonly<Ref<MapNavigationHandle | null>>
+  continuousMap?: Readonly<Ref<boolean>>
   isEntityCommandBlocked: (command: EntityCommand) => boolean
   moveOrbitCenter: (
     orbitId: string,
     center: Point,
     hostId: string | null,
     isCurrent?: () => boolean,
+    systemId?: string,
   ) => Promise<boolean>
 }
 
@@ -42,6 +44,7 @@ export function useOrbitCenterPlacement({
   workspace,
   creationActive,
   systemMapRef,
+  continuousMap,
   isEntityCommandBlocked,
   moveOrbitCenter,
 }: OrbitCenterPlacementOptions) {
@@ -50,8 +53,7 @@ export function useOrbitCenterPlacement({
   const orbitCenterMovePreview = ref<OrbitCenterMovePreview | null>(null)
   const orbitCenterMoveError = ref('')
   const orbitCenterMoveAvailable = computed(() => {
-    return store.activeView === 'system'
-      && store.mapMode === 'move'
+    return store.mapMode === 'move'
       && !creationActive.value
       && currentFreeOrbit() !== null
   })
@@ -61,13 +63,29 @@ export function useOrbitCenterPlacement({
   let nextToken = 0
   let pendingConfirmationToken: number | null = null
   let pendingConfirmationContextInvalidated = false
-  let appliedPreview: { map: SystemMapHandle; orbitId: string } | null = null
+  let appliedPreview: { map: MapNavigationHandle; orbitId: string; systemId: string } | null = null
+
+  function currentOwnerOrbitSelection(): { systemId: string; orbitId: string } | null {
+    if (continuousMap?.value && store.activeView === 'cluster') {
+      const target = store.inspectedTarget
+      return target?.kind === 'orbit' ? { systemId: target.systemId, orbitId: target.orbitId } : null
+    }
+    return store.activeView === 'system' && store.selectedSystemId && store.selectedOrbitId
+      ? { systemId: store.selectedSystemId, orbitId: store.selectedOrbitId }
+      : null
+  }
+
+  function ownsCurrentOrbitSelection(systemId: string, orbitId: string): boolean {
+    const selection = currentOwnerOrbitSelection()
+    return selection?.systemId === systemId && selection.orbitId === orbitId
+  }
 
   function currentFreeOrbit(): { workspace: LocalWorkspace; system: StarSystem; orbit: Orbit } | null {
     const currentWorkspace = workspace.value
-    if (!currentWorkspace || store.activeView !== 'system' || !store.selectedSystemId || !store.selectedOrbitId) return null
-    const system = currentWorkspace.cluster.systems.find(candidate => candidate.id === store.selectedSystemId)
-    const orbit = system?.orbits.find(candidate => candidate.id === store.selectedOrbitId)
+    const selection = currentOwnerOrbitSelection()
+    if (!currentWorkspace || !selection) return null
+    const system = currentWorkspace.cluster.systems.find(candidate => candidate.id === selection.systemId)
+    const orbit = system?.orbits.find(candidate => candidate.id === selection.orbitId)
     if (!system || !orbit || orbit.hostId !== null) return null
     return { workspace: currentWorkspace, system, orbit }
   }
@@ -86,13 +104,13 @@ export function useOrbitCenterPlacement({
   function cancelOrbitCenterMove(returnFocus = true): void {
     const preview = orbitCenterMovePreview.value
     const orbitId = source?.orbitId ?? preview?.orbitId
-    if (orbitId) systemMapRef.value?.setOrbitCenterMovePreview(orbitId, null)
+    if (orbitId) systemMapRef.value?.setOrbitCenterMovePreview?.(orbitId, null, source?.systemId ?? preview?.systemId)
     orbitCenterMapMoveTargeting.value = false
     orbitCenterMovePreview.value = null
     orbitCenterMoveError.value = ''
     source = null
     targetScenePoint = null
-    if (returnFocus) systemMapRef.value?.focusMap()
+    if (returnFocus) systemMapRef.value?.focusMap?.()
   }
 
   function canMoveCurrentCenter(): boolean {
@@ -129,11 +147,24 @@ export function useOrbitCenterPlacement({
     targetScenePoint = toScenePoint(center)
     orbitCenterMoveError.value = ''
     orbitCenterMapMoveTargeting.value = true
-    systemMapRef.value?.focusMap()
+    systemMapRef.value?.focusMap?.()
     return true
   }
 
   function previewOrbitCenterMoveAt(scenePoint: Point): boolean {
+    const current = currentFreeOrbit()
+    if (!current) return false
+    const localPoint = continuousMap?.value && store.activeView === 'cluster'
+      ? systemMapRef.value?.toSystemScenePoint?.(current.system.id, scenePoint) ?? null
+      : scenePoint
+    if (!localPoint) {
+      orbitCenterMoveError.value = 'The owning system is no longer visible for this Orbit-center move.'
+      return false
+    }
+    return previewOrbitCenterMoveAtLocal(localPoint)
+  }
+
+  function previewOrbitCenterMoveAtLocal(scenePoint: Point): boolean {
     if (!orbitCenterMapMoveTargeting.value && !beginOrbitCenterMapMove()) return false
     if (!source || !currentMatchesSource()) {
       cancelOrbitCenterMove(false)
@@ -160,7 +191,7 @@ export function useOrbitCenterPlacement({
       previousCenter: { ...source.previousCenter },
       targetCenter: toNormalizedMapPoint(scenePoint),
     }
-    systemMapRef.value?.focusMap()
+    systemMapRef.value?.focusMap?.()
     return true
   }
 
@@ -169,7 +200,7 @@ export function useOrbitCenterPlacement({
     if (!orbitCenterMapMoveTargeting.value && !beginOrbitCenterMapMove()) return false
     const current = targetScenePoint
     if (!current) return false
-    return previewOrbitCenterMoveAt({ x: current.x + delta.x, y: current.y + delta.y })
+    return previewOrbitCenterMoveAtLocal({ x: current.x + delta.x, y: current.y + delta.y })
   }
 
   async function confirmOrbitCenterMove(token: number): Promise<boolean> {
@@ -195,14 +226,12 @@ export function useOrbitCenterPlacement({
         && source.orbitId === preview.orbitId
         && source.previousCenter.x === preview.previousCenter.x
         && source.previousCenter.y === preview.previousCenter.y
-        && store.activeView === 'system'
         && store.mapMode === 'move'
-        && store.selectedSystemId === preview.systemId
-        && store.selectedOrbitId === preview.orbitId
+        && ownsCurrentOrbitSelection(preview.systemId, preview.orbitId)
         && !creationActive.value
         && currentMatchesSource()
         && canMoveCurrentCenter()
-      const applied = await moveOrbitCenter(preview.orbitId, { ...preview.targetCenter }, null, isCurrent)
+      const applied = await moveOrbitCenter(preview.orbitId, { ...preview.targetCenter }, null, isCurrent, preview.systemId)
       if (!applied) {
         const stillOwnsPreview = orbitCenterMovePreview.value?.token === preview.token
         const contextIsStillValid = orbitCenterMoveAvailable.value
@@ -217,7 +246,7 @@ export function useOrbitCenterPlacement({
       }
       if (orbitCenterMovePreview.value?.token === preview.token) {
         cancelOrbitCenterMove(false)
-        systemMapRef.value?.focusMap()
+        systemMapRef.value?.focusMap?.()
       }
       return true
     } catch (error) {
@@ -238,12 +267,12 @@ export function useOrbitCenterPlacement({
     ([map, preview]) => {
       if (appliedPreview && (appliedPreview.map !== map
         || !preview || appliedPreview.orbitId !== preview.orbitId)) {
-        appliedPreview.map.setOrbitCenterMovePreview(appliedPreview.orbitId, null)
+        appliedPreview.map.setOrbitCenterMovePreview?.(appliedPreview.orbitId, null, appliedPreview.systemId)
         appliedPreview = null
       }
       if (map && preview) {
-        map.setOrbitCenterMovePreview(preview.orbitId, toScenePoint(preview.targetCenter))
-        appliedPreview = { map, orbitId: preview.orbitId }
+        map.setOrbitCenterMovePreview?.(preview.orbitId, toScenePoint(preview.targetCenter), preview.systemId)
+        appliedPreview = { map, orbitId: preview.orbitId, systemId: preview.systemId }
       }
     },
     { flush: 'post', immediate: true },
@@ -251,7 +280,7 @@ export function useOrbitCenterPlacement({
 
   watch(
     [workspace, () => store.activeView, () => store.mapMode, () => store.selectedSystemId,
-      () => store.selectedOrbitId, creationActive, () => source
+      () => store.selectedOrbitId, () => store.inspectedTarget, () => continuousMap?.value, creationActive, () => source
         ? isEntityCommandBlocked({ kind: 'orbit-center-position', orbitId: source.orbitId })
         : false],
     () => {
@@ -276,7 +305,7 @@ export function useOrbitCenterPlacement({
   )
 
   onBeforeUnmount(() => {
-    if (appliedPreview) appliedPreview.map.setOrbitCenterMovePreview(appliedPreview.orbitId, null)
+    if (appliedPreview) appliedPreview.map.setOrbitCenterMovePreview?.(appliedPreview.orbitId, null, appliedPreview.systemId)
     appliedPreview = null
   })
 

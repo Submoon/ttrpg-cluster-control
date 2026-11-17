@@ -378,6 +378,7 @@
                     :move-targeting="mapMoveTargeting"
                     :cluster-chooser-open="creationChooserOpen || continuousObjectOwnerChooserOpen"
                     :is-entity-command-blocked="isEntityCommandBlocked"
+                    :orbit-adjustment-preview="orbitAdjustmentPreview"
                     :feedback-element="workspaceFeedbackRef"
                     @navigate-system="selectSystem"
                     @select-cluster-system="selectClusterSystem"
@@ -398,6 +399,8 @@
                     @cluster-target="handleClusterTarget"
                     @continuous-object-add-target="handleContinuousObjectAddTarget"
                     @move-object-in-system="handleContinuousObjectMove"
+                    @orbit-adjustment="updateOrbitAdjustment"
+                    @entity-command-blocked="handleBlockedEntityCommand"
                     @cancel-cluster-preview="cancelClusterPlacement"
                     @move-object="moveMapObject"
                     @move-orbit-center="moveMapOrbitCenter"
@@ -1230,6 +1233,7 @@ const {
 } = orbitCenter
 const mapMoveTargeting = computed(() => activeView.value === 'cluster'
   ? unresolvedExitTargeting.value || clusterSystemMapMoveTargeting.value
+    || systemObjectMapMoveTargeting.value || orbitCenterMapMoveTargeting.value
   : systemObjectMapMoveTargeting.value || orbitCenterMapMoveTargeting.value)
 const {
   creationSession, chooseCreationType, chooseCreationCandidate, updateCreationInput,
@@ -1286,6 +1290,8 @@ function isObjectMoveBlocked(objectId: string): boolean {
 function handleMapMoveTarget(point: Point): void {
   if (activeView.value === 'cluster' && unresolvedExitTargeting.value) previewUnresolvedExitAt(point)
   else if (activeView.value === 'cluster' && clusterSystemMapMoveTargeting.value) previewSystemMoveAt(point)
+  else if (activeView.value === 'cluster' && systemObjectMapMoveTargeting.value) previewSystemObjectMoveAt(point)
+  else if (activeView.value === 'cluster' && orbitCenterMapMoveTargeting.value) previewOrbitCenterMoveAt(point)
   else if (activeView.value === 'system' && systemObjectMapMoveTargeting.value) previewSystemObjectMoveAt(point)
   else if (activeView.value === 'system' && orbitCenterMapMoveTargeting.value) previewOrbitCenterMoveAt(point)
 }
@@ -1293,6 +1299,8 @@ function handleMapMoveTarget(point: Point): void {
 function handleMapMoveNudge(delta: Point): void {
   if (activeView.value === 'cluster' && unresolvedExitTargeting.value) nudgeUnresolvedExit(delta)
   else if (activeView.value === 'cluster' && clusterSystemMapMoveTargeting.value) nudgeClusterSystemMove(delta)
+  else if (activeView.value === 'cluster' && systemObjectMapMoveTargeting.value) nudgeSystemObjectMove(delta)
+  else if (activeView.value === 'cluster' && orbitCenterMapMoveTargeting.value) nudgeOrbitCenterMove(delta)
   else if (activeView.value === 'system' && systemObjectMapMoveTargeting.value) nudgeSystemObjectMove(delta)
   else if (activeView.value === 'system' && orbitCenterMapMoveTargeting.value) nudgeOrbitCenterMove(delta)
 }
