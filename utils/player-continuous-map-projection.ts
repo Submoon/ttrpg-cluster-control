@@ -4,6 +4,7 @@ import type { Point } from '../domain/workspace-model'
 import type { SvgViewportRect } from './map-zoom'
 import { projectContinuousSystemGeometry, type ContinuousWardenSystemProjection } from './continuous-map-projection'
 import { playerClusterGeometry, type PlayerRouteGeometry } from './player-cluster-geometry'
+import { CLUSTER_ROUTE_PRESENTATION, clusterRoutePresentationLabel, clusterRoutePresentationLabelWidth } from './cluster-route-presentation'
 
 export interface PlayerContinuousSystemProjection {
   id: string
@@ -83,10 +84,27 @@ export function projectPlayerContinuousMap(document: PlayerClusterDocument): Pla
   })
 
   const cluster = playerClusterGeometry(document)
+  const routes = projectContinuousPublicRoutes(document)
   let left = cluster.bounds.minX
   let top = cluster.bounds.minY
   let right = cluster.bounds.minX + cluster.bounds.width
   let bottom = cluster.bounds.minY + cluster.bounds.height
+  for (const route of routes) {
+    left = Math.min(left, route.labelX - route.labelWidth / 2)
+    top = Math.min(top, route.labelY + CLUSTER_ROUTE_PRESENTATION.badge.topOffset)
+    right = Math.max(right, route.labelX + route.labelWidth / 2)
+    bottom = Math.max(bottom, route.labelY + CLUSTER_ROUTE_PRESENTATION.badge.topOffset + CLUSTER_ROUTE_PRESENTATION.badge.height)
+    if (route.destination) {
+      left = Math.min(left, route.destination.position.x - CLUSTER_ROUTE_PRESENTATION.endpoint.radius,
+        route.destination.labelX - route.destination.labelWidth)
+      top = Math.min(top, route.destination.position.y - CLUSTER_ROUTE_PRESENTATION.endpoint.radius,
+        route.destination.labelY + CLUSTER_ROUTE_PRESENTATION.endpoint.captionTopOffset)
+      right = Math.max(right, route.destination.position.x + CLUSTER_ROUTE_PRESENTATION.endpoint.radius,
+        route.destination.labelX)
+      bottom = Math.max(bottom, route.destination.position.y + CLUSTER_ROUTE_PRESENTATION.endpoint.radius,
+        route.destination.labelY + CLUSTER_ROUTE_PRESENTATION.endpoint.captionBottomOffset)
+    }
+  }
   for (const system of systems) {
     const envelope = system.geometry?.envelope
     if (!envelope) continue
@@ -102,7 +120,59 @@ export function projectPlayerContinuousMap(document: PlayerClusterDocument): Pla
 
   return {
     systems,
-    routes: cluster.routes,
+    routes,
     bounds: { x: left, y: top, width: right - left, height: bottom - top },
   }
+}
+
+/** Continuous player routes meet their public Cluster anchors or anonymous destination points. */
+function projectContinuousPublicRoutes(document: PlayerClusterDocument): PlayerRouteGeometry[] {
+  const systemsById = new Map(document.systems.map(system => [system.id, system]))
+  return document.routes.map((route, index) => {
+    const origin = systemsById.get(route.fromSystemId)
+    if (!origin) throw new Error('A player route references a missing public origin marker.')
+    const destinationSystem = route.destination.kind === 'system'
+      ? systemsById.get(route.destination.systemId)
+      : undefined
+    if (route.destination.kind === 'system' && !destinationSystem) {
+      throw new Error('A player route references a missing public destination marker.')
+    }
+
+    const destinationPosition = route.destination.kind === 'system'
+      ? destinationSystem!.position
+      : route.destination.position
+    const label = clusterRoutePresentationLabel(route.jumpLevel)
+    const labelWidth = clusterRoutePresentationLabelWidth(route.jumpLevel)
+    const midpoint = { x: (origin.position.x + destinationPosition.x) / 2, y: (origin.position.y + destinationPosition.y) / 2 }
+    const labelX = midpoint.x
+    const labelY = midpoint.y + (index % 2 === 0 ? -18 : 18)
+    const accessibleLabel = route.destination.kind === 'unknown'
+      ? `Jump Level ${route.jumpLevel} to ${route.destination.label}`
+      : `Jump Level ${route.jumpLevel} from ${origin.label} to ${destinationSystem!.label}`
+    return {
+      id: route.id,
+      foreground: false,
+      path: `M ${origin.position.x} ${origin.position.y} L ${destinationPosition.x} ${destinationPosition.y}`,
+      label,
+      accessibleLabel,
+      labelX,
+      labelY,
+      labelWidth,
+      ...(route.destination.kind === 'unknown'
+        ? {
+            destination: {
+              position: { ...destinationPosition },
+              label: route.destination.label,
+              labelX: destinationPosition.x - CLUSTER_ROUTE_PRESENTATION.endpoint.badgeGap
+                - CLUSTER_ROUTE_PRESENTATION.endpoint.radius,
+              labelY: destinationPosition.y + (destinationPosition.y >= origin.position.y
+                ? CLUSTER_ROUTE_PRESENTATION.endpoint.captionVerticalOffset
+                : -CLUSTER_ROUTE_PRESENTATION.endpoint.captionVerticalOffset),
+              labelWidth: Array.from(route.destination.label).length
+                * CLUSTER_ROUTE_PRESENTATION.endpoint.captionCharacterAdvance,
+            },
+          }
+        : {}),
+    }
+  })
 }

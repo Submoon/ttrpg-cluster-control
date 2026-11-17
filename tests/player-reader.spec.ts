@@ -393,15 +393,21 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
 
   const zoomIn = continuousMap.getByRole('button', { name: 'Zoom in', exact: true })
   for (let step = 0; step < 24 && !(await zoomIn.isDisabled()); step += 1) await zoomIn.click()
-  const publicObject = revealedMarker.map.objects.find(object => object.disclosure === 'revealed')
-  if (!publicObject) throw new Error('The public player document has no Revealed object to inspect.')
+  const publicObject = revealedMarker.map.objects.find(object => object.label === 'Harbor World' && object.disclosure === 'revealed')
+  if (!publicObject || publicObject.disclosure !== 'revealed') {
+    throw new Error('The public player document has no distinct Revealed world to inspect.')
+  }
   const objectMarker = continuousMap.locator(
     `.player-continuous-object[data-player-system-id="${revealedMarker.id}"][data-player-object-id="${publicObject.id}"]`,
   )
   await expect(objectMarker).toBeVisible()
   const objectBeforeInspect = await readPlayerMarkerAnchor(objectMarker)
-  await objectMarker.click()
+  await objectMarker.locator('.player-continuous-object-hit-target').click()
   await expect(continuousMap.getByRole('button', { name: 'Center selection', exact: true })).toBeEnabled()
+  await expect(objectMarker).toHaveAttribute('aria-pressed', 'true')
+  const objectDetails = page.getByRole('dialog', { name: 'Player details', exact: true })
+    .getByRole('region', { name: 'Player object details', exact: true })
+  await expect(objectDetails.getByRole('heading', { name: 'Harbor World', exact: true })).toBeVisible()
   const objectAfterInspect = await readPlayerMarkerAnchor(objectMarker)
   expect(Math.hypot(objectAfterInspect.x - objectBeforeInspect.x, objectAfterInspect.y - objectBeforeInspect.y)).toBeLessThan(1)
   await continuousMap.getByRole('button', { name: 'Center selection', exact: true }).click()
@@ -409,4 +415,9 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   const mapBounds = await continuousScene.boundingBox()
   if (!mapBounds) throw new Error('The continuous public map has no visible viewport.')
   expect(Math.abs(objectAfterCenter.x - (mapBounds.x + mapBounds.width / 2))).toBeLessThan(mapBounds.width * .12)
+
+  await objectMarker.focus()
+  for (let step = 0; step < 24 && await objectMarker.count() > 0; step += 1) await objectMarker.press('-')
+  await expect(objectMarker).toHaveCount(0)
+  await expect(continuousMap.locator(`.player-continuous-name-target[data-player-system-id="${revealedMarker.id}"]`)).toBeFocused()
 })

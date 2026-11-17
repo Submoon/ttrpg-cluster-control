@@ -1,6 +1,16 @@
 import { expect, test } from './fixtures'
-import { playerContinuousDetailSystemIds, projectPlayerContinuousMap } from '../utils/player-continuous-map-projection'
-import type { PlayerClusterDocument } from '../domain/player-projection'
+import { addStarSystem, createLocalWorkspace, isLocalWorkspace, updateChartDetails } from '../domain/workspace'
+import { projectPlayerCluster, type PlayerClusterDocument } from '../domain/player-projection'
+import {
+  playerContinuousDetailSystemIds,
+  projectPlayerContinuousMap,
+} from '../utils/player-continuous-map-projection'
+import {
+  layoutPlayerContinuousNameLabels,
+  playerContinuousTargetBounds,
+  playerContinuousTargetMinimumScale,
+} from '../utils/player-continuous-map-layout'
+import { fitMapViewport } from '../utils/map-zoom'
 
 function publicDocument(): PlayerClusterDocument {
   return {
@@ -99,6 +109,8 @@ test('player continuous geometry keeps generic anchors and projects only public 
   expect(projection.bounds.y).toBeLessThan(120)
   expect(projection.bounds.x + projection.bounds.width).toBeGreaterThan(1300)
   expect(projection.routes.map(route => route.id)).toEqual(['route-1', 'route-2'])
+  expect(projection.routes[0]?.path).toBe('M 500 300 L 900 500')
+  expect(projection.routes[1]?.path).toBe('M 900 500 L 1180 530')
 })
 
 test('player continuous bounds and camera inputs ignore data outside the detached public document @pure', () => {
@@ -112,6 +124,82 @@ test('player continuous bounds and camera inputs ignore data outside the detache
 
   expect(extendedProjection.bounds).toEqual(publicProjection.bounds)
   expect(JSON.parse(JSON.stringify(extendedProjection.systems))).toEqual(JSON.parse(JSON.stringify(publicProjection.systems)))
+})
+
+test('hidden source geometry cannot change the public continuous envelope or fit camera @pure', () => {
+  const base = createLocalWorkspace('Private Source', 'Public System')
+  const publicSystem = base.cluster.systems[0]!
+  const revealed = updateChartDetails(base, publicSystem.id, {
+    clusterName: base.cluster.name,
+    systemName: publicSystem.name,
+    playerTitle: base.cluster.playerTitle,
+    publication: 'revealed',
+  })
+  const added = addStarSystem(revealed, 'Distant Hidden System')
+  const privateWorkspace = updateChartDetails(added.workspace, added.system.id, {
+    clusterName: added.workspace.cluster.name,
+    systemName: added.system.name,
+    playerTitle: added.workspace.cluster.playerTitle,
+    publication: 'hidden',
+  })
+  const farHiddenWorkspace = structuredClone(privateWorkspace)
+  farHiddenWorkspace.layout.systemPositions[added.system.id] = { x: 1000, y: -1000 }
+
+  expect(isLocalWorkspace(privateWorkspace)).toBe(true)
+  expect(isLocalWorkspace(farHiddenWorkspace)).toBe(true)
+  const publicProjection = projectPlayerContinuousMap(projectPlayerCluster(privateWorkspace))
+  const farProjection = projectPlayerContinuousMap(projectPlayerCluster(farHiddenWorkspace))
+  const publicSystemProjection = publicProjection.systems.find(system => system.disclosure === 'revealed')
+  const farSystemProjection = farProjection.systems.find(system => system.disclosure === 'revealed')
+  const viewport = { x: 0, y: 0, width: 960, height: 560 }
+
+  expect(farSystemProjection?.geometry?.envelope).toEqual(publicSystemProjection?.geometry?.envelope)
+  expect(farProjection.bounds).toEqual(publicProjection.bounds)
+  expect(fitMapViewport(farProjection.bounds, viewport, Number.MIN_VALUE))
+    .toEqual(fitMapViewport(publicProjection.bounds, viewport, Number.MIN_VALUE))
+})
+
+test('player continuous names use screen coordinates and independently fit the unobstructed viewport @pure', () => {
+  const projection = projectPlayerContinuousMap(publicDocument())
+  const labels = layoutPlayerContinuousNameLabels(
+    projection.systems,
+    { x: 80, y: 20, k: .2 },
+    2,
+    { x: 20, y: 10, width: 300, height: 200 },
+  )
+
+  expect(labels.map(label => label.systemId)).toEqual(['system-2', 'system-3', 'system-4'])
+  expect(new Set(labels.map(label => `${label.x}:${label.y}`)).size).toBe(labels.length)
+  for (const label of labels) {
+    expect(label.anchorX).toBeCloseTo(80 + projection.systems.find(system => system.id === label.systemId)!.anchor.x * .2)
+    expect(label.anchorY).toBeCloseTo(20 + projection.systems.find(system => system.id === label.systemId)!.anchor.y * .2)
+    expect(label.width * 2).toBeGreaterThanOrEqual(72)
+    expect(label.height * 2).toBeCloseTo(28)
+    expect(label.x - label.width / 2).toBeGreaterThanOrEqual(24)
+    expect(label.x + label.width / 2).toBeLessThanOrEqual(316)
+    expect(label.y).toBeGreaterThanOrEqual(14)
+    expect(label.y + label.height).toBeLessThanOrEqual(206)
+  }
+})
+
+test('player continuous target framing includes long labels, rotated orbits, and detail scale @pure', () => {
+  const projection = projectPlayerContinuousMap(publicDocument())
+  const system = projection.systems[2]!
+  const geometry = system.geometry!
+  const objectBounds = playerContinuousTargetBounds(geometry, { kind: 'object', id: 'object-1' })
+  const orbitBounds = playerContinuousTargetBounds(geometry, { kind: 'orbit', id: 'orbit-1' })
+  const detailScale = playerContinuousTargetMinimumScale(system, 1, 1, false)
+  const retainedDetailScale = playerContinuousTargetMinimumScale(system, 1.58, 1, true)
+  const requiredDetailScale = 250 / Math.max(geometry.envelope.width, geometry.envelope.height)
+
+  expect(objectBounds?.width).toBeGreaterThanOrEqual(Array.from('Pilgrim World').length * 7 + 22)
+  const angle = Math.PI / 6
+  const extentX = Math.hypot(18 * Math.cos(angle), 8 * Math.sin(angle))
+  const extentY = Math.hypot(18 * Math.sin(angle), 8 * Math.cos(angle))
+  expect(orbitBounds?.width).toBeCloseTo(extentX * 2 + 28)
+  expect(orbitBounds?.height).toBeCloseTo(extentY * 2 + 28)
+  expect(detailScale).toBeCloseTo(requiredDetailScale)
+  expect(retainedDetailScale).toBe(1.58)
 })
 
 test('player system detail uses independent public envelope thresholds with collapse hysteresis @pure', () => {

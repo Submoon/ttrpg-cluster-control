@@ -33,6 +33,7 @@
             :selected-system-id="selectedSystemId"
             :selected-object-id="selectedObjectId"
             :selected-orbit-id="selectedOrbitId"
+            :search-locator-object-id="searchLocatorObjectId"
             :dimmed-object-ids="dimmedObjectIds"
             :get-usable-client-rect="usableRectReader"
             :active="isActive"
@@ -276,6 +277,7 @@
             :selected-system-id="selectedSystemId"
             :selected-object-id="selectedObjectId"
             :selected-orbit-id="selectedOrbitId"
+            :search-locator-object-id="searchLocatorObjectId"
             :dimmed-object-ids="dimmedObjectIds"
             :get-usable-client-rect="usableRectReader"
             :active="isActive"
@@ -705,7 +707,9 @@ async function revealSearchTarget(target: PlayerSearchTarget): Promise<
         if (!ownsSearch() || searchOpen.value || selectedSystem.value !== destination) return stale
       }
       if (target.kind === 'object') {
-        await inspectObjectFromSearch(target.objectId)
+        const inspectionRequest = await inspectObjectFromSearch(target.objectId)
+        if (inspectionRequest === null) return stale
+        navigationRequest = inspectionRequest
         if (!ownsSearch() || searchOpen.value || selectedSystem.value !== destination) return stale
       } else {
         systemMapHandle.value?.centerSystem?.(target.systemId, source)
@@ -727,7 +731,10 @@ async function revealSearchTarget(target: PlayerSearchTarget): Promise<
     }
     if (target.kind === 'object') {
       focusCurrentMap('.player-system-map-scene')
-      await inspectObjectFromSearch(target.objectId)
+      const inspectionRequest = await inspectObjectFromSearch(target.objectId)
+      if (inspectionRequest === null) return stale
+      navigationRequest = inspectionRequest
+      if (!ownsSearch() || searchOpen.value || selectedSystem.value !== destination) return stale
     } else if (selectedSystem.value) {
       focusBackButton(navigationRequest, source, selectedSystem.value)
     }
@@ -849,7 +856,7 @@ function inspectObject(publicObjectId: string): void {
   void inspectTarget({ kind: 'object', id: publicObjectId })
 }
 
-function inspectObjectFromSearch(publicObjectId: string): Promise<void> {
+function inspectObjectFromSearch(publicObjectId: string): Promise<number | null> {
   return inspectTarget({ kind: 'object', id: publicObjectId }, true)
 }
 
@@ -857,10 +864,10 @@ function inspectOrbit(publicOrbitId: string): void {
   void inspectTarget({ kind: 'orbit', id: publicOrbitId })
 }
 
-async function inspectTarget(target: PlayerInspectionTarget, fromSearch = false): Promise<void> {
+async function inspectTarget(target: PlayerInspectionTarget, fromSearch = false): Promise<number | null> {
   const clusterDocument = props.document
   const system = selectedSystem.value
-  if (!system || !targetExists(target, system.map)) return
+  if (!system || !targetExists(target, system.map)) return null
   const map = systemMapHandle.value
   const copiedTarget: PlayerInspectionTarget = target.kind === 'object'
     ? { kind: 'object', id: target.id }
@@ -887,9 +894,10 @@ async function inspectTarget(target: PlayerInspectionTarget, fromSearch = false)
   if (continuousMap.value && !fromSearch) {
     pendingReveal.value = null
     lastRevealAttempt = ''
-    return
+    return request
   }
   await attemptPendingReveal(nextPending)
+  return request
 }
 
 function targetExists(target: PlayerInspectionTarget, systemDocument: PlayerSystemDocument): boolean {

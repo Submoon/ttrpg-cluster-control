@@ -132,6 +132,15 @@
               </g>
             </g>
             <circle
+              v-if="props.searchLocatorObjectId && isObjectSelected(system.id, props.searchLocatorObjectId)"
+              class="map-search-locator player-continuous-search-locator"
+              data-map-search-locator
+              :cx="system.geometry.objects.find(object => object.id === props.searchLocatorObjectId)?.scenePosition.x"
+              :cy="system.geometry.objects.find(object => object.id === props.searchLocatorObjectId)?.scenePosition.y"
+              r="10"
+              aria-hidden="true"
+            />
+            <circle
               v-for="orbit in unoccupiedOrbits(system)"
               :key="`center-${orbit.id}`"
               class="player-continuous-unoccupied-center"
@@ -170,15 +179,13 @@
         <g v-if="foregroundRoutes.length" class="player-continuous-routes-foreground" pointer-events="none">
           <PlayerClusterRouteMark v-for="route in foregroundRoutes" :key="route.id" :route="route" />
         </g>
-      </g>
-
       <g class="player-continuous-name-layer" :transform="screenLayerTransform">
         <g
           v-for="label in systemNameLabels"
           :key="label.systemId"
           class="player-continuous-name-target"
           :class="{ 'is-selected': props.selectedSystemId === label.systemId }"
-          :transform="`translate(${label.x} ${label.y}) scale(${1 / svgPixelScale})`"
+          :transform="`translate(${label.x} ${label.y})`"
           :data-player-system-id="label.systemId"
           :aria-label="`Inspect ${label.name}`"
           :aria-pressed="props.selectedSystemId === label.systemId"
@@ -197,8 +204,15 @@
             aria-hidden="true"
           />
           <rect class="player-continuous-name-background" :x="-label.width / 2" :width="label.width" :height="label.height" rx="5" aria-hidden="true" />
-          <text class="player-continuous-name" :y="label.height * .68" text-anchor="middle" aria-hidden="true">{{ label.name }}</text>
+          <text
+            class="player-continuous-name"
+            :style="{ fontSize: `${SYSTEM_NAME_FONT_PIXELS / svgPixelScale}px` }"
+            :y="label.height * .68"
+            text-anchor="middle"
+            aria-hidden="true"
+          >{{ label.name }}</text>
         </g>
+      </g>
       </g>
     </svg>
   </section>
@@ -206,7 +220,7 @@
 
 <script setup lang="ts">
 /** Renders one public Cluster canvas with a local camera and public-only semantic detail. */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { usePlayerContinuousMapViewport } from '../composables/usePlayerContinuousMapViewport'
 import type { PlayerClusterDocument, PlayerObjectMarker, PlayerOrbit, PlayerSystemDocument } from '../domain/player-projection'
 import type { PlayerUsableRectReader, PlayerInspectionTarget } from '../utils/player-inspection'
@@ -216,21 +230,15 @@ import {
   playerContinuousDetailSystemIds,
   projectPlayerContinuousMap,
 } from '../utils/player-continuous-map-projection'
+import {
+  layoutPlayerContinuousNameLabels,
+  playerContinuousTargetBounds,
+  playerContinuousTargetMinimumScale,
+  type PlayerContinuousNameLabel,
+} from '../utils/player-continuous-map-layout'
 import { playerObjectPresentation } from '../utils/player-object-presentation'
 import { PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS } from '../utils/cluster-system-presentation'
 import PlayerClusterRouteMark from './maps/PlayerClusterRouteMark.vue'
-
-interface PublicNameLabel {
-  systemId: string
-  name: string
-  x: number
-  y: number
-  width: number
-  height: number
-  anchorX: number
-  anchorY: number
-  hasLeader: boolean
-}
 
 const props = withDefaults(defineProps<{
   document: PlayerClusterDocument
@@ -238,10 +246,11 @@ const props = withDefaults(defineProps<{
   selectedSystemId: string | null
   selectedObjectId?: string | null
   selectedOrbitId?: string | null
+  searchLocatorObjectId?: string | null
   dimmedObjectIds: ReadonlySet<string>
   getUsableClientRect?: PlayerUsableRectReader
   workspacePresentation?: boolean
-}>(), { active: true, selectedObjectId: null, selectedOrbitId: null, workspacePresentation: false })
+}>(), { active: true, selectedObjectId: null, selectedOrbitId: null, searchLocatorObjectId: null, workspacePresentation: false })
 
 const emit = defineEmits<{
   'select-system': [publicSystemId: string]
@@ -251,7 +260,6 @@ const emit = defineEmits<{
 }>()
 
 const SYSTEM_NAME_FONT_PIXELS = 18
-const SYSTEM_NAME_HEIGHT_PIXELS = 28
 const VIEWPORT = { x: 0, y: 0, width: 960, height: 560 }
 const mapElement = ref<SVGSVGElement | null>(null)
 const projection = computed(() => projectPlayerContinuousMap(props.document))
@@ -274,25 +282,80 @@ const {
   panBy,
   sceneTransform,
   screenLayerTransform,
+  getUsableViewportRect,
+  measureSvg,
   svgPixelScale,
   zoomBy,
 } = mapViewport
 const detailSystemIds = ref(new Set<string>())
+const nameViewport = shallowRef<SvgViewportRect>(VIEWPORT)
 const backgroundRoutes = computed(() => projection.value.routes.filter(route => !route.foreground))
 const foregroundRoutes = computed(() => projection.value.routes.filter(route => route.foreground))
 const hasSelection = computed(() => props.selectedSystemId !== null)
-const systemNameLabels = computed(() => createPublicNameLabels(projection.value.systems, camera.value, svgPixelScale.value))
-
-watch(() => props.document, () => {
-  detailSystemIds.value = new Set()
-  fitPlayerMap()
-}, { flush: 'post' })
+const systemNameLabels = computed<PlayerContinuousNameLabel[]>(() => layoutPlayerContinuousNameLabels(
+  projection.value.systems,
+  camera.value,
+  svgPixelScale.value,
+  nameViewport.value,
+))
 
 let resizeObserver: ResizeObserver | undefined
+let suppressDetailFocusHandoff = false
+let pendingDetailFocusHandoff: {
+  document: PlayerClusterDocument
+  element: SVGSVGElement
+  systemId: string
+  activeElement: Element
+} | null = null
+
+watch(() => props.document, () => {
+  suppressDetailFocusHandoff = true
+  pendingDetailFocusHandoff = null
+  detailSystemIds.value = new Set()
+  fitPlayerMap()
+  void nextTick().then(() => { suppressDetailFocusHandoff = false })
+}, { flush: 'post' })
+
+watch(detailSystemIds, (next, previous) => {
+  pendingDetailFocusHandoff = null
+  if (suppressDetailFocusHandoff) return
+  const element = mapElement.value
+  const activeElement = element?.ownerDocument.activeElement
+  if (!element || !(activeElement instanceof Element) || !element.contains(activeElement)) return
+  const detail = activeElement.closest<SVGGElement>('.player-continuous-system-detail')
+  const owner = detail?.closest<SVGGElement>('.player-continuous-system')
+  const systemId = owner?.getAttribute('data-player-system-id')
+  if (!systemId || next.has(systemId) || !previous.has(systemId)) return
+  pendingDetailFocusHandoff = { document: props.document, element, systemId, activeElement }
+}, { flush: 'pre' })
+
+watch(detailSystemIds, async () => {
+  const handoff = pendingDetailFocusHandoff
+  pendingDetailFocusHandoff = null
+  if (!handoff) return
+  await nextTick()
+  if (props.document !== handoff.document || !props.active || mapElement.value !== handoff.element
+    || !handoff.element.isConnected) return
+  const activeElement = handoff.element.ownerDocument.activeElement
+  if (activeElement !== handoff.element.ownerDocument.body && activeElement !== handoff.activeElement) return
+  const name = [...handoff.element.querySelectorAll<SVGElement>('.player-continuous-name-target')]
+    .find(candidate => candidate.getAttribute('data-player-system-id') === handoff.systemId
+      && isVisibleFocusTarget(candidate, handoff.element))
+  if (name) name.focus({ preventScroll: true })
+  else handoff.element.focus({ preventScroll: true })
+}, { flush: 'post' })
+
+watch(usableRectReader, refreshNameViewport, { flush: 'post' })
+
 onMounted(() => {
   const element = mapElement.value
+  refreshNameViewport()
   if (!element || typeof ResizeObserver === 'undefined') return
-  resizeObserver = new ResizeObserver(() => updateDetailReveal(camera.value))
+  resizeObserver = new ResizeObserver(() => {
+    measureSvg()
+    refreshNameViewport()
+    updateDetailReveal(camera.value)
+  })
   resizeObserver.observe(element)
 })
 onBeforeUnmount(() => resizeObserver?.disconnect())
@@ -414,23 +477,7 @@ function systemBounds(systemId: string): SvgViewportRect | undefined {
 function targetBounds(systemId: string, target: PlayerInspectionTarget): SvgViewportRect | undefined {
   const system = projection.value.systems.find(candidate => candidate.id === systemId)
   if (!system?.geometry) return undefined
-  if (target.kind === 'object') {
-    const object = system.geometry.objects.find(candidate => candidate.id === target.id)
-    if (!object) return undefined
-    const width = Math.max(44, object.name.length * 7 + 22)
-    return { x: object.scenePosition.x - 10, y: object.scenePosition.y - 18, width, height: 36 }
-  }
-  const orbit = system.geometry.orbits.find(candidate => candidate.id === target.id)
-  if (!orbit) return undefined
-  const radians = orbit.rotation * Math.PI / 180
-  const extentX = Math.hypot(orbit.sceneRadii.horizontal * Math.cos(radians), orbit.sceneRadii.vertical * Math.sin(radians))
-  const extentY = Math.hypot(orbit.sceneRadii.horizontal * Math.sin(radians), orbit.sceneRadii.vertical * Math.cos(radians))
-  return {
-    x: orbit.sceneCenter.x - extentX - 14,
-    y: orbit.sceneCenter.y - extentY - 14,
-    width: Math.max(28, extentX * 2 + 28),
-    height: Math.max(28, extentY * 2 + 28),
-  }
+  return playerContinuousTargetBounds(system.geometry, target)
 }
 
 function centerSystem(systemId: string): boolean {
@@ -447,8 +494,17 @@ function centerSelection(): boolean {
 }
 
 function centerTarget(target: PlayerInspectionTarget, systemId: string): boolean {
+  const system = projection.value.systems.find(candidate => candidate.id === systemId)
+  if (!system?.geometry) return false
   const bounds = targetBounds(systemId, target)
-  return bounds ? frameBounds(bounds) : false
+  if (!bounds) return false
+  const minimumScale = playerContinuousTargetMinimumScale(
+    system,
+    camera.value.k,
+    svgPixelScale.value,
+    detailSystemIds.value.has(systemId),
+  )
+  return frameBounds(bounds, minimumScale)
 }
 
 /** Search and explicit Center requests are fenced by their exact detached system document. */
@@ -464,81 +520,20 @@ function centerSystemForDocument(systemId: string, expectedClusterDocument: Play
   return centerSystem(systemId)
 }
 
-function createPublicNameLabels(
-  systems: readonly PlayerContinuousSystemProjection[],
-  currentCamera: { x: number; y: number; k: number },
-  pixelScale: number,
-): PublicNameLabel[] {
-  const scale = Number.isFinite(pixelScale) && pixelScale > 0 ? pixelScale : 1
-  const visible = systems.flatMap(system => {
-    if (system.disclosure === 'unknown') return []
-    const anchorX = currentCamera.x + system.anchor.x * currentCamera.k
-    const anchorY = currentCamera.y + system.anchor.y * currentCamera.k
-    const envelope = system.geometry?.envelope
-    const envelopeIntersects = envelope !== undefined
-      && currentCamera.x + (envelope.x + envelope.width) * currentCamera.k >= VIEWPORT.x - 96 / scale
-      && currentCamera.x + envelope.x * currentCamera.k <= VIEWPORT.x + VIEWPORT.width + 96 / scale
-      && currentCamera.y + (envelope.y + envelope.height) * currentCamera.k >= VIEWPORT.y - 96 / scale
-      && currentCamera.y + envelope.y * currentCamera.k <= VIEWPORT.y + VIEWPORT.height + 96 / scale
-    const anchorNear = anchorX >= VIEWPORT.x - 96 / scale && anchorX <= VIEWPORT.x + VIEWPORT.width + 96 / scale
-      && anchorY >= VIEWPORT.y - 96 / scale && anchorY <= VIEWPORT.y + VIEWPORT.height + 96 / scale
-    return anchorNear || envelopeIntersects ? [{ system, anchorX, anchorY }] : []
-  })
-  const occupied: Array<{ left: number; top: number; right: number; bottom: number }> = []
-  const labels: PublicNameLabel[] = []
-  const heightPixels = SYSTEM_NAME_HEIGHT_PIXELS
+function refreshNameViewport(): void {
+  measureSvg()
+  const next = getUsableViewportRect()
+  if (next) nameViewport.value = next
+}
 
-  for (const entry of visible) {
-    const widthPixels = Math.max(72, Math.ceil(Array.from(entry.system.label).length * SYSTEM_NAME_FONT_PIXELS * .52 + 24))
-    const width = widthPixels / scale
-    const height = heightPixels / scale
-    const radius = entry.system.disclosure === 'unknown' ? 18 / scale : 10 / scale
-    const candidates = [
-      { x: 0, y: -height - 10 / scale },
-      { x: 0, y: 10 / scale },
-      { x: -width / 2 - radius - 8 / scale, y: -height / 2 },
-      { x: width / 2 + radius + 8 / scale, y: -height / 2 },
-    ]
-    let chosen = candidates[0]!
-    let chosenScore = Number.POSITIVE_INFINITY
-    for (const candidate of candidates) {
-      const x = entry.anchorX + candidate.x
-      const y = entry.anchorY + candidate.y
-      const bounds = { left: x - width / 2, top: y, right: x + width / 2, bottom: y + height }
-      const overlaps = occupied.reduce((total, prior) => total
-        + Math.max(0, Math.min(bounds.right + 6 / scale, prior.right) - Math.max(bounds.left - 6 / scale, prior.left))
-          * Math.max(0, Math.min(bounds.bottom + 4 / scale, prior.bottom) - Math.max(bounds.top - 4 / scale, prior.top)), 0)
-      const anchorOverlaps = visible.reduce((total, other) => {
-        if (other.system.id === entry.system.id) return total
-        const deltaX = Math.max(0, Math.min(bounds.right, other.anchorX + 18 / scale) - Math.max(bounds.left, other.anchorX - 18 / scale))
-        const deltaY = Math.max(0, Math.min(bounds.bottom, other.anchorY + 18 / scale) - Math.max(bounds.top, other.anchorY - 18 / scale))
-        return total + deltaX * deltaY
-      }, 0)
-      const outside = Math.max(0, VIEWPORT.x - bounds.left) + Math.max(0, bounds.right - VIEWPORT.width)
-        + Math.max(0, VIEWPORT.y - bounds.top) + Math.max(0, bounds.bottom - VIEWPORT.height)
-      const score = overlaps * 100 + anchorOverlaps * 40 + outside * 10 + Math.hypot(candidate.x, candidate.y) * .01
-      if (score < chosenScore) {
-        chosen = candidate
-        chosenScore = score
-      }
-      if (overlaps === 0 && anchorOverlaps === 0 && outside === 0) break
-    }
-    const x = entry.anchorX + chosen.x
-    const y = entry.anchorY + chosen.y
-    occupied.push({ left: x - width / 2, top: y, right: x + width / 2, bottom: y + height })
-    labels.push({
-      systemId: entry.system.id,
-      name: entry.system.label,
-      x,
-      y,
-      width,
-      height,
-      anchorX: entry.anchorX,
-      anchorY: entry.anchorY,
-      hasLeader: Math.hypot(chosen.x * scale, chosen.y * scale + heightPixels / 2) > 24,
-    })
-  }
-  return labels
+function isVisibleFocusTarget(target: SVGElement, viewport: SVGSVGElement): boolean {
+  if (!target.isConnected || target.getClientRects().length === 0) return false
+  const targetBounds = target.getBoundingClientRect()
+  const viewportBounds = viewport.getBoundingClientRect()
+  return targetBounds.right > viewportBounds.left && targetBounds.left < viewportBounds.right
+    && targetBounds.bottom > viewportBounds.top && targetBounds.top < viewportBounds.bottom
+    && getComputedStyle(target).visibility !== 'hidden'
+    && !target.closest('[inert], [aria-hidden="true"]')
 }
 
 defineExpose({ centerSystem: centerSystemForDocument, fitPlayerMap, revealTarget })

@@ -149,12 +149,12 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
     }
   }
 
-  function frameBounds(bounds: SvgViewportRect): boolean {
+  function frameBounds(bounds: SvgViewportRect, requiredScale = minimumScale.value): boolean {
     if (!options.active.value) return false
     const viewport = usableViewportRect()
     if (!viewport) return false
     updateMinimumScale(viewport)
-    const fitted = fitMapViewport(bounds, viewport, minimumScale.value)
+    const fitted = fitMapViewport(bounds, viewport, Math.max(minimumScale.value, requiredScale))
     if (!fitted) return false
     applyCamera(fitted)
     cameraInitialized.value = true
@@ -216,7 +216,9 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
     fitPlayerMap,
     focusMap,
     frameBounds,
+    getUsableViewportRect: usableViewportRect,
     handleMapKeydown,
+    measureSvg,
     minimumScale,
     panBy,
     sceneTransform,
