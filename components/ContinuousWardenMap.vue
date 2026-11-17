@@ -80,7 +80,11 @@
                   v-for="object in projection.objects"
                   :key="object.id"
                   class="continuous-warden-object"
-                  :class="{ 'is-selected': isSelectedObject(projection.id, object.id), 'is-search-result': searchLocatorId === object.id }"
+                  :class="{
+                    'is-selected': isSelectedObject(projection.id, object.id),
+                    'is-search-result': searchLocatorId === object.id,
+                    'is-dimmed': dimmedObjectIds.has(object.id),
+                  }"
                   :transform="`translate(${object.position.x} ${object.position.y})`"
                   :data-object-id="object.id"
                   :data-system-id="projection.id"
@@ -254,7 +258,10 @@ import {
 } from '../utils/continuous-map-history-reveal'
 import type { ClientRectBounds } from '../utils/map-usable-area'
 import { createMapTouchNavigation } from './maps/map-touch-navigation'
-import { exportMapImage, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
+import type { MapImageExportOptions, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import { exportContinuousWardenMapImage } from '../utils/continuous-warden-image-export'
+import { CONTINUOUS_SYSTEM_NAME_FONT_PIXELS as SYSTEM_NAME_FONT_PIXELS, continuousMapNameLabels } from '../utils/continuous-map-name-labels'
+import type { ContinuousMapNameLabel } from '../utils/continuous-map-name-labels'
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
 import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
 import ContinuousWardenRouteLayer from './maps/ContinuousWardenRouteLayer.vue'
@@ -262,9 +269,6 @@ import ContinuousWardenRouteLayer from './maps/ContinuousWardenRouteLayer.vue'
 const DETAIL_REVEAL_PIXELS = 250
 const DETAIL_HIDE_PIXELS = 210
 const MINIMUM_FIT_PADDING = 48
-const SYSTEM_NAME_FONT_PIXELS = 18
-const SYSTEM_NAME_HEIGHT_PIXELS = 28
-const SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS = 8
 const ROUTE_REVEAL_PADDING_PIXELS = 14
 const ROUTE_FAN_OUT_LIMIT_PIXELS = 96
 const OVERVIEW_DETAIL_SYSTEM_IDS: ReadonlySet<string> = new Set()
@@ -273,6 +277,7 @@ const props = defineProps<{
   cluster: JumpCluster
   systemPositions: Readonly<Record<string, Point>>
   unresolvedExitPositions?: Readonly<Record<string, Point>>
+  dimmedObjectIds?: readonly string[]
   objectAngles: Readonly<Record<string, number>>
   orbitRadii: Readonly<Record<string, { horizontal: number; vertical: number }>>
   orbitRotations: Readonly<Record<string, number>>
@@ -340,6 +345,7 @@ const systemGeometry = computed(() => ({
   orbitRadii: props.orbitRadii,
   orbitRotations: props.orbitRotations,
 }))
+const dimmedObjectIds = computed(() => new Set(props.dimmedObjectIds ?? []))
 
 const projections = computed(() => props.cluster.systems.map((system, index) => projectWardenSystem(
   system,
@@ -447,48 +453,6 @@ const screenLayerTransform = computed(() => {
   return `translate(${-x / k} ${-y / k}) scale(${1 / k})`
 })
 
-interface NameLabel {
-  id: string
-  name: string
-  x: number
-  y: number
-  width: number
-  height: number
-  anchorX: number
-  anchorY: number
-  hasLeader: boolean
-}
-
-let textMeasureContext: CanvasRenderingContext2D | null | undefined
-
-function systemNameWidthPixels(name: string): number {
-  if (textMeasureContext === undefined && typeof document !== 'undefined') {
-    textMeasureContext = document.createElement('canvas').getContext('2d')
-    if (textMeasureContext) textMeasureContext.font = `600 ${SYSTEM_NAME_FONT_PIXELS}px Georgia, serif`
-  }
-  const textWidth = textMeasureContext?.measureText(name).width ?? name.length * 9
-  return Math.max(72, Math.ceil(textWidth + 24))
-}
-
-function namePlacementOffsets(widthPixels: number): Point[] {
-  const side = widthPixels / 2 + 10
-  const offsets: Point[] = []
-  for (let ring = 0; ring <= 12; ring += 1) {
-    const distance = ring * 38
-    offsets.push(
-      { x: 0, y: -SYSTEM_NAME_HEIGHT_PIXELS - 8 - distance },
-      { x: 0, y: 8 + distance },
-      { x: -side - distance, y: -SYSTEM_NAME_HEIGHT_PIXELS / 2 },
-      { x: side + distance, y: -SYSTEM_NAME_HEIGHT_PIXELS / 2 },
-      { x: -side - distance, y: -SYSTEM_NAME_HEIGHT_PIXELS - 8 },
-      { x: side + distance, y: -SYSTEM_NAME_HEIGHT_PIXELS - 8 },
-      { x: -side - distance, y: 8 },
-      { x: side + distance, y: 8 },
-    )
-  }
-  return offsets
-}
-
 function anchorFor(projection: ContinuousWardenSystemProjection): Point {
   const preview = previewPositions.value.get(projection.id)
   return preview
@@ -511,115 +475,13 @@ function anchorTransform(projection: ContinuousWardenSystemProjection): string {
   return `translate(${anchor.x} ${anchor.y}) scale(${1 / (viewport.value.k * svgPixelScale.value)})`
 }
 
-function clampToViewport(value: number, minimum: number, maximum: number): number {
-  return maximum < minimum ? (minimum + maximum) / 2 : Math.max(minimum, Math.min(maximum, value))
-}
-
-const nameLabels = computed<NameLabel[]>(() => {
-  const scale = svgPixelScale.value > 0 ? svgPixelScale.value : 1
-  const viewportRect = svgViewport.value
-  const margin = SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS / scale
-  const labels: NameLabel[] = []
-  const occupied: Array<{ left: number; top: number; right: number; bottom: number }> = []
-  const expandedViewport = {
-    left: viewportRect.x - 96 / scale,
-    top: viewportRect.y - 96 / scale,
-    right: viewportRect.x + viewportRect.width + 96 / scale,
-    bottom: viewportRect.y + viewportRect.height + 96 / scale,
-  }
-  const anchorPoints = projections.value.flatMap(projection => {
-    const anchor = anchorFor(projection)
-    const point = {
-      id: projection.id,
-      name: projection.name,
-      x: viewport.value.x + anchor.x * viewport.value.k,
-      y: viewport.value.y + anchor.y * viewport.value.k,
-    }
-    const delta = anchorDelta(projection)
-    const envelope = projection.envelope
-    const envelopeBounds = {
-      left: viewport.value.x + (envelope.x + delta.x) * viewport.value.k,
-      top: viewport.value.y + (envelope.y + delta.y) * viewport.value.k,
-      right: viewport.value.x + (envelope.x + delta.x + envelope.width) * viewport.value.k,
-      bottom: viewport.value.y + (envelope.y + delta.y + envelope.height) * viewport.value.k,
-    }
-    const anchorNearViewport = point.x >= expandedViewport.left && point.x <= expandedViewport.right
-      && point.y >= expandedViewport.top && point.y <= expandedViewport.bottom
-    const envelopeNearViewport = envelopeBounds.right >= expandedViewport.left
-      && envelopeBounds.left <= expandedViewport.right
-      && envelopeBounds.bottom >= expandedViewport.top
-      && envelopeBounds.top <= expandedViewport.bottom
-    return anchorNearViewport || envelopeNearViewport ? [point] : []
-  })
-  for (const anchor of anchorPoints) {
-    const widthPixels = systemNameWidthPixels(anchor.name)
-    const width = widthPixels / scale
-    const height = SYSTEM_NAME_HEIGHT_PIXELS / scale
-    const candidates = namePlacementOffsets(widthPixels).map(offset => ({ x: offset.x / scale, y: offset.y / scale }))
-    let chosen = candidates[0]!
-    let chosenScore = Number.POSITIVE_INFINITY
-    for (const offset of candidates) {
-      const centerX = clampToViewport(
-        anchor.x + offset.x,
-        viewportRect.x + margin + width / 2,
-        viewportRect.x + viewportRect.width - margin - width / 2,
-      )
-      const top = clampToViewport(
-        anchor.y + offset.y,
-        viewportRect.y + margin,
-        viewportRect.y + viewportRect.height - margin - height,
-      )
-      const candidateOffset = { x: centerX - anchor.x, y: top - anchor.y }
-      const bounds = {
-        left: centerX - width / 2,
-        right: centerX + width / 2,
-        top,
-        bottom: top + height,
-      }
-      const outsideWidth = Math.max(0, viewportRect.x + margin - bounds.left)
-        + Math.max(0, bounds.right - (viewportRect.x + viewportRect.width - margin))
-      const outsideHeight = Math.max(0, viewportRect.y + margin - bounds.top)
-        + Math.max(0, bounds.bottom - (viewportRect.y + viewportRect.height - margin))
-      const outsideArea = outsideWidth * height + outsideHeight * width
-      const labelOverlapArea = occupied.reduce((total, prior) => {
-        const overlapWidth = Math.max(0, Math.min(bounds.right + 6 / scale, prior.right) - Math.max(bounds.left - 6 / scale, prior.left))
-        const overlapHeight = Math.max(0, Math.min(bounds.bottom + 4 / scale, prior.bottom) - Math.max(bounds.top - 4 / scale, prior.top))
-        return total + overlapWidth * overlapHeight
-      }, 0)
-      const anchorOverlapArea = anchorPoints.reduce((total, other) => {
-        if (other.id === anchor.id) return total
-        const radius = 18 / scale
-        const overlapWidth = Math.max(0, Math.min(bounds.right, other.x + radius) - Math.max(bounds.left, other.x - radius))
-        const overlapHeight = Math.max(0, Math.min(bounds.bottom, other.y + radius) - Math.max(bounds.top, other.y - radius))
-        return total + overlapWidth * overlapHeight
-      }, 0)
-      const duplicatePosition = labels.some(prior => prior.x === centerX && prior.y === top)
-      const score = labelOverlapArea * 100 + anchorOverlapArea * 30 + outsideArea * 10
-        + (duplicatePosition ? 1_000_000_000 : 0) + Math.hypot(candidateOffset.x, candidateOffset.y) * 0.01
-      if (score < chosenScore) {
-        chosen = candidateOffset
-        chosenScore = score
-      }
-      if (labelOverlapArea === 0 && anchorOverlapArea === 0 && outsideArea === 0 && !duplicatePosition) break
-    }
-    const x = anchor.x + chosen.x
-    const y = anchor.y + chosen.y
-    occupied.push({ left: x - width / 2, top: y, right: x + width / 2, bottom: y + height })
-    labels.push({
-      id: anchor.id,
-      name: anchor.name,
-      x,
-      y,
-      width,
-      height,
-      anchorX: anchor.x,
-      anchorY: anchor.y,
-      hasLeader: Math.abs(chosen.x * scale) > 0
-        || Math.abs(chosen.y * scale + SYSTEM_NAME_HEIGHT_PIXELS + 8) > 6,
-    })
-  }
-  return labels
-})
+const nameLabels = computed<ContinuousMapNameLabel[]>(() => continuousMapNameLabels({
+  projections: projections.value,
+  viewport: viewport.value,
+  viewportRect: svgViewport.value,
+  svgPixelScale: svgPixelScale.value,
+  getAnchor: anchorFor,
+}))
 
 function localObject(projectionId: string, objectId: string): StarSystem['objects'][number] | undefined {
   return props.cluster.systems.find(system => system.id === projectionId)?.objects.find(object => object.id === objectId)
@@ -1406,12 +1268,41 @@ function setUnresolvedExitPositionPreview(routeId: string, position: Point | nul
   exitPositionOverrides.value = next
 }
 
-function exportImage(format: MapImageFormat, palette: MapImagePalette = 'active'): Promise<Blob> {
+function exportImage(
+  format: MapImageFormat,
+  palette: MapImagePalette = 'active',
+  options: MapImageExportOptions = {},
+): Promise<Blob | null> {
   const element = svgElement.value
-  return element ? exportMapImage(element, format, undefined, palette, clone => {
-    clone.querySelector('.continuous-warden-import-placement-preview')?.remove()
+  if (!element) return Promise.reject(new Error('The continuous map is not ready to export.'))
+  return exportContinuousWardenMapImage({
+    source: element,
+    cluster: props.cluster,
+    projections: projections.value,
+    unresolvedExitPositions: props.unresolvedExitPositions,
+    dimmedObjectIds: props.dimmedObjectIds,
+    scope: options.scope ?? 'viewport',
+    selectedSystemId: options.selectedSystemId,
+    selectedRouteId: props.selectedRouteId,
+    format,
+    palette,
+    viewport: getViewport(),
+    viewportRect: { ...svgViewport.value },
+    svgPixelScale: svgPixelScale.value,
+    detailSystemIds: new Set(detailSystemIds.value),
+    isCurrent: options.isCurrent,
   })
-    : Promise.reject(new Error('The continuous map is not ready to export.'))
+}
+
+function getImageContextKey(): string {
+  return JSON.stringify({
+    clusterId: props.cluster.id,
+    viewport: getViewport(),
+    viewportRect: svgViewport.value,
+    svgPixelScale: svgPixelScale.value,
+    detailSystemIds: [...detailSystemIds.value].sort(),
+    dimmedObjectIds: [...dimmedObjectIds.value].sort(),
+  })
 }
 
 function cancelActiveGesture(): void {
@@ -1516,6 +1407,7 @@ watch(projections, () => {
 
 defineExpose({
   exportImage,
+  getImageContextKey,
   getMinimumZoomScale: () => minimumZoomScale.value,
   getViewport,
   setViewport,
@@ -1639,6 +1531,10 @@ defineExpose({
   fill: var(--map-text);
   cursor: pointer;
   pointer-events: all;
+}
+
+.continuous-warden-object.is-dimmed {
+  opacity: 0.14;
 }
 
 .continuous-warden-object-hit-target {

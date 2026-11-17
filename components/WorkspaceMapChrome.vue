@@ -108,7 +108,7 @@
     <template #right>
       <slot name="history" />
       <MapTypeFilters
-        v-if="activeView === 'system' && selectedSystem"
+        v-if="(activeView === 'system' && selectedSystem) || props.continuousMap"
         :icon-only="true"
         v-model:open="typeFiltersOpen"
         :selected-types="mapCriteriaValues.types"
@@ -191,6 +191,8 @@
         :workspace-id="workspace.id"
         :scope="mapFileScope"
         :active-view="activeView"
+        :continuous-map="props.continuousMap"
+        :selected-image-system-id="props.selectedImageSystemId"
         :image-available="Boolean(activeMap)"
         :restore-loading="props.restoreLoading"
         :export-error="props.exportError"
@@ -243,7 +245,7 @@ import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 import type { SystemCreationSession } from '../composables/editor-workflows/types'
 import type { PlayerLinkGenerationResult } from '../composables/usePlayerFileExports'
 import type { WardenFilterControl, WardenFilterCriteriaOwner } from '../composables/useWardenFilterCriteria'
-import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { MapImageExporter, MapImageFormat, MapImagePalette, MapImageScope } from '../utils/map-image-export'
 import type { SearchResult, SearchTarget } from '../utils/workspace-search'
 import WorkspaceMapFilesMenu from './workspace-map-files/WorkspaceMapFilesMenu.vue'
 import WorkspaceSearch from './WorkspaceSearch.vue'
@@ -252,6 +254,8 @@ import MapTypeFilters from './MapTypeFilters.vue'
 const props = withDefaults(defineProps<{
   workspace: LocalWorkspace | null
   activeView: 'cluster' | 'system'
+  continuousMap?: boolean
+  selectedImageSystemId?: string | null
   selectedSystem: StarSystem | null | undefined
   clusterMap: MapImageExporter | null
   systemMap: MapImageExporter | null
@@ -292,7 +296,14 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   'export-cluster-json': []
   'export-system-json': []
-  'export-map-image': [map: MapImageExporter | null, name: string | undefined, kind: 'jump-cluster' | 'star-system', format: MapImageFormat, palette: MapImagePalette]
+  'export-map-image': [
+    map: MapImageExporter | null,
+    kind: 'jump-cluster' | 'star-system',
+    format: MapImageFormat,
+    palette: MapImagePalette,
+    scope: MapImageScope | null,
+    selectedSystemId: string | null,
+  ]
   'export-player-json': []
   'export-player-image': [format: MapImageFormat, palette: MapImagePalette]
   'preview-player-view': [focusMapFiles: () => void]
@@ -363,12 +374,19 @@ watch(() => props.compactModalOpen, open => {
   if (open) headerMapActionsOpen.value = false
 })
 
-function exportMapImage(format: MapImageFormat, lightForPrinting: boolean): void {
-  const map = activeMap.value
-  const isCluster = activeView.value === 'cluster'
-  const name = isCluster ? workspace.value?.cluster.name : selectedSystem.value?.name
+function exportMapImage(format: MapImageFormat, lightForPrinting: boolean, imageScope: MapImageScope): void {
+  const continuousMap = props.continuousMap ?? false
+  const selectedSystemId = continuousMap && imageScope === 'system' ? props.selectedImageSystemId ?? null : null
+  const selectedImageSystem = selectedSystemId
+    ? workspace.value?.cluster.systems.find(system => system.id === selectedSystemId)
+    : undefined
+  const selectedSystemScope = continuousMap && imageScope === 'system' && selectedImageSystem
+  const map = continuousMap ? props.clusterMap : activeMap.value
+  const kind = selectedSystemScope || (!continuousMap && activeView.value === 'system')
+    ? 'star-system'
+    : 'jump-cluster'
   const palette: MapImagePalette = lightForPrinting ? 'print-light' : 'active'
-  emit('export-map-image', map, name, isCluster ? 'jump-cluster' : 'star-system', format, palette)
+  emit('export-map-image', map, kind, format, palette, continuousMap ? imageScope : null, selectedSystemId)
 }
 
 function exportPlayerImage(format: MapImageFormat, lightForPrinting: boolean): void {

@@ -35,6 +35,7 @@
       :cluster="props.workspace.cluster"
       :system-positions="props.workspace.layout.systemPositions"
       :unresolved-exit-positions="props.workspace.layout.unresolvedExitPositions"
+      :dimmed-object-ids="props.dimmedObjectIds ?? []"
       :object-angles="props.workspace.layout.objectAngles"
       :orbit-radii="props.workspace.layout.orbitRadii"
       :orbit-rotations="props.workspace.layout.orbitRotations"
@@ -165,7 +166,7 @@ import type {
   OrbitAdjustmentIntent,
   OrbitAdjustmentPreview,
 } from '../composables/editor-workflows/continuous-orbit-adjustments'
-import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { MapImageExportOptions, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import type { PublicationMenuLease, PublicationTarget } from '../composables/editor-workflows/publication-types'
 import type { MapViewport } from '../utils/map-zoom'
@@ -1476,8 +1477,19 @@ watch(
 )
 
 defineExpose({
-  exportImage: async (format: MapImageFormat, palette: MapImagePalette = 'active') => currentMap()?.exportImage(format, palette)
-    ?? Promise.reject(new Error('The map is not ready to export.')),
+  exportImage: async (
+    format: MapImageFormat,
+    palette: MapImagePalette = 'active',
+    options?: MapImageExportOptions,
+  ) => {
+    if (props.continuousMap && props.activeView === 'cluster') {
+      return continuousWardenMapRef.value?.exportImage(format, palette, options)
+        ?? Promise.reject(new Error('The map is not ready to export.'))
+    }
+    return currentMap()?.exportImage(format, palette)
+      ?? Promise.reject(new Error('The map is not ready to export.'))
+  },
+  getImageContextKey: () => continuousWardenMapRef.value?.getImageContextKey() ?? '',
   getViewport: () => currentMap()?.getViewport() ?? { x: 0, y: 0, k: 1 },
   getMinimumZoomScale: () => props.activeView === 'cluster'
     ? currentClusterMap()?.getMinimumZoomScale?.() ?? MAP_ZOOM_MIN_SCALE

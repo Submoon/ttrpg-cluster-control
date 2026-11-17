@@ -124,6 +124,8 @@
               ref="workspaceMapChrome"
               :workspace="workspace"
               :active-view="activeView"
+              :continuous-map="continuousMapEnabled && activeView === 'cluster'"
+              :selected-image-system-id="continuousInspectorSystemId"
               :selected-system="selectedSystem"
               :cluster-map="clusterMapRef"
               :system-map="systemMapRef"
@@ -341,6 +343,7 @@
                     :standalone-import-placement="standaloneImportPlacement"
                     :keyboard-owned-overlay-open="mapKeyboardOverlayOpen"
                     :inspected-target="inspectedTarget"
+                    :dimmed-object-ids="dimmedMapObjectIds"
                     :map-key="activeMapKey ?? ''"
                     :initial-viewport="initialViewport"
                     :workspace="workspace"
@@ -1063,6 +1066,7 @@ const wardenFilters = useWardenMapFilters({
   workspace,
   selectedSystem,
   activeView,
+  continuousMap: continuousMapEnabled,
   criteria: filterCriteria.map.criteria,
   fieldOptions: filterCriteria.fieldOptions,
 })
@@ -1606,14 +1610,50 @@ const workspaceFiles = useWorkspaceFiles({
   workspace,
   selectedSystem,
   mutations,
-  getCurrentMapImage: (kind) => {
+  getCurrentMapImage: (kind, scope, systemId) => {
+    if (continuousMapEnabled.value && scope) {
+      if (activeView.value !== 'cluster') return null
+      if (scope === 'system') {
+        if (!systemId || systemId !== continuousInspectorSystemId.value) return null
+        const system = workspace.value?.cluster.systems.find(candidate => candidate.id === systemId)
+        if (!system) return null
+        return {
+          map: clusterMapRef.value,
+          name: system.name,
+          kind: 'star-system',
+          scope,
+          selectedSystemId: systemId,
+        }
+      }
+      return {
+        map: clusterMapRef.value,
+        name: workspace.value?.cluster.name,
+        kind: 'jump-cluster',
+        scope,
+        selectedSystemId: null,
+      }
+    }
+    if (scope !== null) return null
     if (kind === 'jump-cluster') {
       if (activeView.value !== 'cluster') return null
-      return { map: clusterMapRef.value, name: workspace.value?.cluster.name }
+      return {
+        map: clusterMapRef.value,
+        name: workspace.value?.cluster.name,
+        kind,
+        scope,
+        selectedSystemId: null,
+      }
     }
     if (activeView.value !== 'system') return null
-    return { map: systemMapRef.value, name: selectedSystem.value?.name }
+    return {
+      map: systemMapRef.value,
+      name: selectedSystem.value?.name,
+      kind,
+      scope,
+      selectedSystemId: null,
+    }
   },
+  getAppliedRevision: () => appliedRevision.value,
   getFieldDefinitionImportConflict,
   resolveImportDefinitionChanges,
   beforeWorkspaceOperation,
