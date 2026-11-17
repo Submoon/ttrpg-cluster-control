@@ -139,7 +139,7 @@ export function useDropboxRestore(
           return null
         }
         message.value = getErrorMessage(error, 'Dropbox could not list your backups. Try again.')
-        throw error
+        return null
       } finally {
         if (isCurrent(operation)) clearOperationState()
       }

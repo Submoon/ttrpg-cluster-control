@@ -462,6 +462,10 @@ async function providerFetch(
         void response.body?.cancel().catch(() => undefined)
         throw createAbortError()
       }
+      if (response.status === 401) {
+        void response.body?.cancel().catch(() => undefined)
+        return { status: response.status, ok: response.ok, headers: response.headers, bytes: new Uint8Array() }
+      }
       const bytes = await readResponseBytes(response, controller.signal)
       return { status: response.status, ok: response.ok, headers: response.headers, bytes }
     }

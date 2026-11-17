@@ -217,6 +217,45 @@ test('Dropbox chooser opens the restore owner before authorization and passes th
   }
 })
 
+test('a Dropbox list failure stays in its provider message without reaching the workspace restore alert @pure', async () => {
+  const listStarted = deferred<void>()
+  const listError = new Error('Dropbox could not list this account.')
+  let workspaceRestoreError = ''
+  let deliveredSource: WorkspaceRestoreSource | null | undefined
+  const { signIn } = readyDropboxSignIn()
+  const restore = {
+    async openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean> {
+      try {
+        deliveredSource = await load(signal)
+      } catch (error) {
+        workspaceRestoreError = error instanceof Error ? error.message : String(error)
+      }
+      return true
+    },
+  }
+  const scope = effectScope()
+  const controller = scope.run(() => useDropboxRestore(restore, signIn, {
+    listBackups: async () => {
+      listStarted.resolve()
+      throw listError
+    },
+    readFile: async () => '{}',
+  }))
+  if (!controller) throw new Error('The Dropbox restore controller did not initialize.')
+
+  try {
+    controller.activate()
+    await listStarted.promise
+    await expect.poll(() => controller.state.value).toBe('idle')
+
+    expect(deliveredSource).toBeNull()
+    expect(workspaceRestoreError).toBe('')
+    expect(controller.message.value).toBe(listError.message)
+  } finally {
+    scope.stop()
+  }
+})
+
 test('Dropbox restore rejects a selection after the authorized account changes @pure', async () => {
   const file = datedBackup('id:backup-one', '2026-11-13-10-00-00-000Z')
   const { signIn, accountId } = readyDropboxSignIn()

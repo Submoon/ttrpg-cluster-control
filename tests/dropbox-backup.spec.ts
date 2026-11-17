@@ -82,6 +82,51 @@ test('a confirmed backup is created once under the App Folder without replacemen
   })
 })
 
+test('a Dropbox 401 response invalidates authorization without reading its stalled body @pure', async () => {
+  const abort = new AbortController()
+  let signalReadStarted!: () => void
+  let signalBodyCanceled!: () => void
+  const readStarted = new Promise<void>(resolve => { signalReadStarted = resolve })
+  const bodyCanceled = new Promise<void>(resolve => { signalBodyCanceled = resolve })
+  const response = {
+    status: 401,
+    ok: false,
+    headers: new Headers(),
+    body: {
+      getReader: () => {
+        signalReadStarted()
+        return {
+          read: () => new Promise<ReadableStreamReadResult<Uint8Array>>(() => undefined),
+          cancel: async () => undefined,
+          releaseLock: () => undefined,
+        }
+      },
+      cancel: () => {
+        signalBodyCanceled()
+        return new Promise<void>(() => undefined)
+      },
+    },
+  } as unknown as Response
+  const request = createDropboxBackup({
+    accessToken: 'stale-token',
+    path: '/Backup.json',
+    contents: '{}',
+    signal: abort.signal,
+    fetcher: async () => response,
+  }).catch(error => error)
+
+  const bodyAction = await Promise.race([
+    readStarted.then(() => 'read' as const),
+    bodyCanceled.then(() => 'canceled' as const),
+  ])
+  if (bodyAction === 'read') abort.abort()
+  const error = await request
+
+  expect(bodyAction).toBe('canceled')
+  expect(error).toBeInstanceOf(DropboxApiError)
+  expect(error).toMatchObject({ httpStatus: 401, code: 'request-failed' })
+})
+
 test('Dropbox API argument headers preserve Unicode names using ASCII JSON escapes @pure', async () => {
   let headerValue = ''
   await createDropboxBackup({
