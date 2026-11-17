@@ -5,6 +5,7 @@ import {
   createLocalWorkspace,
   defaultObjectFieldSettings,
   exportJumpCluster,
+  exportStarSystem,
   prepareJsonImport,
   restoreJumpClusterBackup,
   restoreLocalWorkspace,
@@ -14,6 +15,7 @@ import {
   type StarSystem,
 } from '../domain/workspace'
 import { createWorkspaceSnapshot } from '../utils/workspace-storage'
+import { jsonImportReviewEffects } from '../domain/workspace-json-import'
 
 function sourceFieldValue(field: CustomFieldDefinition): string | number | boolean {
   switch (field.type) {
@@ -285,6 +287,42 @@ function workspaceWithOriginalRecords(): LocalWorkspace {
     },
   }
 }
+
+test('standalone system import uses the chosen finite Cluster anchor, including coordinates beyond the normalized map @pure', () => {
+  const sourceWorkspace = createLocalWorkspace('Source Reach', 'Standalone System')
+  const sourceSystem = sourceWorkspace.cluster.systems[0]
+  if (!sourceSystem) throw new Error('The source workspace needs one star system.')
+  const standalone = exportStarSystem(sourceWorkspace, sourceSystem.id)
+  const destination = createLocalWorkspace('Destination Reach', 'Home')
+  const anchor = { x: -1.75, y: 2.4 }
+
+  const prepared = prepareJsonImport(destination, standalone, anchor)
+  const importedSystemId = prepared.addedSystemIds[0]
+
+  expect(importedSystemId).toBeTruthy()
+  expect(prepared.workspace.layout.systemPositions[importedSystemId!]).toEqual(anchor)
+  expect(prepared.workspace.layout.systemPositions[sourceSystem.id]).toEqual(undefined)
+  expect(destination.cluster.systems).toHaveLength(1)
+})
+
+test('standalone review effects include the selected anchor but ignore regenerated copy identities @pure', () => {
+  const sourceWorkspace = createLocalWorkspace('Source Reach', 'Standalone System')
+  const sourceSystem = sourceWorkspace.cluster.systems[0]
+  if (!sourceSystem) throw new Error('The source workspace needs one star system.')
+  const standalone = exportStarSystem(sourceWorkspace, sourceSystem.id)
+  const destination = createLocalWorkspace('Destination Reach', 'Home')
+  const anchor = { x: -1.75, y: 2.4 }
+  const initialPrepared = prepareJsonImport(destination, standalone, anchor)
+  const repeatedPrepared = prepareJsonImport(destination, standalone, anchor)
+  const movedPrepared = prepareJsonImport(destination, standalone, { x: -1.75, y: 2.5 })
+
+  const initialSignature = jsonImportReviewEffects(destination, standalone, initialPrepared).signature
+  const repeatedSignature = jsonImportReviewEffects(destination, standalone, repeatedPrepared).signature
+  const movedSignature = jsonImportReviewEffects(destination, standalone, movedPrepared).signature
+
+  expect(repeatedSignature).toBe(initialSignature)
+  expect(movedSignature).not.toBe(initialSignature)
+})
 
 test('cluster import remaps identities and preserves exact relationships and geometry @pure', () => {
   const current = createLocalWorkspace('Local Reach', 'Home System')

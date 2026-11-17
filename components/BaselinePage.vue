@@ -158,7 +158,7 @@
               @preview-player-view="openPlayerPreview"
               :generate-player-link="generatePlayerLink"
               @copy-player-link="copyPlayerLink"
-              @import-file="importJsonFile"
+              @import-file="handleWorkspaceJsonImport"
               @restore-file="openLocalWorkspaceRestore"
               @show-cluster="showClusterMap"
               @toggle-hierarchy="togglePanel('hierarchy')"
@@ -280,8 +280,8 @@
               v-model:add-open="creationChooserOpen"
               :creation-session="activeView === 'system' ? creationSession : null"
               :creation-type-label="creationTypeLabel"
-              :cluster-add-label="clusterAddPresentation?.label ?? null"
-              :cluster-move-targeting="clusterMoveTargeting && clusterAddType === null"
+              :cluster-add-label="standaloneImportPlacementEnabled ? null : clusterAddPresentation?.label ?? null"
+              :cluster-move-targeting="!standaloneImportPlacementEnabled && clusterMoveTargeting && clusterAddType === null"
               :system-object-move-available="systemObjectMoveAvailable"
               :system-object-move-destination="systemObjectMoveDestination"
               :system-object-move-destination-options="systemObjectMoveDestinationOptions"
@@ -289,13 +289,13 @@
               :system-object-move-candidate-request="systemObjectMoveCandidateRequest"
               :system-object-move-preview="systemObjectMovePreview"
               :system-object-move-error="systemObjectMoveError"
-              :unresolved-exit-available="unresolvedExitAvailable"
-              :unresolved-exit-preview="unresolvedExitPreview"
-              :unresolved-exit-error="unresolvedExitError"
-              :orbit-center-move-available="orbitCenterMoveAvailable"
-              :orbit-center-map-move-targeting="orbitCenterMapMoveTargeting"
-              :orbit-center-move-preview="orbitCenterMovePreview"
-              :orbit-center-move-error="orbitCenterMoveError"
+              :unresolved-exit-available="!standaloneImportPlacementEnabled && unresolvedExitAvailable"
+              :unresolved-exit-preview="standaloneImportPlacementEnabled ? null : unresolvedExitPreview"
+              :unresolved-exit-error="standaloneImportPlacementEnabled ? '' : unresolvedExitError"
+              :orbit-center-move-available="!standaloneImportPlacementEnabled && orbitCenterMoveAvailable"
+              :orbit-center-map-move-targeting="!standaloneImportPlacementEnabled && orbitCenterMapMoveTargeting"
+              :orbit-center-move-preview="standaloneImportPlacementEnabled ? null : orbitCenterMovePreview"
+              :orbit-center-move-error="standaloneImportPlacementEnabled ? '' : orbitCenterMoveError"
               :selected-system="selectedSystem"
               @update-creation-input="updateCreationInput"
               @add-from-inputs="addCreationFromInputs"
@@ -341,6 +341,22 @@
                   @add-orbit="chooseOrbitCreationType"
                 />
               </template>
+              <template #placement>
+                <div
+                  v-if="activeView === 'cluster' && continuousMapEnabled && standaloneImportPlacementEnabled"
+                  class="workspace-dock-placement-controls"
+                  role="group"
+                  aria-label="Standalone star system placement controls"
+                  @keydown.esc.stop.prevent="handleStandaloneImportPlacementEscape"
+                >
+                  <span class="workspace-dock-placement-instruction">
+                    Click map or focus it and press Enter to place {{ standaloneImportPlacement?.system.name ?? 'the imported system' }}; arrows pan; Escape cancels.
+                  </span>
+                  <UButton size="xs" color="neutral" variant="soft" @click="frameStandaloneImportPlacement">Frame preview</UButton>
+                  <UButton size="xs" color="primary" @click="reviewStandaloneImportPlacement">Review placement</UButton>
+                  <UButton size="xs" color="neutral" variant="ghost" @click="cancelStandaloneImportPlacement">Cancel</UButton>
+                </div>
+              </template>
             </WorkspaceDock>
           </template>
 
@@ -348,7 +364,7 @@
             <WorkspaceZoomControls
               :zoom-level="zoomLevel"
               :minimum-zoom-level="minimumZoomLevel"
-              :center-available="continuousMapEnabled && inspectedTarget !== null && inspectedTarget.kind !== 'route'"
+              :center-available="continuousMapEnabled && inspectedTarget !== null"
               :compact-modal-open="compactPanelOpen"
               @zoom-by="zoomActiveMap"
               @zoom-to="setViewportPercentage"
@@ -386,6 +402,9 @@
                     @editing-gesture-change="mapControls.setEditingGestureActive"
                     :active-view="activeView"
                     :continuous-map="continuousMapEnabled"
+                    :standalone-import-placement-enabled="continuousMapEnabled && standaloneImportPlacementEnabled"
+                    :standalone-import-placement="standaloneImportPlacement"
+                    :keyboard-owned-overlay-open="mapKeyboardOverlayOpen"
                     :inspected-target="inspectedTarget"
                     :map-key="activeMapKey ?? ''"
                     :initial-viewport="initialViewport"
@@ -397,14 +416,14 @@
                     :selected-orbit-id="selectedOrbitId"
                     :selected-route-id="selectedRouteId"
                     :mode="mapMode"
-                    :creation-type="continuousObjectCreationType"
+                    :creation-type="standaloneImportPlacementEnabled ? null : continuousObjectCreationType"
                     :creation-other-type="continuousObjectAddType === 'other' ? continuousObjectAddOtherType : null"
                     :object-add-pinned-owner-id="continuousObjectPinnedOwnerId"
                     :creation-preview="null"
                     :creation-chooser-open="creationChooserOpen"
-                    :cluster-add-type="clusterAddType"
-                    :cluster-move-targeting="clusterSystemMapMoveTargeting && clusterAddType === null"
-                    :move-targeting="mapMoveTargeting"
+                    :cluster-add-type="standaloneImportPlacementEnabled ? null : clusterAddType"
+                    :cluster-move-targeting="!standaloneImportPlacementEnabled && clusterSystemMapMoveTargeting && clusterAddType === null"
+                    :move-targeting="!standaloneImportPlacementEnabled && mapMoveTargeting"
                     :cluster-chooser-open="creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen"
                     :is-entity-command-blocked="isEntityCommandBlocked"
                     :orbit-adjustment-preview="orbitAdjustmentPreview"
@@ -424,6 +443,8 @@
                     @move-unresolved-exit="moveUnresolvedExit"
                     @move-target="handleMapMoveTarget"
                     @move-nudge="handleMapMoveNudge"
+                    @standalone-import-placement-anchor="previewStandaloneImportAnchor"
+                    @cancel-standalone-import-placement="cancelStandaloneImportPlacement"
                     @cancel-map-move="cancelMapMove"
                     @cluster-target="handleClusterTarget"
                     @continuous-object-add-target="handleContinuousObjectAddTarget"
@@ -2160,11 +2181,53 @@ const {
   downloadMapImage,
   importJsonFile,
   importReview,
+  standaloneImportPlacement,
+  standaloneImportPlacementEnabled,
+  previewStandaloneImportAnchor,
+  reviewStandaloneImportPlacement,
+  cancelStandaloneImportPlacement,
   confirmJsonImport,
   cancelJsonImport,
   reviewImportFields,
   resumeImportReview,
 } = workspaceFiles
+
+async function handleWorkspaceJsonImport(event: Event): Promise<void> {
+  await importJsonFile(event)
+  if (!standaloneImportPlacementEnabled.value) return
+
+  if (!continuousMapEnabled.value) {
+    reviewStandaloneImportPlacement()
+    return
+  }
+
+  if (compactPanelOpen.value && compactPanel.value) closePanel(compactPanel.value)
+}
+
+function frameStandaloneImportPlacement(): void {
+  if (!standaloneImportPlacementEnabled.value || !continuousMapEnabled.value) return
+  clusterMapRef.value?.frameStandaloneImportPlacement?.()
+}
+
+function handleStandaloneImportPlacementEscape(): void {
+  if (!mapKeyboardOverlayOpen.value) cancelStandaloneImportPlacement()
+}
+
+watch(continuousMapEnabled, enabled => {
+  if (!enabled && standaloneImportPlacement.value) reviewStandaloneImportPlacement()
+}, { flush: 'sync' })
+
+watch(activeView, view => {
+  if (view !== 'cluster' && standaloneImportPlacement.value) cancelStandaloneImportPlacement()
+}, { flush: 'sync' })
+
+watch(
+  [() => workspace.value?.id, () => workspace.value?.cluster.id],
+  () => {
+    if (standaloneImportPlacement.value) cancelStandaloneImportPlacement()
+  },
+  { flush: 'sync' },
+)
 
 publicationFocusRestoreAllowed = request => !(
   historyOpen.value
@@ -2208,6 +2271,11 @@ const workspaceOverlayAvailable = computed(() => workspace.value !== null
   && !compactPanelOpen.value
   && !editingGestureActive.value)
 
+const mapKeyboardOverlayOpen = computed(() => !workspaceOverlayAvailable.value
+  || searchOpen.value
+  || publicationMenuRequest.value !== null
+  || googleDriveBackupDialogOpen.value)
+
 function openPlayerPreview(focusMapFiles: () => void): void {
   if (!workspaceOverlayAvailable.value || searchOpen.value || publicationMenuRequest.value) return
   focusMapFiles()
@@ -2215,6 +2283,7 @@ function openPlayerPreview(focusMapFiles: () => void): void {
 }
 
 readEditorHistoryBlockReason = () => {
+  if (standaloneImportPlacement.value) return 'Finish or cancel standalone system placement before using Undo or Redo.'
   if (historyOpen.value) return 'Close History before using Undo or Redo.'
   if (helpOpen.value) return 'Close Help before using Undo or Redo.'
   if (searchOpen.value) return 'Close Search before using Undo or Redo.'
@@ -2233,24 +2302,14 @@ endCleanHistorySessions = workflows.historyGuards.endCleanSessions
 useWorkspaceHistoryShortcuts({
   status: historyStatus,
   workspaceEnabled: () => workspace.value !== null,
-  pageOverlayOpen: () => historyOpen.value || helpOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
-    || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
-    || searchOpen.value
-    || mapTypeFiltersOpen.value
-    || creationChooserOpen.value || continuousObjectOwnerChooserOpen.value || continuousObjectOtherTypeOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
-    || importReview.value.open || importReview.value.suspended || importReview.value.confirming,
+  pageOverlayOpen: () => mapKeyboardOverlayOpen.value || standaloneImportPlacement.value !== null,
   undo: undoWorkspace,
   redo: redoWorkspace,
 })
 
 const mapToolShortcuts = useMapToolShortcuts({
   workspaceEnabled: () => workspace.value !== null,
-  pageOverlayOpen: () => historyOpen.value || helpOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
-    || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
-    || searchOpen.value
-    || mapTypeFiltersOpen.value
-    || creationChooserOpen.value || continuousObjectOwnerChooserOpen.value || continuousObjectOtherTypeOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
-    || importReview.value.open || importReview.value.suspended || importReview.value.confirming,
+  pageOverlayOpen: () => mapKeyboardOverlayOpen.value || standaloneImportPlacement.value !== null,
   editingGestureActive: () => editingGestureActive.value,
   activeMapKey: () => activeMapKey.value,
   mapMode: () => mapMode.value,

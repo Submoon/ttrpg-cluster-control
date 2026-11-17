@@ -24,6 +24,17 @@
         Zoom continuously to reveal each system interior independently. In Move, drag an object to move it within its owning system, or drag a system anchor or name to update its Cluster position.
       </desc>
       <g class="cluster-map-content" :transform="cameraTransform">
+        <ContinuousWardenRouteLayer
+          ref="routeLayer"
+          :routes="routeMarks"
+          :geometries="routeGeometries"
+          :detail-system-ids="ready ? detailSystemIds : undefined"
+          :selected-route-id="selectedRouteId"
+          :viewport="viewport"
+          :viewport-rect="svgViewport"
+          :svg-pixel-scale="svgPixelScale"
+          :label-obstacles="routeLabelObstacles"
+        />
         <g class="cluster-map-items">
           <g
             v-for="projection in renderedProjections"
@@ -179,6 +190,57 @@
               <circle class="continuous-warden-anchor-core" r="2" />
             </g>
           </g>
+          <g
+            v-if="standaloneImportProjection"
+            class="continuous-warden-import-placement-preview"
+            :data-anchor-x="props.standaloneImportPlacement?.anchor.x"
+            :data-anchor-y="props.standaloneImportPlacement?.anchor.y"
+            aria-hidden="true"
+            pointer-events="none"
+          >
+            <title>Imported {{ standaloneImportProjection.name }} placement preview</title>
+            <rect
+              class="continuous-warden-import-envelope"
+              :x="standaloneImportProjection.envelope.x"
+              :y="standaloneImportProjection.envelope.y"
+              :width="standaloneImportProjection.envelope.width"
+              :height="standaloneImportProjection.envelope.height"
+              rx="18"
+            />
+            <g
+              class="continuous-warden-import-system-detail"
+              :transform="systemTransform(standaloneImportProjection)"
+            >
+              <g class="continuous-warden-import-orbits">
+                <ellipse
+                  v-for="orbit in standaloneImportProjection.orbits"
+                  :key="orbit.id"
+                  class="continuous-warden-import-orbit"
+                  :cx="orbit.center.x"
+                  :cy="orbit.center.y"
+                  :rx="orbit.radii.horizontal"
+                  :ry="orbit.radii.vertical"
+                  :transform="`rotate(${orbit.rotation} ${orbit.center.x} ${orbit.center.y})`"
+                />
+              </g>
+              <g class="continuous-warden-import-objects">
+                <g
+                  v-for="object in standaloneImportProjection.objects"
+                  :key="object.id"
+                  class="continuous-warden-import-object"
+                  :transform="`translate(${object.position.x} ${object.position.y})`"
+                >
+                  <circle r="5" />
+                  <text y="12" text-anchor="middle">{{ object.locationKey }}</text>
+                  <text y="24" text-anchor="middle">{{ object.name }}</text>
+                </g>
+              </g>
+            </g>
+            <g :transform="`translate(${standaloneImportProjection.anchor.x} ${standaloneImportProjection.anchor.y})`">
+              <circle class="continuous-warden-import-anchor" r="13" />
+              <circle class="continuous-warden-import-anchor-core" r="3" />
+            </g>
+          </g>
         </g>
         <g class="continuous-warden-name-layer" :transform="screenLayerTransform">
           <g v-for="label in nameLabels" :key="label.id">
@@ -228,11 +290,12 @@
 /** Warden continuous scene with one D3 camera and independent system-envelope reveal. */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from 'vue'
 import { pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
-import { minimumOrbitRadius, type CatalogueSubtype, type JumpCluster, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem } from '../domain/workspace'
+import { jumpPointsInCluster, minimumOrbitRadius, type CatalogueSubtype, type JumpCluster, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem } from '../domain/workspace'
 import { normalizeOrbitRotation } from '../domain/workspace-orbits'
 import { getDetachedOrbitCenter, objectPositions, objectsMovedWithOrbit, orbitCenter, orbitPointAtAngle, orbitRadii as readOrbitRadii, orbitRotation, orbitRotationHandlePoint, rotatePoint, requiredPosition } from '../utils/system-map-geometry'
 import type { EntityCommand, MapHistoryTarget, MapInteractionMode, OrbitCenterMoveCandidate, SystemCreationType, SystemObjectMoveTarget } from '../composables/editor-workflows/types'
 import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../composables/editor-workflows/continuous-orbit-adjustments'
+import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
 import type { InspectedMapTarget } from '../stores/editor-ui'
 import { initialClusterSystemPosition } from '../domain/workspace-cluster'
 import type { MapViewport, SvgViewportRect } from '../utils/map-zoom'
@@ -264,7 +327,9 @@ import {
   type ContinuousObjectAddOwner,
   type ContinuousObjectAddTarget,
 } from '../utils/continuous-map-editing'
-import { clusterSystemPosition } from '../utils/cluster-map-geometry'
+import { clusterRouteLabel, clusterSystemPosition } from '../utils/cluster-map-geometry'
+import { buildContinuousWardenRouteGeometries } from '../utils/continuous-warden-routes'
+import { centerContinuousMapRouteViewport, revealContinuousMapRouteViewport } from '../utils/continuous-map-route-viewport'
 import {
   centerMapTargetViewport,
   minimumHistoryRevealViewport,
@@ -276,6 +341,7 @@ import { createMapTouchNavigation } from './maps/map-touch-navigation'
 import { exportMapImage, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
 import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
+import ContinuousWardenRouteLayer from './maps/ContinuousWardenRouteLayer.vue'
 
 const DETAIL_REVEAL_PIXELS = 250
 const DETAIL_HIDE_PIXELS = 210
@@ -283,15 +349,20 @@ const MINIMUM_FIT_PADDING = 48
 const SYSTEM_NAME_FONT_PIXELS = 18
 const SYSTEM_NAME_HEIGHT_PIXELS = 28
 const SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS = 8
+const ROUTE_REVEAL_PADDING_PIXELS = 14
+const ROUTE_FAN_OUT_LIMIT_PIXELS = 96
+const OVERVIEW_DETAIL_SYSTEM_IDS: ReadonlySet<string> = new Set()
 
 const props = defineProps<{
   cluster: JumpCluster
   workspace: LocalWorkspace
   systemPositions: Readonly<Record<string, Point>>
+  unresolvedExitPositions?: Readonly<Record<string, Point>>
   objectAngles: Readonly<Record<string, number>>
   orbitRadii: Readonly<Record<string, { horizontal: number; vertical: number }>>
   orbitRotations: Readonly<Record<string, number>>
   selectedSystemId: string | null
+  selectedRouteId: string | null
   inspectedTarget: InspectedMapTarget | null
   mode: MapInteractionMode
   creationType: SystemCreationType | null
@@ -302,6 +373,9 @@ const props = defineProps<{
   clusterChooserOpen: boolean
   clusterMoveTargeting: boolean
   moveTargeting: boolean
+  standaloneImportPlacementEnabled?: boolean
+  standaloneImportPlacement?: StandaloneImportPlacementView | null
+  keyboardOwnedOverlayOpen?: boolean
   touchNavigation?: boolean
   initialViewport: MapViewport | null
   getUsableClientRect?: () => ClientRectBounds | undefined
@@ -312,6 +386,7 @@ const emit = defineEmits<{
   'activate-system': [id: string]
   'select-object': [systemId: string, objectId: string]
   'select-orbit': [systemId: string, orbitId: string]
+  'select-route': [routeId: string]
   'cluster-target': [point: Point, systemIds: string[]]
   'continuous-object-add-target': [request: ContinuousObjectAddTarget]
   'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace]
@@ -323,11 +398,13 @@ const emit = defineEmits<{
   'rotate-orbit': [orbitId: string, rotation: number, systemId: string]
   'move-system': [id: string, position: Point]
   'move-target': [point: Point]
+  'standalone-import-placement-anchor': [anchor: Point]
   'editing-gesture-change': [active: boolean]
   'viewport-change': [viewport: MapViewport]
 }>()
 
 const svgElement = ref<SVGSVGElement | null>(null)
+const routeLayer = ref<InstanceType<typeof ContinuousWardenRouteLayer> | null>(null)
 const viewport = ref<MapViewport>({ x: 0, y: 0, k: 1 })
 const previewPositions = ref(new Map<string, Point>())
 const objectMovePreview = shallowRef<{ systemId: string; objectId: string; projection: ContinuousWardenSystemProjection } | null>(null)
@@ -335,6 +412,7 @@ const preciseObjectPlacementPreview = shallowRef<{ systemId: string; objectId: s
 const preciseOrbitCenterMovePreview = shallowRef<{ systemId: string; orbitId: string; projection: ContinuousWardenSystemProjection } | null>(null)
 const directOrbitPreview = shallowRef<{ systemId: string; orbitId: string; projection: ContinuousWardenSystemProjection } | null>(null)
 const orbitPlacementPreview = shallowRef<{ systemId: string; orbitId: string; preview: { center: Point; radii: { horizontal: number; vertical: number }; rotation?: number } } | null>(null)
+const exitPositionOverrides = ref(new Map<string, Point>())
 const previewVersions = ref(new Map<string, number>())
 const detailSystemIds = ref(new Set<string>())
 const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
@@ -454,6 +532,76 @@ function isObjectMovePreview(systemId: string, objectId: string): boolean {
       && preciseObjectPlacementPreview.value.objectId === objectId)
 }
 
+const routeMarks = computed(() => {
+  const jumpPoints = new Map(jumpPointsInCluster(props.cluster).map(reference => [reference.point.id, reference]))
+  return props.cluster.routes.map(route => {
+    const endpointLabel = clusterRouteLabel(route, props.cluster, jumpPoints)
+    return {
+      id: route.id,
+      jumpLevel: route.jumpLevel,
+      accessibleLabel: route.name ? `${endpointLabel}, ${route.name}` : endpointLabel,
+      unresolved: route.toSystemId === null,
+    }
+  })
+})
+
+const routeAnchorOverrides = computed(() => new Map(projections.value.flatMap(projection =>
+  previewPositions.value.has(projection.id) ? [[projection.id, anchorFor(projection)] as const] : [],
+)))
+
+const routePixelScale = computed(() => viewport.value.k * svgPixelScale.value)
+const routeFanOutLimitPixels = computed(() => Math.min(
+  ROUTE_FAN_OUT_LIMIT_PIXELS,
+  Math.min(svgViewport.value.width, svgViewport.value.height) * svgPixelScale.value / 4,
+))
+
+function routesAtDetail(detail: ReadonlySet<string>, pixelsPerSceneUnit?: number) {
+  return buildContinuousWardenRouteGeometries({
+    routes: props.cluster.routes,
+    projections: getRenderedSystemProjections(),
+    detailSystemIds: detail,
+    anchorOverrides: routeAnchorOverrides.value,
+    unresolvedExitPositions: props.unresolvedExitPositions,
+    exitPositionOverrides: exitPositionOverrides.value,
+    display: pixelsPerSceneUnit === undefined
+      ? undefined
+      : { pixelsPerSceneUnit, fanOutLimitPixels: routeFanOutLimitPixels.value },
+  })
+}
+
+const routeGeometries = computed(() => routesAtDetail(detailSystemIds.value, routePixelScale.value))
+const overviewRoutes = computed(() => buildContinuousWardenRouteGeometries({
+  routes: props.cluster.routes,
+  projections: projections.value,
+  detailSystemIds: OVERVIEW_DETAIL_SYSTEM_IDS,
+  unresolvedExitPositions: props.unresolvedExitPositions,
+}))
+const hasOverlappingOverviewRoutes = computed(() =>
+  [...overviewRoutes.value.values()].some(route => route.sharesDisplayedEndpoints),
+)
+
+const standaloneImportProjection = computed(() => {
+  const placement = props.standaloneImportPlacement
+  if (!props.standaloneImportPlacementEnabled || !placement) return null
+  const system: StarSystem = {
+    ...placement.system,
+    objects: placement.system.objects.map(object => ({
+      ...object,
+      placement: { ...object.placement },
+      playerFieldMasks: [...object.playerFieldMasks],
+      ...(object.customFieldValues ? { customFieldValues: { ...object.customFieldValues } } : {}),
+    })),
+    orbits: placement.system.orbits.map(orbit => orbit.hostId === null
+      ? { ...orbit, center: { ...orbit.center } }
+      : { ...orbit, hostId: orbit.hostId }),
+  }
+  return projectWardenSystem(system, { ...placement.anchor }, {
+    objectAngles: { ...placement.geometry.objectAngles },
+    orbitRadii: { ...placement.geometry.orbitRadii },
+    orbitRotations: { ...placement.geometry.orbitRotations },
+  })
+})
+
 const sceneBounds = computed<SvgViewportRect | null>(() => {
   if (projections.value.length === 0) return null
   let left = Number.POSITIVE_INFINITY
@@ -466,6 +614,12 @@ const sceneBounds = computed<SvgViewportRect | null>(() => {
     top = Math.min(top, projection.envelope.y + delta.y)
     right = Math.max(right, projection.envelope.x + delta.x + projection.envelope.width)
     bottom = Math.max(bottom, projection.envelope.y + delta.y + projection.envelope.height)
+  }
+  for (const { bounds } of overviewRoutes.value.values()) {
+    left = Math.min(left, bounds.x)
+    top = Math.min(top, bounds.y)
+    right = Math.max(right, bounds.x + bounds.width)
+    bottom = Math.max(bottom, bounds.y + bounds.height)
   }
   return [left, top, right, bottom].every(Number.isFinite)
     ? { x: left - MINIMUM_FIT_PADDING, y: top - MINIMUM_FIT_PADDING, width: right - left + MINIMUM_FIT_PADDING * 2, height: bottom - top + MINIMUM_FIT_PADDING * 2 }
@@ -656,6 +810,13 @@ function localObject(projectionId: string, objectId: string): StarSystem['object
   return props.cluster.systems.find(system => system.id === projectionId)?.objects.find(object => object.id === objectId)
 }
 
+const routeLabelObstacles = computed(() => nameLabels.value.map(label => ({
+  x: label.x - label.width / 2,
+  y: label.y,
+  width: label.width,
+  height: label.height,
+})))
+
 function objectGlyph(projectionId: string, objectId: string): string {
   const object = localObject(projectionId, objectId)
   if (!object) return '◇'
@@ -701,8 +862,7 @@ function orbitLabel(systemId: string, orbitId: string): string {
   return orbit ? `Select Orbit ${orbit.order}` : 'Select Orbit'
 }
 
-function updateDetailReveal(cameraScale: number): void {
-  if (!cameraInitialized) return
+function detailSystemIdsAtScale(cameraScale: number): Set<string> {
   const current = detailSystemIds.value
   const next = new Set<string>()
   for (const projection of projections.value) {
@@ -711,6 +871,13 @@ function updateDetailReveal(cameraScale: number): void {
       next.add(projection.id)
     }
   }
+  return next
+}
+
+function updateDetailReveal(cameraScale: number): void {
+  if (!cameraInitialized) return
+  const current = detailSystemIds.value
+  const next = detailSystemIdsAtScale(cameraScale)
   if (next.size !== current.size || [...next].some(id => !current.has(id))) {
     preserveFocusBeforeDetailCollapse(next)
     detailSystemIds.value = next
@@ -780,9 +947,16 @@ function getFitBounds(): SvgViewportRect | undefined {
   return sceneBounds.value ?? undefined
 }
 
+/** Reserves the maximum display-only expansion without using camera-dependent curve bounds. */
+function routeFitRect(rect: SvgViewportRect): SvgViewportRect {
+  if (!hasOverlappingOverviewRoutes.value) return rect
+  const inset = Math.min(routeFanOutLimitPixels.value / svgPixelScale.value, rect.width / 4, rect.height / 4)
+  return { x: rect.x + inset, y: rect.y + inset, width: rect.width - 2 * inset, height: rect.height - 2 * inset }
+}
+
 function updateMinimumZoomScale(rect: SvgViewportRect, allowIncrease = false): void {
   const bounds = getFitBounds()
-  const fit = bounds ? fitMapViewport(bounds, rect, Number.MIN_VALUE) : undefined
+  const fit = bounds ? fitMapViewport(bounds, routeFitRect(rect), Number.MIN_VALUE) : undefined
   const fittedMinimum = fit ? Math.min(MAP_ZOOM_MIN_SCALE, fit.k) : MAP_ZOOM_MIN_SCALE
   minimumZoomScale.value = allowIncrease ? fittedMinimum : Math.min(minimumZoomScale.value, fittedMinimum)
   zoomBehavior?.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
@@ -808,8 +982,36 @@ function fitMap(usableRect?: SvgViewportRect): void {
   const rect = requestedRect ?? getSvgViewportRect(element)
   zoomBehavior.extent(() => svgViewportExtent(rect))
   updateMinimumZoomScale(rect, true)
-  const fitted = fitMapViewport(bounds, rect, minimumZoomScale.value)
+  const fitted = fitMapViewport(bounds, routeFitRect(rect), minimumZoomScale.value)
   if (fitted) setViewport(fitted)
+}
+
+/** Frames only the detached imported projection inside the current unobstructed camera area. */
+function frameStandaloneImportPlacement(usableRect?: SvgViewportRect): boolean {
+  const projection = standaloneImportProjection.value
+  const element = svgElement.value
+  if (!projection || !element || !zoomBehavior) return false
+  const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
+  if (!rect) return false
+
+  zoomBehavior.extent(() => svgViewportExtent(rect))
+  updateMinimumZoomScale(rect, true)
+  const delta = anchorDelta(projection)
+  const bounds = {
+    ...projection.envelope,
+    x: projection.envelope.x + delta.x,
+    y: projection.envelope.y + delta.y,
+  }
+  const completeFit = fitMapViewport(bounds, rect, Number.MIN_VALUE)
+  if (!completeFit) return false
+
+  // A distant imported envelope can need a lower zoom floor than committed Cluster bounds.
+  minimumZoomScale.value = Math.min(minimumZoomScale.value, completeFit.k)
+  zoomBehavior.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
+  const fitted = fitMapViewport(bounds, rect, minimumZoomScale.value)
+  if (!fitted) return false
+  setViewport(fitted)
+  return true
 }
 
 function frameSystem(systemId: string, usableRect?: SvgViewportRect): boolean {
@@ -914,6 +1116,7 @@ function centerInspectedTarget(target: InspectedMapTarget, usableRect?: SvgViewp
     return true
   }
   if (target.kind === 'system') return frameSystem(target.systemId, usableRect)
+  if (target.kind === 'route') return frameRoute(target.routeId, usableRect, true)
   if (target.kind === 'object' || target.kind === 'orbit') {
     return frameEntityTarget(
       target.systemId,
@@ -924,6 +1127,30 @@ function centerInspectedTarget(target: InspectedMapTarget, usableRect?: SvgViewp
     )
   }
   return false
+}
+
+function frameRoute(routeId: string, usableRect: SvgViewportRect | undefined, center: boolean): boolean {
+  const element = svgElement.value
+  const route = props.cluster.routes.find(candidate => candidate.id === routeId)
+  const geometry = routeGeometries.value.get(routeId)
+  if (!element || !zoomBehavior || !route || !geometry) return false
+  const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
+  if (!rect) return false
+  const current = getViewport()
+  const options = { current, usableRect: rect, padding: ROUTE_REVEAL_PADDING_PIXELS / svgPixelScale.value }
+  const next = center
+    ? centerContinuousMapRouteViewport({
+        ...options,
+        svgPixelScale: svgPixelScale.value,
+        geometryAt: scale => scale === current.k
+          ? geometry
+          : routesAtDetail(detailSystemIdsAtScale(scale), scale * svgPixelScale.value).get(routeId),
+      })
+    : revealContinuousMapRouteViewport({ ...options, geometry, unresolved: route.toSystemId === null })
+  if (!next) return false
+  if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
+    || next.k !== current.k) setViewport(next)
+  return true
 }
 
 function prepareSearchLocator(objectId: string): () => void {
@@ -955,7 +1182,7 @@ watch(() => props.inspectedTarget, (target) => {
 
 function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportRect): boolean {
   if (!usableRect) return false
-  if (target.kind === 'route') return false
+  if (target.kind === 'route') return frameRoute(target.id, usableRect, false)
   const systemId = target.kind === 'system' ? target.id : target.systemId
   const projection = projections.value.find(candidate => candidate.id === systemId)
   const element = svgElement.value
@@ -1110,6 +1337,11 @@ function orbitTargetAtTarget(target: EventTarget | null): { systemId: string; or
   return systemId && orbitId ? { systemId, orbitId } : null
 }
 
+function routeIdAtTarget(target: EventTarget | null): string | null {
+  if (!(target instanceof Element)) return null
+  return target.closest('.cluster-route[data-route-id]')?.getAttribute('data-route-id') ?? null
+}
+
 function moveTargetAtPoint(event: PointerEvent, element: SVGSVGElement | null): WardenMovePointerTarget | null {
   if (!element) return null
   const hits = element.ownerDocument.elementsFromPoint(event.clientX, event.clientY)
@@ -1249,7 +1481,7 @@ function onOrbitAdjustmentKeydown(event: KeyboardEvent): boolean {
 }
 
 function onWheelCapture(event: WheelEvent): void {
-  if (!event.ctrlKey || event.deltaY === 0 || props.mode !== 'move'
+  if (props.standaloneImportPlacementEnabled || !event.ctrlKey || event.deltaY === 0 || props.mode !== 'move'
     || props.creationType != null || props.clusterAddType != null || props.clusterChooserOpen
     || props.moveTargeting || props.clusterMoveTargeting) return
   const hit = orbitTargetAtTarget(event.target)
@@ -1635,7 +1867,7 @@ function onPointerDownCapture(event: PointerEvent): void {
   pendingObjectClickTarget = null
   if (pendingObjectClickTimer) clearTimeout(pendingObjectClickTimer)
   pendingObjectClickTimer = undefined
-  if (event.button !== 0 || props.mode !== 'move' || props.moveTargeting || props.clusterMoveTargeting
+  if (props.standaloneImportPlacementEnabled || event.button !== 0 || props.mode !== 'move' || props.moveTargeting || props.clusterMoveTargeting
     || props.clusterAddType != null || props.creationType != null) return
   const element = svgElement.value
   const moveTarget = moveTargetAtPoint(event, element)
@@ -1823,6 +2055,16 @@ function onClickCapture(event: MouseEvent): void {
     event.stopImmediatePropagation()
     return
   }
+  if (props.standaloneImportPlacementEnabled) {
+    const point = cameraPoint(event)
+    if (point) {
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      emit('standalone-import-placement-anchor', unprojectWardenClusterAnchor(point))
+    }
+    return
+  }
   if (props.moveTargeting || props.clusterMoveTargeting) {
     const point = cameraPoint(event)
     if (point) {
@@ -1874,6 +2116,13 @@ function onClickCapture(event: MouseEvent): void {
     emit('select-object', objectTarget.systemId, objectTarget.objectId)
     return
   }
+  const routeId = routeIdAtTarget(event.target)
+  if (routeId) {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('select-route', routeLayer.value?.routeIdAtStroke(event) ?? routeId)
+    return
+  }
   const orbitTarget = orbitTargetAtTarget(event.target)
   if (orbitTarget) {
     event.preventDefault()
@@ -1888,20 +2137,39 @@ function onClickCapture(event: MouseEvent): void {
 
 function onKeydownCapture(event: KeyboardEvent): void {
   if (event.defaultPrevented) return
-  if (onOrbitAdjustmentKeydown(event)) return
   const objectTarget = objectTargetAtTarget(event.target)
   const orbitTarget = orbitTargetAtTarget(event.target)
   const systemId = systemIdAtTarget(event.target)
-  if (props.creationType?.kind === 'object' && event.repeat
-    && (event.key === 'Enter' || event.key === ' ') && !props.clusterChooserOpen) {
-    event.preventDefault()
-    event.stopPropagation()
-    event.stopImmediatePropagation()
+  const isActivation = event.key === 'Enter' || event.key === ' '
+  if (props.standaloneImportPlacementEnabled) {
+    if (props.keyboardOwnedOverlayOpen || !isActivation || !(event.target instanceof SVGElement)) return
+    const element = svgElement.value
+    const viewportRect = svgViewport.value
+    const scenePoint = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget)
+      ?? (event.target === element && element
+        ? (() => {
+            const [x, y] = zoomTransform(element).invert([
+              viewportRect.x + viewportRect.width / 2,
+              viewportRect.y + viewportRect.height / 2,
+            ])
+            return { x, y }
+          })()
+        : null)
+    if (scenePoint) {
+      event.preventDefault()
+      event.stopPropagation()
+      emit('standalone-import-placement-anchor', unprojectWardenClusterAnchor(scenePoint))
+    }
     return
   }
-  if (props.creationType?.kind === 'object'
-    && (event.key === 'Enter' || event.key === ' ')
+  if (onOrbitAdjustmentKeydown(event)) return
+  if (props.creationType?.kind === 'object' && isActivation
     && !props.clusterChooserOpen && !props.moveTargeting && !props.clusterMoveTargeting) {
+    if (event.repeat) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      return
+    }
     const point = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget, true)
     if (point) {
       event.preventDefault()
@@ -1910,9 +2178,10 @@ function onKeydownCapture(event: KeyboardEvent): void {
       return
     }
   }
+  const routeId = routeIdAtTarget(event.target)
   const action = continuousMapKeyboardIntent({
     key: event.key,
-    targetKind: objectTarget ? 'object' : orbitTarget ? 'orbit' : systemId ? 'system' : 'map',
+    targetKind: routeId ? 'route' : objectTarget ? 'object' : orbitTarget ? 'orbit' : systemId ? 'system' : 'map',
     addArmed: props.clusterAddType !== null,
     chooserOpen: props.clusterChooserOpen,
     moveTargeting: props.moveTargeting,
@@ -1921,7 +2190,8 @@ function onKeydownCapture(event: KeyboardEvent): void {
   if (!action) return
 
   if (action === 'add-target' || action === 'move-target') {
-    const scenePoint = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget)
+    const routeGeometry = routeId ? routeGeometries.value.get(routeId) : undefined
+    const scenePoint = routeGeometry?.midpoint ?? keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget)
     if (!scenePoint) return
     event.preventDefault()
     event.stopPropagation()
@@ -1944,6 +2214,12 @@ function onKeydownCapture(event: KeyboardEvent): void {
     return
   }
 
+  if (action === 'inspect-route' && routeId) {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('select-route', routeId)
+    return
+  }
   if (action === 'inspect-object' && objectTarget) {
     event.preventDefault()
     event.stopPropagation()
@@ -2158,9 +2434,18 @@ function getDetachedCenter(orbitId: string, systemId: string): Point | undefined
   return system ? getDetachedOrbitCenter(system, orbitId, systemMapGeometry(props.workspace)) : undefined
 }
 
+function setUnresolvedExitPositionPreview(routeId: string, position: Point | null): void {
+  const next = new Map(exitPositionOverrides.value)
+  if (position) next.set(routeId, position)
+  else next.delete(routeId)
+  exitPositionOverrides.value = next
+}
+
 function exportImage(format: MapImageFormat, palette: MapImagePalette = 'active'): Promise<Blob> {
   const element = svgElement.value
-  return element ? exportMapImage(element, format, undefined, palette)
+  return element ? exportMapImage(element, format, undefined, palette, clone => {
+    clone.querySelector('.continuous-warden-import-placement-preview')?.remove()
+  })
     : Promise.reject(new Error('The continuous map is not ready to export.'))
 }
 
@@ -2303,6 +2588,7 @@ defineExpose({
   zoomBy,
   panBy,
   fitMap,
+  frameStandaloneImportPlacement,
   frameSystem,
   frameSearchTarget,
   centerInspectedTarget,
@@ -2326,6 +2612,7 @@ defineExpose({
   setOrbitPlacementPreview,
   toSystemScenePoint,
   getDetachedCenter,
+  setUnresolvedExitPositionPreview,
   whenReady: () => readiness,
 })
 </script>
@@ -2355,6 +2642,52 @@ defineExpose({
 .continuous-warden-system-envelope.is-move-preview {
   stroke: var(--map-selected);
   stroke-width: 2;
+}
+
+.continuous-warden-import-placement-preview {
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.continuous-warden-import-envelope {
+  fill: color-mix(in srgb, var(--focus) 7%, transparent);
+  stroke: var(--focus);
+  stroke-width: 2;
+  stroke-dasharray: 9 6;
+  vector-effect: non-scaling-stroke;
+}
+
+.continuous-warden-import-orbit {
+  fill: none;
+  stroke: var(--focus);
+  stroke-width: 2;
+  stroke-dasharray: 4 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.continuous-warden-import-object {
+  fill: var(--focus);
+  font-family: Georgia, serif;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.continuous-warden-import-object circle {
+  fill: var(--map-bg);
+  stroke: var(--focus);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.continuous-warden-import-anchor {
+  fill: color-mix(in srgb, var(--focus) 18%, var(--map-bg));
+  stroke: var(--focus);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.continuous-warden-import-anchor-core {
+  fill: var(--focus);
 }
 
 .continuous-warden-system-detail {

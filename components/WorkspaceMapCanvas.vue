@@ -35,6 +35,7 @@
       :cluster="props.workspace.cluster"
       :workspace="props.workspace"
       :system-positions="props.workspace.layout.systemPositions"
+      :unresolved-exit-positions="props.workspace.layout.unresolvedExitPositions"
       :object-angles="props.workspace.layout.objectAngles"
       :orbit-radii="props.workspace.layout.orbitRadii"
       :orbit-rotations="props.workspace.layout.orbitRotations"
@@ -42,6 +43,7 @@
         ? props.inspectedTarget.systemId
         : props.selectedSystemId"
       :inspected-target="props.inspectedTarget ?? null"
+      :selected-route-id="props.selectedRouteId"
       :mode="props.mode"
       :creation-type="props.creationType ?? null"
       :creation-other-type="props.creationOtherType ?? null"
@@ -52,12 +54,16 @@
       :cluster-chooser-open="props.clusterChooserOpen ?? false"
       :cluster-move-targeting="props.clusterMoveTargeting ?? false"
       :move-targeting="props.moveTargeting ?? false"
+      :standalone-import-placement-enabled="props.standaloneImportPlacementEnabled ?? false"
+      :standalone-import-placement="props.standaloneImportPlacement ?? null"
+      :keyboard-owned-overlay-open="props.keyboardOwnedOverlayOpen ?? false"
       :get-usable-client-rect="measureUnobstructedClientRect"
       :initial-viewport="props.initialViewport"
       touch-navigation
       @activate-system="handleSystemActivation"
       @select-object="(systemId, objectId) => emit('select-continuous-object', systemId, objectId)"
       @select-orbit="(systemId, orbitId) => emit('select-continuous-orbit', systemId, orbitId)"
+      @select-route="handleRouteSelection"
       @cluster-target="forwardClusterTarget"
       @continuous-object-add-target="emit('continuous-object-add-target', $event)"
       @orbit-adjustment="forwardOrbitAdjustment"
@@ -67,6 +73,7 @@
       @orbit-center-candidates="forwardOrbitCenterCandidates"
       @resize-orbit="forwardResizeOrbit"
       @rotate-orbit="forwardRotateOrbit"
+      @standalone-import-placement-anchor="forwardStandaloneImportPlacementAnchor"
       @move-target="forwardMoveTarget"
       @move-system="forwardMoveSystem"
       @editing-gesture-change="orbitInput.setChildGestureActive"
@@ -155,6 +162,7 @@ import type {
   Point,
   StarSystem,
 } from '../domain/workspace'
+import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
 import type {
   MapInteractionMode,
   MapHistoryTarget,
@@ -217,6 +225,9 @@ const props = defineProps<{
   orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
   /** A focused placement controller currently owns scene clicks and arrow keys. */
   moveTargeting?: boolean
+  standaloneImportPlacementEnabled?: boolean
+  standaloneImportPlacement?: StandaloneImportPlacementView | null
+  keyboardOwnedOverlayOpen?: boolean
 }>()
 const commands = useEditorCommands()
 
@@ -245,6 +256,8 @@ const emit = defineEmits<{
   'cluster-target': [point: Point, systemIds: string[]]
   'continuous-object-add-target': [request: ContinuousObjectAddTarget]
   'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace]
+  'standalone-import-placement-anchor': [anchor: Point]
+  'cancel-standalone-import-placement': []
   'cancel-cluster-preview': []
   'cancel-object-placement-preview': []
   'cancel-orbit-placement-preview': []
@@ -565,7 +578,8 @@ function hasClusterAddIntent(): boolean {
 }
 
 function hasMapAddIntent(): boolean {
-  return hasClusterAddIntent()
+  return props.standaloneImportPlacementEnabled === true
+    || hasClusterAddIntent()
     || hasContinuousObjectAddIntent()
     || (props.activeView === 'system' && props.creationType != null)
 }
@@ -745,6 +759,37 @@ function onMouseUpCapture(event: MouseEvent): void {
 }
 
 function onKeyDownCapture(event: KeyboardEvent): void {
+  if (!event.defaultPrevented
+    && !event.isComposing
+    && event.keyCode !== 229
+    && props.standaloneImportPlacementEnabled
+    && !props.keyboardOwnedOverlayOpen
+    && !eventOwnedByKeyboardPopup(event)
+    && event.target instanceof SVGElement
+    && event.target.closest('svg.continuous-warden-map-svg')) {
+    if (event.key === 'Escape') {
+      dismissSearchLocator()
+      event.preventDefault()
+      event.stopPropagation()
+      emit('cancel-standalone-import-placement')
+      return
+    }
+    const panDeltas: Record<string, [number, number]> = {
+      ArrowLeft: [-80, 0],
+      ArrowRight: [80, 0],
+      ArrowUp: [0, -80],
+      ArrowDown: [0, 80],
+    }
+    const delta = panDeltas[event.key]
+    if (delta) {
+      dismissSearchLocator()
+      event.preventDefault()
+      event.stopPropagation()
+      panBy(delta[0], delta[1])
+      return
+    }
+  }
+
   if (event.target instanceof SVGElement && !event.isComposing
     && (['Enter', ' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'ContextMenu'].includes(event.key)
       || (event.key === 'F10' && event.shiftKey)
@@ -811,6 +856,14 @@ function onKeyDownCapture(event: KeyboardEvent): void {
   event.preventDefault()
   event.stopPropagation()
   panBy(delta[0], delta[1])
+}
+
+function eventOwnedByKeyboardPopup(event: KeyboardEvent): boolean {
+  return event.composedPath().some(target => target instanceof Element && (
+    ['alertdialog', 'dialog', 'listbox', 'menu', 'menuitem', 'menuitemcheckbox', 'menuitemradio']
+      .includes(target.getAttribute('role') ?? '')
+    || target.getAttribute('role') === 'combobox' && target.getAttribute('aria-expanded') === 'true'
+  ))
 }
 
 function onWindowKeyDownCapture(event: KeyboardEvent): void {
@@ -1192,6 +1245,18 @@ function forwardClusterTarget(point: Point, systemIds: string[]): void {
     || props.clusterChooserOpen) return
   emit('cluster-target', point, systemIds)
 }
+function forwardStandaloneImportPlacementAnchor(anchor: Point): void {
+  if (props.activeView !== 'cluster' || !props.continuousMap || !props.standaloneImportPlacementEnabled) return
+  emit('standalone-import-placement-anchor', anchor)
+}
+function frameStandaloneImportPlacement(): boolean {
+  if (!props.continuousMap || props.activeView !== 'cluster' || !props.standaloneImportPlacementEnabled) return false
+  const map = continuousWardenMapRef.value
+  const usableRect = measureUnobstructedViewport()
+  if (!map || !usableRect) return false
+  noteManualCameraInteraction()
+  return map.frameStandaloneImportPlacement(usableRect)
+}
 function forwardMoveObject(id: string, position: Point): void { if (props.mode === 'move') emit('move-object', id, position) }
 function forwardBlockedObjectMove(id: string): void { emit('object-move-blocked', id) }
 function forwardObjectMoveCandidates(id: string, candidates: SystemObjectMoveCandidate[]): void {
@@ -1415,6 +1480,12 @@ watch(() => props.mode, () => {
   publicationMenuLease = null
   cancelCanvasGesture(true)
 }, { flush: 'sync' })
+watch(() => props.standaloneImportPlacementEnabled, (enabled, wasEnabled) => {
+  if (!wasEnabled || enabled) return
+  clearLongPress()
+  clearPointerLongPress()
+  for (const sequence of livePointerSequences.values()) sequence.cancelledRelease = true
+}, { flush: 'sync' })
 watch(() => props.creationType, () => {
   pendingRightClickContextMenu = null
   orbitInput.cancel()
@@ -1486,6 +1557,7 @@ defineExpose({
   whenReady,
   frameSearchTarget,
   centerInspectedTarget,
+  frameStandaloneImportPlacement,
   prepareSearchLocator: (objectId: string) => props.continuousMap
     ? continuousWardenMapRef.value?.prepareSearchLocator(objectId)
     : systemMapRef.value?.prepareSearchLocator(objectId),
@@ -1511,7 +1583,7 @@ defineExpose({
     return continuousWardenMapRef.value?.getClusterSystemPositionPreviewVersion(systemId)
   },
   setUnresolvedExitPositionPreview: (routeId: string, position: Point | null) => {
-    if (props.activeView === 'cluster') clusterMapRef.value?.setUnresolvedExitPositionPreview(routeId, position)
+    if (props.activeView === 'cluster') currentClusterMap()?.setUnresolvedExitPositionPreview(routeId, position)
   },
   setObjectPlacementPreview: (objectId: string, scenePoint: Point | null, systemId?: string) => {
     if (props.activeView === 'cluster' && props.continuousMap && systemId) {

@@ -1075,6 +1075,21 @@ p-note {
   align-items: center;
   gap: 0.25rem;
 }
+.workspace-dock-placement-controls {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  border-left: 1px solid var(--line-soft);
+  padding-left: 0.35rem;
+}
+.workspace-dock-placement-instruction {
+  max-width: 15rem;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
 .workspace-dock-mode { border-right: 1px solid var(--line-soft); padding-right: 0.35rem; }
 .workspace-zoom-controls {
   border-color: var(--line-soft);
@@ -1295,6 +1310,8 @@ p-note {
   .map-workspace-shell .workspace-dock { gap: 0.2rem; padding: 0.25rem; }
   .workspace-dock-mode { justify-content: center; border-right: 0; padding-right: 0; }
   .workspace-dock-mode > button { min-height: 2rem; padding-inline: 0.4rem; }
+  .workspace-dock-placement-controls { justify-content: center; border-left: 0; padding-left: 0; }
+  .workspace-dock-placement-instruction { flex-basis: 100%; max-width: 100%; text-align: center; }
   .workspace-zoom-controls { gap: 0.15rem; padding: 0.2rem; }
   .workspace-zoom-value { min-width: 2.8rem; }
   .workspace-resizable-panel:not(.workspace-resizable-panel-compact) .workspace-panel-resize-handle { display: none; }

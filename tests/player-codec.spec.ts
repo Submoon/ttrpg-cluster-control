@@ -202,6 +202,27 @@ test('player JSON codec round-trips public documents and drops unknown extension
   expect(restorePlayerDocument(extendedDocument)).toEqual(document)
 })
 
+test('player file admission removes resolved same-system loops after validating the complete document @pure', () => {
+  const document = validPlayerDocument()
+  const loop = {
+    id: 'route-3',
+    jumpLevel: 5,
+    fromSystemId: 'system-3',
+    destination: { kind: 'system' as const, systemId: 'system-3' },
+  }
+  const legacyDocument = { ...document, routes: [...document.routes, loop] }
+
+  expect(parsePlayerJson(JSON.stringify(legacyDocument)).routes).toEqual(document.routes)
+  expectPlayerDocumentError(
+    () => parsePlayerJson(JSON.stringify({
+      ...legacyDocument,
+      routes: [...document.routes, { ...loop, jumpLevel: 0 }],
+    })),
+    'invalid-document',
+  )
+  expectPlayerDocumentError(() => serializePlayerJson(legacyDocument), 'invalid-document')
+})
+
 test('player JSON admits all disclosure modes, permitted values, and public relationship graphs @pure', () => {
   const document = validPlayerDocument()
   const serialized = serializePlayerJson(document)
