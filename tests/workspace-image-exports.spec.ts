@@ -1054,11 +1054,10 @@ test('system image exports retain applied geometry during local and parent-owned
   await page.goto('/?map=continuous')
   const continuousMap = page.locator('svg.continuous-warden-map-svg')
   await expect(continuousMap).toBeVisible()
-  await setWorkspaceMapMode(page, 'Navigate')
-  const continuousGroup = page.getByRole('group', { name: 'Kestrel Reach Prime continuous map', exact: true })
+  await setWorkspaceMapMode(page, 'Select')
   const zoom = workspaceZoomControls(page)
   await zoom.getByRole('button', { name: 'Fit map', exact: true }).click()
-  await continuousGroup.getByRole('button', { name: 'Select Vesper Prime', exact: true }).click()
+  await continuousMap.locator('.continuous-warden-system-anchor[data-system-id="campaign-baseline-vesper"]').click()
   await zoom.getByRole('button', { name: 'Center selected target', exact: true }).click()
   const vesperObjects = continuousMap.locator('.continuous-warden-object[data-system-id="campaign-baseline-vesper"]')
   for (let step = 0; await vesperObjects.count() === 0 && step < 12; step++) {
@@ -1067,6 +1066,7 @@ test('system image exports retain applied geometry during local and parent-owned
   await expect(vesperObjects.first()).toBeVisible()
   const harrowAnchor = continuousMap.locator('.continuous-warden-system-anchor[data-system-id="campaign-baseline-harrow"]')
   const harrowOverlapsLiveViewport = async () => harrowAnchor.evaluate(anchor => {
+    if (!(anchor instanceof SVGElement)) throw new Error('The Harrow anchor is missing its SVG geometry.')
     const svg = anchor.ownerSVGElement
     if (!svg) return false
     const mapBounds = svg.getBoundingClientRect()
@@ -1078,7 +1078,6 @@ test('system image exports retain applied geometry during local and parent-owned
     await zoom.getByRole('button', { name: 'Zoom in', exact: true }).click()
   }
   expect(await harrowOverlapsLiveViewport()).toBe(false)
-  await page.waitForTimeout(180)
 
   const filterButton = page.getByRole('button', { name: /^Filters(?: \(|$)/ })
   await filterButton.click()
