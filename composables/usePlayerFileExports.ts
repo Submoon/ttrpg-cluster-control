@@ -2,21 +2,32 @@ import { getCurrentScope, onScopeDispose, ref } from 'vue'
 import type { PlayerClusterDocument } from '../domain/player-projection'
 import { PlayerDocumentError, serializePlayerJson } from '../domain/player-codec'
 import type { CurrentPlayerMapScene } from '../domain/player-scene'
-import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import { rasterizeMapSvg, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
+import type { MapImageScope } from '../utils/map-image-scope'
 import { downloadBlob, exportFileName } from '../utils/browser-download'
+import { serializeContinuousPlayerMapImage, type ContinuousPlayerImageScope } from '../utils/continuous-player-image-export'
 import { exportPlayerMapImage } from '../utils/player-map-image-export'
 import { createPlayerShareUrl, PlayerShareLinkError } from '../utils/player-share-link'
 
-interface PreparedPlayerExport {
+interface PlayerExportContext {
   document: PlayerClusterDocument
-  scene: CurrentPlayerMapScene | null
   /** Rechecks the caller's captured document and map context after asynchronous work. */
   isCurrent: () => boolean
+}
+
+interface PreparedPlayerExport extends PlayerExportContext {
+  scene: CurrentPlayerMapScene | null
+}
+
+interface PreparedScopedPlayerImage extends PlayerExportContext {
+  image: ContinuousPlayerImageScope
 }
 
 interface PlayerFileExportsOptions {
   /** Prepares one public document and the current scene after any caller-owned preflight. */
   prepare: () => Promise<PreparedPlayerExport | null>
+  /** Captures the requested scope from the mounted public map. */
+  prepareImage?: (scope: MapImageScope) => PreparedScopedPlayerImage | null | Promise<PreparedScopedPlayerImage | null>
   /** Announces that a current player link is ready for use. */
   onPlayerLinkReady?: () => void
   /** Announces that the current player link was copied successfully. */
@@ -38,7 +49,7 @@ const EMPTY_IMAGE_ERROR = 'This player map has no public features to export as a
  * Owns player-file action status and cancels stale async work when a newer action or scope wins.
  * Browser APIs are used only from invoked download, share, and clipboard actions, never during setup or SSR.
  */
-export function usePlayerFileExports({ prepare, onPlayerLinkReady, onPlayerLinkCopied }: PlayerFileExportsOptions) {
+export function usePlayerFileExports({ prepare, prepareImage, onPlayerLinkReady, onPlayerLinkCopied }: PlayerFileExportsOptions) {
   const playerExportError = ref('')
   const generatedPlayerUrl = ref('')
   const playerLinkBusy = ref(false)
@@ -49,7 +60,7 @@ export function usePlayerFileExports({ prepare, onPlayerLinkReady, onPlayerLinkC
   let artifactIdentity = 0
   let disposed = false
 
-  function isCurrent(activeOperation: number, prepared?: PreparedPlayerExport | null): boolean {
+  function isCurrent(activeOperation: number, prepared?: PlayerExportContext | null): boolean {
     return !disposed
       && operation === activeOperation
       && (prepared === undefined || prepared === null || prepared.isCurrent())
@@ -59,7 +70,7 @@ export function usePlayerFileExports({ prepare, onPlayerLinkReady, onPlayerLinkC
     return !disposed && operation === activeOperation
   }
 
-  function publishError(activeOperation: number, error: unknown, prepared?: PreparedPlayerExport | null): void {
+  function publishError(activeOperation: number, error: unknown, prepared?: PlayerExportContext | null): void {
     if (!isCurrent(activeOperation, prepared)) return
     playerExportError.value = error instanceof PlayerDocumentError ? error.message : GENERIC_EXPORT_ERROR
   }
@@ -67,7 +78,7 @@ export function usePlayerFileExports({ prepare, onPlayerLinkReady, onPlayerLinkC
   function publishFixedError(
     activeOperation: number,
     message: string,
-    prepared: PreparedPlayerExport,
+    prepared: PlayerExportContext,
   ): void {
     if (!isCurrent(activeOperation, prepared)) return
     playerExportError.value = message
@@ -117,8 +128,12 @@ export function usePlayerFileExports({ prepare, onPlayerLinkReady, onPlayerLinkC
     }
   }
 
-  async function downloadPlayerImage(format: MapImageFormat, palette: MapImagePalette): Promise<void> {
+  async function downloadPlayerImage(format: MapImageFormat, palette: MapImagePalette, scope?: MapImageScope): Promise<void> {
     if (disposed) return
+    if (scope && prepareImage) {
+      await downloadScopedImage(format, palette, () => prepareImage(scope))
+      return
+    }
     const activeOperation = startExport()
     let prepared: PreparedPlayerExport | null = null
     try {
@@ -142,6 +157,39 @@ export function usePlayerFileExports({ prepare, onPlayerLinkReady, onPlayerLinkC
       if (!isCurrent(activeOperation, prepared) || !blob) return
       const filename = sceneFileName(prepared.document, prepared.scene, format)
       if (!isCurrent(activeOperation, prepared)) return
+      downloadBlob(filename, blob)
+    } catch (error) {
+      publishError(activeOperation, error, prepared)
+    }
+  }
+
+  async function downloadScopedImage(
+    format: MapImageFormat,
+    palette: MapImagePalette,
+    capture: () => ReturnType<NonNullable<PlayerFileExportsOptions['prepareImage']>>,
+  ): Promise<void> {
+    const activeOperation = startExport()
+    let prepared: PreparedScopedPlayerImage | null = null
+    try {
+      prepared = await capture()
+      if (!prepared || !isCurrent(activeOperation, prepared)) return
+      const { document, image } = prepared
+      if (document.systems.length === 0) {
+        publishFixedError(activeOperation, EMPTY_IMAGE_ERROR, prepared)
+        return
+      }
+
+      const scene = serializeContinuousPlayerMapImage(document, image, palette)
+      const svg = new Blob([scene.svg], { type: 'image/svg+xml;charset=utf-8' })
+      if (!isCurrent(activeOperation, prepared)) return
+      const blob = format === 'svg' ? svg : await rasterizeMapSvg(svg, scene.width, scene.height)
+      if (!isCurrent(activeOperation, prepared)) return
+
+      const name = image.scope === 'system'
+        ? document.systems.find(system => system.id === image.systemId)?.label ?? document.title
+        : document.title
+      const suffix = image.scope === 'viewport' ? '-player-viewport' : '-player'
+      const filename = exportFileName(name + suffix, image.scope === 'system' ? 'star-system' : 'jump-cluster', format)
       downloadBlob(filename, blob)
     } catch (error) {
       publishError(activeOperation, error, prepared)

@@ -234,7 +234,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { usePlayerContinuousMapViewport } from '../composables/usePlayerContinuousMapViewport'
 import type { PlayerClusterDocument, PlayerObjectMarker, PlayerOrbit, PlayerSystemDocument } from '../domain/player-projection'
 import type { PlayerUsableRectReader, PlayerInspectionTarget } from '../utils/player-inspection'
-import type { SvgViewportRect } from '../utils/map-zoom'
+import { getSvgViewportRect, type SvgViewportRect } from '../utils/map-zoom'
+import type { PlayerImageViewportSnapshot } from '../utils/continuous-player-image-export'
 import type { ContinuousMapRouteGeometry } from '../utils/continuous-map-route-geometry'
 import type { PlayerContinuousSystemProjection } from '../utils/player-continuous-map-projection'
 import { buildContinuousMapRouteGeometries } from '../utils/continuous-map-route-geometry'
@@ -647,7 +648,28 @@ function isVisibleFocusTarget(target: SVGElement, viewport: SVGSVGElement): bool
     && !target.closest('[inert], [aria-hidden="true"]')
 }
 
-defineExpose({ centerRoute: centerRouteForDocument, centerSystem: centerSystemForDocument, fitPlayerMap, revealTarget })
+/** Captures applied public display state without copying transient marks or animated route frames. */
+function captureImageViewport(expectedDocument: PlayerClusterDocument): PlayerImageViewportSnapshot | null {
+  const element = mapElement.value
+  if (!props.active || props.document !== expectedDocument || !element?.isConnected
+    || element.clientWidth <= 0 || element.clientHeight <= 0) return null
+  const dimmedOwner = props.selectedSystemId && detailSystemIds.value.has(props.selectedSystemId)
+    ? props.selectedSystemId
+    : null
+  return {
+    camera: { ...camera.value },
+    drawable: getSvgViewportRect(element),
+    nameViewport: { ...nameViewport.value },
+    svgPixelScale: svgPixelScale.value,
+    detailSystemIds: [...detailSystemIds.value].sort(),
+    dimmedObjects: dimmedOwner && props.dimmedObjectIds.size
+      ? { systemId: dimmedOwner, ids: [...props.dimmedObjectIds].sort() }
+      : null,
+    selectedRouteId: props.selectedRouteId ?? null,
+  }
+}
+
+defineExpose({ captureImageViewport, centerRoute: centerRouteForDocument, centerSystem: centerSystemForDocument, fitPlayerMap, revealTarget })
 </script>
 
 <style scoped>
