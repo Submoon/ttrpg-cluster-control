@@ -87,10 +87,11 @@
           <section class="grid gap-2" aria-labelledby="map-help-shortcuts-heading">
             <h3 id="map-help-shortcuts-heading" class="m-0 text-base font-semibold">Keyboard shortcuts</h3>
             <ul class="m-0 grid list-disc gap-1.5 pl-5">
-              <li>Focus the map or one of its items, then press N for Navigate, S for Select, M for Move, or A to open Add.</li>
+              <li v-if="props.continuousMap">Focus the map or one of its items, then press S for Select, M for Move, or A to open Add.</li>
+              <li v-else>Focus the map or one of its items, then press N for Navigate, S for Select, M for Move, or A to open Add.</li>
               <li>Press Ctrl+K on Windows or Linux, or Cmd+K on Mac, to open Search.</li>
               <li>Press Ctrl+Z or Cmd+Z to Undo. Redo with Ctrl+Shift+Z, Cmd+Shift+Z, or Ctrl+Y.</li>
-              <li>Choose Navigate, focus the map, then use the arrow keys to move the view.</li>
+              <li v-if="!props.continuousMap">Choose Navigate, focus the map, then use the arrow keys to move the view.</li>
               <li>After choosing an object type in Add, focus the star system map and press Enter or Space to target the center of the view.</li>
             </ul>
           </section>
@@ -104,6 +105,7 @@
 import { nextTick, onBeforeUnmount, watch } from 'vue'
 import type { ModalProps } from '@nuxt/ui/components/Modal.vue'
 
+const props = withDefaults(defineProps<{ continuousMap?: boolean }>(), { continuousMap: false })
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ 'active-change': [active: boolean] }>()
 const dialogContent: ModalProps['content'] & { 'aria-modal': 'true'; onCloseAutoFocus: () => void } = {

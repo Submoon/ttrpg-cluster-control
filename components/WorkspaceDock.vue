@@ -3,7 +3,7 @@
     <div class="workspace-dock-tools">
       <div class="workspace-dock-mode" role="group" aria-label="Map interaction mode">
         <UTooltip
-          v-for="mode in modes"
+          v-for="mode in availableModes"
           :key="mode.value"
           :text="`${mode.label} map mode. Focus the map or a map item to use tool shortcuts.`"
           :kbds="[mode.shortcut.toLowerCase()]"
@@ -129,7 +129,8 @@
         @cancel="emit('cancel-orbit-center-move')"
       />
       <p id="workspace-map-tool-shortcut-help" class="sr-only" role="note">
-        Focus the map or a map item to use these shortcuts: N Navigate, S Select, M Move, and A open Add. Text entry, map controls, and dialogs keep their own keys.
+        <template v-if="props.continuousMap">Focus the map or a map item to use these shortcuts: S Select, M Move, and A open Add. Text entry, map controls, and dialogs keep their own keys.</template>
+        <template v-else>Focus the map or a map item to use these shortcuts: N Navigate, S Select, M Move, and A open Add. Text entry, map controls, and dialogs keep their own keys.</template>
       </p>
     </div>
   </nav>
@@ -156,6 +157,7 @@ import OrbitCenterPlacementControls from './OrbitCenterPlacementControls.vue'
 import type { UnresolvedExitMovePreview } from '../composables/editor-workflows/useUnresolvedExitPlacement'
 
 const props = withDefaults(defineProps<{
+  continuousMap?: boolean
   creationSession?: SystemCreationSession | null
   creationTypeLabel?: string
   clusterAddLabel?: string | null
@@ -176,6 +178,7 @@ const props = withDefaults(defineProps<{
   orbitCenterMovePreview?: OrbitCenterMovePreview | null
   orbitCenterMoveError?: string
 }>(), {
+  continuousMap: false,
   creationSession: null,
   creationTypeLabel: 'object',
   systemObjectMoveAvailable: false,
@@ -221,6 +224,9 @@ const modes: Array<{ value: MapInteractionMode; label: string; shortcut: string;
   { value: 'navigate', label: 'Navigate', shortcut: 'N', icon: 'i-lucide-hand' },
   { value: 'move', label: 'Move', shortcut: 'M', icon: 'i-lucide-move' },
 ]
+const availableModes = computed(() => props.continuousMap
+  ? modes.filter(mode => mode.value !== 'navigate')
+  : modes)
 const shortcutTooltipUi = {
   content: 'workspace-map-shortcut-tooltip-content',
   text: 'workspace-map-shortcut-tooltip-text',

@@ -40,6 +40,18 @@
       />
     </UTooltip>
 
+    <UTooltip v-if="props.centerAvailable" text="Center selected target">
+      <UButton
+        class="workspace-control"
+        color="neutral"
+        variant="outline"
+        size="sm"
+        icon="i-lucide-focus"
+        aria-label="Center selected target"
+        @click="emit('center-map')"
+      />
+    </UTooltip>
+
     <UPopover
       v-model:open="navigationOpen"
       :modal="false"
@@ -132,6 +144,7 @@ const props = withDefaults(defineProps<{
   zoomLevel: number
   minimumZoomLevel?: number
   compactModalOpen?: boolean
+  centerAvailable?: boolean
 }>(), {
   compactModalOpen: false,
   minimumZoomLevel: 25,
@@ -141,6 +154,7 @@ const emit = defineEmits<{
   'zoom-by': [factor: number]
   'zoom-to': [percentage: number]
   'fit-map': []
+  'center-map': []
   'pan-by': [dx: number, dy: number]
 }>()
 
