@@ -19,9 +19,9 @@
         icon="i-lucide-crosshair"
         aria-label="Center selection"
         :disabled="!hasSelection"
-        @click="centerSelection"
+        @click="centerSelectionManually"
       />
-      <UButton color="neutral" variant="outline" size="xs" icon="i-lucide-maximize" aria-label="Fit player map" @click="fitPlayerMap" />
+      <UButton color="neutral" variant="outline" size="xs" icon="i-lucide-maximize" aria-label="Fit player map" @click="fitPlayerMapManually" />
     </div>
 
     <svg
@@ -208,9 +208,11 @@
             class="player-continuous-name"
             :style="{ fontSize: `${SYSTEM_NAME_FONT_PIXELS / svgPixelScale}px` }"
             :y="label.height * .68"
+            :textLength="label.displayName === label.name ? undefined : Math.max(1, label.width - 24)"
+            lengthAdjust="spacingAndGlyphs"
             text-anchor="middle"
             aria-hidden="true"
-          >{{ label.name }}</text>
+          >{{ label.displayName }}</text>
         </g>
       </g>
       </g>
@@ -271,6 +273,7 @@ const mapViewport = usePlayerContinuousMapViewport({
   active: computed(() => props.active !== false),
   getUsableClientRect: usableRectReader,
   onCameraChange: updateDetailReveal,
+  onManualCameraInteraction: () => emit('map-interaction'),
 })
 const {
   camera,
@@ -504,7 +507,17 @@ function centerTarget(target: PlayerInspectionTarget, systemId: string): boolean
     svgPixelScale.value,
     detailSystemIds.value.has(systemId),
   )
-  return frameBounds(bounds, minimumScale)
+  return frameBounds(bounds, camera.value.k, minimumScale)
+}
+
+function centerSelectionManually(): void {
+  emit('map-interaction')
+  centerSelection()
+}
+
+function fitPlayerMapManually(): void {
+  emit('map-interaction')
+  fitPlayerMap()
 }
 
 /** Search and explicit Center requests are fenced by their exact detached system document. */
@@ -541,6 +554,7 @@ defineExpose({ centerSystem: centerSystemForDocument, fitPlayerMap, revealTarget
 
 <style scoped>
 .player-continuous-map {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 14rem;
@@ -552,10 +566,24 @@ defineExpose({ centerSystem: centerSystemForDocument, fitPlayerMap, revealTarget
 }
 
 .player-continuous-map-navigation {
+  position: absolute;
+  z-index: 2;
+  bottom: 1rem;
+  left: 50%;
   display: flex;
+  width: max-content;
+  max-width: min(340px, calc(100% - 1rem));
   flex-wrap: wrap;
   align-items: center;
   gap: .25rem;
+  overflow-x: auto;
+  transform: translateX(-50%);
+  border: 1px solid var(--line-soft);
+  border-radius: .35rem;
+  padding: .3rem;
+  background: color-mix(in srgb, var(--panel-bg) 96%, transparent);
+  box-shadow: 0 .35rem 1.2rem color-mix(in srgb, var(--map-bg) 45%, transparent);
+  backdrop-filter: blur(12px);
 }
 
 .player-continuous-map-scene {

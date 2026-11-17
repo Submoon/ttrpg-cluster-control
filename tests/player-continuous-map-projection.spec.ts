@@ -6,6 +6,7 @@ import {
   projectPlayerContinuousMap,
 } from '../utils/player-continuous-map-projection'
 import {
+  fitPlayerContinuousTarget,
   layoutPlayerContinuousNameLabels,
   playerContinuousTargetBounds,
   playerContinuousTargetMinimumScale,
@@ -113,6 +114,25 @@ test('player continuous geometry keeps generic anchors and projects only public 
   expect(projection.routes[1]?.path).toBe('M 900 500 L 1180 530')
 })
 
+test('coincident public endpoints get a visible curve while same-ID loops stay omitted @pure', () => {
+  const document = publicDocument()
+  document.systems[2]!.position = { x: 500, y: 300 }
+  document.routes.push(
+    { id: 'route-3', jumpLevel: 3, fromSystemId: 'system-2', destination: { kind: 'unknown', position: { x: 500, y: 300 }, label: 'Unknown destination' } },
+    { id: 'route-4', jumpLevel: 5, fromSystemId: 'system-2', destination: { kind: 'system', systemId: 'system-2' } },
+  )
+
+  const routes = projectPlayerContinuousMap(document).routes
+  const coincidentResolved = routes.find(route => route.id === 'route-1')
+  const coincidentAnonymous = routes.find(route => route.id === 'route-3')
+
+  expect(coincidentResolved?.path).toMatch(/^M 500 300 Q .+ 500 300$/)
+  expect(coincidentAnonymous?.path).toMatch(/^M 500 300 Q .+ 500 300$/)
+  expect(coincidentAnonymous?.foreground).toBe(true)
+  expect(coincidentAnonymous?.destination?.position).toEqual({ x: 500, y: 300 })
+  expect(routes.map(route => route.id)).toEqual(['route-1', 'route-2', 'route-3'])
+})
+
 test('player continuous bounds and camera inputs ignore data outside the detached public document @pure', () => {
   const publicProjection = projectPlayerContinuousMap(publicDocument())
   const extendedInput = {
@@ -182,6 +202,26 @@ test('player continuous names use screen coordinates and independently fit the u
   }
 })
 
+test('player continuous long names stay inside compact viewports and clear their own anchor @pure', () => {
+  const projection = projectPlayerContinuousMap(publicDocument())
+  const source = projection.systems[1]!
+  const longSystem = { ...source, label: 'L'.repeat(80) }
+  const viewport = { x: 0, y: 0, width: 300, height: 200 }
+  const [label] = layoutPlayerContinuousNameLabels(
+    [longSystem],
+    { x: -200, y: -288, k: 1 },
+    1,
+    viewport,
+  )
+
+  if (!label) throw new Error('The public long-name label was not laid out.')
+  expect(label.name).toBe('L'.repeat(80))
+  expect(label.displayName).toMatch(/…$/)
+  expect(label.displayName.length).toBeLessThan(80)
+  expect(label.width).toBeLessThanOrEqual(viewport.width - 16)
+  expect(label.y).toBeGreaterThanOrEqual(label.anchorY + 18)
+})
+
 test('player continuous target framing includes long labels, rotated orbits, and detail scale @pure', () => {
   const projection = projectPlayerContinuousMap(publicDocument())
   const system = projection.systems[2]!
@@ -200,6 +240,23 @@ test('player continuous target framing includes long labels, rotated orbits, and
   expect(orbitBounds?.height).toBeCloseTo(extentY * 2 + 28)
   expect(detailScale).toBeCloseTo(requiredDetailScale)
   expect(retainedDetailScale).toBe(1.58)
+})
+
+test('player continuous target Center preserves fitting zoom and expands only for semantic detail @pure', () => {
+  const bounds = { x: 100, y: 70, width: 100, height: 80 }
+  const viewport = { x: 0, y: 0, width: 400, height: 300 }
+  const currentFit = fitPlayerContinuousTarget(bounds, viewport, .25, 1)
+  const oversized = fitPlayerContinuousTarget(bounds, viewport, .25, 10)
+  const belowDetailFloor = fitPlayerContinuousTarget(bounds, viewport, .25, 1, 2.2)
+
+  expect(currentFit?.k).toBe(1)
+  expect(oversized?.k).toBeCloseTo(2.75)
+  expect(belowDetailFloor?.k).toBe(2.2)
+  for (const camera of [currentFit, oversized, belowDetailFloor]) {
+    expect(camera).toBeDefined()
+    expect(camera!.x + (bounds.x + bounds.width / 2) * camera!.k).toBeCloseTo(viewport.width / 2)
+    expect(camera!.y + (bounds.y + bounds.height / 2) * camera!.k).toBeCloseTo(viewport.height / 2)
+  }
 })
 
 test('player system detail uses independent public envelope thresholds with collapse hysteresis @pure', () => {

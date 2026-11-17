@@ -1,13 +1,14 @@
 /** Screen-space naming and selection framing for the public continuous map. */
 import type { PlayerInspectionTarget } from './player-inspection'
-import type { SvgViewportRect } from './map-zoom'
+import type { MapViewport, SvgViewportRect } from './map-zoom'
 import type { PlayerContinuousSystemProjection } from './player-continuous-map-projection'
-import { MAP_ZOOM_MAX_SCALE } from './map-zoom'
+import { fitMapViewport, MAP_ZOOM_MAX_SCALE } from './map-zoom'
 import { PLAYER_DETAIL_HIDE_PIXELS, PLAYER_DETAIL_REVEAL_PIXELS } from './player-continuous-map-projection'
 
 export interface PlayerContinuousNameLabel {
   systemId: string
   name: string
+  displayName: string
   x: number
   y: number
   width: number
@@ -70,8 +71,15 @@ export function layoutPlayerContinuousNameLabels(
   const margin = SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS / scale
 
   for (const point of points) {
-    const widthPixels = Math.max(72, Math.ceil(Array.from(point.name).length * SYSTEM_NAME_FONT_PIXELS * .52 + 24))
+    const naturalWidthPixels = Math.max(72, Math.ceil(Array.from(point.name).length * SYSTEM_NAME_FONT_PIXELS * .65 + 24))
+    const maximumWidthPixels = Math.max(1, viewport.width * scale - SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS * 2)
+    const widthPixels = Math.floor(Math.min(naturalWidthPixels, maximumWidthPixels))
     const width = widthPixels / scale
+    const maximumCharacters = Math.max(1, Math.floor((widthPixels - 24) / (SYSTEM_NAME_FONT_PIXELS * .65)))
+    const nameCharacters = Array.from(point.name)
+    const displayName = nameCharacters.length > maximumCharacters
+      ? `${nameCharacters.slice(0, Math.max(0, maximumCharacters - 1)).join('')}…`
+      : point.name
     const candidates = namePlacementOffsets(widthPixels).map(offset => ({ x: offset.x / scale, y: offset.y / scale }))
     let chosen = candidates[0]!
     let chosenScore = Number.POSITIVE_INFINITY
@@ -96,7 +104,6 @@ export function layoutPlayerContinuousNameLabels(
         + Math.max(0, Math.min(bounds.right + 6 / scale, prior.right) - Math.max(bounds.left - 6 / scale, prior.left))
           * Math.max(0, Math.min(bounds.bottom + 4 / scale, prior.bottom) - Math.max(bounds.top - 4 / scale, prior.top)), 0)
       const anchorOverlapArea = points.reduce((total, other) => {
-        if (other.id === point.id) return total
         const radius = 18 / scale
         const overlapWidth = Math.max(0, Math.min(bounds.right, other.x + radius) - Math.max(bounds.left, other.x - radius))
         const overlapHeight = Math.max(0, Math.min(bounds.bottom, other.y + radius) - Math.max(bounds.top, other.y - radius))
@@ -119,6 +126,7 @@ export function layoutPlayerContinuousNameLabels(
     labels.push({
       systemId: point.id,
       name: point.name,
+      displayName,
       x,
       y,
       width,
@@ -130,6 +138,31 @@ export function layoutPlayerContinuousNameLabels(
   }
 
   return labels
+}
+
+/** Frames a target at the lower of current and fit zoom, subject to a semantic visibility floor. */
+export function fitPlayerContinuousTarget(
+  bounds: SvgViewportRect,
+  viewport: SvgViewportRect,
+  minimumScale: number,
+  currentScale?: number,
+  semanticFloor = minimumScale,
+): MapViewport | undefined {
+  const fittedBounds = fitMapViewport(bounds, viewport, minimumScale)
+  if (!fittedBounds) return undefined
+  const preferredScale = Number.isFinite(currentScale) && currentScale! > 0
+    ? Math.min(currentScale!, fittedBounds.k)
+    : fittedBounds.k
+  const requiredScale = Number.isFinite(semanticFloor) ? Math.max(minimumScale, semanticFloor) : minimumScale
+  const k = Math.min(MAP_ZOOM_MAX_SCALE, Math.max(preferredScale, requiredScale))
+  const width = Math.max(1, bounds.width)
+  const height = Math.max(1, bounds.height)
+  const camera = {
+    x: viewport.x + (viewport.width - width * k) / 2 - bounds.x * k,
+    y: viewport.y + (viewport.height - height * k) / 2 - bounds.y * k,
+    k,
+  }
+  return [camera.x, camera.y, camera.k].every(Number.isFinite) ? camera : undefined
 }
 
 /** Includes the rendered object label in the framing bounds, including long public names. */

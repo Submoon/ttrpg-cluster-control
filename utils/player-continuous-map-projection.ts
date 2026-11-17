@@ -47,6 +47,11 @@ export function playerContinuousDetailSystemIds(
  * Public IDs remain scoped to their system by consumers; source Location keys are never accepted.
  */
 export function projectPlayerContinuousMap(document: PlayerClusterDocument): PlayerContinuousMapProjection {
+  const renderableDocument: PlayerClusterDocument = {
+    ...document,
+    routes: document.routes.filter(route =>
+      route.destination.kind !== 'system' || route.destination.systemId !== route.fromSystemId),
+  }
   const systems = document.systems.map((system): PlayerContinuousSystemProjection => {
     if (system.disclosure !== 'revealed') {
       return {
@@ -83,8 +88,8 @@ export function projectPlayerContinuousMap(document: PlayerClusterDocument): Pla
     }
   })
 
-  const cluster = playerClusterGeometry(document)
-  const routes = projectContinuousPublicRoutes(document)
+  const cluster = playerClusterGeometry(renderableDocument)
+  const routes = projectContinuousPublicRoutes(renderableDocument)
   let left = cluster.bounds.minX
   let top = cluster.bounds.minY
   let right = cluster.bounds.minX + cluster.bounds.width
@@ -143,16 +148,36 @@ function projectContinuousPublicRoutes(document: PlayerClusterDocument): PlayerR
       : route.destination.position
     const label = clusterRoutePresentationLabel(route.jumpLevel)
     const labelWidth = clusterRoutePresentationLabelWidth(route.jumpLevel)
-    const midpoint = { x: (origin.position.x + destinationPosition.x) / 2, y: (origin.position.y + destinationPosition.y) / 2 }
-    const labelX = midpoint.x
-    const labelY = midpoint.y + (index % 2 === 0 ? -18 : 18)
+    const dx = destinationPosition.x - origin.position.x
+    const dy = destinationPosition.y - origin.position.y
+    const distance = Math.hypot(dx, dy)
+    let path = `M ${origin.position.x} ${origin.position.y} L ${destinationPosition.x} ${destinationPosition.y}`
+    let labelX = (origin.position.x + destinationPosition.x) / 2
+    let labelY = (origin.position.y + destinationPosition.y) / 2 + (index % 2 === 0 ? -18 : 18)
+    if (distance < 40) {
+      const angle = distance > 0
+        ? Math.atan2(dy, dx) + Math.PI / 2
+        : -Math.PI / 2 + index * Math.PI / 4
+      const bend = index % 2 === 0 ? 42 : -42
+      const control = {
+        x: (origin.position.x + destinationPosition.x) / 2 + Math.cos(angle) * bend,
+        y: (origin.position.y + destinationPosition.y) / 2 + Math.sin(angle) * bend,
+      }
+      path = `M ${origin.position.x} ${origin.position.y} Q ${control.x} ${control.y} ${destinationPosition.x} ${destinationPosition.y}`
+      labelX = (origin.position.x + 2 * control.x + destinationPosition.x) / 4
+      labelY = (origin.position.y + 2 * control.y + destinationPosition.y) / 4
+        + CLUSTER_ROUTE_PRESENTATION.curve.labelOffsetY
+    }
     const accessibleLabel = route.destination.kind === 'unknown'
       ? `Jump Level ${route.jumpLevel} to ${route.destination.label}`
       : `Jump Level ${route.jumpLevel} from ${origin.label} to ${destinationSystem!.label}`
+    const foreground = route.destination.kind === 'unknown' && document.systems.some(system =>
+      Math.hypot(system.position.x - destinationPosition.x, system.position.y - destinationPosition.y)
+        <= 18 + CLUSTER_ROUTE_PRESENTATION.endpoint.radius)
     return {
       id: route.id,
-      foreground: false,
-      path: `M ${origin.position.x} ${origin.position.y} L ${destinationPosition.x} ${destinationPosition.y}`,
+      foreground,
+      path,
       label,
       accessibleLabel,
       labelX,

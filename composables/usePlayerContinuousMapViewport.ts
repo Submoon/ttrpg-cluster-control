@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import { select, zoom, zoomIdentity, type ZoomBehavior } from 'd3'
 import type { PlayerUsableRectReader } from '../utils/player-inspection'
+import { fitPlayerContinuousTarget } from '../utils/player-continuous-map-layout'
 import {
   clientRectToSvgViewportRect,
   clampMapViewport,
@@ -19,6 +20,7 @@ interface PlayerContinuousMapViewportOptions {
   active: Readonly<Ref<boolean>>
   getUsableClientRect: Readonly<Ref<PlayerUsableRectReader | undefined>>
   onCameraChange?: (camera: MapViewport) => void
+  onManualCameraInteraction?: () => void
 }
 
 /**
@@ -149,12 +151,16 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
     }
   }
 
-  function frameBounds(bounds: SvgViewportRect, requiredScale = minimumScale.value): boolean {
+  function frameBounds(
+    bounds: SvgViewportRect,
+    preferredScale?: number,
+    requiredScale = minimumScale.value,
+  ): boolean {
     if (!options.active.value) return false
     const viewport = usableViewportRect()
     if (!viewport) return false
     updateMinimumScale(viewport)
-    const fitted = fitMapViewport(bounds, viewport, Math.max(minimumScale.value, requiredScale))
+    const fitted = fitPlayerContinuousTarget(bounds, viewport, minimumScale.value, preferredScale, requiredScale)
     if (!fitted) return false
     applyCamera(fitted)
     cameraInitialized.value = true
@@ -177,11 +183,13 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
     if (!options.active.value || !Number.isFinite(factor) || factor <= 0) return
     const element = options.element.value
     if (!element || !zoomBehavior) return
+    options.onManualCameraInteraction?.()
     select(element).call(zoomBehavior.scaleBy, factor)
   }
 
   function panBy(horizontal: number, vertical: number): void {
     if (!options.active.value || !Number.isFinite(horizontal) || !Number.isFinite(vertical)) return
+    options.onManualCameraInteraction?.()
     applyCamera({
       x: camera.value.x + horizontal,
       y: camera.value.y + vertical,
@@ -199,7 +207,10 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
       case '+':
       case '=': zoomBy(1.2); break
       case '-': zoomBy(1 / 1.2); break
-      case '0': fitPlayerMap(); break
+      case '0':
+        options.onManualCameraInteraction?.()
+        fitPlayerMap()
+        break
       default: return
     }
     event.preventDefault()
