@@ -61,6 +61,10 @@
       @orbit-adjustment="forwardOrbitAdjustment"
       @entity-command-blocked="emit('entity-command-blocked', $event)"
       @move-object-in-system="forwardMoveObjectInSystem"
+      @move-orbit-center="forwardMoveOrbitCenter"
+      @orbit-center-candidates="forwardOrbitCenterCandidates"
+      @resize-orbit="forwardResizeOrbit"
+      @rotate-orbit="forwardRotateOrbit"
       @move-target="forwardMoveTarget"
       @move-system="forwardMoveSystem"
       @editing-gesture-change="orbitInput.setChildGestureActive"
@@ -158,6 +162,7 @@ import type {
   SystemCreationPreview,
   SystemCreationType,
   SystemObjectMoveCandidate,
+  SystemObjectMoveTarget,
 } from '../composables/editor-workflows/types'
 import type { EntityCommand } from '../composables/editor-workflows/types'
 import type {
@@ -226,7 +231,7 @@ const emit = defineEmits<{
   'orbit-adjustment': [intent: OrbitAdjustmentIntent]
   'object-move-blocked': [id: string]
   'object-move-candidates': [id: string, candidates: SystemObjectMoveCandidate[]]
-  'orbit-center-candidates': [id: string, candidates: OrbitCenterMoveCandidate[]]
+  'orbit-center-candidates': [id: string, candidates: OrbitCenterMoveCandidate[], systemId?: string]
   'entity-command-blocked': [command: EntityCommand]
   'move-system': [id: string, position: Point]
   'move-unresolved-exit': [id: string, position: Point]
@@ -240,10 +245,10 @@ const emit = defineEmits<{
   'cancel-object-placement-preview': []
   'cancel-orbit-placement-preview': []
   'move-object': [id: string, position: Point]
-  'move-orbit-center': [id: string, center: Point, hostId: string | null]
+  'move-orbit-center': [id: string, center: Point, hostId: string | null, systemId?: string]
   'rotate-object': [id: string, angle: number]
-  'resize-orbit': [id: string, radii: OrbitRadii]
-  'rotate-orbit': [id: string, rotation: number]
+  'resize-orbit': [id: string, radii: OrbitRadii, systemId?: string]
+  'rotate-orbit': [id: string, rotation: number, systemId?: string]
   'place-object-in-orbit': [id: string, orbitId: string, angle: number]
   'creation-target': [candidates: SystemCreationCandidate[]]
   'creation-drop-target': [type: SystemCreationType, candidates: SystemCreationCandidate[]]
@@ -277,10 +282,8 @@ const matchingOrbitAdjustmentPreview = computed(() => {
   if (props.activeView === 'system') {
     return props.system?.id === preview.identity.systemId ? preview : null
   }
-  const target = props.inspectedTarget
-  return props.continuousMap && target
-    && (target.kind === 'object' || target.kind === 'orbit' || target.kind === 'system')
-    && target.systemId === preview.identity.systemId
+  return props.continuousMap && props.workspace.cluster.systems.some(system => system.id === preview.identity.systemId
+    && system.orbits.some(orbit => orbit.id === preview.identity.orbitId))
     ? preview
     : null
 })
@@ -1166,12 +1169,15 @@ function handleOrbitSelection(orbitId: string): void {
 
 /** Enriches one active-system Orbit input with the workspace identity owned by this map surface. */
 function forwardOrbitAdjustment(input: OrbitAdjustmentInput): void {
-  const target = props.inspectedTarget
   const continuousOwnerMatches = props.activeView === 'cluster' && props.continuousMap
-    && target?.kind === 'orbit' && target.systemId === input.systemId
+    && props.workspace.cluster.systems.some(candidate => candidate.id === input.systemId
+      && candidate.orbits.some(orbit => orbit.id === input.orbitId))
   const system = props.system
-  if (props.mode !== 'move' || !(props.activeView === 'system' && system?.id === input.systemId)
-    && !continuousOwnerMatches) return
+  const activeOwnerMatches = props.activeView === 'system' && system?.id === input.systemId
+    || continuousOwnerMatches
+  if (props.mode !== 'move' || !activeOwnerMatches
+    || props.creationType != null || props.creationChooserOpen || props.clusterAddType != null || props.clusterChooserOpen
+    || props.moveTargeting || props.clusterMoveTargeting) return
   emit('orbit-adjustment', { ...input, workspaceId: props.workspace.id })
 }
 
@@ -1187,15 +1193,23 @@ function forwardBlockedObjectMove(id: string): void { emit('object-move-blocked'
 function forwardObjectMoveCandidates(id: string, candidates: SystemObjectMoveCandidate[]): void {
   if (props.activeView === 'system' && props.mode === 'move') emit('object-move-candidates', id, candidates)
 }
-function forwardOrbitCenterCandidates(id: string, candidates: OrbitCenterMoveCandidate[]): void {
-  if (props.activeView === 'system' && props.mode === 'move') emit('orbit-center-candidates', id, candidates)
+function forwardOrbitCenterCandidates(id: string, candidates: OrbitCenterMoveCandidate[], systemId?: string): void {
+  if (props.activeView === 'system' && props.mode === 'move') {
+    emit('orbit-center-candidates', id, candidates, systemId ?? props.system?.id)
+  } else if (props.activeView === 'cluster' && props.continuousMap && props.mode === 'move' && systemId) {
+    emit('orbit-center-candidates', id, candidates, systemId)
+  }
 }
-function forwardMoveOrbitCenter(id: string, center: Point, hostId: string | null): void {
-  if (props.mode === 'move') emit('move-orbit-center', id, center, hostId)
+function forwardMoveOrbitCenter(id: string, center: Point, hostId: string | null, systemId?: string): void {
+  if (props.mode === 'move') emit('move-orbit-center', id, center, hostId, systemId ?? props.system?.id)
 }
 function forwardRotateObject(id: string, angle: number): void { if (props.mode === 'move') emit('rotate-object', id, angle) }
-function forwardResizeOrbit(id: string, radii: OrbitRadii): void { if (props.mode === 'move') emit('resize-orbit', id, radii) }
-function forwardRotateOrbit(id: string, rotation: number): void { if (props.mode === 'move') emit('rotate-orbit', id, rotation) }
+function forwardResizeOrbit(id: string, radii: OrbitRadii, systemId?: string): void {
+  if (props.mode === 'move') emit('resize-orbit', id, radii, systemId ?? props.system?.id)
+}
+function forwardRotateOrbit(id: string, rotation: number, systemId?: string): void {
+  if (props.mode === 'move') emit('rotate-orbit', id, rotation, systemId ?? props.system?.id)
+}
 function forwardPlaceObject(id: string, orbitId: string, angle: number): void {
   if (props.mode === 'move') emit('place-object-in-orbit', id, orbitId, angle)
 }
@@ -1499,6 +1513,11 @@ defineExpose({
     if (props.activeView === 'cluster' && props.continuousMap && systemId) {
       continuousWardenMapRef.value?.setObjectPlacementPreview(systemId, objectId, scenePoint)
     } else if (props.activeView === 'system') systemMapRef.value?.setObjectPlacementPreview(objectId, scenePoint)
+  },
+  setObjectMoveTargetPreview: (objectId: string, target: SystemObjectMoveTarget | null, systemId?: string) => {
+    if (props.activeView === 'cluster' && props.continuousMap && systemId) {
+      continuousWardenMapRef.value?.setObjectMoveTargetPreview(systemId, objectId, target)
+    }
   },
   setOrbitPlacementPreview: (orbitId: string, preview: OrbitPlacementPreview | null, systemId?: string) => {
     if (props.activeView === 'cluster' && props.continuousMap && systemId) {

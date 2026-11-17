@@ -325,7 +325,13 @@ export function useSystemObjectPlacement({
 
   function clearPreview(): void {
     const preview = systemObjectMovePreview.value
-    if (preview) systemMapRef.value?.setObjectPlacementPreview?.(preview.objectId, null, preview.systemId)
+    if (preview) {
+      if (continuousOwnerSelection()?.systemId === preview.systemId) {
+        systemMapRef.value?.setObjectMoveTargetPreview?.(preview.objectId, null, preview.systemId)
+      } else {
+        systemMapRef.value?.setObjectPlacementPreview?.(preview.objectId, null, preview.systemId)
+      }
+    }
     systemObjectMovePreview.value = null
     preparedBaseline = null
   }
@@ -464,7 +470,11 @@ export function useSystemObjectPlacement({
       }
       preparedBaseline = { fingerprint }
       systemObjectMovePreview.value = preview
-      systemMapRef.value?.setObjectPlacementPreview?.(current.object.id, scenePoint, current.system.id)
+      if (continuousOwnerSelection()?.systemId === current.system.id) {
+        systemMapRef.value?.setObjectMoveTargetPreview?.(current.object.id, target, current.system.id)
+      } else {
+        systemMapRef.value?.setObjectPlacementPreview?.(current.object.id, scenePoint, current.system.id)
+      }
       return true
     } catch (error) {
       systemObjectMoveError.value = errorMessage(error)
@@ -835,11 +845,15 @@ export function useSystemObjectPlacement({
         systemObjectMoveError.value = 'The object placement or Orbit geometry changed. Preview the position again.'
         return
       }
-      systemMapRef.value?.setObjectPlacementPreview?.(
-        preview.objectId,
-        scenePointForTarget(latest, preview.target),
-        preview.systemId,
-      )
+      if (continuousOwnerSelection()?.systemId === preview.systemId) {
+        systemMapRef.value?.setObjectMoveTargetPreview?.(preview.objectId, preview.target, preview.systemId)
+      } else {
+        systemMapRef.value?.setObjectPlacementPreview?.(
+          preview.objectId,
+          scenePointForTarget(latest, preview.target),
+          preview.systemId,
+        )
+      }
     })
   }, { flush: 'sync', immediate: true })
 

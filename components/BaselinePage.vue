@@ -403,7 +403,7 @@
                     @entity-command-blocked="handleBlockedEntityCommand"
                     @cancel-cluster-preview="cancelClusterPlacement"
                     @move-object="moveMapObject"
-                    @move-orbit-center="moveMapOrbitCenter"
+                    @move-orbit-center="handleMapOrbitCenterMove"
                     @orbit-center-candidates="placement.interactions.handleOrbitCenterCandidates"
                     @rotate-object="rotateMapObject"
                     @resize-orbit="resizeMapOrbit"
@@ -452,7 +452,7 @@
                     @object-move-candidates="placement.interactions.handleObjectMoveCandidates"
                     @object-move-blocked="handleBlockedObjectMove"
                     @entity-command-blocked="handleBlockedEntityCommand"
-                    @move-orbit-center="moveMapOrbitCenter"
+                    @move-orbit-center="handleMapOrbitCenterMove"
                     @orbit-center-candidates="placement.interactions.handleOrbitCenterCandidates"
                     @rotate-object="rotateMapObject"
                     @resize-orbit="resizeMapOrbit"
@@ -1303,6 +1303,15 @@ function handleMapMoveNudge(delta: Point): void {
   else if (activeView.value === 'cluster' && orbitCenterMapMoveTargeting.value) nudgeOrbitCenterMove(delta)
   else if (activeView.value === 'system' && systemObjectMapMoveTargeting.value) nudgeSystemObjectMove(delta)
   else if (activeView.value === 'system' && orbitCenterMapMoveTargeting.value) nudgeOrbitCenterMove(delta)
+}
+
+function handleMapOrbitCenterMove(
+  orbitId: string,
+  center: Point,
+  hostId: string | null,
+  systemId?: string,
+): void {
+  void moveMapOrbitCenter(orbitId, center, hostId, undefined, systemId)
 }
 
 function cancelClusterPlacement(): void {

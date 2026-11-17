@@ -336,6 +336,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     creation: systemCreation,
     viewport,
     beginOrbitEdit: map.beginOrbitEdit,
+    continuousMap: options.continuousMap,
   })
 
   const historyGuards = computed(() => {

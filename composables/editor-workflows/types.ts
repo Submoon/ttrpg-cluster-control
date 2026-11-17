@@ -344,6 +344,8 @@ export interface MapNavigationHandle extends MapImageExporter {
   setUnresolvedExitPositionPreview?(routeId: string, position: Point | null): void
   /** Shows or clears a precise object placement preview in its owning system's local scene. */
   setObjectPlacementPreview?(objectId: string, scenePoint: Point | null, systemId?: string): void
+  /** Shows or clears an explicit precise object destination without resolving it through drag snapping. */
+  setObjectMoveTargetPreview?(objectId: string, target: SystemObjectMoveTarget | null, systemId?: string): void
   /** Shows or clears an Orbit placement draft preview for its owning system. */
   setOrbitPlacementPreview?(orbitId: string, preview: OrbitPlacementPreview | null, systemId?: string): void
   /** Shows or clears a precise unoccupied Orbit-center preview in its owning system. */
