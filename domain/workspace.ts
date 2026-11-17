@@ -70,9 +70,11 @@ export {
 export { planMapEntityDeletion } from './workspace-deletion'
 export { resolveSystemObjectBranch } from './workspace-object-branch'
 export type { SystemObjectBranch } from './workspace-object-branch'
+export { fromNormalizedMapPoint, toNormalizedMapPoint } from './workspace-map-coordinates'
 export {
   applySystemObjectTransfer,
   prepareSystemObjectTransfer,
+  resolveSystemObjectHistoryTarget,
   validateSystemObjectTransferKeys,
 } from './workspace-transfer'
 export type {

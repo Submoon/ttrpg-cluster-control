@@ -5,6 +5,7 @@ import { canPlaceObjectInOrbit } from './workspace-orbits'
 import { captureEffectiveObjectAngles } from './workspace-placement'
 import { validText } from './workspace-validation'
 import { resolveSystemObjectBranch, type SystemObjectBranch } from './workspace-object-branch'
+import { fromNormalizedMapPoint } from './workspace-map-coordinates'
 
 export type SystemObjectTransferPlacement =
   | { kind: 'system'; x: number; y: number }
@@ -46,6 +47,20 @@ export interface SystemObjectTransferReview {
   previewWorkspace: LocalWorkspace
 }
 
+/** Resolves the current owner of an object after transfer, Undo, or Redo. */
+export function resolveSystemObjectHistoryTarget(
+  workspace: LocalWorkspace,
+  objectId: string,
+): { kind: 'object'; id: string; systemId: string } | null {
+  let owner: StarSystem | null = null
+  for (const system of workspace.cluster.systems) {
+    if (!system.objects.some(object => object.id === objectId)) continue
+    if (owner) return null
+    owner = system
+  }
+  return owner ? { kind: 'object', id: objectId, systemId: owner.id } : null
+}
+
 function findSystem(workspace: LocalWorkspace, systemId: string, label: string): StarSystem {
   const system = workspace.cluster.systems.find(candidate => candidate.id === systemId)
   if (!system) throw new Error(`The ${label} star system no longer exists.`)
@@ -60,6 +75,10 @@ function validatePlacement(
   if (placement.kind === 'system') {
     if (!Number.isFinite(placement.x) || !Number.isFinite(placement.y)) {
       throw new Error('Schematic X and Y must be finite numbers.')
+    }
+    const scenePoint = fromNormalizedMapPoint(placement)
+    if (!Number.isFinite(scenePoint.x) || !Number.isFinite(scenePoint.y)) {
+      throw new Error('Choose a free position that can be represented on the destination map.')
     }
     return
   }
@@ -192,6 +211,7 @@ export function validateSystemObjectTransferKeys(
 ): ReadonlyMap<string, string> {
   const issues = new Map<string, string>()
   const branchIds = new Set(review.branch.objectIds)
+  const editableIds = new Set(review.keyConflicts.map(conflict => conflict.objectId))
   for (const objectId of locationKeys?.keys() ?? []) {
     if (!branchIds.has(objectId)) issues.set(objectId, 'This Location key no longer belongs to the transferred branch.')
   }
@@ -227,6 +247,11 @@ export function validateSystemObjectTransferKeys(
     grouped.set(key, objectIds)
   }
   for (const [objectId, key] of keys) {
+    const originalKey = review.suggestedLocationKeys.get(objectId)
+    if (!editableIds.has(objectId) && key !== originalKey) {
+      issues.set(objectId, 'This Location key is available and must stay unchanged during transfer.')
+      continue
+    }
     if (destinationKeys.has(key)) {
       issues.set(objectId, `Location key "${key}" is already used in the destination star system.`)
       continue

@@ -4,6 +4,7 @@ import {
   createLocalWorkspace,
   exportJumpCluster,
   prepareSystemObjectTransfer,
+  resolveSystemObjectHistoryTarget,
   restoreJumpClusterBackup,
   validateSystemObjectTransferKeys,
   type LocalWorkspace,
@@ -173,6 +174,25 @@ test('a hosted branch transfers with nested geometry and effective neighboring a
   expect(workspace.layout.objectAngles.root).toBe(0.45)
 })
 
+test('history reveal resolves the transferred root to its actual owner in each snapshot @pure', () => {
+  const before = nestedBranchWorkspace()
+  const sourceId = before.cluster.systems[0]!.id
+  const destinationId = before.cluster.systems[1]!.id
+  const request = {
+    sourceSystemId: sourceId,
+    rootObjectId: 'root',
+    destinationSystemId: destinationId,
+    placement: { kind: 'system' as const, x: 0.61, y: 0.35 },
+  }
+  const after = applySystemObjectTransfer(before, request)
+
+  expect(resolveSystemObjectHistoryTarget(before, 'root'))
+    .toEqual({ kind: 'object', id: 'root', systemId: sourceId })
+  expect(resolveSystemObjectHistoryTarget(after, 'root'))
+    .toEqual({ kind: 'object', id: 'root', systemId: destinationId })
+  expect(resolveSystemObjectHistoryTarget(after, 'missing')).toBeNull()
+})
+
 test('key suggestions skip destination keys and every retained moved key, then reject unavailable edits @pure', () => {
   const base = createLocalWorkspace('Kestrel Reach', 'Source')
   const sourceBase = base.cluster.systems[0]!
@@ -212,6 +232,12 @@ test('key suggestions skip destination keys and every retained moved key, then r
     { objectId: 'collision-a', currentKey: 'PL-01', suggestedKey: 'PL-04' },
     { objectId: 'collision-b', currentKey: 'PL-02', suggestedKey: 'PL-05' },
   ])
+
+  const changedAvailableKey = new Map(review.suggestedLocationKeys)
+  changedAvailableKey.set('retained-key', 'PL-20')
+  expect(validateSystemObjectTransferKeys(review, changedAvailableKey).get('retained-key'))
+    .toContain('must stay unchanged')
+  expect(() => applySystemObjectTransfer(workspace, request, changedAvailableKey)).toThrow()
 
   const invalidKeys = new Map(review.suggestedLocationKeys)
   invalidKeys.set('collision-a', '   ')
@@ -370,7 +396,7 @@ test('prototype-looking legacy entity IDs remain map keys through branch angles 
   }
   const destination = secondSystem(base, [
     object('legacy-destination-host', { kind: 'system', x: 0.25, y: 0.3 }, { subtype: 'star', locationKey: 'STAR-01' }),
-    object('legacy-destination-occupant', { kind: 'orbit', orbitId: 'legacy-destination-ring' }, { locationKey: 'PL-03' }),
+    object('legacy-destination-occupant', { kind: 'orbit', orbitId: 'legacy-destination-ring' }, { locationKey: 'PL-01' }),
   ], [{ id: 'legacy-destination-ring', hostId: 'legacy-destination-host', order: 1 }])
   const workspace = workspaceWithSystems(base, source, destination, [], {
     orbitRadii: {
@@ -391,7 +417,7 @@ test('prototype-looking legacy entity IDs remain map keys through branch angles 
     placement: { kind: 'orbit' as const, orbitId: 'legacy-destination-ring', angle: 2.3 },
   }
   const review = prepareSystemObjectTransfer(workspace, request)
-  expect(review.suggestedLocationKeys.get('__proto__')).toBe('PL-01')
+  expect(review.suggestedLocationKeys.get('__proto__')).toBe('PL-02')
   const next = applySystemObjectTransfer(workspace, request, new Map([
     ['__proto__', ' TRANSFERRED '],
   ]))

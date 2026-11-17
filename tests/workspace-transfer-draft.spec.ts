@@ -128,3 +128,61 @@ test('a changed source object invalidates the draft without publishing its stale
   expect(() => draft.accept()).toThrow()
   expect(currentWorkspace.value.cluster.systems[0]!.objects.map(object => object.id)).not.toContain(rootId)
 })
+
+test('a transfer review cannot detach a route attachment added after the displayed preview @pure', () => {
+  const { workspace, sourceId, destinationId, rootId } = transferWorkspace()
+  const source = workspace.cluster.systems[0]!
+  source.objects = source.objects.map(object => object.id === rootId
+    ? { ...object, family: 'JumpPoint', subtype: 'jump-point', locationKey: 'JP-01' }
+    : object)
+  const currentWorkspace = ref(workspace)
+  const draft = useSystemObjectTransferDraft(() => currentWorkspace.value, sourceId, rootId)
+  draft.selectDestination(destinationId)
+  draft.chooseFreePlacement({ x: 0.4, y: 0.3 })
+  expect(draft.review.value?.detachedRouteAttachments).toEqual([])
+
+  const attached = {
+    id: 'late-route',
+    jumpLevel: 2,
+    fromSystemId: sourceId,
+    fromPointId: rootId,
+    toSystemId: destinationId,
+    toPointId: null,
+    playerShared: false,
+  }
+  currentWorkspace.value = {
+    ...currentWorkspace.value,
+    cluster: { ...currentWorkspace.value.cluster, routes: [attached] },
+  }
+
+  expect(draft.isStale.value).toBe(true)
+  expect(draft.review.value?.detachedRouteAttachments).toEqual([
+    { routeId: 'late-route', end: 'from', pointId: rootId },
+  ])
+  expect(() => draft.accept()).toThrow()
+  expect(currentWorkspace.value.cluster.routes).toEqual([attached])
+})
+
+test('free transfer placement rejects a normalized coordinate that cannot project to the local map @pure', () => {
+  const { workspace, sourceId, destinationId, rootId } = transferWorkspace()
+  const draft = useSystemObjectTransferDraft(() => workspace, sourceId, rootId)
+  draft.selectDestination(destinationId)
+  draft.chooseFreePlacement({ x: Number.MAX_VALUE, y: 0.3 })
+
+  expect(draft.canAccept.value).toBe(false)
+  expect(() => draft.accept()).toThrow()
+})
+
+test('a caller cannot mutate the accepted placement through a returned request @pure', () => {
+  const { workspace, sourceId, destinationId, rootId } = transferWorkspace()
+  const draft = useSystemObjectTransferDraft(() => workspace, sourceId, rootId)
+  draft.selectDestination(destinationId)
+  draft.chooseFreePlacement({ x: 0.42, y: 0.3 })
+  const exposedRequest = draft.request.value
+  expect(exposedRequest).not.toBeNull()
+  Reflect.set(exposedRequest!.placement, 'x', Number.MAX_VALUE)
+
+  const accepted = draft.accept()
+  expect(accepted.cluster.systems[1]!.objects.find(object => object.id === rootId)?.placement)
+    .toEqual({ kind: 'system', x: 0.42, y: 0.3 })
+})

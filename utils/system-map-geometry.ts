@@ -11,6 +11,8 @@ import {
   type StarSystem,
   type SystemObject,
 } from '../domain/workspace'
+import { fromNormalizedMapPoint, toNormalizedMapPoint } from '../domain/workspace-map-coordinates'
+export { fromNormalizedMapPoint, toNormalizedMapPoint } from '../domain/workspace-map-coordinates'
 import { defaultObjectOrbitAngle } from '../domain/workspace-placement'
 import type {
   SystemCreationCandidate,
@@ -70,30 +72,6 @@ export function orbitCenter(
     return fromNormalizedMapPoint(orbit.center)
   }
   return requiredPosition(positions, orbit.hostId)
-}
-
-/**
- * Converts an SVG scene point to normalized coordinates relative to the initial map body, without clamping.
- * @param point Position in SVG scene coordinates.
- * @returns Normalized system-map placement or Orbit-center coordinates.
- */
-export function toNormalizedMapPoint(point: Point): Point {
-  return {
-    x: (point.x - 64) / 832,
-    y: (point.y - 72) / 416,
-  }
-}
-
-/**
- * Converts a normalized system-map point to SVG scene coordinates.
- * @param point Normalized system-map placement or Orbit-center coordinates.
- * @returns The corresponding point in SVG scene coordinates.
- */
-export function fromNormalizedMapPoint(point: Point): Point {
-  return {
-    x: 64 + point.x * 832,
-    y: 72 + point.y * 416,
-  }
 }
 
 /**
