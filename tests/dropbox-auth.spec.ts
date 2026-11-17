@@ -132,6 +132,29 @@ test('canceling Dropbox authorization closes the popup and releases its callback
   expect([...channels.values()][0]?.closed).toBe(true)
 })
 
+test('Dropbox authorization accepts a delayed callback after the popup reference is detached @pure', async () => {
+  const channels = new Map<string, FakeChannel>()
+  let requestedUrl = ''
+  const popup: FakePopup = {
+    closed: false,
+    location: { replace: (url: string) => { requestedUrl = url } },
+    close: () => { popup.closed = true },
+  }
+  const dependencies = fakeAuthorizationDependencies({ popup, channels })
+  const pending = startDropboxAuthorization('public-app-key', undefined, dependencies)
+  await waitFor(() => requestedUrl !== '')
+
+  popup.closed = true
+  dependencies.pulseIntervals(30)
+  const state = new URL(requestedUrl).searchParams.get('state') ?? ''
+  const channel = [...channels.values()][0]
+  if (!channel) throw new Error('Expected the state-keyed callback channel.')
+  channel.dispatch({ source: 'ttrpg-dropbox-oauth-callback', state, code: 'delayed-code' })
+
+  await expect(pending).resolves.toMatchObject({ accountId: 'dbid:unused' })
+  expect(channel.closed).toBe(true)
+})
+
 test('Dropbox callback removes credentials from history before notifying the opener @pure', () => {
   const oldDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'BroadcastChannel')
   const validState = 'B'.repeat(43)
@@ -212,8 +235,13 @@ function fakeAuthorizationDependencies(options: {
   popup: FakePopup
   channels: Map<string, FakeChannel>
   exchangeCode?: DropboxAuthorizationDependencies['exchangeCode']
-}): DropboxAuthorizationDependencies & { dispatchWindowMessage(event: MessageEvent): void } {
+}): DropboxAuthorizationDependencies & {
+  dispatchWindowMessage(event: MessageEvent): void
+  pulseIntervals(count: number): void
+} {
   const listeners = new Set<(event: MessageEvent) => void>()
+  const intervals = new Map<number, TimerHandler>()
+  let nextIntervalId = 0
   const browser = {
     location: { origin: 'http://localhost:3051' },
     open: () => options.popup,
@@ -221,12 +249,23 @@ function fakeAuthorizationDependencies(options: {
     removeEventListener: (_type: 'message', listener: (event: MessageEvent) => void) => { listeners.delete(listener) },
     setTimeout: globalThis.setTimeout.bind(globalThis),
     clearTimeout: globalThis.clearTimeout.bind(globalThis),
-    setInterval: globalThis.setInterval.bind(globalThis),
-    clearInterval: globalThis.clearInterval.bind(globalThis),
+    setInterval: (handler: TimerHandler) => {
+      const intervalId = ++nextIntervalId
+      intervals.set(intervalId, handler)
+      return intervalId
+    },
+    clearInterval: (intervalId: number) => { intervals.delete(intervalId) },
   }
   return {
     browser,
     dispatchWindowMessage: (event: MessageEvent) => { for (const listener of listeners) listener(event) },
+    pulseIntervals: (count: number) => {
+      for (let pulse = 0; pulse < count; pulse += 1) {
+        for (const handler of intervals.values()) {
+          if (typeof handler === 'function') handler()
+        }
+      }
+    },
     createChannel: (name) => {
       const channel = new FakeChannel()
       options.channels.set(name, channel)

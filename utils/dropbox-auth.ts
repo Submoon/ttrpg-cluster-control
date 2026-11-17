@@ -9,8 +9,6 @@ const DROPBOX_AUTHORIZE_URL = 'https://www.dropbox.com/oauth2/authorize'
 const DROPBOX_TOKEN_URL = 'https://api.dropboxapi.com/oauth2/token'
 const CALLBACK_CHANNEL_PREFIX = 'ttrpg-dropbox-oauth:'
 const AUTHORIZATION_TIMEOUT_MS = 120_000
-const POPUP_CLOSED_GRACE_POLLS = 30
-const POPUP_POLL_INTERVAL_MS = 500
 const TOKEN_TIMEOUT_MS = 20_000
 
 /** OAuth cancellation is an expected user choice, not a failed backup or restore. */
@@ -61,8 +59,6 @@ export interface DropboxOAuthWindow {
   removeEventListener(type: 'message', listener: (event: MessageEvent) => void): void
   setTimeout(handler: TimerHandler, timeout?: number): number
   clearTimeout(timeoutId: number): void
-  setInterval(handler: TimerHandler, timeout?: number): number
-  clearInterval(intervalId: number): void
 }
 
 export interface DropboxAuthorizationDependencies {
@@ -142,12 +138,9 @@ export function startDropboxAuthorization(
     const operation = new AbortController()
     let settled = false
     let exchanging = false
-    let popupClosedPolls = 0
-    let popupPoll: number | undefined
 
     const cleanup = (closePopup: boolean) => {
       browser.clearTimeout(timeout)
-      if (popupPoll !== undefined) browser.clearInterval(popupPoll)
       signal?.removeEventListener('abort', onAbort)
       channel.removeEventListener('message', onChannelMessage)
       browser.removeEventListener('message', onWindowMessage)
@@ -186,8 +179,6 @@ export function startDropboxAuthorization(
       }
 
       exchanging = true
-      if (popupPoll !== undefined) browser.clearInterval(popupPoll)
-      popupPoll = undefined
       void services.exchangeCode({ appKey: trimmedAppKey, code: value.code, codeVerifier, redirectUri }, operation.signal)
         .then(grant => finishResolve(grant))
         .catch(error => finishReject(error instanceof Error ? error : new Error('Dropbox authorization failed. Try again.')))
@@ -197,15 +188,6 @@ export function startDropboxAuthorization(
     signal?.addEventListener('abort', onAbort, { once: true })
     channel.addEventListener('message', onChannelMessage)
     browser.addEventListener('message', onWindowMessage)
-    popupPoll = browser.setInterval(() => {
-      if (exchanging || !popup.closed) {
-        popupClosedPolls = 0
-        return
-      }
-      popupClosedPolls += 1
-      // COOP may sever the popup reference before its callback posts on the fallback channel.
-      if (popupClosedPolls >= POPUP_CLOSED_GRACE_POLLS) finishReject(canceledError())
-    }, POPUP_POLL_INTERVAL_MS)
     if (signal?.aborted) {
       onAbort()
       return
