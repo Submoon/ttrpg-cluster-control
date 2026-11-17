@@ -29,6 +29,8 @@ User stories covered: 1–58 integrated.
 
 Planning baseline: `dc5edb282087458c1bc6dd26287c96a974662c3b` (`main` and `origin/main` after fetch on 2026-11-16). The local planning checkout retains the prototype branch. Implement against the application baseline after refreshing it.
 
+The refreshed [implementation baseline](../spec.md#source-issue) includes the grouped Map Files menu and the Warden selection halo. Preserve those product behaviors when removing the split-map entry points.
+
 ## Acceptance criteria
 
 - [ ] The normal product entry points use one continuous D3 canvas per view. Disconnected-map navigation and temporary entry points are retired once their behavior has migrated. No Warden draft or data access leaks into the reader or public image pipeline.
