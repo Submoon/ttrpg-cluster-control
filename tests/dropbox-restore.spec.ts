@@ -6,7 +6,7 @@ import type { WorkspaceRestoreSource } from '../composables/useWorkspaceRestore'
 import type { DropboxGrant } from '../utils/dropbox-auth'
 import type { DropboxSignInController } from '../composables/useDropboxSignIn'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
-import { downloadJson, waitForWorkspaceSaved, waitForWorkspaceStartup, workspaceMapContextType } from './helpers'
+import { captureMapExportBlobs, downloadJson, openMapFilesSection, waitForWorkspaceSaved, waitForWorkspaceStartup } from './helpers'
 import {
   DropboxApiError,
   listDropboxBackups,
@@ -292,59 +292,72 @@ test('canceling a Dropbox restore aborts a pending list and ignores its late res
   }
 })
 
-test('a Warden restores a Dropbox JSON backup from welcome and keeps it after reload', async ({ page, context }) => {
+test('a Warden backs up to Dropbox and restores the same Jump Cluster in a fresh profile', async ({ page, context, browser, baseURL, previewCookies }) => {
   const appKey = 'controlled-public-app-key'
-  const backupFilename = 'Warden renamed backup.json'
-  const revision = 'a1b2c3d4e5'
-  const content = JSON.stringify(campaignBaselineFixture)
-  const size = new TextEncoder().encode(content).byteLength
-  const metadata = {
-    '.tag': 'file',
-    id: 'id:controlled-restore',
-    name: backupFilename,
-    rev: revision,
-    path_display: `/${backupFilename}`,
-    server_modified: '2026-11-13T10:00:00Z',
-    size,
-  }
+  const backups: ControlledDropboxBackup[] = []
   const providerCalls: string[] = []
 
   await injectDropboxPublicKey(context, appKey)
-  await installControlledDropbox(context, appKey, backupFilename, metadata, providerCalls)
+  await installControlledDropbox(context, appKey, backups, providerCalls)
+  await captureMapExportBlobs(page)
 
   await page.goto('/')
   await waitForWorkspaceStartup(page)
-  const restoreButton = page.getByRole('button', { name: 'Restore Jump Cluster from Dropbox', exact: true })
-  await expect(restoreButton).toBeVisible()
-  await restoreButton.click()
-
-  const chooser = page.getByRole('dialog', { name: 'Restore Jump Cluster from Dropbox', exact: true })
-  await expect(chooser).toBeVisible()
-  await expect(chooser.getByRole('button', { name: `Restore ${backupFilename}`, exact: true })).toBeVisible()
-  await chooser.getByRole('button', { name: `Restore ${backupFilename}`, exact: true }).click()
-
-  const review = page.getByRole('dialog', { name: 'Open Jump Cluster', exact: true })
-  await expect(review).toBeVisible()
-  await expect(review).toContainText(campaignBaselineFixture.cluster.name)
-  await expect(review).toContainText(backupFilename)
-  await review.getByRole('button', { name: 'Open Jump Cluster', exact: true }).click()
-
-  await expect(page.getByText('Restored from Dropbox', { exact: true })).toBeVisible()
-  await expect(workspaceMapContextType(page)).toHaveText('Jump Cluster')
+  const localFile = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: 'Open local Jump Cluster backup', exact: true }).click()
+  await (await localFile).setFiles({
+    name: 'Synthetic Jump Cluster.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(campaignBaselineFixture)),
+  })
+  await page.getByRole('dialog', { name: 'Open Jump Cluster', exact: true })
+    .getByRole('button', { name: 'Open Jump Cluster', exact: true }).click()
   await waitForWorkspaceSaved(page)
-  expect(providerCalls).toEqual(['authorization', 'token exchange', 'list App Folder', 'download selected revision'])
+  const original = await downloadJson(page, 'Export Jump Cluster JSON')
 
-  await page.reload()
-  await waitForWorkspaceStartup(page)
-  await expect(workspaceMapContextType(page)).toHaveText('Jump Cluster')
-  const restored = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(restored.cluster?.name).toBe(campaignBaselineFixture.cluster.name)
-  expect(restored.cluster?.systems.map(system => system.id)).toEqual(campaignBaselineFixture.cluster.systems.map(system => system.id))
-  expect(restored.cluster?.routes).toMatchObject(campaignBaselineFixture.cluster.routes)
-  expect(restored.layout.systemPositions).toMatchObject(campaignBaselineFixture.layout.systemPositions)
-  const preservedNotes = restored.cluster?.systems.flatMap(system => system.objects)
-    .find(object => object.id === 'campaign-baseline-iria')?.customFieldValues
-  expect(preservedNotes).toMatchObject({ 'campaign-baseline-warden-notes': 'Existing campaign record.' })
+  const backupMenu = await openMapFilesSection(page, 'Download or back up')
+  await backupMenu.getByRole('menuitem', { name: 'Back up Jump Cluster to Dropbox', exact: true }).click()
+  const backupDialog = page.getByRole('dialog', { name: 'Back up Jump Cluster to Dropbox', exact: true })
+  await expect(backupDialog).toContainText('Dropbox App Folder')
+  await backupDialog.getByRole('button', { name: 'Back up to Dropbox', exact: true }).click()
+  await expect(page.getByText('Backed up to Dropbox', { exact: true })).toBeVisible()
+  expect(backups).toHaveLength(1)
+  const saved = backups[0]!
+  const backupFilename = saved.metadata.name
+  expect(backupFilename).toMatch(/Kestrel Reach Prime-jump-cluster-.+\.json$/)
+  expect(JSON.parse(saved.content)).toEqual(original)
+  await expect(page.getByText(`${backupFilename} in this app’s Dropbox App Folder`, { exact: true })).toBeVisible()
+
+  const freshContext = await browser.newContext({ baseURL })
+  try {
+    if (previewCookies.length) await freshContext.addCookies(previewCookies)
+    await injectDropboxPublicKey(freshContext, appKey)
+    await installControlledDropbox(freshContext, appKey, backups, providerCalls)
+    const fresh = await freshContext.newPage()
+    await captureMapExportBlobs(fresh)
+    await fresh.goto('/')
+    await waitForWorkspaceStartup(fresh)
+    await fresh.getByRole('button', { name: 'Restore Jump Cluster from Dropbox', exact: true }).click()
+
+    const chooser = fresh.getByRole('dialog', { name: 'Restore Jump Cluster from Dropbox', exact: true })
+    await chooser.getByRole('button', { name: `Restore ${backupFilename}`, exact: true }).click()
+    const review = fresh.getByRole('dialog', { name: 'Open Jump Cluster', exact: true })
+    await expect(review).toContainText(campaignBaselineFixture.cluster.name)
+    await expect(review).toContainText(backupFilename)
+    await review.getByRole('button', { name: 'Open Jump Cluster', exact: true }).click()
+
+    await expect(fresh.getByText('Restored from Dropbox', { exact: true })).toBeVisible()
+    await waitForWorkspaceSaved(fresh)
+    expect(providerCalls).toEqual([
+      'authorization', 'token exchange', 'upload to App Folder',
+      'authorization', 'token exchange', 'list App Folder', 'download selected revision',
+    ])
+    await fresh.reload()
+    await waitForWorkspaceStartup(fresh)
+    expect(await downloadJson(fresh, 'Export Jump Cluster JSON')).toEqual(original)
+  } finally {
+    await freshContext.close()
+  }
 })
 
 async function injectDropboxPublicKey(context: BrowserContext, appKey: string): Promise<void> {
@@ -377,14 +390,24 @@ async function injectDropboxPublicKey(context: BrowserContext, appKey: string): 
   }, appKey)
 }
 
+interface ControlledDropboxBackup {
+  metadata: {
+    id: string
+    name: string
+    rev: string
+    path_display: string
+    server_modified: string
+    size: number
+  }
+  content: string
+}
+
 async function installControlledDropbox(
   context: BrowserContext,
   appKey: string,
-  backupFilename: string,
-  metadata: Record<string, unknown>,
+  backups: ControlledDropboxBackup[],
   calls: string[],
 ): Promise<void> {
-  const content = JSON.stringify(campaignBaselineFixture)
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -436,19 +459,48 @@ async function installControlledDropbox(
       scope: 'files.metadata.read files.content.read files.content.write',
     }))
   })
+  await context.route('https://content.dropboxapi.com/2/files/upload', async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      await fulfillCors(route, '')
+      return
+    }
+    const args = JSON.parse(route.request().headers()['dropbox-api-arg'] ?? '{}') as { path: string }
+    expect(args.path).toMatch(/^\/[^/]+\.json$/)
+    const content = route.request().postData() ?? ''
+    const metadata = {
+      id: 'id:controlled-restore',
+      name: args.path.slice(1),
+      rev: 'a1b2c3d4e5',
+      path_display: args.path,
+      server_modified: '2026-11-13T10:00:00Z',
+      size: new TextEncoder().encode(content).byteLength,
+    }
+    backups.push({ metadata, content })
+    calls.push('upload to App Folder')
+    await fulfillCors(route, JSON.stringify(metadata))
+  })
   await context.route('https://api.dropboxapi.com/2/files/list_folder', async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      await fulfillCors(route, '')
+      return
+    }
     const request = JSON.parse(route.request().postData() ?? '{}') as { path?: string; recursive?: boolean }
     expect(request).toMatchObject({ path: '', recursive: false })
     calls.push('list App Folder')
-    await fulfillCors(route, JSON.stringify({ entries: [metadata], cursor: 'controlled-cursor', has_more: false }))
+    const entries = backups.map(backup => ({ '.tag': 'file', ...backup.metadata }))
+    await fulfillCors(route, JSON.stringify({ entries, cursor: 'controlled-cursor', has_more: false }))
   })
   await context.route('https://content.dropboxapi.com/2/files/download', async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      await fulfillCors(route, '')
+      return
+    }
     const apiArgument = JSON.parse(route.request().headers()['dropbox-api-arg'] ?? '{}') as { path?: string }
-    expect(apiArgument.path).toBe(`rev:${String(metadata.rev)}`)
-    expect(metadata.name).toBe(backupFilename)
+    const backup = backups.find(candidate => apiArgument.path === `rev:${candidate.metadata.rev}`)
+    if (!backup) throw new Error('Dropbox download must use the saved backup revision.')
     calls.push('download selected revision')
-    await fulfillCors(route, content, 'application/octet-stream', {
-      'Dropbox-API-Result': JSON.stringify(metadata),
+    await fulfillCors(route, backup.content, 'application/octet-stream', {
+      'Dropbox-API-Result': JSON.stringify(backup.metadata),
     })
   })
 }
