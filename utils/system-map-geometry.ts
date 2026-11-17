@@ -340,8 +340,9 @@ export function objectPositions(
       }
       const siblings = childrenByOrbit.get(orbit.id) ?? []
       const index = siblings.findIndex(candidate => candidate.id === object.id)
-      const angle = geometry.objectAngles[object.id]
-        ?? defaultObjectOrbitAngle(index, siblings.length)
+      const angle = Object.hasOwn(geometry.objectAngles, object.id)
+        ? geometry.objectAngles[object.id]!
+        : defaultObjectOrbitAngle(index, siblings.length)
       point = orbitPointAtAngle(
         center,
         orbitRadii(system, orbit, geometry, overrides?.orbitRadii),

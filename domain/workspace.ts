@@ -68,6 +68,21 @@ export {
   updateChartDetails,
 } from './workspace-cluster'
 export { planMapEntityDeletion } from './workspace-deletion'
+export { resolveSystemObjectBranch } from './workspace-object-branch'
+export type { SystemObjectBranch } from './workspace-object-branch'
+export {
+  applySystemObjectTransfer,
+  prepareSystemObjectTransfer,
+  validateSystemObjectTransferKeys,
+} from './workspace-transfer'
+export type {
+  SystemObjectTransferPlacement,
+  SystemObjectTransferRequest,
+  SystemObjectTransferReview,
+  SystemObjectTransferKeyConflict,
+  SystemObjectTransferRouteAttachment,
+  SystemObjectTransferStationLink,
+} from './workspace-transfer'
 export { moveUnresolvedExitTarget } from './workspace-exit-placement'
 export {
   createOrbit,
