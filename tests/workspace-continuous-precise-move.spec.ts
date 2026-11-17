@@ -74,7 +74,7 @@ test('continuous precise Free placement stays exact beside an Orbit and commits 
   const { map, orbitId, primaryObjectId, systemName } = await prepareContinuousOrbitMap(page)
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   await hierarchy.getByRole('button', { name: `Inspect ${systemName}`, exact: true }).click()
-  const primaryObject = hierarchy.locator(`[data-object-id="${primaryObjectId}"]`)
+  const primaryObject = hierarchy.getByRole('treeitem', { name: /^Primary Star\b/ })
   await expect(primaryObject).toBeVisible()
   await primaryObject.click()
   const object = map.locator(`.continuous-warden-object[data-object-id="${primaryObjectId}"]`)
@@ -88,32 +88,52 @@ test('continuous precise Free placement stays exact beside an Orbit and commits 
   const target = await orbitClientPoint(map, orbitId, 0, 18)
   expect(Math.hypot(target.local.x - ringPoint.local.x, target.local.y - ringPoint.local.y))
     .toBeCloseTo(18, 1)
-  await page.mouse.click(target.client.x, target.client.y)
+  const click = { x: Math.round(target.client.x), y: Math.round(target.client.y) }
+  const expected = await map.locator('.continuous-warden-system-detail').evaluate((element, point) => {
+    if (!(element instanceof SVGGraphicsElement)) throw new Error('The owning system has no geometry.')
+    const matrix = element.getScreenCTM()
+    if (!matrix) throw new Error('The owning system has no screen transform.')
+    const local = new DOMPoint(point.x, point.y).matrixTransform(matrix.inverse())
+    return { x: local.x, y: local.y }
+  }, click)
+  await page.mouse.click(click.x, click.y)
 
   await placement.click()
   await expect(page.getByRole('button', { name: 'Confirm position', exact: true })).toBeVisible()
   const previewPosition = objectLocalPosition(await object.getAttribute('transform'))
-  expect(previewPosition.x).toBeCloseTo(target.local.x, 1)
-  expect(previewPosition.y).toBeCloseTo(target.local.y, 1)
+  expect(previewPosition.x).toBeCloseTo(expected.x, 1)
+  expect(previewPosition.y).toBeCloseTo(expected.y, 1)
 
   await page.getByRole('button', { name: 'Confirm position', exact: true }).click()
   await expect.poll(async () => objectLocalPosition(await object.getAttribute('transform')).x)
-    .toBeCloseTo(target.local.x, 1)
+    .toBeCloseTo(expected.x, 1)
   await expect.poll(async () => objectLocalPosition(await object.getAttribute('transform')).y)
-    .toBeCloseTo(target.local.y, 1)
+    .toBeCloseTo(expected.y, 1)
   await waitForWorkspaceSaved(page)
 })
 
 test('continuous Orbit resize rolls back on Escape and accepts the next pointer gesture', async ({ page }) => {
-  const { map, orbitId } = await prepareContinuousOrbitMap(page)
-  const ringHit = await orbitClientPoint(map, orbitId, 0.7)
-  await page.mouse.click(ringHit.client.x, ringHit.client.y)
+  const { map, orbit, orbitId } = await prepareContinuousOrbitMap(page)
+  const ringHit = await orbit.evaluate((element) => {
+    if (!(element instanceof SVGEllipseElement)) throw new Error('The Orbit has no ellipse.')
+    const transform = element.getScreenCTM()
+    if (!transform) throw new Error('The Orbit has no screen transform.')
+    const length = element.getTotalLength()
+    for (let step = 0; step < 32; step++) {
+      const point = element.getPointAtLength(length * step / 32).matrixTransform(transform)
+      const x = Math.round(point.x)
+      const y = Math.round(point.y)
+      if (document.elementFromPoint(x, y) === element) return { x, y }
+    }
+    throw new Error('No painted Orbit stroke is reachable.')
+  })
+  await page.mouse.click(ringHit.x, ringHit.y)
   const resize = map.locator(
     `.continuous-warden-orbit-edit-handle[data-system-id][data-orbit-id="${orbitId}"][data-resize-axis="horizontal"]`,
   )
   await expect(resize).toBeVisible()
 
-  const ring = map.locator(`.continuous-warden-orbit-target[data-orbit-id="${orbitId}"]`)
+  const ring = orbit
   const initialRadius = Number(await ring.getAttribute('rx'))
   const dragHandle = async (distance: number): Promise<void> => {
     const bounds = await resize.boundingBox()
@@ -125,7 +145,10 @@ test('continuous Orbit resize rolls back on Escape and accepts the next pointer 
   }
 
   await dragHandle(32)
+  await expect.poll(async () => Number(await ring.getAttribute('rx')))
+    .toBeGreaterThan(initialRadius)
   await page.keyboard.press('Escape')
+  await expect(ring).toHaveAttribute('rx', String(initialRadius))
   await page.mouse.up()
   await expect(ring).toHaveAttribute('rx', String(initialRadius))
 
