@@ -1,6 +1,7 @@
 ---
 title: "Place the anchor of an imported standalone system"
-status: open
+status: in-progress
+assignee: Codex
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
