@@ -1,10 +1,14 @@
+import { readFile } from 'node:fs/promises'
 import { expect, preparedCampaignTest as test, type Locator } from './fixtures'
 import {
   captureMapExportBlobs,
+  type DownloadWindow,
   downloadJson,
+  type ExportedMap,
   openWorkspaceHierarchy,
   openWorkspaceZoomNavigation,
   returnToClusterMap,
+  setHeaderMapActionsOpen,
   snapshotSvgCoordinates,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
@@ -551,7 +555,17 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
 
   await page.goto('/?map=continuous')
   await waitForWorkspaceStartup(page)
-  const clusterBeforeGroupMove = await downloadJson(page, 'Export Jump Cluster JSON')
+  const clusterFiles = await openMapFilesSection(page, 'Download or back up')
+  let clusterBeforeGroupMove: ExportedMap
+  try {
+    const downloadPromise = page.waitForEvent('download')
+    await clusterFiles.getByRole('menuitem', { name: 'Download private Jump Cluster JSON', exact: true }).click()
+    const download = await downloadPromise
+    clusterBeforeGroupMove = JSON.parse(await readFile(await download.path(), 'utf8')) as ExportedMap
+    await page.evaluate(() => (window as DownloadWindow).__mapExportBlobs?.splice(0))
+  } finally {
+    await setHeaderMapActionsOpen(page, false)
+  }
   const cluster = clusterBeforeGroupMove.cluster
   if (!cluster) throw new Error('The continuous Warden map did not export a Jump Cluster.')
   const sourceOwner = cluster.systems.find(candidate => candidate.id === system.id)

@@ -465,7 +465,7 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
           clusterSelectedSystemId: target.kind === 'cluster' ? null : target.systemId,
           inspectedClusterSystemId: target.kind === 'cluster' ? null : target.systemId,
           selectedObjectId: target.kind === 'object' ? target.objectId : null,
-          selectedObjectIds: [],
+          selectedObjectIds: target.kind === 'object' ? [target.objectId] : [],
           selectedOrbitId: null,
           selectedRouteId: null,
         })

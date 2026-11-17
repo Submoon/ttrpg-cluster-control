@@ -331,6 +331,7 @@ import {
   continuousMapDetailScale,
   CONTINUOUS_MAP_LOCAL_ORIGIN,
   moveWardenClusterAnchorBySceneDelta,
+  previewWardenSystemObjects,
   projectWardenSystem,
   unprojectWardenClusterAnchor,
   type ContinuousWardenSystemProjection,
@@ -572,8 +573,16 @@ const renderedProjections = computed(() => projections.value.map(projection => {
     ? { ...rendered, objects: directOrbit.objects, orbits: directOrbit.orbits }
     : rendered
   const adjustment = props.orbitAdjustmentPreview
-  if (!adjustment || adjustment.identity.systemId !== projection.id) return withDirectOrbit
-  return projectionWithOrbitAdjustment(projection, adjustment) ?? withDirectOrbit
+  const withOrbitAdjustment = adjustment?.identity.systemId === projection.id
+    ? projectionWithOrbitAdjustment(projection, adjustment) ?? withDirectOrbit
+    : withDirectOrbit
+  const preview = selectedObjectDragPreview.value
+  if (!preview) return withOrbitAdjustment
+  const positions = new Map([...preview.positions].filter(([objectId]) => preview.objectSystemIds.get(objectId) === projection.id))
+  if (!positions.size) return withOrbitAdjustment
+  const sourceSystem = props.cluster.systems.find(system => system.id === projection.id)
+  const orbitHostIds = new Map(sourceSystem?.orbits.map(orbit => [orbit.id, orbit.hostId] as const) ?? [])
+  return previewWardenSystemObjects(withOrbitAdjustment, positions, orbitHostIds)
 }))
 
 function isObjectMovePreview(systemId: string, objectId: string): boolean {

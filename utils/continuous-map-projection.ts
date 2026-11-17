@@ -64,6 +64,39 @@ export interface ContinuousWardenSystemProjection {
   unprojectLocalPoint(point: Point): Point
 }
 
+/** Applies transient owner-local object positions and carries hosted Orbit centers by their host delta. */
+export function previewWardenSystemObjects(
+  projection: ContinuousWardenSystemProjection,
+  positions: ReadonlyMap<string, Point>,
+  orbitHostIds: ReadonlyMap<string, string | null>,
+): ContinuousWardenSystemProjection {
+  const movedObjects = new Map<string, { position: Point; delta: Point }>()
+  for (const object of projection.objects) {
+    const position = positions.get(object.id)
+    if (!position) continue
+    const delta = { x: position.x - object.position.x, y: position.y - object.position.y }
+    if (delta.x !== 0 || delta.y !== 0) movedObjects.set(object.id, { position, delta })
+  }
+  if (!movedObjects.size) return projection
+
+  return {
+    ...projection,
+    objects: projection.objects.map(object => {
+      const moved = movedObjects.get(object.id)
+      return moved
+        ? { ...object, position: moved.position, scenePosition: projection.projectLocalPoint(moved.position) }
+        : object
+    }),
+    orbits: projection.orbits.map(orbit => {
+      const hostId = orbitHostIds.get(orbit.id)
+      const delta = hostId ? movedObjects.get(hostId)?.delta : undefined
+      if (!delta) return orbit
+      const center = { x: orbit.center.x + delta.x, y: orbit.center.y + delta.y }
+      return { ...orbit, center, sceneCenter: projection.projectLocalPoint(center) }
+    }),
+  }
+}
+
 interface Bounds {
   left: number
   top: number
