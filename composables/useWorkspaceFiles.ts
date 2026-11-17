@@ -13,7 +13,8 @@ import {
   type StarSystem,
 } from '../domain/workspace'
 import { jsonImportReviewEffects } from '../domain/workspace-json-import'
-import type { MapImageExporter, MapImageFormat, MapImagePalette, MapImageScope } from '../utils/map-image-export'
+import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { MapImageScope } from '../utils/map-image-scope'
 import { downloadBlob, exportFileName } from '../utils/browser-download'
 import type { WorkspaceMutationExecutor } from './editor-workflows/workspace-mutations'
 
@@ -317,14 +318,14 @@ export function useWorkspaceFiles({
         && currentMap.scope === scope
         && currentMap.selectedSystemId === selectedSystemId
         && (appliedRevision === undefined || getAppliedRevision() === appliedRevision)
-        && (imageContextKey === undefined || map.getImageContextKey?.() === imageContextKey)
+        && (imageContextKey === undefined || map.getImageContextKey?.(scope) === imageContextKey)
     }
     try {
       if (!await beforeWorkspaceOperation() || !isCurrent()) return
       await nextTick()
       if (!isCurrent()) return
       appliedRevision = getAppliedRevision()
-      imageContextKey = map.getImageContextKey?.()
+      imageContextKey = map.getImageContextKey?.(scope)
       const current = getCurrentMapImage(kind, scope, selectedSystemId)
       if (!current?.name || !isCurrent()) return
       const image = await map.exportImage(format, palette, {

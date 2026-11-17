@@ -342,6 +342,7 @@ import {
 import type { ClientRectBounds } from '../utils/map-usable-area'
 import { createMapTouchNavigation } from './maps/map-touch-navigation'
 import type { MapImageExportOptions, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import { mapImageContextKey, type MapImageScope } from '../utils/map-image-scope'
 import { exportContinuousWardenMapImage } from '../utils/continuous-warden-image-export'
 import { CONTINUOUS_SYSTEM_NAME_FONT_PIXELS as SYSTEM_NAME_FONT_PIXELS, continuousMapNameLabels } from '../utils/continuous-map-name-labels'
 import type { ContinuousMapNameLabel } from '../utils/continuous-map-name-labels'
@@ -2381,14 +2382,15 @@ function exportImage(
   })
 }
 
-function getImageContextKey(): string {
-  return JSON.stringify({
+function getImageContextKey(scope: MapImageScope | null = 'viewport'): string {
+  return mapImageContextKey(scope, {
     clusterId: props.cluster.id,
     viewport: getViewport(),
-    viewportRect: svgViewport.value,
+    viewportRect: { ...svgViewport.value },
     svgPixelScale: svgPixelScale.value,
-    detailSystemIds: [...detailSystemIds.value].sort(),
-    dimmedObjectIds: [...dimmedObjectIds.value].sort(),
+    detailSystemIds: [...detailSystemIds.value],
+    dimmedObjectIds: [...dimmedObjectIds.value],
+    selectedRouteId: props.selectedRouteId,
   })
 }
 
@@ -2680,7 +2682,10 @@ defineExpose({
   pointer-events: all;
 }
 
-.continuous-warden-object.is-dimmed {
+.continuous-warden-object.is-dimmed .continuous-warden-star-halo,
+.continuous-warden-object.is-dimmed .continuous-warden-object-glyph,
+.continuous-warden-object.is-dimmed .continuous-warden-object-key,
+.continuous-warden-object.is-dimmed .continuous-warden-object-name {
   opacity: 0.14;
 }
 

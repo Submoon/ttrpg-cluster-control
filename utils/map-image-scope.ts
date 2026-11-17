@@ -1,6 +1,43 @@
 import type { Point } from '../domain/workspace'
+import type { MapViewport, SvgViewportRect } from './map-zoom'
 
 export type MapImageScope = 'cluster' | 'system' | 'viewport'
+
+export interface MapImageContextSnapshot {
+  clusterId: string
+  viewport: MapViewport
+  viewportRect: SvgViewportRect
+  svgPixelScale: number
+  detailSystemIds: readonly string[]
+  dimmedObjectIds: readonly string[]
+  selectedRouteId: string | null
+}
+
+/** Falls back to the Cluster when a selected-system image no longer has an inspected owner. */
+export function effectiveWardenMapImageScope(
+  requestedScope: MapImageScope,
+  selectedSystemId: string | null | undefined,
+  continuousMap = true,
+): MapImageScope {
+  return continuousMap && requestedScope === 'system' && !selectedSystemId ? 'cluster' : requestedScope
+}
+
+/** Captures only context that can affect the requested Warden image scene. */
+export function mapImageContextKey(
+  scope: MapImageScope | null,
+  snapshot: MapImageContextSnapshot,
+): string {
+  if (scope !== 'viewport') return JSON.stringify({ clusterId: snapshot.clusterId })
+  return JSON.stringify({
+    clusterId: snapshot.clusterId,
+    viewport: snapshot.viewport,
+    viewportRect: snapshot.viewportRect,
+    svgPixelScale: snapshot.svgPixelScale,
+    detailSystemIds: [...snapshot.detailSystemIds].sort(),
+    dimmedObjectIds: [...snapshot.dimmedObjectIds].sort(),
+    selectedRouteId: snapshot.selectedRouteId,
+  })
+}
 
 export interface MapImageBounds {
   x: number

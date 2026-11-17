@@ -1,11 +1,14 @@
 import { expect, test } from '@playwright/test'
 import type { Point } from '../domain/workspace'
 import {
+  effectiveWardenMapImageScope,
   incidentRoutesForMapImage,
+  mapImageContextKey,
   mapImageBounds,
   mapImageScopeFrame,
   trimMapImageRoute,
 } from '../utils/map-image-scope'
+import { continuousMapNameLabels, type ContinuousMapNameProjection } from '../utils/continuous-map-name-labels'
 
 test('selected-system image scopes include both incident directions and leave unrelated routes out @pure', { tag: '@pure' }, () => {
   const routes = [
@@ -55,4 +58,68 @@ test('incoming route prefixes start at the selected endpoint and stay bounded wh
   expect(movedRemoteEnd.length).toBeLessThanOrEqual(40.1)
   expect(first.end.x).toBeLessThan(selectedEndpoint.x)
   expect(first.end.y).toBeGreaterThan(selectedEndpoint.y)
+})
+
+test('automatic Cluster names distribute coincident anchors into readable bounds @pure', { tag: '@pure' }, () => {
+  const projections: ContinuousMapNameProjection[] = Array.from({ length: 6 }, (_, index) => ({
+    id: `system-${index}`,
+    name: 'Same Width',
+    anchor: { x: 0, y: 0 },
+    envelope: { x: -60, y: -44, width: 120, height: 88 },
+  }))
+  const labels = continuousMapNameLabels({
+    projections,
+    viewport: { x: 800, y: 600, k: 1 },
+    viewportRect: { x: 0, y: 0, width: 1600, height: 1200 },
+    svgPixelScale: 1,
+  })
+
+  expect(labels).toHaveLength(projections.length)
+  expect(new Set(labels.map(label => `${label.x}:${label.y}`)).size).toBe(projections.length)
+  for (let leftIndex = 0; leftIndex < labels.length; leftIndex++) {
+    const left = labels[leftIndex]!
+    expect(left.x - left.width / 2).toBeGreaterThanOrEqual(8)
+    expect(left.x + left.width / 2).toBeLessThanOrEqual(1592)
+    expect(left.y).toBeGreaterThanOrEqual(8)
+    expect(left.y + left.height).toBeLessThanOrEqual(1192)
+    for (const right of labels.slice(leftIndex + 1)) {
+      const overlapWidth = Math.max(0, Math.min(left.x + left.width / 2, right.x + right.width / 2)
+        - Math.max(left.x - left.width / 2, right.x - right.width / 2))
+      const overlapHeight = Math.max(0, Math.min(left.y + left.height, right.y + right.height)
+        - Math.max(left.y, right.y))
+      expect(overlapWidth * overlapHeight).toBe(0)
+    }
+  }
+})
+
+test('Warden image scope falls back without an owner and viewport requests fence their full context @pure', { tag: '@pure' }, () => {
+  const snapshot = {
+    clusterId: 'cluster',
+    viewport: { x: 10, y: 20, k: 2 },
+    viewportRect: { x: 0, y: 0, width: 960, height: 560 },
+    svgPixelScale: 1.5,
+    detailSystemIds: ['vesper'],
+    dimmedObjectIds: ['star'],
+    selectedRouteId: null as string | null,
+  }
+  const clusterKey = mapImageContextKey('cluster', snapshot)
+  const movedContext = {
+    ...snapshot,
+    viewport: { ...snapshot.viewport, x: 44 },
+    detailSystemIds: ['harrow'],
+    dimmedObjectIds: ['moon'],
+    selectedRouteId: 'route',
+  }
+
+  expect(effectiveWardenMapImageScope('system', null)).toBe('cluster')
+  expect(effectiveWardenMapImageScope('system', 'vesper')).toBe('system')
+  expect(effectiveWardenMapImageScope('system', null, false)).toBe('system')
+  expect(effectiveWardenMapImageScope('viewport', null)).toBe('viewport')
+  expect(mapImageContextKey('cluster', movedContext)).toBe(clusterKey)
+  expect(mapImageContextKey('system', movedContext)).toBe(mapImageContextKey('system', snapshot))
+  expect(mapImageContextKey('viewport', movedContext)).not.toBe(mapImageContextKey('viewport', snapshot))
+  expect(mapImageContextKey('viewport', { ...snapshot, selectedRouteId: 'route' }))
+    .not.toBe(mapImageContextKey('viewport', snapshot))
+  expect(mapImageContextKey('viewport', { ...snapshot, viewportRect: { ...snapshot.viewportRect, width: 800 } }))
+    .not.toBe(mapImageContextKey('viewport', snapshot))
 })

@@ -2,7 +2,6 @@
  * Exports an applied Warden or detached player SVG scene with inlined styles before serialization or rasterization.
  */
 import type { MapImageScope } from './map-image-scope'
-export type { MapImageScope } from './map-image-scope'
 
 export type MapImageFormat = 'png' | 'svg'
 export type MapImagePalette = 'active' | 'print-light'
@@ -18,7 +17,7 @@ export interface MapImageExportOptions {
 export interface MapImageExporter {
   exportImage(format: MapImageFormat, palette?: MapImagePalette, options?: MapImageExportOptions): Promise<Blob | null>
   /** Stable key for camera, semantic detail, and applied display filters during rasterization. */
-  getImageContextKey?(): string
+  getImageContextKey?(scope?: MapImageScope | null): string
 }
 
 export type PrepareMapExportClone = (clone: SVGSVGElement) => void

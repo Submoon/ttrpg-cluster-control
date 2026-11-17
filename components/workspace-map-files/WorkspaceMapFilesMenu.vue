@@ -95,7 +95,8 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { useDialogCloseFocusBarrier } from '../../composables/useDialogCloseFocusBarrier'
 import type { PlayerLinkGenerationResult } from '../../composables/usePlayerFileExports'
-import type { MapImageFormat, MapImageScope } from '../../utils/map-image-export'
+import type { MapImageFormat } from '../../utils/map-image-export'
+import { effectiveWardenMapImageScope, type MapImageScope } from '../../utils/map-image-scope'
 import MapFilesItemHint from './MapFilesItemHint.vue'
 import WorkspaceMapFilesObstructionMarker from './WorkspaceMapFilesObstructionMarker.vue'
 import MapFilesTriggerHint from './MapFilesTriggerHint.vue'
@@ -170,11 +171,23 @@ const imageScopeChoices: ReadonlyArray<{ value: MapImageScope; label: string }> 
   { value: 'system', label: 'Selected system' },
   { value: 'viewport', label: 'Current viewport' },
 ]
+const activeWardenImageScope = computed(() => effectiveWardenMapImageScope(
+  wardenImageScope.value,
+  props.selectedImageSystemId,
+  props.continuousMap,
+))
 const selectedImageScopeLabel = computed(() =>
-  imageScopeChoices.find(choice => choice.value === wardenImageScope.value)?.label ?? 'Entire Cluster',
+  imageScopeChoices.find(choice => choice.value === activeWardenImageScope.value)?.label ?? 'Entire Cluster',
 )
 
 watch(() => props.workspaceId, () => { wardenImageScope.value = 'cluster' })
+watch(
+  [() => props.continuousMap, () => props.selectedImageSystemId],
+  ([continuousMap, selectedSystemId]) => {
+    if (continuousMap && !selectedSystemId && wardenImageScope.value === 'system') wardenImageScope.value = 'cluster'
+  },
+  { flush: 'sync' },
+)
 
 const groups = computed(() => [
   { value: 'download' as const, label: 'Download or back up', icon: 'i-lucide-download' },
@@ -232,7 +245,7 @@ const items = computed<MenuItem[][]>(() => {
     label: `${audience} ${format.toUpperCase()}`,
     icon: format === 'png' ? 'i-lucide-image' : 'i-lucide-shapes',
     disabled: !props.imageAvailable,
-    hint: `${props.scope} · ${audience === 'Warden' ? `${selectedImageScopeLabel.value} · ` : ''}${audience} image · ${format}. ${audience === 'Warden' ? 'Includes private Warden content.' : 'Includes only player-visible content.'}`,
+    hint: `${props.scope} · ${audience === 'Warden' && props.continuousMap ? `${selectedImageScopeLabel.value} · ` : ''}${audience} image · ${format}. ${audience === 'Warden' ? 'Includes private Warden content.' : 'Includes only player-visible content.'}`,
     onSelect: () => exportImage(audience, format),
   })
 
@@ -484,7 +497,7 @@ async function reopenLink(): Promise<void> {
 function exportImage(audience: 'Warden' | 'Player', format: MapImageFormat): void {
   const lightForPrinting = printLight.value
   printLight.value = false
-  if (audience === 'Warden') emit('export-warden-image', format, lightForPrinting, wardenImageScope.value)
+  if (audience === 'Warden') emit('export-warden-image', format, lightForPrinting, activeWardenImageScope.value)
   else emit('export-player-image', format, lightForPrinting)
 }
 

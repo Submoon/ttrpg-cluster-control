@@ -1,10 +1,11 @@
 import type { Point } from '../domain/workspace'
-import type { ContinuousWardenSystemProjection } from './continuous-map-projection'
 import type { MapViewport, SvgViewportRect } from './map-zoom'
 
 export const CONTINUOUS_SYSTEM_NAME_FONT_PIXELS = 18
 export const CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS = 28
 export const CONTINUOUS_SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS = 8
+export const CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_COUNT = 12
+export const CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_SPACING_PIXELS = 38
 
 export interface ContinuousMapNameLabel {
   id: string
@@ -18,24 +19,31 @@ export interface ContinuousMapNameLabel {
   hasLeader: boolean
 }
 
-export interface ContinuousMapNameLabelsOptions {
-  projections: readonly ContinuousWardenSystemProjection[]
+export interface ContinuousMapNameProjection {
+  id: string
+  name: string
+  anchor: Point
+  envelope: SvgViewportRect
+}
+
+export interface ContinuousMapNameLabelsOptions<T extends ContinuousMapNameProjection = ContinuousMapNameProjection> {
+  projections: readonly T[]
   viewport: MapViewport
   viewportRect: SvgViewportRect
   svgPixelScale: number
-  getAnchor?: (projection: ContinuousWardenSystemProjection) => Point
+  getAnchor?: (projection: T) => Point
 }
 
 let textMeasureContext: CanvasRenderingContext2D | null | undefined
 
 /** Places Warden system names around applied anchors inside the drawable SVG rectangle. */
-export function continuousMapNameLabels({
+export function continuousMapNameLabels<T extends ContinuousMapNameProjection>({
   projections,
   viewport,
   viewportRect,
   svgPixelScale,
   getAnchor = projection => projection.anchor,
-}: ContinuousMapNameLabelsOptions): ContinuousMapNameLabel[] {
+}: ContinuousMapNameLabelsOptions<T>): ContinuousMapNameLabel[] {
   const scale = svgPixelScale > 0 ? svgPixelScale : 1
   const margin = CONTINUOUS_SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS / scale
   const labels: ContinuousMapNameLabel[] = []
@@ -155,8 +163,8 @@ function systemNameWidthPixels(name: string): number {
 function namePlacementOffsets(widthPixels: number): Point[] {
   const side = widthPixels / 2 + 10
   const offsets: Point[] = []
-  for (let ring = 0; ring <= 12; ring += 1) {
-    const distance = ring * 38
+  for (let ring = 0; ring <= CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_COUNT; ring += 1) {
+    const distance = ring * CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_SPACING_PIXELS
     offsets.push(
       { x: 0, y: -CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS - 8 - distance },
       { x: 0, y: 8 + distance },

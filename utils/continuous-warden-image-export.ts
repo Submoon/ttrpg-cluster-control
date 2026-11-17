@@ -4,7 +4,13 @@ import type { ContinuousWardenSystemProjection } from './continuous-map-projecti
 import type { ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
 import type { MapViewport, SvgViewportRect } from './map-zoom'
 import { CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS, placeContinuousMapRouteLabels } from './continuous-map-route-labels'
-import { CONTINUOUS_SYSTEM_NAME_FONT_PIXELS, continuousMapNameLabels } from './continuous-map-name-labels'
+import {
+  CONTINUOUS_SYSTEM_NAME_FONT_PIXELS,
+  CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_COUNT,
+  CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_SPACING_PIXELS,
+  CONTINUOUS_SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS,
+  continuousMapNameLabels,
+} from './continuous-map-name-labels'
 import {
   exportMapImageScene,
   type MapImageFormat,
@@ -16,7 +22,6 @@ import {
   mapImageBounds,
   mapImageScopeFrame,
   trimMapImageRoute,
-  type MapImageBounds,
   type MapImageScope,
 } from './map-image-scope'
 import { clusterRoutePresentationLabel } from './cluster-route-presentation'
@@ -25,7 +30,6 @@ const exportPadding = 24
 const selectedRoutePrefixLength = 60
 const selectedRouteGutter = selectedRoutePrefixLength + 8
 const systemNameFontPixels = CONTINUOUS_SYSTEM_NAME_FONT_PIXELS
-const systemNameHeightPixels = 28
 const routeLabelFontPixels = 11
 const svgNamespace = 'http://www.w3.org/2000/svg'
 const overviewDetailSystemIds: ReadonlySet<string> = new Set()
@@ -212,6 +216,7 @@ export async function exportContinuousWardenMapImage(
           routeLabel,
           sceneViewport,
           request.scope === 'viewport' ? request.svgPixelScale : 1,
+          request.scope === 'cluster',
         )
       }
       content.append(routeLayer)
@@ -256,7 +261,7 @@ function sceneFrames(
       width: continuousRouteLabelWidth(route.jumpLevel),
       height: CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS,
     })
-    if (route.toSystemId === null) {
+    if (route.toSystemId === null && request.scope === 'cluster') {
       const exitText = `Unknown: ${route.unresolvedExit}`
       const width = estimateTextWidth(exitText, routeLabelFontPixels, 'Consolas, monospace')
       bounds.push({ x: geometry.end.x - width - 12, y: geometry.end.y - 20, width: width + 12, height: 26 })
@@ -302,87 +307,48 @@ function layoutSystemNames(
   pixelScale: number,
   viewportRect: SvgViewportRect | null,
 ): ExportLabel[] {
-  if (viewport && viewportRect) {
-    const projectionsById = new Map(projections.map(projection => [projection.id, projection]))
-    return continuousMapNameLabels({
-      projections,
-      viewport,
-      viewportRect,
-      svgPixelScale: pixelScale,
-    }).flatMap(label => {
-      const projection = projectionsById.get(label.id)
-      return projection ? [{
-        projection,
-        anchor: { x: label.anchorX, y: label.anchorY },
-        centerX: label.x,
-        top: label.y,
-        width: label.width,
-        height: label.height,
-        fontSize: systemNameFontPixels / pixelScale,
-        hasLeader: label.hasLeader,
-        leaderY: label.y + label.height / 2,
-      }] : []
-    })
-  }
-
-  const fontSize = systemNameFontPixels / pixelScale
-  const height = systemNameHeightPixels / pixelScale
-  const gap = 8 / pixelScale
-  const occupied: MapImageBounds[] = []
-  const labels: ExportLabel[] = []
-  const sceneAnchors = projections.map(projection => ({
-    projection,
-    point: viewport
-      ? { x: viewport.x + projection.anchor.x * viewport.k, y: viewport.y + projection.anchor.y * viewport.k }
-      : projection.anchor,
-    width: estimateTextWidth(projection.name, systemNameFontPixels) / pixelScale + 12 / pixelScale,
-  }))
-
-  for (const { projection, point, width } of sceneAnchors) {
-    const candidates = [
-      { centerX: point.x, top: point.y - height - gap },
-      { centerX: point.x, top: point.y + gap },
-      { centerX: point.x + width / 2 + gap, top: point.y - height / 2 },
-      { centerX: point.x - width / 2 - gap, top: point.y - height / 2 },
-    ]
-    let chosen = candidates[0]!
-    let bestScore = Number.POSITIVE_INFINITY
-    for (const candidate of candidates) {
-      let centerX = candidate.centerX
-      let top = candidate.top
-      if (viewportRect) {
-        centerX = clamp(centerX, viewportRect.x + width / 2 + gap, viewportRect.x + viewportRect.width - width / 2 - gap)
-        top = clamp(top, viewportRect.y + gap, viewportRect.y + viewportRect.height - height - gap)
-      }
-      const box = { x: centerX - width / 2, y: top, width, height }
-      const labelOverlap = occupied.reduce((sum, other) => sum + overlapArea(box, other), 0)
-      const anchorOverlap = sceneAnchors.reduce((sum, anchor) => {
-        const dx = Math.max(0, Math.min(box.x + box.width, anchor.point.x + 18 / pixelScale)
-          - Math.max(box.x, anchor.point.x - 18 / pixelScale))
-        const dy = Math.max(0, Math.min(box.y + box.height, anchor.point.y + 18 / pixelScale)
-          - Math.max(box.y, anchor.point.y - 18 / pixelScale))
-        return sum + dx * dy
-      }, 0)
-      const score = labelOverlap * 100 + anchorOverlap * 30 + Math.hypot(centerX - point.x, top - point.y) * 0.01
-      if (score < bestScore) {
-        bestScore = score
-        chosen = { centerX, top }
-      }
-      if (score === 0) break
-    }
-    const label = {
+  const placementViewport = viewport ?? { x: 0, y: 0, k: 1 }
+  const placementRect = viewportRect ?? automaticNamePlacementViewportRect(projections)
+  const scale = pixelScale > 0 ? pixelScale : 1
+  const projectionsById = new Map(projections.map(projection => [projection.id, projection]))
+  return continuousMapNameLabels({
+    projections,
+    viewport: placementViewport,
+    viewportRect: placementRect,
+    svgPixelScale: scale,
+  }).flatMap(label => {
+    const projection = projectionsById.get(label.id)
+    return projection ? [{
       projection,
-      anchor: point,
-      centerX: chosen.centerX,
-      top: chosen.top,
-      width,
-      height,
-      fontSize,
-    }
-    labels.push(label)
-    occupied.push({ x: label.centerX - width / 2, y: label.top, width, height })
+      anchor: { x: label.anchorX, y: label.anchorY },
+      centerX: label.x,
+      top: label.y,
+      width: label.width,
+      height: label.height,
+      fontSize: systemNameFontPixels / scale,
+      hasLeader: label.hasLeader,
+      leaderY: label.y + label.height / 2,
+    }] : []
+  })
+}
+
+function automaticNamePlacementViewportRect(
+  projections: readonly ContinuousWardenSystemProjection[],
+): SvgViewportRect {
+  const bounds = mapImageBounds(projections.map(projection => projection.envelope))
+    ?? { x: 0, y: 0, width: 960, height: 560 }
+  const widestLabel = Math.max(0, ...projections.map(projection =>
+    estimateTextWidth(projection.name, systemNameFontPixels) + 24,
+  ))
+  const margin = widestLabel / 2
+    + CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_COUNT * CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_SPACING_PIXELS
+    + CONTINUOUS_SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS + 32
+  return {
+    x: bounds.x - margin,
+    y: bounds.y - margin,
+    width: bounds.width + margin * 2,
+    height: bounds.height + margin * 2,
   }
-  return labels
 }
 
 function appendSystem(
@@ -492,6 +458,7 @@ function appendRoute(
   routeLabelWidthPixels: number | null,
   viewport: MapViewport,
   svgPixelScale: number,
+  includeUnresolvedCaption: boolean,
 ): void {
   const routeMark = createScopedElement(parent, 'g', `cluster-route${route.toSystemId === null ? ' is-unresolved' : ''}`)
   routeMark.setAttribute('data-route-id', route.id)
@@ -530,18 +497,18 @@ function appendRoute(
       : '7')
     marker.setAttribute('aria-hidden', 'true')
     routeMark.append(marker)
-    const exitLabel = createScopedElement(parent, 'text', 'cluster-exit-label')
-    const labelOffset = viewport.k !== 1 || svgPixelScale !== 1
-      ? 12 / Math.max(0.0001, viewport.k * svgPixelScale)
-      : 12
-    exitLabel.setAttribute('x', String(geometry.end.x - labelOffset))
-    exitLabel.setAttribute('y', String(geometry.end.y - labelOffset))
-    if (viewport.k !== 1 || svgPixelScale !== 1) {
-      exitLabel.setAttribute('font-size', String(routeLabelFontPixels / Math.max(0.0001, viewport.k * svgPixelScale)))
+    if (includeUnresolvedCaption) {
+      const exitLabel = createScopedElement(parent, 'text', 'cluster-exit-label')
+      const scenePixelScale = Math.max(0.0001, viewport.k * svgPixelScale)
+      const labelOffset = 12 / scenePixelScale
+      exitLabel.setAttribute('x', String(geometry.end.x - labelOffset))
+      exitLabel.setAttribute('y', String(geometry.end.y - labelOffset))
+      exitLabel.setAttribute('font-family', 'Consolas, monospace')
+      exitLabel.setAttribute('font-size', String(routeLabelFontPixels / scenePixelScale))
+      exitLabel.setAttribute('text-anchor', 'end')
+      exitLabel.textContent = `Unknown: ${route.unresolvedExit}`
+      routeMark.append(exitLabel)
     }
-    exitLabel.setAttribute('text-anchor', 'end')
-    exitLabel.textContent = `Unknown: ${route.unresolvedExit}`
-    routeMark.append(exitLabel)
   }
   parent.append(routeMark)
 }
@@ -604,13 +571,4 @@ function estimateTextWidth(text: string, size: number, family = 'Georgia, serif'
   if (!context) return Array.from(text).length * size * 0.62
   context.font = `600 ${size}px ${family}`
   return context.measureText(text).width
-}
-
-function overlapArea(left: MapImageBounds, right: MapImageBounds): number {
-  return Math.max(0, Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x))
-    * Math.max(0, Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y))
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return maximum < minimum ? (minimum + maximum) / 2 : Math.max(minimum, Math.min(maximum, value))
 }

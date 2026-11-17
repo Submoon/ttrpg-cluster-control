@@ -182,6 +182,7 @@ import type {
   OrbitAdjustmentPreview,
 } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { MapImageExportOptions, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { MapImageScope } from '../utils/map-image-scope'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import type { PublicationMenuLease, PublicationTarget } from '../composables/editor-workflows/publication-types'
 import type { MapViewport } from '../utils/map-zoom'
@@ -1562,7 +1563,7 @@ defineExpose({
     return currentMap()?.exportImage(format, palette)
       ?? Promise.reject(new Error('The map is not ready to export.'))
   },
-  getImageContextKey: () => continuousWardenMapRef.value?.getImageContextKey() ?? '',
+  getImageContextKey: (scope?: MapImageScope | null) => continuousWardenMapRef.value?.getImageContextKey(scope ?? null) ?? '',
   getViewport: () => currentMap()?.getViewport() ?? { x: 0, y: 0, k: 1 },
   getMinimumZoomScale: () => props.activeView === 'cluster'
     ? currentClusterMap()?.getMinimumZoomScale?.() ?? MAP_ZOOM_MIN_SCALE

@@ -59,6 +59,13 @@ function campaignWithUnresolvedExit(): LegacyCampaignMap {
 
 function campaignWithExportPreviews(): LegacyCampaignMap {
   const fixture = campaignWithUnresolvedExit()
+  const unresolvedRoute = fixture.cluster?.routes.find(route => route.id === 'campaign-baseline-unresolved-route')
+  if (!unresolvedRoute || !fixture.layout) throw new Error('The export preview fixture is missing its unresolved route layout.')
+  unresolvedRoute.unresolvedExit = 'Uncharted exit beyond the Perseus Reach and outer navigation boundary'
+  fixture.layout.unresolvedExitPositions = {
+    ...fixture.layout.unresolvedExitPositions,
+    [unresolvedRoute.id]: { x: 40, y: 260 },
+  }
   const system = fixture.cluster?.systems[0]
   if (!system) throw new Error('The export preview fixture is missing its Star System.')
   fixture.cluster?.routes.push({
@@ -122,6 +129,10 @@ async function inspectContinuousImage(
   objectIds: string[]
   dimmedObjectIds: string[]
   anchorTransforms: Record<string, string | null>
+  systemNameBounds: Record<string, SceneBounds>
+  unresolvedExitMarkerIds: string[]
+  unresolvedCaptions: Array<{ routeId: string; text: string; x: number; fontSize: string | null; fontFamily: string | null; anchor: string | null }>
+  searchLocatorObjectIds: string[]
   texts: string[]
 }> {
   return page.evaluate((source) => {
@@ -144,6 +155,18 @@ async function inspectContinuousImage(
       return id ? [[id, anchor?.getAttribute('transform') ?? null] as const] : []
     })
     const objects = [...svg.querySelectorAll<SVGGElement>('.continuous-warden-object[data-object-id]')]
+    const nameBounds = [...svg.querySelectorAll<SVGGElement>('.continuous-warden-name-target[data-system-id]')].flatMap(target => {
+      const id = target.getAttribute('data-system-id')
+      const transform = target.getAttribute('transform')?.match(/translate\(([-\d.]+)[ ,]+([-\d.]+)\)/)
+      const background = target.querySelector<SVGRectElement>('.continuous-warden-name-background')
+      if (!id || !transform || !background) return []
+      return [[id, {
+        x: Number(transform[1]) + Number(background.getAttribute('x')),
+        y: Number(transform[2]) + Number(background.getAttribute('y') ?? 0),
+        width: Number(background.getAttribute('width')),
+        height: Number(background.getAttribute('height')),
+      }] as const]
+    })
     return {
       viewBox: [x, y, width, height],
       width: Number(svg.getAttribute('width')),
@@ -171,6 +194,24 @@ async function inspectContinuousImage(
       dimmedObjectIds: objects.filter(object => object.classList.contains('is-dimmed'))
         .map(object => object.getAttribute('data-object-id')!).filter(Boolean),
       anchorTransforms: Object.fromEntries(anchors),
+      systemNameBounds: Object.fromEntries(nameBounds),
+      unresolvedExitMarkerIds: routeMarks.filter(route => route.querySelector('.cluster-exit-mark'))
+        .map(route => route.getAttribute('data-route-id')!).filter(Boolean),
+      unresolvedCaptions: routeMarks.flatMap(route => {
+        const label = route.querySelector<SVGTextElement>('.cluster-exit-label')
+        const routeId = route.getAttribute('data-route-id')
+        return label && routeId ? [{
+          routeId,
+          text: label.textContent?.trim() ?? '',
+          x: Number(label.getAttribute('x')),
+          fontSize: label.getAttribute('font-size'),
+          fontFamily: label.getAttribute('font-family'),
+          anchor: label.getAttribute('text-anchor'),
+        }] : []
+      }),
+      searchLocatorObjectIds: [...svg.querySelectorAll<SVGElement>('.continuous-warden-search-locator')]
+        .map(locator => locator.closest('.continuous-warden-object')?.getAttribute('data-object-id') ?? '')
+        .filter(Boolean),
       texts: [...svg.querySelectorAll('text')].map(text => text.textContent?.trim() ?? '').filter(Boolean),
     }
   }, content)
@@ -891,7 +932,7 @@ for (const { mapCase, paletteCase } of imageExportCases) {
 }
 
 test('system image exports retain applied geometry during local and parent-owned previews', async ({ page }) => {
-  test.setTimeout(180_000)
+  test.setTimeout(240_000)
   const clusterMap = await createImportedCampaign(page, 'light', campaignWithExportPreviews())
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
   await setWorkspaceMapMode(page, 'Navigate')
@@ -1089,6 +1130,25 @@ test('system image exports retain applied geometry during local and parent-owned
   const liveDimmedIds = await continuousMap.locator('.continuous-warden-object.is-dimmed')
     .evaluateAll(objects => objects.map(object => object.getAttribute('data-object-id')).filter((id): id is string => Boolean(id)).sort())
   expect(liveDimmedIds).toContain('campaign-baseline-star')
+
+  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
+  const searchQuery = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
+  await searchQuery.fill('Primary Star')
+  const starSearchResult = searchDialog.getByRole('option', { name: /Primary Star.*Star System: Vesper Prime/ })
+  await expect(starSearchResult).toBeVisible()
+  await starSearchResult.click()
+  const filteredSearchStar = continuousMap.locator('.continuous-warden-object[data-object-id="campaign-baseline-star"]')
+  await expect(filteredSearchStar).toHaveClass(/is-dimmed/)
+  const searchLocator = filteredSearchStar.locator('.continuous-warden-search-locator')
+  await expect(searchLocator).toBeVisible()
+  expect(await searchLocator.evaluate((element) => {
+    let effectiveOpacity = 1
+    for (let current: Element | null = element; current; current = current.parentElement) {
+      effectiveOpacity *= Number.parseFloat(getComputedStyle(current).opacity)
+    }
+    return effectiveOpacity
+  })).toBe(1)
   const liveViewportTransform = await continuousMap.locator('.cluster-map-content').getAttribute('transform')
   if (!liveViewportTransform) throw new Error('The continuous map camera transform is missing.')
 
@@ -1127,6 +1187,12 @@ test('system image exports retain applied geometry during local and parent-owned
   const viewportScene = scopeScenes['Current viewport']
   if (!clusterScene || !selectedScene || !viewportScene) throw new Error('A Warden image scope was not exported.')
   expect(clusterScene.systemNames).toEqual(expect.arrayContaining(['Vesper Prime', 'Harrow']))
+  for (const bounds of Object.values(clusterScene.systemNameBounds)) {
+    expect(bounds.x).toBeGreaterThanOrEqual(clusterScene.viewBox[0])
+    expect(bounds.y).toBeGreaterThanOrEqual(clusterScene.viewBox[1])
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(clusterScene.viewBox[0] + clusterScene.viewBox[2])
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(clusterScene.viewBox[1] + clusterScene.viewBox[3])
+  }
   expect(clusterScene.routeIds.sort()).toEqual([
     'campaign-baseline-route',
     'campaign-baseline-unresolved-route',
@@ -1134,7 +1200,25 @@ test('system image exports retain applied geometry during local and parent-owned
   ])
   expect(clusterScene.texts).toEqual(expect.arrayContaining(['Jump-1', 'Jump-3', 'Jump-12']))
   expect(clusterScene.routeLabelIds.sort()).toEqual(clusterScene.routeIds.sort())
-  expect(clusterScene.texts).toContain('Unknown: Uncharted exit')
+  const longCaption = 'Unknown: Uncharted exit beyond the Perseus Reach and outer navigation boundary'
+  expect(clusterScene.texts).toContain(longCaption)
+  expect(clusterScene.unresolvedExitMarkerIds).toContain('campaign-baseline-unresolved-route')
+  const caption = clusterScene.unresolvedCaptions.find(item => item.routeId === 'campaign-baseline-unresolved-route')
+  if (!caption) throw new Error('The Cluster export is missing the long unresolved destination caption.')
+  expect(caption.fontSize).toBe('11')
+  expect(caption.fontFamily).toBe('Consolas, monospace')
+  expect(caption.anchor).toBe('end')
+  const captionWidth = await page.evaluate(({ text, fontSize, fontFamily }) => {
+    const context = document.createElement('canvas').getContext('2d')
+    if (!context) throw new Error('Could not measure the exported unresolved destination caption.')
+    context.font = `${fontSize}px ${fontFamily}`
+    return context.measureText(text).width
+  }, { text: caption.text, fontSize: Number(caption.fontSize), fontFamily: caption.fontFamily ?? 'Consolas, monospace' })
+  expect(caption.x - captionWidth).toBeGreaterThanOrEqual(clusterScene.viewBox[0])
+  expect(viewportScene.texts).not.toContain(longCaption)
+  expect(viewportScene.unresolvedCaptions).toEqual([])
+  expect(viewportScene.unresolvedExitMarkerIds).toContain('campaign-baseline-unresolved-route')
+  expect(viewportScene.searchLocatorObjectIds).toEqual([])
   expect(selectedScene.routeIds.sort()).toEqual([
     'campaign-baseline-route',
     'campaign-baseline-unresolved-route',
@@ -1142,7 +1226,7 @@ test('system image exports retain applied geometry during local and parent-owned
   ])
   expect(selectedScene.dashedRouteIds.sort()).toEqual(selectedScene.routeIds.sort())
   expect(selectedScene.routeLabelIds).toEqual([])
-  expect(selectedScene.texts).not.toContain('Unknown: Uncharted exit')
+  expect(selectedScene.texts).not.toContain(longCaption)
   for (const routeId of selectedScene.routeIds) {
     const path = selectedScene.routePaths[routeId]
     if (!path) throw new Error(`The selected-system export is missing incident route ${routeId}.`)
@@ -1157,7 +1241,7 @@ test('system image exports retain applied geometry during local and parent-owned
     .evaluateAll(routes => routes.filter(route => route.querySelector('.cluster-route-label-bg'))
       .map(route => route.getAttribute('data-route-id')).filter((id): id is string => Boolean(id)).sort())
   expect(viewportScene.routeLabelIds.sort()).toEqual(liveViewportRouteLabelIds)
-  expect(viewportScene.detailedSystemIds).toEqual(
+  expect([...viewportScene.detailedSystemIds].sort()).toEqual(
     (await continuousMap.locator('.continuous-warden-system-envelope.is-detailed')
       .evaluateAll(envelopes => envelopes.map(envelope => envelope.closest('.continuous-warden-system')?.getAttribute('data-system-id'))
         .filter((id): id is string => Boolean(id)).sort())),
