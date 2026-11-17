@@ -3,6 +3,7 @@ import {
   createLocalWorkspace,
   exportJumpCluster,
   exportStarSystem,
+  prepareJsonImport,
   restoreJumpClusterBackup,
   type CustomFieldDefinition,
   type LocalWorkspace,
@@ -202,6 +203,56 @@ test('complete backup restore preserves portable Cluster data and creates a fres
   expect(restored.cluster).toEqual(source.cluster)
   expect(restored.objectFieldSettings).toEqual(source.objectFieldSettings)
   expect(restored.layout).toEqual(source.layout)
+})
+
+test('complete backup restore preserves optional marker colors and rejects malformed colors @pure', () => {
+  const source = workspaceForPortableExports()
+  const firstSystem = source.cluster.systems[0]!
+  const firstObject = firstSystem.objects[0]!
+  const markerColor = '#aBcD09'
+  const coloredWorkspace = {
+    ...source,
+    cluster: {
+      ...source.cluster,
+      systems: source.cluster.systems.map(system => system.id !== firstSystem.id
+        ? system
+        : {
+            ...system,
+            objects: system.objects.map(object => object.id === firstObject.id
+              ? { ...object, markerColor }
+              : object),
+          }),
+    },
+  }
+  const backup = exportJumpCluster(coloredWorkspace)
+
+  expect(restoreJumpClusterBackup(backup).cluster.systems[0]?.objects[0]?.markerColor).toBe(markerColor)
+  const standalone = exportStarSystem(coloredWorkspace, firstSystem.id)
+  const importedStandalone = prepareJsonImport(source, standalone)
+  const importedSystem = importedStandalone.workspace.cluster.systems.find(system =>
+    system.id === importedStandalone.addedSystemIds[0],
+  )
+  expect(importedSystem?.objects.find(object => object.name === firstObject.name)?.markerColor).toBe(markerColor)
+
+  const malformedBackup = {
+    ...backup,
+    cluster: {
+      ...backup.cluster,
+      systems: backup.cluster.systems.map(system => system.id !== firstSystem.id
+        ? system
+        : {
+            ...system,
+            objects: system.objects.map(object => object.id === firstObject.id
+              ? { ...object, markerColor: 'purple' }
+              : object),
+          }),
+    },
+  }
+  expect(() => restoreJumpClusterBackup(malformedBackup)).toThrow(/valid/i)
+
+  const legacyBackup = { ...exportJumpCluster(source), version: 3 }
+  const legacyObject = restoreJumpClusterBackup(legacyBackup).cluster.systems[0]?.objects[0]
+  expect(legacyObject).not.toHaveProperty('markerColor')
 })
 
 test('complete backup restore applies supported legacy migrations and rejects standalone systems @pure', () => {

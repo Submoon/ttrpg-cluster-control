@@ -1,6 +1,6 @@
 import { computed, nextTick, watch, type Ref } from 'vue'
 import {
-  jumpPointsInCluster,
+  type JumpCluster,
   type JumpRoute,
   type LocalWorkspace,
   type MapDeletionPlan,
@@ -55,7 +55,6 @@ export function useEditorNavigation(options: {
   const selectedObject = computed(() => selectedSystem.value?.objects.find(object => object.id === store.selectedObjectId))
   const selectedOrbit = computed(() => selectedSystem.value?.orbits.find(orbit => orbit.id === store.selectedOrbitId))
   const selectedRoute = computed(() => workspace.value?.cluster.routes.find(item => item.id === store.selectedRouteId))
-  const jumpPoints = computed(() => workspace.value ? jumpPointsInCluster(workspace.value.cluster) : [])
   const searchReveal = useWardenSearchReveal({
     workspace,
     continuousMap,
@@ -225,26 +224,17 @@ export function useEditorNavigation(options: {
   })
 
   /** Formats route endpoints with explicit unresolved and missing-reference fallbacks. */
-  function routeEndpointSummary(routeValue: JumpRoute): string {
-    const originSystem = workspace.value?.cluster.systems.find(system => system.id === routeValue.fromSystemId)
-    const originPoint = routeValue.fromPointId === null
-      ? undefined
-      : jumpPoints.value.find(({ point }) => point.id === routeValue.fromPointId)
-    let destination: string
-    if (routeValue.toSystemId === null) {
-      destination = `Unknown destination: ${routeValue.unresolvedExit}`
-    } else {
-      const system = workspace.value?.cluster.systems.find(candidate => candidate.id === routeValue.toSystemId)
-      const point = routeValue.toPointId === null
-        ? undefined
-        : jumpPoints.value.find(({ point: candidate }) => candidate.id === routeValue.toPointId)
-      destination = system
-        ? point ? `${point.point.name} (${system.name})` : system.name
-        : 'Missing system'
+  function routeEndpointSummary(routeValue: JumpRoute, cluster: JumpCluster | undefined = workspace.value?.cluster): string {
+    function endpointName(systemId: string, pointId: string | null): string {
+      const system = cluster?.systems.find(candidate => candidate.id === systemId)
+      if (!system) return 'Missing system'
+      const point = system.objects.find(candidate => candidate.id === pointId && candidate.family === 'JumpPoint')
+      return point ? `${point.name} (${system.name})` : system.name
     }
-    const originName = originSystem
-      ? originPoint ? `${originPoint.point.name} (${originSystem.name})` : originSystem.name
-      : 'Missing system'
+    const destination = routeValue.toSystemId === null
+      ? `Unknown destination: ${routeValue.unresolvedExit}`
+      : endpointName(routeValue.toSystemId, routeValue.toPointId)
+    const originName = endpointName(routeValue.fromSystemId, routeValue.fromPointId)
     return `${originName} -> ${destination}`
   }
 

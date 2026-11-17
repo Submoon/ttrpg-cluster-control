@@ -12,6 +12,7 @@ import type {
 } from './workspace-model'
 import { canPlaceObjectInOrbit } from './workspace-orbits'
 import { isPublicationMode, objectFieldValidationError, validName, validText } from './workspace-validation'
+import { isMarkerColor } from './marker-color'
 
 /**
  * Allocates the first unused prefixed numeric location key within one system.
@@ -115,10 +116,15 @@ export function updateSystemObject(
   if (changes.publication !== undefined && !isPublicationMode(changes.publication)) {
     throw new Error('Choose a valid object publication mode.')
   }
+  const { markerColor, ...otherChanges } = changes
+  if (markerColor !== undefined && markerColor !== null && !isMarkerColor(markerColor)) {
+    throw new Error('Choose a valid marker color in #RRGGBB format.')
+  }
 
   const updated: SystemObject = {
     ...object,
-    ...changes,
+    ...otherChanges,
+    ...(markerColor === undefined || markerColor === null ? {} : { markerColor }),
     locationKey: validText(changes.locationKey ?? object.locationKey, 'Location key'),
     name: validName(changes.name ?? object.name, 'Object name'),
     description: changes.description ?? object.description,
@@ -127,6 +133,7 @@ export function updateSystemObject(
   if (typeof updated.description !== 'string') {
     throw new Error('Object description must be text.')
   }
+  if (markerColor === null) delete updated.markerColor
 
   const matchesFamily = updated.family === 'Other'
     || catalogueTypes.some(type => type.value === updated.subtype && type.family === updated.family)

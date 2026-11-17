@@ -63,6 +63,7 @@ export interface ObjectDraft {
   playerText: string
   playerFieldMasks: string[]
   publication: PublicationMode
+  markerColor: string | null
   subtype: string
   placement: string
   atmosphere: string

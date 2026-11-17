@@ -17,7 +17,7 @@
       :class="{ 'map-touch-surface': touchNavigation }"
       viewBox="0 0 960 560"
       role="group"
-      :aria-label="`${cluster.name} Jump Cluster map`"
+      :aria-label="`${props.presentation?.cluster.name ?? cluster.name} Jump Cluster map`"
       aria-describedby="workspace-map-tool-shortcut-help cluster-map-keyboard-help"
       tabindex="0"
       @touchstart.capture="startTouchNavigation"
@@ -80,9 +80,11 @@ import {
   CLUSTER_SYSTEM_SEAL,
 } from '../utils/cluster-system-presentation'
 import { CLUSTER_ROUTE_PRESENTATION, clusterRoutePresentationLabel } from '../utils/cluster-route-presentation'
+import type { WardenClusterMapPresentation } from './maps/warden-map-presentation'
 
 const props = withDefaults(defineProps<{
   cluster: JumpCluster
+  presentation?: WardenClusterMapPresentation | null
   systemPositions: Record<string, Point>
   unresolvedExitPositions?: Record<string, Point>
   selectedSystemId: string | null
@@ -255,51 +257,146 @@ function focusMap(): void { svgElement.value?.focus({ preventScroll: true }) }
  * @throws If the SVG is not mounted or scene export/rasterization fails.
  */
 function prepareExportClone(clone: SVGSVGElement): void {
+  const cluster = props.cluster
   const jumpPoints = new Map(
-    jumpPointsInCluster(props.cluster).map(reference => [reference.point.id, reference]),
+    jumpPointsInCluster(cluster).map(reference => [reference.point.id, reference]),
   )
+  clone.setAttribute('aria-label', `${cluster.name} Jump Cluster map`)
+  clone.querySelectorAll('.gm-publication-admin').forEach(description => description.remove())
+  clone.querySelectorAll<SVGElement>('[data-gm-publication-described]').forEach(mark => {
+    mark.removeAttribute('aria-describedby')
+    mark.removeAttribute('data-gm-publication-described')
+  })
 
   clone.querySelectorAll<SVGGElement>('.cluster-system-node[data-system-id]').forEach(mark => {
     const systemId = mark.getAttribute('data-system-id')
     if (!systemId) return
+    const system = cluster.systems.find(candidate => candidate.id === systemId)
+    if (!system) return
     const position = clusterSystemPosition(props.systemPositions, systemId)
     mark.setAttribute('transform', `translate(${position.x} ${position.y})`)
+    mark.setAttribute('aria-label', props.systemActivation === 'inspect'
+      ? `Inspect ${system.name} system details`
+      : props.systemActivation === 'select'
+        ? `Select ${system.name} system`
+        : `Open ${system.name} system map`)
+    const name = mark.querySelector<SVGTextElement>('.cluster-system-name')
+    if (name) name.textContent = system.name
+    const stars = system.objects.filter(object => object.subtype === 'star').length
+    const meta = mark.querySelector<SVGTextElement>('.cluster-system-meta')
+    if (meta) meta.textContent = `${stars} STAR${stars === 1 ? '' : 'S'} / ${system.objects.length} OBJECTS`
+    describeMapPublication(mark, `system-${system.id}`, system.publication)
   })
 
   clone.querySelectorAll<SVGGElement>('.cluster-route[data-route-id]').forEach(mark => {
     const routeId = mark.getAttribute('data-route-id')
-    const index = props.cluster.routes.findIndex(route => route.id === routeId)
-    const route = props.cluster.routes[index]
+    const index = cluster.routes.findIndex(route => route.id === routeId)
+    const route = cluster.routes[index]
     if (!route || index < 0) return
 
     const geometry = clusterRouteGeometry(
       route,
-      props.cluster,
+      cluster,
       jumpPoints,
       props.systemPositions,
       undefined,
       props.unresolvedExitPositions,
     )
     const labelWidth = clusterRouteLabelWidth(route)
+    mark.classList.toggle('is-unresolved', route.toPointId === null)
+    mark.setAttribute('aria-label', clusterRouteLabel(route, jumpPoints))
     mark.querySelector<SVGPathElement>('.cluster-route-line')?.setAttribute('d', geometry.path)
     const labelBackground = mark.querySelector<SVGRectElement>('.cluster-route-label-bg')
     labelBackground?.setAttribute('x', String(geometry.labelX - labelWidth / 2))
     labelBackground?.setAttribute('y', String(geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.topOffset))
+    labelBackground?.setAttribute('width', String(labelWidth))
     const routeLabel = mark.querySelector<SVGTextElement>('.cluster-route-label')
+    if (routeLabel) routeLabel.textContent = clusterRoutePresentationLabel(route.jumpLevel)
     routeLabel?.setAttribute('x', String(geometry.labelX))
     routeLabel?.setAttribute('y', String(geometry.labelY + CLUSTER_ROUTE_PRESENTATION.badge.textBaselineOffset))
     const exitMark = mark.querySelector<SVGCircleElement>('.cluster-exit-mark')
+    const exitHitTarget = mark.querySelector<SVGCircleElement>('.cluster-exit-hit-target')
     const exitLabel = mark.querySelector<SVGTextElement>('.cluster-exit-label')
     if (geometry.exitPoint && geometry.exitLabel && route.toSystemId === null) {
-      exitMark?.setAttribute('cx', String(geometry.exitPoint.x))
-      exitMark?.setAttribute('cy', String(geometry.exitPoint.y))
-      exitLabel?.setAttribute('x', String(geometry.exitLabel.x))
-      exitLabel?.setAttribute('y', String(geometry.exitLabel.y))
-      exitLabel?.setAttribute('textLength', String(geometry.exitLabel.width))
-      exitLabel?.setAttribute('lengthAdjust', 'spacingAndGlyphs')
-      exitLabel?.setAttribute('text-anchor', geometry.exitLabel.anchor)
+      const document = clone.ownerDocument
+      const ensureCircle = (existing: SVGCircleElement | null, className: string): SVGCircleElement => {
+        if (existing) return existing
+        const created = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+        created.setAttribute('class', className)
+        created.setAttribute('r', '7')
+        created.setAttribute('aria-hidden', 'true')
+        mark.append(created)
+        return created
+      }
+      const target = ensureCircle(exitHitTarget, 'cluster-exit-hit-target')
+      const marker = ensureCircle(exitMark, 'cluster-exit-mark')
+      target.setAttribute('cx', String(geometry.exitPoint.x))
+      target.setAttribute('cy', String(geometry.exitPoint.y))
+      marker.setAttribute('cx', String(geometry.exitPoint.x))
+      marker.setAttribute('cy', String(geometry.exitPoint.y))
+      let caption = exitLabel
+      if (!caption) {
+        caption = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+        caption.setAttribute('class', 'cluster-exit-label')
+        mark.append(caption)
+      }
+      caption.textContent = geometry.exitLabel.text
+      caption.setAttribute('x', String(geometry.exitLabel.x))
+      caption.setAttribute('y', String(geometry.exitLabel.y))
+      caption.setAttribute('textLength', String(geometry.exitLabel.width))
+      caption.setAttribute('lengthAdjust', 'spacingAndGlyphs')
+      caption.setAttribute('text-anchor', geometry.exitLabel.anchor)
+    } else {
+      exitMark?.remove()
+      exitHitTarget?.remove()
+      exitLabel?.remove()
     }
+    const sharingStatus = routeSharingStatus(cluster, route, jumpPoints)
+    describeRouteSharing(mark, `route-${route.id}`, sharingStatus)
   })
+
+  const items = clone.querySelector<SVGGElement>('.cluster-map-items')
+  const firstSystemMark = items?.querySelector('.cluster-system-node') ?? null
+  if (items) {
+    for (const route of cluster.routes) {
+      const mark = [...items.querySelectorAll<SVGGElement>('.cluster-route[data-route-id]')]
+        .find(candidate => candidate.getAttribute('data-route-id') === route.id)
+      if (mark) items.insertBefore(mark, firstSystemMark)
+    }
+  }
+
+  const publicationLayer = clone.querySelector<SVGGElement>('.gm-publication-decorations')
+  if (publicationLayer) {
+    publicationLayer.replaceChildren()
+    for (const route of cluster.routes) {
+      const geometry = clusterRouteGeometry(route, cluster, jumpPoints, props.systemPositions, undefined, props.unresolvedExitPositions)
+      const status = routeSharingStatus(cluster, route, jumpPoints)
+      const badgeGroup = clone.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'g')
+      badgeGroup.setAttribute('class', 'cluster-route-publication')
+      badgeGroup.setAttribute('data-route-id', route.id)
+      badgeGroup.setAttribute('transform', `translate(${geometry.labelX + clusterRouteLabelWidth(route) / 2 + 8} ${geometry.labelY - 1})`)
+      publicationLayer.append(badgeGroup)
+      appendRouteSharingBadge(badgeGroup, {
+        identity: `route-${route.id}`,
+        playerShared: route.playerShared,
+        hasVisibleEndpoint: status.hasVisibleEndpoint,
+        position: { x: 0, y: 0 },
+      })
+    }
+    for (const system of cluster.systems) {
+      const position = clusterSystemPosition(props.systemPositions, system.id)
+      const badgeGroup = clone.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'g')
+      badgeGroup.setAttribute('class', 'cluster-system-publication')
+      badgeGroup.setAttribute('data-system-id', system.id)
+      badgeGroup.setAttribute('transform', `translate(${position.x} ${position.y})`)
+      publicationLayer.append(badgeGroup)
+      appendPublicationBadge(badgeGroup, {
+        identity: `system-${system.id}`,
+        mode: system.publication,
+        position: { x: 63, y: -26 },
+      })
+    }
+  }
 }
 
 async function exportImage(format: MapImageFormat, palette: MapImagePalette = 'active'): Promise<Blob> {
@@ -588,6 +685,11 @@ function render(): void {
   const element = svgElement.value
   if (!element) return
 
+  const presentation = props.presentation
+  const sceneCluster = presentation?.cluster ?? props.cluster
+  const sceneSystemPositions = presentation?.systemPositions ?? props.systemPositions
+  const sceneUnresolvedExitPositions = presentation?.unresolvedExitPositions ?? props.unresolvedExitPositions
+
   const focusedElement = element.ownerDocument.activeElement
   const focusedSystemId = focusedElement instanceof Element && element.contains(focusedElement)
     ? focusedElement.closest<SVGGElement>('.cluster-system-node[data-system-id]')?.getAttribute('data-system-id')
@@ -603,6 +705,9 @@ function render(): void {
   const currentTransform = zoomTransform(element)
   const liveSystemPositions = new Map<string, Point>()
   const jumpPoints = new Map(
+    jumpPointsInCluster(sceneCluster).map(reference => [reference.point.id, reference]),
+  )
+  const appliedJumpPoints = new Map(
     jumpPointsInCluster(props.cluster).map(reference => [reference.point.id, reference]),
   )
   svg.selectAll('*').remove()
@@ -638,7 +743,7 @@ function render(): void {
     .attr('aria-hidden', 'true')
     .attr('pointer-events', 'none')
   const routeMarks = items.selectAll<SVGGElement, JumpRoute>('g.cluster-route')
-    .data(props.cluster.routes)
+    .data(sceneCluster.routes)
     .join('g')
     .attr('data-route-id', route => route.id)
     .attr('class', route => `cluster-route${route.toSystemId === null ? ' is-unresolved' : ''}${props.selectedRouteId === route.id ? ' is-selected' : ''}`)
@@ -651,17 +756,17 @@ function render(): void {
   routeMarks.each(function (route) {
     const geometry = clusterRouteGeometry(
       route,
-      props.cluster,
+      sceneCluster,
       jumpPoints,
-      props.systemPositions,
+      sceneSystemPositions,
       undefined,
-      props.unresolvedExitPositions,
+      sceneUnresolvedExitPositions,
       routeTargetOverrides(),
     )
     const mark = select(this)
     const label = clusterRoutePresentationLabel(route.jumpLevel)
     const labelWidth = clusterRouteLabelWidth(route)
-    const sharingStatus = routeSharingStatus(props.cluster, route)
+    const sharingStatus = routeSharingStatus(sceneCluster, route)
     describeRouteSharing(this, `route-${route.id}`, sharingStatus)
 
     const badgeGroup = publicationDecorations.append('g')
@@ -691,6 +796,23 @@ function render(): void {
       .attr('rx', CLUSTER_ROUTE_PRESENTATION.badge.cornerRadius)
 
     if (route.toSystemId === null && geometry.exitPoint && geometry.exitLabel) {
+      const appliedRoute = props.cluster.routes.find(candidate => candidate.id === route.id)
+      const appliedUnresolvedRoute = appliedRoute?.toSystemId === null ? appliedRoute : null
+      const appliedExitPoint = appliedUnresolvedRoute
+        ? clusterRouteGeometry(
+          appliedUnresolvedRoute,
+          props.cluster,
+          appliedJumpPoints,
+          props.systemPositions,
+          undefined,
+          props.unresolvedExitPositions,
+        ).exitPoint
+        : undefined
+      const appliedExitIsStillRendered = !!appliedUnresolvedRoute
+        && appliedUnresolvedRoute.fromSystemId === route.fromSystemId
+        && appliedUnresolvedRoute.fromPointId === route.fromPointId
+        && appliedExitPoint?.x === geometry.exitPoint.x
+        && appliedExitPoint?.y === geometry.exitPoint.y
       const exitLabel = geometry.exitLabel
       const exitHitTarget = mark.insert('circle', '.cluster-route-label')
         .attr('class', 'cluster-exit-hit-target')
@@ -726,11 +848,11 @@ function render(): void {
       }
       const committedExitPoint = (): Point => clusterRouteGeometry(
         route,
-        props.cluster,
+        sceneCluster,
         jumpPoints,
-        props.systemPositions,
+        sceneSystemPositions,
         undefined,
-        props.unresolvedExitPositions,
+        sceneUnresolvedExitPositions,
       ).exitPoint ?? geometry.exitPoint!
       const exitDrag = drag<SVGCircleElement, Extract<JumpRoute, { toSystemId: null }>>()
         .filter(event => props.moveEnabled && !props.moveTargeting && !event.ctrlKey && !event.button
@@ -788,8 +910,10 @@ function render(): void {
           if (!position) return
           emit('move-unresolved-exit', route.id, position)
         })
-      exitHitTarget.datum(route).call(exitDrag)
-      exitMarker.datum(route).call(exitDrag)
+      if (appliedExitIsStillRendered && appliedUnresolvedRoute) {
+        exitHitTarget.datum(appliedUnresolvedRoute).call(exitDrag)
+        exitMarker.datum(appliedUnresolvedRoute).call(exitDrag)
+      }
       mark.append('text')
         .attr('class', 'cluster-exit-label')
         .attr('x', exitLabel.x)
@@ -811,11 +935,11 @@ function render(): void {
     routeMarks.each(function (route) {
       const geometry = clusterRouteGeometry(
         route,
-        props.cluster,
+        sceneCluster,
         jumpPoints,
-        props.systemPositions,
+        sceneSystemPositions,
         liveSystemPositions,
-        props.unresolvedExitPositions,
+        sceneUnresolvedExitPositions,
         routeTargetOverrides(),
       )
       const mark = select(this)
@@ -878,12 +1002,12 @@ function render(): void {
     })
 
   const systemMarks = items.selectAll<SVGGElement, StarSystem>('g.cluster-system-node')
-    .data(props.cluster.systems)
+    .data(sceneCluster.systems)
     .join('g')
     .attr('data-system-id', system => system.id)
     .attr('class', system => `cluster-system-node${props.selectedSystemId === system.id ? ' is-selected' : ''}`)
     .attr('transform', system => {
-      const position = clusterSystemPosition(props.systemPositions, system.id)
+      const position = clusterSystemPosition(sceneSystemPositions, system.id)
       return `translate(${position.x} ${position.y})`
     })
     .attr('role', 'button')
@@ -899,12 +1023,12 @@ function render(): void {
   })
 
   const systemPublicationMarks = publicationDecorations.selectAll<SVGGElement, StarSystem>('g.cluster-system-publication')
-    .data(props.cluster.systems)
+    .data(sceneCluster.systems)
     .join('g')
     .attr('class', 'cluster-system-publication')
     .attr('data-system-id', system => system.id)
     .attr('transform', system => {
-      const position = clusterSystemPosition(props.systemPositions, system.id)
+      const position = clusterSystemPosition(sceneSystemPositions, system.id)
       return `translate(${position.x} ${position.y})`
     })
 
@@ -1062,7 +1186,7 @@ function render(): void {
     updateRouteGeometry()
   }
 
-  if (props.cluster.systems.length === 0) {
+  if (sceneCluster.systems.length === 0) {
     items.append('text')
       .attr('class', 'cluster-map-empty')
       .attr('x', 480)
@@ -1142,6 +1266,7 @@ onBeforeUnmount(() => {
   cancelActiveGesture()
 })
 watch(() => props.cluster, render, { deep: true })
+watch(() => props.presentation, render, { deep: true })
 watch(() => props.systemPositions, render, { deep: true })
 watch(() => props.unresolvedExitPositions, render, { deep: true })
 watch(() => props.selectedSystemId, render)

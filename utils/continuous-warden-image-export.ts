@@ -434,6 +434,7 @@ function appendSystemDetail(
     const glyph = createScopedElement(parent, 'text', 'continuous-warden-object-glyph')
     glyph.setAttribute('y', '8')
     glyph.setAttribute('text-anchor', 'middle')
+    if (sourceObject.markerColor !== undefined) glyph.style.fill = sourceObject.markerColor
     glyph.textContent = objectGlyphs[sourceObject.subtype] ?? '◇'
     const key = createScopedElement(parent, 'text', 'continuous-warden-object-key')
     key.setAttribute('y', '31')

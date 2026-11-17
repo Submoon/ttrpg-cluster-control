@@ -4,7 +4,7 @@ import type { LocalWorkspace } from '../domain/workspace'
 import { createWorkspaceSnapshot, type WorkspaceStorageVersion } from '../utils/workspace-storage'
 import { restoreJumpClusterBackup } from '../domain/workspace-json-import'
 
-export type WorkspaceRestoreSourceKind = 'local-file' | 'google-drive'
+export type WorkspaceRestoreSourceKind = 'local-file' | 'google-drive' | 'dropbox'
 
 export interface WorkspaceRestoreSource {
   name: string

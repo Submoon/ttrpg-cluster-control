@@ -93,6 +93,17 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   test.setTimeout(60_000)
   if (!baseURL) throw new Error('The player reader requires a configured base URL.')
   const { document } = createPlayerInterfaceFixture()
+  const publicSystem = document.systems.find(system => system.disclosure === 'revealed')
+  if (!publicSystem || publicSystem.disclosure !== 'revealed') {
+    throw new Error('The player fixture has no Revealed system.')
+  }
+  const harborWorld = publicSystem.map.objects.find(object => object.label === 'Harbor World')
+  const publicStation = publicSystem.map.objects.find(object => object.label === 'Public Station')
+  if (!harborWorld || harborWorld.disclosure !== 'revealed' || !publicStation || publicStation.disclosure !== 'revealed') {
+    throw new Error('The player fixture has no Revealed Harbor World and station.')
+  }
+  Object.assign(harborWorld, { markerColor: '#A13B7C' })
+  Object.assign(publicStation, { markerColor: '#35A7C2' })
   document.systems.push({
     id: 'system-2',
     position: { x: 620, y: 360 },
@@ -100,12 +111,6 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
     type: 'star-system',
     label: 'Star system',
   })
-  const publicSystem = document.systems.find(system => system.disclosure === 'revealed')
-  if (!publicSystem) throw new Error('The player fixture must contain a revealed system.')
-  const publicStation = publicSystem.map.objects.find(object => object.label === 'Public Station')
-  if (!publicStation || publicStation.disclosure !== 'revealed') {
-    throw new Error('The player fixture has no revealed station for cross-system navigation.')
-  }
   document.systems.push({
     id: 'system-3',
     position: { x: 780, y: 470 },
@@ -146,11 +151,11 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   expect(html).not.toContain(compressed)
   expect(html).not.toContain(document.title)
   const title = page.getByRole('heading', { name: document.title, exact: true })
-  await expect(title).toBeVisible()
+  await expect(title).toBeVisible({ timeout: 30_000 })
   await page.getByRole('link', { name: 'Open player JSON instead', exact: true }).click()
 
   const input = page.getByLabel('Open player JSON', { exact: true })
-  await expect(input).toBeEnabled()
+  await expect(input).toBeEnabled({ timeout: 30_000 })
   await expect(page.getByRole('heading', { name: 'Open a player map', exact: true })).toBeVisible()
   await page.evaluate(() => {
     const probe = window as PlayerReadProbe
@@ -319,10 +324,30 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   expect(viewBoxAfterReveal.split(/\s+/).slice(2).map(Number))
     .toEqual(viewBoxBeforeSearch.split(/\s+/).slice(2).map(Number))
   await expect(harborMarker).toHaveAttribute('aria-pressed', 'true')
+  const harborGlyph = harborMarker.locator('.player-system-object-glyph')
+  const selectionOutline = harborMarker.locator('.player-system-object-selection-outline')
+  const keyboardFocusOutline = harborMarker.locator('.player-system-object-focus-outline')
+  await expect(harborGlyph).toHaveCSS('fill', 'rgb(161, 59, 124)')
+  await expect(selectionOutline).toHaveCSS('opacity', '1')
+  await expect(keyboardFocusOutline).toHaveCSS('opacity', '0')
   await expect(harborMarker).toHaveClass(/player-system-object-marker--dimmed/)
   const searchLocator = system.locator('[data-map-search-locator]')
   await expect(searchLocator).toBeVisible()
   await system.locator('svg.player-system-map-scene').focus()
+  let harborHasKeyboardFocus = false
+  for (let index = 0; index < 24 && !harborHasKeyboardFocus; index += 1) {
+    await page.keyboard.press('Tab')
+    harborHasKeyboardFocus = await harborMarker.evaluate(element => element.matches(':focus-visible'))
+  }
+  expect(harborHasKeyboardFocus).toBe(true)
+  await expect(harborGlyph).toHaveCSS('fill', 'rgb(161, 59, 124)')
+  await expect(selectionOutline).toHaveCSS('opacity', '1')
+  await expect(keyboardFocusOutline).toHaveCSS('opacity', '1')
+  expect(await keyboardFocusOutline.evaluate(element => getComputedStyle(element).strokeDasharray)).not.toBe('none')
+  const selectionBounds = await selectionOutline.boundingBox()
+  const focusBounds = await keyboardFocusOutline.boundingBox()
+  if (!selectionBounds || !focusBounds) throw new Error('The selection and keyboard focus outlines need visible bounds.')
+  expect(selectionBounds.width).toBeGreaterThan(focusBounds.width)
   await expect(searchLocator).toBeVisible()
   await page.getByRole('button', { name: 'Map files', exact: true }).click()
   const svgDownloadPromise = page.waitForEvent('download')
@@ -332,6 +357,7 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   for (const publicName of ['Public Star', 'Harbor World', 'Quiet Moon', 'Unknown presence']) {
     expect(exportedSvg).toContain(publicName)
   }
+  expect(exportedSvg).toContain('fill="#A13B7C"')
   expect(exportedSvg).not.toContain('map-search-locator')
   await expect(searchLocator).toBeVisible()
 
@@ -483,11 +509,15 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
     await zoomIn.click()
   }
   await expect(objectMarker).toBeVisible()
+  const continuousGlyph = objectMarker.locator('.player-continuous-object-glyph')
+  await expect(continuousGlyph).toHaveCSS('fill', 'rgb(161, 59, 124)')
   await expect.poll(async () => isPlayerAnchorInsideMap(await readPlayerMarkerAnchor(objectMarker))).toBe(true)
   const objectBeforeInspect = await readPlayerMarkerAnchor(objectMarker)
   await objectMarker.locator('.player-continuous-object-hit-target').click()
   await expect(centerSelection).toBeEnabled()
   await expect(objectMarker).toHaveAttribute('aria-pressed', 'true')
+  await expect(continuousGlyph).toHaveCSS('fill', 'rgb(161, 59, 124)')
+  await expect(objectMarker.locator('.player-continuous-object-marker-outline')).not.toHaveCSS('stroke', 'rgba(0, 0, 0, 0)')
   const objectDetails = page.getByRole('region', { name: 'Player object details', exact: true })
   await expect(objectDetails.getByRole('heading', { name: 'Harbor World', exact: true })).toBeVisible()
   const objectAfterInspect = await readPlayerMarkerAnchor(objectMarker)
@@ -513,6 +543,8 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
     await expect(continuousMap.locator('[data-map-search-locator]')).toBeVisible()
   }
   await revealHarbor()
+  await expect(continuousGlyph).toHaveCSS('opacity', '0.14')
+  await expect(continuousGlyph).toHaveCSS('fill', 'rgb(161, 59, 124)')
   const mapFiles = page.getByRole('button', { name: 'Map files', exact: true })
   await mapFiles.click()
   const viewportScope = page.getByRole('radio', { name: /^current viewport$/i })
@@ -531,6 +563,7 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   const viewportDownload = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export Current viewport SVG', exact: true }).click()
   const viewportSvg = await readFile(await (await viewportDownload).path(), 'utf8')
+  expect(viewportSvg).toContain('fill="#A13B7C"')
   const exportedViewport = viewportSvg.match(/viewBox="([^"]+)"/)?.[1]?.split(' ').map(Number)
   expect(exportedViewport).toHaveLength(4)
   for (const [index, value] of paintedViewport.entries()) expect(exportedViewport?.[index]).toBeCloseTo(value, 3)

@@ -43,12 +43,15 @@ async function openSessionLab(page: Page): Promise<{
 }
 
 test('object transitions keep Stay, Apply and Discard distinct, while a clean edit leaves directly', async ({ page }) => {
-  const { hierarchy, inspector } = await openSessionLab(page)
-  let iria = hierarchy.getByRole('treeitem', { name: 'Select PL-01, Iria', exact: true })
+  const { hierarchy, inspector, map } = await openSessionLab(page)
+  const iria = hierarchy.getByRole('treeitem', { name: 'Select PL-01, Applied Iria', exact: true })
+  const previewMarker = (name: string) => map.getByRole('button', { name: `Select PL-01, ${name} (Planet)`, exact: true })
   const nix = hierarchy.getByRole('treeitem', { name: 'Select MO-01, Nix', exact: true })
-  await iria.click()
+  await hierarchy.getByRole('treeitem', { name: 'Select PL-01, Iria', exact: true }).click()
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   await inspector.getByLabel('Name', { exact: true }).fill('Applied Iria')
+  await expect(previewMarker('Applied Iria')).toBeVisible()
+  await expect(iria).toBeVisible()
 
   await nix.click()
   let guard = page.getByRole('dialog', { name: 'Edit Jump Cluster details' })
@@ -65,18 +68,19 @@ test('object transitions keep Stay, Apply and Discard distinct, while a clean ed
   await expect(nix).toHaveAttribute('aria-selected', 'true')
   await waitForWorkspaceSaved(page)
 
-  iria = hierarchy.getByRole('treeitem', { name: 'Select PL-01, Applied Iria', exact: true })
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   await iria.click()
   await expect(page.getByRole('dialog', { name: 'Edit Jump Cluster details' })).toHaveCount(0)
   await expect(iria).toHaveAttribute('aria-selected', 'true')
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   await inspector.getByLabel('Name', { exact: true }).fill('Discarded Iria draft')
+  await expect(previewMarker('Discarded Iria draft')).toBeVisible()
   await nix.click()
   guard = page.getByRole('dialog', { name: 'Edit Jump Cluster details' })
   await guard.getByRole('button', { name: 'Discard edits and continue', exact: true }).click()
   await expect(guard).toBeHidden()
   await expect(nix).toHaveAttribute('aria-selected', 'true')
+  await expect(previewMarker('Applied Iria')).toBeVisible()
 
   const exported = await downloadJson(page, 'Export star system JSON')
   expect(exported.system!.objects.map(object => object.name)).toContain('Applied Iria')

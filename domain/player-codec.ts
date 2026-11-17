@@ -1,4 +1,5 @@
 import { catalogueTypes } from './workspace-model'
+import { isMarkerColor } from './marker-color'
 import type {
   CustomFieldType,
   ObjectFamily,
@@ -589,6 +590,7 @@ function restoreObject(
   if (value.disclosure === 'known-type') {
     const label = subtypeLabel(family, subtype)
     if (value.label !== label) return invalidDocument()
+    const markerColor = value.markerColor === undefined ? undefined : readMarkerColor(value.markerColor)
     budget.addKey('disclosure')
     budget.addString('known-type')
     budget.addKey('family')
@@ -597,11 +599,25 @@ function restoreObject(
     budget.addString(subtype)
     budget.addKey('label')
     budget.addString(label)
+    if (markerColor !== undefined) {
+      budget.addKey('markerColor')
+      budget.addString(markerColor)
+    }
     budget.endObject()
-    return { id, position, placement, disclosure: 'known-type', family, subtype, label }
+    return {
+      id,
+      position,
+      placement,
+      disclosure: 'known-type',
+      family,
+      subtype,
+      label,
+      ...(markerColor === undefined ? {} : { markerColor }),
+    }
   }
 
   const label = readText(value.label, true)
+  const markerColor = value.markerColor === undefined ? undefined : readMarkerColor(value.markerColor)
   const playerText = readText(value.playerText)
   if (!Array.isArray(value.fields)) return invalidDocument()
   counts.fields += value.fields.length
@@ -618,6 +634,10 @@ function restoreObject(
   budget.addString(subtype)
   budget.addKey('label')
   budget.addString(label)
+  if (markerColor !== undefined) {
+    budget.addKey('markerColor')
+    budget.addString(markerColor)
+  }
   budget.addKey('playerText')
   budget.addString(playerText)
   budget.addKey('fields')
@@ -638,10 +658,16 @@ function restoreObject(
     family,
     subtype,
     label,
+    ...(markerColor === undefined ? {} : { markerColor }),
     playerText,
     fields,
     ...(stationId === undefined ? {} : { stationId }),
   }
+}
+
+function readMarkerColor(value: unknown): string {
+  if (!isMarkerColor(value)) return invalidDocument()
+  return value
 }
 
 function restorePlacement(

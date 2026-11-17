@@ -67,8 +67,8 @@
       <span class="section-kicker">A PRIVATE CHART FOR YOUR CAMPAIGN</span>
       <h1 class="workspace-welcome-title my-3 max-w-[14ch] leading-[1.02] tracking-[-0.04em]">Give the unknown a name.</h1>
       <p class="mb-0 max-w-[34rem] text-[0.92rem] leading-[1.65]">
-        Start with a Jump Cluster and its first star system. This workspace stays in this browser;
-        there is no app account or remote workspace. Optional Google Drive backups are user-triggered.
+        Start with a Jump Cluster and its first star system. This workspace stays in this browser.
+        You can choose to back up to Google Drive or Dropbox.
       </p>
     </div>
 

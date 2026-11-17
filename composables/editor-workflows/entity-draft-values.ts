@@ -26,6 +26,7 @@ export function objectDraftValuesFor(
     playerText: object ? object.playerText : '',
     playerFieldMasks: object ? [...object.playerFieldMasks].sort() : [],
     publication: object?.publication ?? 'hidden',
+    markerColor: object?.markerColor ?? null,
     subtype: object?.subtype ?? '',
     placement: object?.placement.kind === 'orbit' ? `orbit:${object.placement.orbitId}` : 'system',
     atmosphere: object?.atmosphere ?? '',
