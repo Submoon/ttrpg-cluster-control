@@ -1,13 +1,14 @@
 /** Coordinates guarded review, map ownership, and one reversible transfer publication. */
 import { computed, readonly, ref, shallowRef } from 'vue'
 import type { Ref } from 'vue'
-import type { LocalWorkspace, SystemObjectTransferPlacement } from '../../domain/workspace'
-import { applySystemObjectTransfer, resolveSystemObjectBranch } from '../../domain/workspace'
+import type { LocalWorkspace, Point, SystemObjectTransferPlacement } from '../../domain/workspace'
+import { applySystemObjectTransfer, prepareSystemObjectTransfer, resolveSystemObjectBranch } from '../../domain/workspace'
 import { useSystemObjectTransferDraft } from '../useSystemObjectTransferDraft'
 import type { SystemObjectTransferAcceptance } from '../useSystemObjectTransferDraft'
 import type {
   SystemObjectTransferIntent,
   SystemObjectTransferMapPlacementLease,
+  SystemObjectTransferMapPreview,
   SystemObjectTransferReviewState,
 } from './system-object-transfer-types'
 import type {
@@ -43,6 +44,8 @@ export interface SystemObjectTransferWorkflowOptions {
   resolveBeforeTransfer(): Promise<boolean>
   /** Settles a pending map adjustment before the transfer session captures its workspace and revision. */
   beforeWorkspaceOperation(): Promise<boolean>
+  /** Moves and frames the chosen destination map before this transfer acquires map input. */
+  prepareDestinationMap?(systemId: string, isCurrent: () => boolean): Promise<boolean>
   /** Returns the exact currently mounted destination renderer, if it owns the requested destination. */
   captureDestinationMapOwner(systemId: string): object | null
   /** Confirms both renderer identity and its destination ownership on map-placement completion/apply. */
@@ -70,6 +73,10 @@ function currentSystem(workspace: LocalWorkspace, systemId: string) {
 export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWorkflowOptions) {
   const activeSession = shallowRef<ActiveTransferSession | null>(null)
   const pendingMapPlacement = shallowRef<SystemObjectTransferMapPlacementLease | null>(null)
+  const mapPointerPreview = shallowRef<{
+    lease: SystemObjectTransferMapPlacementLease
+    preview: SystemObjectTransferMapPreview
+  } | null>(null)
   const lastError = ref<string | null>(null)
   let nextSessionId = 1
   let openGeneration = 0
@@ -96,6 +103,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       inputGeneration: draft.inputGeneration.value,
       request: draft.request.value,
       review: currentReview,
+      sourceWorkspace: currentReview?.sourceWorkspace ?? null,
       previewWorkspace: currentReview?.previewWorkspace ?? null,
       movedObjectIds: currentReview?.branch.objectIds ?? [],
       movedOrbitIds: currentReview?.branch.orbitIds ?? [],
@@ -111,12 +119,32 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     else lastError.value = message
   }
 
+  const mapPreview = readonly(computed<SystemObjectTransferMapPreview | null>(() => {
+    const pointerPreview = mapPointerPreview.value
+    if (pointerPreview && ownsMapPlacement(pointerPreview.lease)) return pointerPreview.preview
+    const current = activeSession.value
+    if (!current || options.workspace.value !== current.workspaceReference
+      || options.appliedRevision.value !== current.appliedRevision || current.draft.isStale.value) return null
+    const review = current?.draft.review.value
+    if (!review) return null
+    return {
+      sessionId: current.id,
+      sourceSystemId: current.sourceSystemId,
+      rootObjectId: current.rootObjectId,
+      destinationSystemId: review.request.destinationSystemId,
+      previewWorkspace: review.previewWorkspace,
+      movedObjectIds: review.branch.objectIds,
+      movedOrbitIds: review.branch.orbitIds,
+    }
+  }))
+
   async function open(sourceSystemId: string, rootObjectId: string): Promise<void> {
     const epoch = ++openGeneration
     const previous = activeSession.value
     previous?.draft.cancel()
     activeSession.value = null
     pendingMapPlacement.value = null
+    mapPointerPreview.value = null
     lastError.value = null
 
     try {
@@ -160,7 +188,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     return current?.id === sessionId ? current : null
   }
 
-  function beginMapPlacement(current: ActiveTransferSession): void {
+  async function beginMapPlacement(current: ActiveTransferSession): Promise<void> {
     const destinationSystemId = current.draft.destinationSystemId.value
     if (!destinationSystemId) {
       current.error.value = 'Choose a destination star system before placing the object.'
@@ -170,6 +198,41 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     if (!workspace || workspace !== current.workspaceReference
       || options.appliedRevision.value !== current.appliedRevision) {
       current.error.value = 'The applied workspace changed after this review. Start a fresh review before placing the object.'
+      return
+    }
+    const revision = options.appliedRevision.value
+    const inputGeneration = current.draft.inputGeneration.value
+    const placementGeneration = current.draft.placementGeneration.value
+    const isCurrent = (): boolean => activeSession.value === current
+      && options.workspace.value === workspace
+      && options.appliedRevision.value === revision
+      && current.draft.inputGeneration.value === inputGeneration
+      && current.draft.placementGeneration.value === placementGeneration
+      && current.draft.destinationSystemId.value === destinationSystemId
+    if (options.prepareDestinationMap) {
+      try {
+        const prepared = await options.prepareDestinationMap(destinationSystemId, isCurrent)
+        if (!prepared || !isCurrent()) {
+          if (activeSession.value === current) {
+            current.error.value = isCurrent()
+              ? 'The destination map could not be prepared for placement.'
+              : 'The transfer review changed before map placement could start.'
+          }
+          return
+        }
+      } catch (error) {
+        if (activeSession.value === current) {
+          current.error.value = error instanceof Error
+            ? error.message
+            : 'The destination map could not be prepared for placement.'
+        }
+        return
+      }
+    }
+    if (!isCurrent()) {
+      if (activeSession.value === current) {
+        current.error.value = 'The transfer review changed before map placement could start.'
+      }
       return
     }
     const mapOwner = options.captureDestinationMapOwner(destinationSystemId)
@@ -189,6 +252,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     current.error.value = null
     current.open.value = false
     current.placingOnMap.value = true
+    mapPointerPreview.value = null
   }
 
   function failMapPlacement(current: ActiveTransferSession, message: string): false {
@@ -196,6 +260,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     current.placingOnMap.value = false
     current.error.value = message
     pendingMapPlacement.value = null
+    mapPointerPreview.value = null
     return false
   }
 
@@ -223,6 +288,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
 
     if (placement.kind === 'system') current.draft.chooseFreePlacement({ x: placement.x, y: placement.y })
     else current.draft.chooseOrbitPlacement(placement.orbitId, placement.angle)
+    mapPointerPreview.value = null
     current.mapPlacementOwner = {
       destinationSystemId: lease.destinationSystemId,
       mapOwner: lease.mapOwner,
@@ -233,6 +299,39 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     current.error.value = current.draft.error.value
     pendingMapPlacement.value = null
     return true
+  }
+
+  function previewMapPlacement(lease: SystemObjectTransferMapPlacementLease, point: Point | null): boolean {
+    const current = ownsSession(lease.sessionId)
+    if (!current || !ownsMapPlacement(lease)) return false
+    if (!point) {
+      mapPointerPreview.value = null
+      return true
+    }
+    try {
+      const review = prepareSystemObjectTransfer(lease.workspaceReference, {
+        sourceSystemId: current.sourceSystemId,
+        rootObjectId: current.rootObjectId,
+        destinationSystemId: lease.destinationSystemId,
+        placement: { kind: 'system', x: point.x, y: point.y },
+      })
+      mapPointerPreview.value = {
+        lease,
+        preview: {
+          sessionId: lease.sessionId,
+          sourceSystemId: review.request.sourceSystemId,
+          rootObjectId: review.request.rootObjectId,
+          destinationSystemId: review.request.destinationSystemId,
+          previewWorkspace: review.previewWorkspace,
+          movedObjectIds: review.branch.objectIds,
+          movedOrbitIds: review.branch.orbitIds,
+        },
+      }
+      return true
+    } catch {
+      mapPointerPreview.value = null
+      return false
+    }
   }
 
   async function apply(sessionId: number): Promise<WorkspaceMutationResult> {
@@ -331,6 +430,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     current.draft.cancel()
     activeSession.value = null
     pendingMapPlacement.value = null
+    mapPointerPreview.value = null
   }
 
   async function handleIntent(intent: SystemObjectTransferIntent): Promise<WorkspaceMutationResult | void> {
@@ -349,16 +449,19 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
         case 'select-destination':
           current.draft.selectDestination(intent.systemId)
           current.mapPlacementOwner = null
+          mapPointerPreview.value = null
           current.error.value = null
           break
         case 'choose-free-placement':
           current.draft.chooseFreePlacement(intent.point)
           current.mapPlacementOwner = null
+          mapPointerPreview.value = null
           current.error.value = current.draft.error.value
           break
         case 'choose-orbit-placement':
           current.draft.chooseOrbitPlacement(intent.orbitId, intent.angle)
           current.mapPlacementOwner = null
+          mapPointerPreview.value = null
           current.error.value = current.draft.error.value
           break
         case 'set-location-key':
@@ -366,11 +469,12 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
           current.error.value = null
           break
         case 'place-on-map':
-          beginMapPlacement(current)
+          await beginMapPlacement(current)
           break
         case 'cancel-map-placement':
           if (pendingMapPlacement.value === intent.lease) {
             pendingMapPlacement.value = null
+            mapPointerPreview.value = null
             current.placingOnMap.value = false
             current.open.value = true
             current.error.value = null
@@ -395,14 +499,17 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     activeSession.value?.draft.cancel()
     activeSession.value = null
     pendingMapPlacement.value = null
+    mapPointerPreview.value = null
   }
 
   return {
     session,
     pendingMapPlacement: readonly(pendingMapPlacement),
+    mapPreview,
     lastError: readonly(lastError),
     handleIntent,
     ownsMapPlacement,
+    previewMapPlacement,
     completeMapPlacement,
     dispose,
   }

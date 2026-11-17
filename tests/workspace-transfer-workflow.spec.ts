@@ -171,3 +171,15 @@ test('map placement lease is bound to exact destination owner and retains the re
   expect(harness.workflow.session.value?.placement).toEqual({ kind: 'system', x: 0.6, y: 0.4 })
   harness.dispose()
 })
+
+test('a stale transfer session no longer publishes its captured map ghost @pure', async () => {
+  const harness = transferHarness()
+  const sessionId = await openTransfer(harness)
+  expect(harness.workflow.mapPreview.value?.destinationSystemId).toBe(harness.destinationSystemId)
+
+  harness.workspace.value = { ...harness.workspace.value }
+
+  expect(harness.workflow.session.value).toMatchObject({ sessionId, stale: true, canAccept: false })
+  expect(harness.workflow.mapPreview.value).toBeNull()
+  harness.dispose()
+})

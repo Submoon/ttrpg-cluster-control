@@ -431,6 +431,8 @@
                     :cluster-chooser-open="creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen"
                     :is-entity-command-blocked="isEntityCommandBlocked"
                     :orbit-adjustment-preview="orbitAdjustmentPreview"
+                    :system-object-transfer-preview="transfer.mapPreview"
+                    :system-object-transfer-map-lease="transfer.pendingMapPlacement"
                     :feedback-element="workspaceFeedbackRef"
                     @navigate-system="selectSystem"
                     @select-cluster-system="selectClusterSystem"
@@ -464,6 +466,9 @@
                     @rotate-orbit="rotateMapOrbit"
                     @place-object-in-orbit="placeMapObjectInOrbit"
                     @viewport-change="recordViewport($event.key, $event.viewport)"
+                    @system-transfer-placement-preview="transfer.previewMapPlacement($event.lease, $event.point)"
+                    @system-transfer-placement-complete="transfer.completeMapPlacement($event.lease, { kind: 'system', x: $event.point.x, y: $event.point.y })"
+                    @system-transfer-placement-cancel="transfer.handleIntent({ kind: 'cancel-map-placement', sessionId: $event.sessionId, lease: $event })"
                   />
                   <WorkspaceMapCanvas
                     v-else-if="selectedSystem"
@@ -599,6 +604,7 @@
               :save-message="saveMessage"
               :save-error="saveError"
               :export-error="exportError"
+              :system-transfer-session="inspector.systemTransferSession"
               @open-system="selectSystem"
               @delete-system="deleteSystem"
               @hide="closePanel('inspector')"
@@ -627,6 +633,7 @@
               @retry-save="retryLatestSave"
               @export-current-json="downloadClusterJson"
               @open-field-definitions="openFieldDefinitions"
+              @system-transfer-intent="inspector.handleSystemTransferIntent"
             >
               <template #chart-editor>
                 <ChartDetailsEditor
@@ -1018,7 +1025,7 @@ const workflows = useEditorWorkflows({
     icon: 'i-lucide-info',
   }),
 })
-const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search, filterCriteria } = workflows
+const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search, filterCriteria, transfer } = workflows
 watch(
   [() => workspace.value?.id, () => workspace.value?.cluster.id, hydrationState, continuousMapEnabled],
   ([workspaceId, clusterId, , enabled]) => {

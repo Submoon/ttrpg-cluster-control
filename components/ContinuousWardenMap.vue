@@ -196,6 +196,47 @@
             </g>
           </g>
           <g
+            v-if="transferBranchPreview"
+            class="continuous-warden-transfer-preview"
+            :transform="systemTransform(transferBranchPreview.projection)"
+            aria-hidden="true"
+            pointer-events="none"
+          >
+            <title>Transferred branch placement preview</title>
+            <g class="system-orbits continuous-warden-transfer-orbits">
+              <ellipse
+                v-for="orbit in transferBranchPreview.orbits"
+                :key="orbit.id"
+                class="orbit-ring continuous-warden-transfer-orbit"
+                :cx="orbit.center.x"
+                :cy="orbit.center.y"
+                :rx="orbit.radii.horizontal"
+                :ry="orbit.radii.vertical"
+                :transform="`rotate(${orbit.rotation} ${orbit.center.x} ${orbit.center.y})`"
+              />
+            </g>
+            <g class="system-map-items continuous-warden-transfer-objects">
+              <g
+                v-for="object in transferBranchPreview.objects"
+                :key="object.id"
+                class="continuous-warden-transfer-object"
+                :class="{ 'is-root': object.id === transferBranchPreview.rootObjectId }"
+                :transform="`translate(${object.position.x} ${object.position.y})`"
+              >
+                <circle class="continuous-warden-transfer-object-mark" r="12" />
+                <text class="continuous-warden-object-glyph" y="5" text-anchor="middle">
+                  {{ transferObjectGlyph(object) }}
+                </text>
+                <text class="continuous-warden-object-key" y="31" text-anchor="middle">
+                  {{ object.locationKey }}
+                </text>
+                <text class="continuous-warden-object-name" y="46" text-anchor="middle">
+                  {{ object.name }}
+                </text>
+              </g>
+            </g>
+          </g>
+          <g
             v-if="standaloneImportProjection"
             class="continuous-warden-import-placement-preview"
             :data-anchor-x="props.standaloneImportPlacement?.anchor.x"
@@ -305,6 +346,7 @@
 <script setup lang="ts">
 /** Warden continuous scene with one D3 camera and independent system-envelope reveal. */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from 'vue'
+import type { DeepReadonly } from 'vue'
 import { pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
 import { jumpPointsInCluster, minimumOrbitRadius, type CatalogueSubtype, type JumpCluster, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem } from '../domain/workspace'
 import { normalizeOrbitRotation } from '../domain/workspace-orbits'
@@ -315,10 +357,12 @@ import type { EntityCommand, MapHistoryTarget, MapInteractionMode, OrbitCenterMo
 import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
 import type { InspectedMapTarget } from '../stores/editor-ui'
+import type { SystemObjectTransferMapPreview } from '../composables/editor-workflows/system-object-transfer-types'
 import { initialClusterSystemPosition } from '../domain/workspace-cluster'
 import type { MapViewport, SvgViewportRect } from '../utils/map-zoom'
 import {
   clampMapViewport,
+  clientRectToSvgViewportRect,
   fitMapViewport,
   getSvgViewportRect,
   MAP_ZOOM_MAX_SCALE,
@@ -399,6 +443,7 @@ const props = defineProps<{
   standaloneImportPlacementEnabled?: boolean
   standaloneImportPlacement?: StandaloneImportPlacementView | null
   keyboardOwnedOverlayOpen?: boolean
+  systemObjectTransferPreview?: SystemObjectTransferMapPreview | null
   touchNavigation?: boolean
   initialViewport: MapViewport | null
   getUsableClientRect?: () => ClientRectBounds | undefined
@@ -432,6 +477,7 @@ const routeLayer = ref<InstanceType<typeof ContinuousMapRouteLayer> | null>(null
 const viewport = ref<MapViewport>({ x: 0, y: 0, k: 1 })
 const previewPositions = ref(new Map<string, Point>())
 const selectedObjectDragPreview = shallowRef<SelectedObjectDragPreview | null>(null)
+const transferPreviewOverride = shallowRef<SystemObjectTransferMapPreview | null | undefined>(undefined)
 const objectMovePreview = shallowRef<{ systemId: string; objectId: string; projection: ContinuousWardenSystemProjection } | null>(null)
 const preciseObjectPlacementPreview = shallowRef<{ systemId: string; objectId: string; projection: ContinuousWardenSystemProjection } | null>(null)
 const preciseOrbitCenterMovePreview = shallowRef<{ systemId: string; orbitId: string; projection: ContinuousWardenSystemProjection } | null>(null)
@@ -548,6 +594,32 @@ const projections = computed(() => props.cluster.systems.map((system, index) => 
   props.systemPositions[system.id] ?? initialClusterSystemPosition(index),
   systemGeometry.value,
 )))
+const transferBranchPreview = computed(() => {
+  const preview = transferPreviewOverride.value === undefined
+    ? props.systemObjectTransferPreview
+    : transferPreviewOverride.value
+  if (!preview
+    || preview.previewWorkspace.id !== props.workspace.id
+    || preview.previewWorkspace.cluster.id !== props.cluster.id
+    || !props.cluster.systems.some(system => system.id === preview.destinationSystemId)) return null
+  const system = preview.previewWorkspace.cluster.systems.find(candidate => candidate.id === preview.destinationSystemId)
+  const anchor = props.systemPositions[preview.destinationSystemId]
+  if (!system || !anchor) return null
+  try {
+    const projection = projectWardenSystem(system, anchor, systemMapGeometry(preview.previewWorkspace))
+    const movedObjectIds = new Set(preview.movedObjectIds)
+    const movedOrbitIds = new Set(preview.movedOrbitIds)
+    return {
+      rootObjectId: preview.rootObjectId,
+      projection,
+      objects: projection.objects.filter(object => movedObjectIds.has(object.id)),
+      orbits: projection.orbits.filter(orbit => movedOrbitIds.has(orbit.id)),
+      objectSubtypes: new Map(system.objects.map(object => [object.id, object.subtype] as const)),
+    }
+  } catch {
+    return null
+  }
+})
 const hiddenSelectedObjectCount = computed(() => {
   const owners = new Map(props.cluster.systems.flatMap(system => system.objects.map(object => [object.id, system.id] as const)))
   return props.selectedObjectIds.filter(objectId => {
@@ -576,9 +648,9 @@ const renderedProjections = computed(() => projections.value.map(projection => {
   const withOrbitAdjustment = adjustment?.identity.systemId === projection.id
     ? projectionWithOrbitAdjustment(projection, adjustment) ?? withDirectOrbit
     : withDirectOrbit
-  const preview = selectedObjectDragPreview.value
-  if (!preview) return withOrbitAdjustment
-  const positions = new Map([...preview.positions].filter(([objectId]) => preview.objectSystemIds.get(objectId) === projection.id))
+  const groupPreview = selectedObjectDragPreview.value
+  if (!groupPreview) return withOrbitAdjustment
+  const positions = new Map([...groupPreview.positions].filter(([objectId]) => groupPreview.objectSystemIds.get(objectId) === projection.id))
   if (!positions.size) return withOrbitAdjustment
   const sourceSystem = props.cluster.systems.find(system => system.id === projection.id)
   const orbitHostIds = new Map(sourceSystem?.orbits.map(orbit => [orbit.id, orbit.hostId] as const) ?? [])
@@ -765,6 +837,15 @@ function objectGlyph(projectionId: string, objectId: string): string {
     vessel: '△', derelict: '▽', 'jump-point': '⊕', anomaly: '✧', nebula: '◌', hazard: '⚠', other: '◇',
   }
   return glyphs[object.subtype] ?? '◇'
+}
+
+function transferObjectGlyph(object: ContinuousWardenSystemProjection['objects'][number]): string {
+  const subtype = transferBranchPreview.value?.objectSubtypes.get(object.id)
+  const glyphs: Record<string, string> = {
+    star: '✦', planet: '◉', moon: '☾', asteroid: '◆', belt: '⋯', station: '⌂', base: '▤', colony: '⚑',
+    vessel: '△', derelict: '▽', 'jump-point': '⊕', anomaly: '✧', nebula: '◌', hazard: '⚠', other: '◇',
+  }
+  return glyphs[subtype ?? ''] ?? '◇'
 }
 
 function objectSubtype(projectionId: string, objectId: string): string {
@@ -999,6 +1080,50 @@ function frameSystem(systemId: string, usableRect?: SvgViewportRect): boolean {
   if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
     || next.k !== current.k) setViewport(next)
   return true
+}
+
+function isSystemTransferDestination(systemId: string): boolean {
+  return props.workspace.cluster.id === props.cluster.id
+    && props.cluster.systems.some(system => system.id === systemId)
+}
+
+function systemTransferPointAtClient(systemId: string, clientX: number, clientY: number): Point | null {
+  const element = svgElement.value
+  if (!isSystemTransferDestination(systemId) || !ready.value || !element
+    || ![clientX, clientY].every(Number.isFinite)) return null
+  const bounds = element.getBoundingClientRect()
+  if (clientX < bounds.left || clientX > bounds.right || clientY < bounds.top || clientY > bounds.bottom) return null
+  const projection = projections.value.find(candidate => candidate.id === systemId)
+  if (!projection) return null
+  const screenMatrix = element.getScreenCTM()
+  if (!screenMatrix) return null
+  let surfacePoint: DOMPoint
+  try {
+    surfacePoint = new DOMPoint(clientX, clientY).matrixTransform(screenMatrix.inverse())
+  } catch {
+    return null
+  }
+  const camera = zoomTransform(element)
+  const localScenePoint = projection.unprojectLocalPoint({
+    x: (surfacePoint.x - camera.x) / camera.k - anchorDelta(projection).x,
+    y: (surfacePoint.y - camera.y) / camera.k - anchorDelta(projection).y,
+  })
+  if (![localScenePoint.x, localScenePoint.y].every(Number.isFinite)) return null
+  return toNormalizedMapPoint(localScenePoint)
+}
+
+function frameSystemTransferDestination(systemId: string, usableRect?: SvgViewportRect): boolean {
+  const element = svgElement.value
+  if (!isSystemTransferDestination(systemId) || !element) return false
+  const usableClientRect = usableRect ? undefined : props.getUsableClientRect?.()
+  const measuredUsableRect = usableRect ?? (usableClientRect
+    ? clientRectToSvgViewportRect(element, usableClientRect)
+    : undefined)
+  return frameSystem(systemId, measuredUsableRect)
+}
+
+function setSystemObjectTransferPreview(preview: SystemObjectTransferMapPreview | null): void {
+  transferPreviewOverride.value = preview
 }
 
 function frameEntityTarget(
@@ -1335,10 +1460,11 @@ function moveTargetAtPoint(event: PointerEvent, element: SVGSVGElement | null): 
   return { target: null, blockedCommand }
 }
 
-function systemMapGeometry(workspace: LocalWorkspace): SystemMapGeometry {
+function systemMapGeometry(workspace: LocalWorkspace | DeepReadonly<LocalWorkspace>): SystemMapGeometry {
   return {
     objectAngles: workspace.layout.objectAngles,
-    orbitRadii: workspace.layout.orbitRadii,
+    orbitRadii: Object.fromEntries(Object.entries(workspace.layout.orbitRadii)
+      .map(([id, radii]) => [id, { horizontal: radii.horizontal, vertical: radii.vertical }])),
     orbitRotations: workspace.layout.orbitRotations,
   }
 }
@@ -2677,9 +2803,13 @@ onBeforeUnmount(() => {
 
 watch(() => props.mode, () => cancelActiveGesture(), { flush: 'sync' })
 watch(() => props.workspace, workspace => {
+  transferPreviewOverride.value = undefined
   if (activeSelectedObjectDrag && toRaw(activeSelectedObjectDrag.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
   if (activeObjectDrag && toRaw(activeObjectDrag.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
   if (activeOrbitGesture && toRaw(activeOrbitGesture.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
+}, { flush: 'sync' })
+watch(() => props.systemObjectTransferPreview, () => {
+  transferPreviewOverride.value = undefined
 }, { flush: 'sync' })
 watch(() => props.cluster.systems.map(system => system.id).join('\u0000'), ids => {
   if (activeSelectedObjectDrag && !ids.split('\u0000').includes(activeSelectedObjectDrag.systemId)) cancelActiveGesture()
@@ -2739,6 +2869,10 @@ defineExpose({
   setObjectMoveTargetPreview,
   setOrbitCenterMovePreview,
   setOrbitPlacementPreview,
+  isSystemTransferDestination,
+  systemTransferPointAtClient,
+  frameSystemTransferDestination,
+  setSystemObjectTransferPreview,
   toSystemScenePoint,
   getDetachedCenter,
   setUnresolvedExitPositionPreview,
@@ -2776,6 +2910,37 @@ defineExpose({
 .continuous-warden-import-placement-preview {
   opacity: 0.72;
   pointer-events: none;
+}
+
+.continuous-warden-transfer-preview {
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.continuous-warden-transfer-orbit {
+  fill: none;
+  stroke: var(--focus);
+  stroke-width: 2;
+  stroke-dasharray: 4 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.continuous-warden-transfer-object {
+  fill: var(--focus);
+  font-family: Georgia, serif;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.continuous-warden-transfer-object-mark {
+  fill: color-mix(in srgb, var(--focus) 18%, var(--map-bg));
+  stroke: var(--focus);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.continuous-warden-transfer-object.is-root .continuous-warden-transfer-object-mark {
+  stroke-width: 3;
 }
 
 .continuous-warden-import-envelope {

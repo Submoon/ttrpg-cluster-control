@@ -1,7 +1,7 @@
 /**
  * Orbit commands enforce host relationships and sibling order, and normalize older circle layouts.
  */
-import type { ObjectPlacement, Orbit, OrbitRadii, Point, StarSystem, SystemObject } from './workspace-model'
+import type { ObjectPlacement, Orbit, OrbitRadii, Point, StarSystem } from './workspace-model'
 import { isRecord } from './workspace-validation'
 
 /**
@@ -51,7 +51,10 @@ export function createOrbit(system: StarSystem, hostId: string | null): Orbit {
  * @returns Host object, or null when the Orbit has an unoccupied center.
  * @throws If a hosted Orbit references a missing object.
  */
-function orbitHost(system: StarSystem, orbit: Orbit): SystemObject | null {
+function orbitHost(
+  system: { readonly objects: readonly { readonly id: string; readonly subtype: string }[] },
+  orbit: { readonly id: string; readonly hostId: string | null; readonly order: number },
+): { readonly subtype: string } | null {
   if (orbit.hostId === null) return null
   const host = system.objects.find(object => object.id === orbit.hostId)
   if (!host) {
@@ -67,7 +70,10 @@ function orbitHost(system: StarSystem, orbit: Orbit): SystemObject | null {
  * @returns A scene-unit radius used for both axes when no saved radii exist.
  * @throws If the Orbit names a missing object host.
  */
-export function defaultOrbitRadius(system: StarSystem, orbit: Orbit): number {
+export function defaultOrbitRadius(
+  system: { readonly objects: readonly { readonly id: string; readonly subtype: string }[] },
+  orbit: { readonly id: string; readonly hostId: string | null; readonly order: number },
+): number {
   const host = orbitHost(system, orbit)
   return host === null || host.subtype === 'star'
     ? 112 + (orbit.order - 1) * 58
@@ -81,7 +87,10 @@ export function defaultOrbitRadius(system: StarSystem, orbit: Orbit): number {
  * @returns A positive minimum radius that clears the host mark.
  * @throws If the Orbit names a missing object host.
  */
-export function minimumOrbitRadius(system: StarSystem, orbit: Orbit): number {
+export function minimumOrbitRadius(
+  system: { readonly objects: readonly { readonly id: string; readonly subtype: string }[] },
+  orbit: { readonly id: string; readonly hostId: string | null; readonly order: number },
+): number {
   const host = orbitHost(system, orbit)
   return Math.ceil((host === null ? 0 : host.subtype === 'star' ? 23 : 14) + 16)
 }

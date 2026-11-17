@@ -1,6 +1,7 @@
 import { computed, nextTick, watch, type Ref } from 'vue'
 import {
   jumpPointsInCluster,
+  resolveSystemObjectHistoryTarget,
   type JumpRoute,
   type LocalWorkspace,
   type MapDeletionPlan,
@@ -810,7 +811,12 @@ export function useEditorNavigation(options: {
     }
 
     const currentClusterId = workspace.value?.cluster.id
-    const target = retainedTargetExists(action.target)
+    const transferTarget = action.kind === 'transfer'
+      && action.target.kind === 'object'
+      && workspaceAtSelection
+      ? resolveSystemObjectHistoryTarget(workspaceAtSelection, action.target.id) ?? undefined
+      : undefined
+    const target = retainedTargetExists(transferTarget ?? action.target)
       ?? retainedTargetExists(action.parent ?? undefined)
       ?? (continuousMap.value && currentClusterId ? { kind: 'cluster' as const, id: currentClusterId } : null)
     const targetKind = target?.kind ?? action.target.kind

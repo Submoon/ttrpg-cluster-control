@@ -141,7 +141,7 @@
             <ul class="m-0 grid gap-1 pl-5">
               <li v-if="!props.session.review.detachedRouteAttachments.length">None</li>
               <li v-for="attachment in props.session.review.detachedRouteAttachments" :key="`${attachment.routeId}:${attachment.end}`" class="break-words">
-                {{ attachment.routeId }} · {{ attachment.end }} end · {{ attachment.pointId }}
+                {{ routeAttachmentDescription(attachment) }}
               </li>
             </ul>
           </div>
@@ -151,7 +151,7 @@
             <ul class="m-0 grid gap-1 pl-5">
               <li v-if="!props.session.review.clearedStationLinks.length">None</li>
               <li v-for="link in props.session.review.clearedStationLinks" :key="`${link.objectId}:${link.stationId}`" class="break-words">
-                {{ link.direction }} · {{ link.objectId }} → {{ link.stationId }}
+                {{ stationLinkDescription(link) }}
               </li>
             </ul>
           </div>
@@ -207,6 +207,10 @@ import { computed } from 'vue'
 import { canPlaceObjectInOrbit } from '../../domain/workspace'
 import type { Orbit } from '../../domain/workspace'
 import type {
+  SystemObjectTransferRouteAttachment,
+  SystemObjectTransferStationLink,
+} from '../../domain/workspace'
+import type {
   SystemObjectTransferIntent,
   SystemObjectTransferReviewState,
 } from '../../composables/editor-workflows/system-object-transfer-types'
@@ -240,6 +244,54 @@ const conflictById = computed(() => new Map((props.session?.review?.keyConflicts
 const objectById = computed(() => new Map((props.session?.previewWorkspace?.cluster.systems
   .find(system => system.id === props.session?.destinationSystemId)?.objects ?? [])
   .map(object => [object.id, object])))
+const sourceObjectsById = computed(() => new Map((props.session?.sourceWorkspace?.cluster.systems ?? [])
+  .flatMap(system => system.objects.map(object => [object.id, { object, system }] as const)))
+)
+
+function objectReference(objectId: string): string {
+  const entry = sourceObjectsById.value.get(objectId)
+  return entry ? `${entry.object.name} (${entry.object.locationKey})` : 'Jump Point'
+}
+
+function ownerName(systemId: string | null): string {
+  if (systemId === null) return 'unresolved exit'
+  return props.session?.sourceWorkspace?.cluster.systems.find(system => system.id === systemId)?.name ?? 'unknown system'
+}
+
+function routeEndpointDescription(systemId: string | null, pointId: string | null, unresolvedExit?: string): string {
+  if (systemId === null) return unresolvedExit?.trim() || 'unresolved exit'
+  const systemName = ownerName(systemId)
+  if (!pointId) return systemName
+  const point = sourceObjectsById.value.get(pointId)?.object
+  return point
+    ? `${systemName} · ${point.name} (${point.locationKey})`
+    : `${systemName} · unattached Jump Point`
+}
+
+function routeAttachmentDescription(attachment: SystemObjectTransferRouteAttachment): string {
+  const source = props.session?.sourceWorkspace
+  const route = source?.cluster.routes.find(candidate => candidate.id === attachment.routeId)
+  if (!route) return `${objectReference(attachment.pointId)} in ${ownerName(props.session?.sourceSystemId ?? null)} has a Jump Route endpoint that will detach.`
+  const from = routeEndpointDescription(route.fromSystemId, route.fromPointId)
+  const to = route.toSystemId === null
+    ? routeEndpointDescription(null, null, route.unresolvedExit)
+    : routeEndpointDescription(route.toSystemId, route.toPointId)
+  const routeLabel = route.name?.trim()
+    ? `Jump Route “${route.name.trim()}”`
+    : 'Jump Route'
+  return `${routeLabel}: ${from} → ${to}. ${objectReference(attachment.pointId)} in ${ownerName(attachment.end === 'from' ? route.fromSystemId : route.toSystemId)} will be detached from its ${attachment.end} endpoint.`
+}
+
+function stationLinkDescription(link: SystemObjectTransferStationLink): string {
+  const jumpPoint = sourceObjectsById.value.get(link.objectId)
+  const station = sourceObjectsById.value.get(link.stationId)
+  const jumpPointName = jumpPoint ? `${jumpPoint.object.name} (${jumpPoint.object.locationKey})` : 'Jump Point'
+  const stationName = station ? `${station.object.name} (${station.object.locationKey})` : 'Station'
+  const jumpPointOwner = jumpPoint?.system.name ?? ownerName(props.session?.sourceSystemId ?? null)
+  const stationOwner = station?.system.name ?? jumpPointOwner
+  const movingEnd = link.direction === 'outgoing' ? 'The Jump Point moves.' : 'The Station moves.'
+  return `${jumpPointName} in ${jumpPointOwner} → ${stationName} in ${stationOwner}. ${movingEnd} The association will clear.`
+}
 
 let opener: HTMLElement | null = null
 

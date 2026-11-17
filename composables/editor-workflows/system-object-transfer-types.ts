@@ -22,6 +22,7 @@ export interface SystemObjectTransferReviewState {
   readonly inputGeneration: number
   readonly request: DeepReadonly<SystemObjectTransferRequest> | null
   readonly review: DeepReadonly<SystemObjectTransferReview> | null
+  readonly sourceWorkspace: DeepReadonly<LocalWorkspace> | null
   readonly previewWorkspace: DeepReadonly<LocalWorkspace> | null
   readonly movedObjectIds: readonly string[]
   readonly movedOrbitIds: readonly string[]
@@ -53,7 +54,30 @@ export interface SystemObjectTransferMapPlacementLease {
   readonly mapOwner: object
 }
 
+/** One accepted primary-pointer release expressed in destination-local normalized coordinates. */
+export interface SystemObjectTransferMapAnchor {
+  readonly lease: SystemObjectTransferMapPlacementLease
+  readonly point: Point
+}
+
+/** Pointer movement may leave the map while the placement gesture remains captured. */
+export interface SystemObjectTransferMapPointerPreview {
+  readonly lease: SystemObjectTransferMapPlacementLease
+  readonly point: Point | null
+}
+
 export interface SystemObjectTransferWorkflowState {
   readonly session: SystemObjectTransferReviewState | null
   readonly pendingMapPlacement: SystemObjectTransferMapPlacementLease | null
+}
+
+/** Renderer-only ghost branch; never merged into map images or exported geometry. */
+export interface SystemObjectTransferMapPreview {
+  readonly sessionId: number
+  readonly sourceSystemId: string
+  readonly rootObjectId: string
+  readonly destinationSystemId: string
+  readonly previewWorkspace: DeepReadonly<LocalWorkspace>
+  readonly movedObjectIds: readonly string[]
+  readonly movedOrbitIds: readonly string[]
 }

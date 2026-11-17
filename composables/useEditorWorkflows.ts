@@ -25,6 +25,9 @@ import { usePublicationMenu } from './usePublicationMenu'
 import type { PublicationMenuRequest } from './editor-workflows/publication-types'
 import type { SearchResult } from '../utils/workspace-search'
 import { useWardenFilterCriteria } from './useWardenFilterCriteria'
+import { useSystemObjectTransferWorkflow } from './editor-workflows/useSystemObjectTransferWorkflow'
+import { resolveSystemObjectHistoryTarget } from '../domain/workspace'
+import type { SystemObjectTransferIntent } from './editor-workflows/system-object-transfer-types'
 
 type EditorWorkflowsOptions = EditorWorkflowOptions & {
   /** Rechecks page-owned modal and keyboard focus owners before restoring a menu opener. */
@@ -188,6 +191,71 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     editorError,
     beforeWorkspaceOperation,
   })
+  const appliedRevision = computed(() => options.appliedRevision?.value ?? 0)
+
+  function revealTransferredObject(objectId: string): void {
+    const currentWorkspace = workspace.value
+    if (!currentWorkspace) return
+    const target = resolveSystemObjectHistoryTarget(currentWorkspace, objectId)
+    if (!target) return
+    const revealCamera = async (): Promise<void> => {
+      await nextTick()
+      if (workspace.value !== currentWorkspace) return
+      mapControls.revealHistoryTarget(target)
+    }
+    if (options.continuousMap?.value) {
+      void navigation.inspectContinuousTarget({
+        kind: 'object',
+        systemId: target.systemId,
+        objectId: target.id,
+      }).then(accepted => accepted ? revealCamera() : undefined)
+      return
+    }
+    void navigation.selectSystem(target.systemId).then(async () => {
+      if (workspace.value !== currentWorkspace || store.activeView !== 'system'
+        || store.selectedSystemId !== target.systemId) return
+      await navigation.selectObject(target.id, true, { leaveChart: false })
+      await revealCamera()
+    })
+  }
+
+  const systemTransfer = useSystemObjectTransferWorkflow({
+    workspace,
+    appliedRevision,
+    history: mutations,
+    resolveBeforeTransfer: () => transitions.resolveTransition(),
+    beforeWorkspaceOperation,
+    prepareDestinationMap: async (systemId, isCurrent) => {
+      if (!isCurrent()) return false
+      if (options.continuousMap?.value) {
+        if (!await navigation.inspectContinuousTarget({ kind: 'system', systemId }, false, isCurrent)) return false
+      } else {
+        await navigation.selectSystem(systemId)
+        if (!isCurrent() || store.activeView !== 'system' || store.selectedSystemId !== systemId) return false
+      }
+      if (!isCurrent()) return false
+      viewport.requestPanel('map')
+      await nextTick()
+      const map = mapControls.placementMapRef.value
+      if (!map || !map.whenReady || !await map.whenReady() || !isCurrent()
+        || !map.isSystemTransferDestination?.(systemId)) return false
+      return map.frameSystemTransferDestination?.(systemId) ?? false
+    },
+    captureDestinationMapOwner: systemId => {
+      const map = mapControls.placementMapRef.value
+      return map?.isSystemTransferDestination?.(systemId)
+        ? map.captureSystemTransferMapOwner?.(systemId) ?? null
+        : null
+    },
+    isDestinationMapOwnerCurrent: (systemId, owner) => {
+      const map = mapControls.placementMapRef.value
+      return map?.isSystemTransferDestination?.(systemId) === true
+        && map.isSystemTransferMapOwnerCurrent?.(systemId, owner) === true
+    },
+    onApplied: target => revealTransferredObject(target.rootObjectId),
+  })
+  watch(workspaceContextId, () => systemTransfer.dispose(), { flush: 'sync' })
+  onBeforeUnmount(() => systemTransfer.dispose())
   const publicationMenu = usePublicationMenu({
     workspace,
     store,
@@ -340,6 +408,9 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   })
 
   const historyGuards = computed(() => {
+    if (systemTransfer.session.value) return systemTransfer.session.value.placingOnMap
+      ? 'Finish or cancel the transfer map placement first.'
+      : 'Apply or cancel the open transfer review first.'
     if (entity.hasModifiedEntitySession.value) return 'Apply or discard the modified Inspector draft first.'
     if (route.hasModifiedRouteSession.value) return 'Apply or discard the modified Jump Route draft first.'
     if (charts.hasChangedNames.value) return 'Apply or discard the modified Jump Cluster details draft first.'
@@ -381,6 +452,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
 
   /** Ends editor-owned drafts, reviews and targeting only after a complete replacement is durable. */
   function resetForWorkspaceReplacement(): void {
+    systemTransfer.dispose()
     transitions.cancelPendingTransition()
     const chartSession = charts.session.value
     if (chartSession) charts.discard(chartSession.id)
@@ -466,6 +538,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       applyRouteSession,
       discardRouteSession,
       cancelRouteCreation: route.cancelRouteCreation,
+      systemTransferSession: systemTransfer.session,
+      handleSystemTransferIntent: (intent: SystemObjectTransferIntent) => systemTransfer.handleIntent(intent),
     },
     charts: {
       session: charts.session,
@@ -602,6 +676,14 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       zoomActiveMap: mapControls.zoomActiveMap,
       panActiveMap: mapControls.panActiveMap,
       setMapMode: navigation.setMapMode,
+    },
+    transfer: {
+      mapPreview: systemTransfer.mapPreview,
+      pendingMapPlacement: systemTransfer.pendingMapPlacement,
+      ownsMapPlacement: systemTransfer.ownsMapPlacement,
+      previewMapPlacement: systemTransfer.previewMapPlacement,
+      completeMapPlacement: systemTransfer.completeMapPlacement,
+      handleIntent: (intent: SystemObjectTransferIntent) => systemTransfer.handleIntent(intent),
     },
     adjustments: {
       orbitAdjustmentPreview: orbitAdjustments.preview,

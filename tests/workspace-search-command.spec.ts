@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRenderer, nextTick, ref } from 'vue'
-import { createLocalWorkspace, createOrbit, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
+import { applySystemObjectTransfer, createLocalWorkspace, createOrbit, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
 import type { MapNavigationHandle, SaveState, SearchPresentationSettlement, SystemMapHandle } from '../composables/editor-workflows/types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
@@ -642,6 +642,54 @@ test('continuous history restores an inspected object as the complete single-mem
     expect(harness.store.selectedObjectId).toBe(object.id)
     expect(harness.store.selectedObjectIds).toEqual([object.id])
     expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: system.id, objectId: object.id })
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('transfer Undo and Redo reveal the stable root in its actual owner @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const original = harness.workspace.value
+    const source = original.cluster.systems[0]
+    const root = source?.objects[0]
+    if (!source || !root) throw new Error('The local workspace did not create a transferable object.')
+    const destination = { ...source, id: 'history-transfer-destination', name: 'Destination', objects: [], orbits: [] }
+    harness.workspace.value = {
+      ...original,
+      cluster: { ...original.cluster, systems: [source, destination] },
+      layout: {
+        ...original.layout,
+        systemPositions: { ...original.layout.systemPositions, [destination.id]: { x: 0.7, y: 0.55 } },
+      },
+    }
+    const before = harness.workspace.value
+    const action = {
+      workspaceId: before.id,
+      clusterId: before.cluster.id,
+      contextLabel: source.name,
+      kind: 'transfer' as const,
+      label: `Change system for ${root.name}`,
+      target: { kind: 'object' as const, id: root.id, systemId: source.id },
+      parent: { kind: 'system' as const, id: destination.id },
+    }
+
+    await harness.workflows.navigation.revealHistoryContext({ direction: 'undo', action })
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: source.id, objectId: root.id })
+    expect(harness.store.selectedObjectIds).toEqual([root.id])
+
+    harness.workspace.value = applySystemObjectTransfer(before, {
+      sourceSystemId: source.id,
+      rootObjectId: root.id,
+      destinationSystemId: destination.id,
+      placement: { kind: 'system', x: 0.74, y: 0.56 },
+    })
+    await harness.workflows.navigation.revealHistoryContext({ direction: 'redo', action })
+
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.store.selectedSystemId).toBe(destination.id)
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: destination.id, objectId: root.id })
+    expect(harness.store.selectedObjectIds).toEqual([root.id])
   } finally {
     harness.dispose()
   }

@@ -38,6 +38,8 @@ export interface SystemObjectTransferStationLink {
 
 /** Consequences and a safe destination projection remain available while keys are being corrected. */
 export interface SystemObjectTransferReview {
+  /** Exact source snapshot used to compute this proposal's labels and consequences. */
+  sourceWorkspace: LocalWorkspace
   request: SystemObjectTransferRequest
   branch: SystemObjectBranch
   suggestedLocationKeys: ReadonlyMap<string, string>
@@ -179,6 +181,7 @@ function buildTransferReview(
   const relationships = collectCrossingRelationships(workspace, source, branchObjectIds)
   const previewWorkspace = applyTransfer(workspace, request, branch, suggestedLocationKeys, relationships)
   return {
+    sourceWorkspace: workspace,
     request: { ...request, placement: { ...request.placement } },
     branch,
     suggestedLocationKeys,
