@@ -529,8 +529,9 @@ export function useMapWorkflows({
     target: Extract<SystemCreationTarget, { kind: 'free' | 'orbit' }>,
     otherType?: string,
     expectedWorkspace?: LocalWorkspace,
+    addRequestIsCurrent: () => boolean = () => true,
   ): Promise<boolean> {
-    if (!await beforeWorkspaceOperation()) return false
+    if (!addRequestIsCurrent() || !await beforeWorkspaceOperation() || !addRequestIsCurrent()) return false
     const currentWorkspace = workspace.value
     if (expectedWorkspace && toRaw(currentWorkspace) !== toRaw(expectedWorkspace)) {
       editorError.value = 'The workspace changed before this object could be added.'
@@ -557,7 +558,7 @@ export function useMapWorkflows({
       const contextIsCurrent = (): boolean => {
         const latest = workspace.value
         const latestSystem = latest?.cluster.systems.find(candidate => candidate.id === systemId)
-        return latest !== null && latest.id === currentWorkspace.id && latest.cluster.id === clusterId
+        return addRequestIsCurrent() && latest !== null && latest.id === currentWorkspace.id && latest.cluster.id === clusterId
           && latestSystem !== undefined
           && (target.kind !== 'orbit' || latestSystem.orbits.some(orbit => orbit.id === target.orbitId))
           && latest === currentWorkspace && store.activeView === 'cluster'
@@ -609,6 +610,7 @@ export function useMapWorkflows({
       editorError.value = ''
       return result.status === 'applied'
     } catch (error) {
+      if (!addRequestIsCurrent()) return false
       editorError.value = errorText(error)
       return false
     }

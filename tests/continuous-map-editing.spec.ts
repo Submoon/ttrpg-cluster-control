@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { createLocalWorkspace, createOrbit } from '../domain/workspace'
+import { creationCandidatesAtPoint, objectPositions, orbitPointAtAngle } from '../utils/system-map-geometry'
 import {
+  createContinuousObjectAddRequestLease,
   resolveContinuousObjectOwnerIds,
   resolveContinuousObjectOwnerResolution,
   selectContinuousObjectAddCandidate,
@@ -69,4 +72,37 @@ test('keyboard Add on an Orbit chooses a point on its rotated ring @pure', () =>
     sceneRadii: { horizontal: 40, vertical: 20 },
     rotation: 90,
   }, { x: 12, y: -5 })).toEqual({ x: 212, y: 135 })
+})
+
+test('a collapsed system cannot attach Add to a hidden Orbit but keeps occupied marks blocked @pure', () => {
+  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const source = workspace.cluster.systems[0]!
+  const star = source.objects[0]!
+  const orbit = createOrbit(source, star.id)
+  const system = { ...source, orbits: [orbit] }
+  const geometry = {
+    objectAngles: {},
+    orbitRadii: { [orbit.id]: { horizontal: 100, vertical: 100 } },
+    orbitRotations: {},
+  }
+  const starPoint = objectPositions(system, geometry).get(star.id)!
+  const ringPoint = orbitPointAtAngle(starPoint, geometry.orbitRadii[orbit.id]!, 0, 0)
+
+  expect(creationCandidatesAtPoint(system, ringPoint, { kind: 'object', subtype: 'planet' }, geometry)
+    .map(candidate => candidate.target.kind)).toContain('orbit')
+  expect(creationCandidatesAtPoint(system, ringPoint, { kind: 'object', subtype: 'planet' }, geometry, false)
+    .map(candidate => candidate.target.kind)).toEqual(['free'])
+  expect(creationCandidatesAtPoint(system, starPoint, { kind: 'object', subtype: 'planet' }, geometry, false)[0])
+    .toMatchObject({ target: { kind: 'host', objectId: star.id }, error: expect.any(String) })
+})
+
+test('clearing an older Add request cannot cancel a newer Add operation @pure', () => {
+  const lease = createContinuousObjectAddRequestLease<string>()
+  const older = lease.capture('planet')
+  const newer = lease.capture('moon')
+
+  expect(lease.clear(older)).toBe(false)
+  expect(lease.isCurrent(newer)).toBe(true)
+  expect(lease.clear(newer)).toBe(true)
+  expect(lease.isCurrent(newer)).toBe(false)
 })

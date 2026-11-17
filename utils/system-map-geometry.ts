@@ -564,6 +564,7 @@ export function creationCandidatesAtPoint(
   point: Point,
   type: SystemCreationType,
   geometry: SystemMapGeometry,
+  includeOrbitTargets = true,
 ): SystemCreationCandidate[] {
   if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return []
 
@@ -576,7 +577,7 @@ export function creationCandidatesAtPoint(
     .sort((left, right) => left.distance - right.distance)
 
   if (type.kind === 'object') {
-    const nearbyOrbits = system.orbits
+    const nearbyOrbits = includeOrbitTargets ? system.orbits
       .map(orbit => {
         const center = orbitCenter(orbit, positions)
         const radii = orbitRadii(system, orbit, geometry)
@@ -587,7 +588,7 @@ export function creationCandidatesAtPoint(
       })
       // Keep the manipulation resolver's existing scene-unit tolerance for placement targeting.
       .filter(candidate => candidate.distance <= 16)
-      .sort((left, right) => left.distance - right.distance || left.orbit.order - right.orbit.order)
+      .sort((left, right) => left.distance - right.distance || left.orbit.order - right.orbit.order) : []
 
     const orbitCandidates: SystemCreationCandidate[] = nearbyOrbits.map(({ orbit, angle }) => ({
       key: `orbit:${orbit.id}`,

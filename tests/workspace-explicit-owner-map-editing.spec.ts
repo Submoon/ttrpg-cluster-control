@@ -158,6 +158,7 @@ test('Add writes to the chosen owner without opening a new Inspector target @pur
   store.setMode('select')
   const inspectedTargetBefore = store.inspectedTarget
   const editorError = ref('')
+  let beforeWorkspaceOperation = async () => true
   const map = useMapWorkflows({
     workspace,
     mutations,
@@ -168,7 +169,7 @@ test('Add writes to the chosen owner without opening a new Inspector target @pur
     isEntityCommandBlocked: () => false,
     editorError,
     orbitAdjustments,
-    beforeWorkspaceOperation: async () => true,
+    beforeWorkspaceOperation: () => beforeWorkspaceOperation(),
   })
 
   await map.addMapObjectInSystem(
@@ -200,6 +201,25 @@ test('Add writes to the chosen owner without opening a new Inspector target @pur
   expect(editorError.value).toContain('workspace changed')
   expect(workspace.value?.cluster.systems.find(system => system.id === added.system.id)?.objects)
     .toHaveLength(createdObjectCount)
+
+  let addRequestCurrent = true
+  beforeWorkspaceOperation = async () => {
+    addRequestCurrent = false
+    return true
+  }
+  const workspaceBeforeCancellation = workspace.value!
+  const revisionBeforeCancellation = revision
+  const cancelledInPreflight = await map.addMapObjectInSystem(
+    added.system.id,
+    'moon',
+    { kind: 'free', point: toNormalizedMapPoint({ x: 730, y: 350 }) },
+    undefined,
+    workspaceBeforeCancellation,
+    () => addRequestCurrent,
+  )
+  expect(cancelledInPreflight).toBe(false)
+  expect(revision).toBe(revisionBeforeCancellation)
+  expect(workspace.value).toBe(workspaceBeforeCancellation)
 
   orbitAdjustments.dispose()
   mutations.dispose()

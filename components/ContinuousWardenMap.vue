@@ -968,7 +968,13 @@ function addOwnersAtPoint(
     if (!projection || !system) return []
     const delta = anchorDelta(projection)
     const localPoint = projection.unprojectLocalPoint({ x: point.x - delta.x, y: point.y - delta.y })
-    const candidates = creationCandidatesAtPoint(system, localPoint, { kind: 'object', subtype }, geometry)
+    const candidates = creationCandidatesAtPoint(
+      system,
+      localPoint,
+      { kind: 'object', subtype },
+      geometry,
+      detailSystemIds.value.has(systemId),
+    )
       .map(candidate => candidate.target.kind === 'orbit'
         && props.isEntityCommandBlocked?.({ kind: 'object-create', orbitId: candidate.target.orbitId })
         ? { ...candidate, error: 'Resolve the Inspector draft before adding an object to this Orbit.' }

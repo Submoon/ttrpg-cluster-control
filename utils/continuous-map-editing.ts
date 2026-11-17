@@ -17,6 +17,35 @@ export interface ContinuousObjectAddTarget {
   owners: ContinuousObjectAddOwner[]
 }
 
+export interface OwnedContinuousObjectAddRequest<T> {
+  id: number
+  request: T
+}
+
+/** Gives each Add attempt a page-lifetime identity so an older completion cannot clear a newer attempt. */
+export function createContinuousObjectAddRequestLease<T>() {
+  let sequence = 0
+  let currentId: number | null = null
+  return {
+    capture(request: T): OwnedContinuousObjectAddRequest<T> {
+      const owned = { id: ++sequence, request }
+      currentId = owned.id
+      return owned
+    },
+    isCurrent(owned: OwnedContinuousObjectAddRequest<T>): boolean {
+      return currentId === owned.id
+    },
+    clear(owned: OwnedContinuousObjectAddRequest<T>): boolean {
+      if (currentId !== owned.id) return false
+      currentId = null
+      return true
+    },
+    clearAll(): void {
+      currentId = null
+    },
+  }
+}
+
 /** A committed Move request keeps the source owner and workspace captured by the gesture. */
 export interface ContinuousObjectMoveTarget {
   systemId: string

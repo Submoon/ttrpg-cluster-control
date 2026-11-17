@@ -214,7 +214,7 @@
                 <p class="m-0 mb-3 text-sm text-muted">Choose the system that will own this object.</p>
                 <div class="grid gap-2">
                   <UButton
-                    v-for="owner in pendingContinuousObjectAdd?.owners ?? []"
+                    v-for="owner in pendingContinuousObjectAdd?.request.owners ?? []"
                     :key="owner.systemId"
                     color="neutral"
                     variant="outline"
@@ -693,7 +693,12 @@ import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type Local
 import { validName } from '../domain/workspace-validation'
 import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { EntityCommand, SearchPresentationSettlement, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
-import { selectContinuousObjectAddCandidate, type ContinuousObjectAddTarget } from '../utils/continuous-map-editing'
+import {
+  createContinuousObjectAddRequestLease,
+  selectContinuousObjectAddCandidate,
+  type ContinuousObjectAddTarget,
+  type OwnedContinuousObjectAddRequest,
+} from '../utils/continuous-map-editing'
 import type { WorkspaceHistoryTraversalContext } from '../composables/editor-workflows/workspace-mutations'
 import { provideEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import type { PublicationMenuRequest } from '../composables/editor-workflows/publication-types'
@@ -1382,7 +1387,9 @@ const continuousObjectOtherTypeName = ref('')
 const continuousObjectOtherTypeError = ref('')
 const continuousObjectAddOtherType = ref('')
 const continuousObjectPinnedOwnerId = ref<string | null>(null)
-const pendingContinuousObjectAdd = ref<ContinuousObjectAddTarget | null>(null)
+const continuousObjectAddRequestLease = createContinuousObjectAddRequestLease<ContinuousObjectAddTarget>()
+const pendingContinuousObjectAdd = ref<OwnedContinuousObjectAddRequest<ContinuousObjectAddTarget> | null>(null)
+let continuousObjectAddChoiceId = 0
 const workspaceDockRef = ref<{ openAddChooserFromKeyboard(): void } | null>(null)
 const keyboardAddOriginMapKey = ref<string | null>(null)
 const continuousObjectCreationType = computed<SystemCreationType | null>(() => continuousMapEnabled.value
@@ -1449,8 +1456,9 @@ watch([creationSession, clusterAddType, continuousObjectAddType], ([creationInte
 }, { flush: 'sync' })
 watch(() => workspace.value, current => {
   if (continuousObjectPinnedOwnerId.value) continuousObjectPinnedOwnerId.value = null
-  if (pendingContinuousObjectAdd.value?.workspaceSnapshot !== current) {
-    pendingContinuousObjectAdd.value = null
+  const pending = pendingContinuousObjectAdd.value
+  if (pending && pending.request.workspaceSnapshot !== current) {
+    clearContinuousObjectAddRequest(pending)
     continuousObjectOwnerChooserOpen.value = false
   }
 }, { flush: 'sync' })
@@ -1459,12 +1467,49 @@ watch([() => workspace.value?.id, () => workspace.value?.cluster.id], ([workspac
 }, { flush: 'sync' })
 
 async function chooseObjectCreationType(subtype: CatalogueSubtype): Promise<void> {
-  if (!await beforeWorkspaceOperation()) return
+  const currentWorkspace = workspace.value
+  if (!currentWorkspace) return
+  const choiceId = ++continuousObjectAddChoiceId
+  const workspaceId = currentWorkspace.id
+  const clusterId = currentWorkspace.cluster.id
+  const mapKey = activeMapKey.value
+  const startingActiveView = activeView.value
+  const startingContinuousMap = continuousMapEnabled.value
+  const startingRouteSessionId = routeSession.value?.id ?? null
+  const resolvingRouteCreation = activeView.value === 'cluster' && continuousMapEnabled.value
+    && clusterAddType.value === 'route'
+    && routeSession.value?.routeId === null
+    && hasModifiedRouteSession.value
+  let routeMayBeClosed = false
+  const isCurrent = (): boolean => {
+    const latest = workspace.value
+    const currentRoute = routeSession.value
+    const routeContextIsCurrent = currentRoute === null
+      ? startingRouteSessionId === null || resolvingRouteCreation || routeMayBeClosed
+      : currentRoute.id === startingRouteSessionId
+      || (resolvingRouteCreation && currentRoute.routeId === null
+        && currentRoute.clusterId === clusterId && !hasModifiedRouteSession.value)
+    return choiceId === continuousObjectAddChoiceId
+      && latest !== null && latest.id === workspaceId && latest.cluster.id === clusterId
+      && activeView.value === startingActiveView && continuousMapEnabled.value === startingContinuousMap
+      && activeMapKey.value === mapKey
+      && routeContextIsCurrent
+  }
+
+  if (resolvingRouteCreation) {
+    if (!await resolveTransition({ leaveChart: false, leaveEntitySession: false }, isCurrent)) return
+    routeMayBeClosed = true
+  } else if (!await beforeWorkspaceOperation() || !isCurrent()) {
+    return
+  }
+  if (!isCurrent()) return
   if (activeView.value === 'cluster' && continuousMapEnabled.value) {
     cancelMapMove()
     if (creationSession.value || clusterAddType.value) {
-      if (!await quitSystemAdd()) return
+      routeMayBeClosed = true
+      if (!await quitSystemAdd(isCurrent)) return
     }
+    if (!isCurrent()) return
     clearContinuousObjectAdd()
     continuousObjectAddType.value = subtype
     editorError.value = ''
@@ -1481,6 +1526,7 @@ async function chooseObjectCreationType(subtype: CatalogueSubtype): Promise<void
 }
 
 function clearContinuousObjectAdd(): void {
+  continuousObjectAddRequestLease.clearAll()
   continuousObjectAddType.value = null
   pendingContinuousObjectAdd.value = null
   continuousObjectOwnerChooserOpen.value = false
@@ -1516,7 +1562,9 @@ function continuousObjectOwnerName(systemId: string): string {
   return workspace.value?.cluster.systems.find(system => system.id === systemId)?.name ?? 'Unknown system'
 }
 
-function continuousAddRequestIsCurrent(request: ContinuousObjectAddTarget): boolean {
+function continuousAddRequestIsCurrent(owned: OwnedContinuousObjectAddRequest<ContinuousObjectAddTarget>): boolean {
+  const request = owned.request
+  if (!continuousObjectAddRequestLease.isCurrent(owned)) return false
   return activeView.value === 'cluster' && continuousMapEnabled.value
     && continuousObjectAddType.value === request.subtype
     && (request.subtype !== 'other' || request.otherType === continuousObjectAddOtherType.value)
@@ -1524,16 +1572,23 @@ function continuousAddRequestIsCurrent(request: ContinuousObjectAddTarget): bool
 }
 
 function handleContinuousObjectAddTarget(request: ContinuousObjectAddTarget): void {
-  if (!continuousAddRequestIsCurrent(request)) return
+  if (activeView.value !== 'cluster' || !continuousMapEnabled.value
+    || continuousObjectAddType.value !== request.subtype
+    || (request.subtype === 'other' && request.otherType !== continuousObjectAddOtherType.value)
+    || toRaw(workspace.value) !== toRaw(request.workspaceSnapshot)) return
+  const owned = continuousObjectAddRequestLease.capture(request)
+  pendingContinuousObjectAdd.value = null
+  continuousObjectOwnerChooserOpen.value = false
   if (request.owners.length === 1 && !request.requiresOwnerChoice) {
-    void addContinuousObjectToOwner(request, request.owners[0]!.systemId)
+    void addContinuousObjectToOwner(owned, request.owners[0]!.systemId)
     return
   }
   if (request.owners.length === 0) {
     editorError.value = 'Choose an available system before adding an object.'
+    clearContinuousObjectAddRequest(owned)
     return
   }
-  pendingContinuousObjectAdd.value = request
+  pendingContinuousObjectAdd.value = owned
   continuousObjectOwnerChooserOpen.value = true
   editorError.value = ''
 }
@@ -1546,9 +1601,14 @@ function continuousAddCandidate(
   return selectContinuousObjectAddCandidate(candidates, request.directTarget)
 }
 
-async function addContinuousObjectToOwner(request: ContinuousObjectAddTarget, systemId: string): Promise<boolean> {
-  if (!continuousAddRequestIsCurrent(request)) {
-    clearContinuousObjectAddRequest()
+async function addContinuousObjectToOwner(
+  owned: OwnedContinuousObjectAddRequest<ContinuousObjectAddTarget>,
+  systemId: string,
+): Promise<boolean> {
+  const request = owned.request
+  const requestIsCurrent = () => continuousAddRequestIsCurrent(owned)
+  if (!requestIsCurrent()) {
+    clearContinuousObjectAddRequest(owned)
     return false
   }
   const choice = continuousAddCandidate(request, systemId)
@@ -1574,11 +1634,13 @@ async function addContinuousObjectToOwner(request: ContinuousObjectAddTarget, sy
     candidate.target,
     request.otherType,
     request.workspaceSnapshot,
+    requestIsCurrent,
   )
   if (!applied) return false
+  if (!continuousObjectAddRequestLease.isCurrent(owned)) return true
   continuousObjectPinnedOwnerId.value = null
   editorError.value = ''
-  clearContinuousObjectAddRequest()
+  clearContinuousObjectAddRequest(owned)
   return true
 }
 
@@ -1587,18 +1649,23 @@ function chooseContinuousObjectOwner(systemId: string): void {
   if (request) void addContinuousObjectToOwner(request, systemId)
 }
 
-function clearContinuousObjectAddRequest(): void {
-  pendingContinuousObjectAdd.value = null
+function clearContinuousObjectAddRequest(owned: OwnedContinuousObjectAddRequest<ContinuousObjectAddTarget>): void {
+  if (!continuousObjectAddRequestLease.clear(owned)) return
+  if (pendingContinuousObjectAdd.value?.id === owned.id) pendingContinuousObjectAdd.value = null
   continuousObjectOwnerChooserOpen.value = false
 }
 
 function onContinuousObjectOwnerChooserOpenChange(open: boolean): void {
   if (open) return
-  clearContinuousObjectAddRequest()
+  const pending = pendingContinuousObjectAdd.value
+  if (pending) clearContinuousObjectAddRequest(pending)
+  else continuousObjectOwnerChooserOpen.value = false
 }
 
 function cancelContinuousObjectOwnerChoice(): void {
-  clearContinuousObjectAddRequest()
+  const pending = pendingContinuousObjectAdd.value
+  if (pending) clearContinuousObjectAddRequest(pending)
+  else continuousObjectOwnerChooserOpen.value = false
 }
 
 function handleContinuousObjectMove(
@@ -1642,10 +1709,10 @@ function beginRouteAndClose(close: () => void): void {
   close()
 }
 
-async function quitSystemAdd(): Promise<boolean> {
-  if (!await beforeWorkspaceOperation()) return false
+async function quitSystemAdd(isCurrent: () => boolean = () => true): Promise<boolean> {
+  if (!isCurrent() || !await beforeWorkspaceOperation() || !isCurrent()) return false
+  if (!await quitAdd(isCurrent) || !isCurrent()) return false
   clearContinuousObjectAdd()
-  quitAdd()
   creationChooserOpen.value = false
   return true
 }

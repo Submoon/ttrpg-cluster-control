@@ -398,12 +398,13 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     store.reset(workspaceContextId.value)
   }
 
-  async function quitAdd(): Promise<void> {
-    if (!await beforeWorkspaceOperation()) return
+  async function quitAdd(isCurrent: () => boolean = () => true): Promise<boolean> {
+    if (!isCurrent() || !await beforeWorkspaceOperation() || !isCurrent()) return false
     route.cancelRouteCreation()
     clusterSystemPlacement.quitClusterAdd()
     systemCreation.quitAdd()
     store.setMode('select')
+    return true
   }
 
   function acknowledgeObjectInspectorFocusRequest(requestId: number): void {
