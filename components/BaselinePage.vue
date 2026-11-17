@@ -19,7 +19,8 @@
         {{ dropboxRestore.message.value }}
       </p>
       <p
-        v-if="activeView === 'system' && mapMode === 'move' && selectedObjectIds.length > 1 && moveSelectionError"
+        v-if="(activeView === 'system' || activeView === 'cluster' && continuousMapEnabled)
+          && mapMode === 'move' && selectedObjectIds.length > 1 && moveSelectionError"
         class="feedback m-0 error-text"
         role="alert"
         aria-live="assertive"
@@ -612,7 +613,7 @@
               :draft-system="wardenSystem"
               :inspected-cluster-system="inspectorClusterSystem"
               :selected-object="inspectorSelectedObject"
-              :selected-object-count="continuousMapEnabled ? (inspectedTarget?.kind === 'object' ? 1 : 0) : selectedObjectIds.length"
+              :selected-object-count="selectedObjectIds.length"
               :object-focus-request="objectInspectorFocusRequest"
               :inspector-visible="inspectorPanelVisible"
               :selected-orbit="inspectorSelectedOrbit"

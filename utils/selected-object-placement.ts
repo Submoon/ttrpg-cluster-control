@@ -38,6 +38,28 @@ export interface SelectedObjectTranslationPlan {
   updates: readonly SelectedObjectPlacementChange[]
 }
 
+/** Selects which member may drive Orbit proximity snapping for a prepared group move. */
+export type SelectedObjectSnapPolicy = 'eligible-selection-root' | 'anchor-only' | 'none'
+
+/** One selected-object placement change annotated with its unchanged owning system. */
+export interface OwnedSelectedObjectPlacementChange {
+  systemId: string
+  change: SelectedObjectPlacementChange
+}
+
+/** Complete multi-system Cluster move plan. Per-system positions remain in their owning local map coordinates. */
+export interface ContinuousSelectedObjectTranslationPlan {
+  effectiveSceneDelta: Point
+  systemPlans: ReadonlyMap<string, SelectedObjectTranslationPlan>
+  objectSystemIds: ReadonlyMap<string, string>
+  positions: ReadonlyMap<string, Point>
+  movedObjectIds: readonly string[]
+  departingObjectIds: ReadonlySet<string>
+  arrivingObjectIds: ReadonlySet<string>
+  changes: readonly OwnedSelectedObjectPlacementChange[]
+  updates: readonly OwnedSelectedObjectPlacementChange[]
+}
+
 function geometryOf(workspace: LocalWorkspace) {
   return {
     objectAngles: workspace.layout.objectAngles,
@@ -292,6 +314,7 @@ export function prepareSelectedObjectTranslation(
   systemId: string,
   selectedObjectIds: readonly string[],
   anchorId?: string,
+  snapPolicy: SelectedObjectSnapPolicy = 'eligible-selection-root',
 ): ((delta: Point) => SelectedObjectTranslationPlan | null) | null {
   if (selectedObjectIds.length === 0) return null
   const system = workspace.cluster.systems.find(candidate => candidate.id === systemId)
@@ -309,9 +332,15 @@ export function prepareSelectedObjectTranslation(
   const preferredRootId = anchor?.placement.kind === 'orbit' && selectedRootIds.includes(anchor.id)
     ? anchor.id
     : undefined
-  const selectedRoots: SelectionSnapRoots = preferredRootId
-    ? { ids: [preferredRootId, ...selectedRootIds.filter(objectId => objectId !== preferredRootId)], preferredId: preferredRootId }
-    : { ids: selectedRootIds }
+  const selectedRoots: SelectionSnapRoots = snapPolicy === 'none'
+    ? { ids: [] }
+    : snapPolicy === 'anchor-only'
+      ? anchor && selectedRootIds.includes(anchor.id)
+        ? { ids: [anchor.id], preferredId: anchor.id }
+        : { ids: [] }
+      : preferredRootId
+        ? { ids: [preferredRootId, ...selectedRootIds.filter(objectId => objectId !== preferredRootId)], preferredId: preferredRootId }
+        : { ids: selectedRootIds }
   const objectsById = new Map(system.objects.map(object => [object.id, object]))
   const orbitsById = new Map(system.orbits.map(orbit => [orbit.id, orbit]))
   const stationaryOrbits = prepareStationaryOrbitGeometry(system, geometry, beforePositions, movedObjectIdSet)
@@ -445,6 +474,108 @@ export function prepareSelectedObjectTranslation(
   }
 }
 
+/**
+ * Prepares one cross-system group move in Cluster-scene coordinates.
+ * The grabbed object's owning system alone may adjust the shared delta to an eligible Orbit;
+ * other owners retain the resulting displacement and only accept exact Orbit placements.
+ */
+export function prepareContinuousSelectedObjectTranslation(
+  workspace: LocalWorkspace,
+  selectedObjectIds: readonly string[],
+  grabbedSystemId: string,
+  grabbedObjectId: string,
+  systemScales: ReadonlyMap<string, number>,
+): ((sceneDelta: Point) => ContinuousSelectedObjectTranslationPlan | null) | null {
+  if (selectedObjectIds.length === 0 || !selectedObjectIds.includes(grabbedObjectId)) return null
+
+  const objectSystemIds = new Map<string, string>()
+  const objectsBySystem = new Map<string, string[]>()
+  for (const system of workspace.cluster.systems) {
+    for (const object of system.objects) objectSystemIds.set(object.id, system.id)
+  }
+  for (const objectId of [...new Set(selectedObjectIds)]) {
+    const systemId = objectSystemIds.get(objectId)
+    if (!systemId) return null
+    const ids = objectsBySystem.get(systemId) ?? []
+    ids.push(objectId)
+    objectsBySystem.set(systemId, ids)
+  }
+  if (objectSystemIds.get(grabbedObjectId) !== grabbedSystemId) return null
+
+  const grabbedScale = systemScales.get(grabbedSystemId)
+  if (grabbedScale === undefined || !Number.isFinite(grabbedScale) || grabbedScale <= 0) return null
+
+  const preparedBySystem = new Map<string, (delta: Point) => SelectedObjectTranslationPlan | null>()
+  for (const [systemId, ids] of objectsBySystem) {
+    const scale = systemScales.get(systemId)
+    if (scale === undefined || !Number.isFinite(scale) || scale <= 0) return null
+    const grabbedOwner = systemId === grabbedSystemId
+    const prepared = prepareSelectedObjectTranslation(
+      workspace,
+      systemId,
+      ids,
+      grabbedOwner ? grabbedObjectId : undefined,
+      grabbedOwner ? 'anchor-only' : 'none',
+    )
+    if (!prepared) return null
+    preparedBySystem.set(systemId, prepared)
+  }
+
+  const grabbedSystem = workspace.cluster.systems.find(system => system.id === grabbedSystemId)
+  if (!grabbedSystem) return null
+  const grabbedOrigin = objectPositions(grabbedSystem, geometryOf(workspace)).get(grabbedObjectId)
+  if (!grabbedOrigin) return null
+
+  return (sceneDelta: Point): ContinuousSelectedObjectTranslationPlan | null => {
+    if (!Number.isFinite(sceneDelta.x) || !Number.isFinite(sceneDelta.y)) return null
+    const grabbedPlan = preparedBySystem.get(grabbedSystemId)?.({
+      x: sceneDelta.x / grabbedScale,
+      y: sceneDelta.y / grabbedScale,
+    })
+    const grabbedPosition = grabbedPlan?.positions.get(grabbedObjectId)
+    if (!grabbedPlan || !grabbedPosition) return null
+
+    const effectiveSceneDelta = {
+      x: (grabbedPosition.x - grabbedOrigin.x) * grabbedScale,
+      y: (grabbedPosition.y - grabbedOrigin.y) * grabbedScale,
+    }
+    const systemPlans = new Map<string, SelectedObjectTranslationPlan>([[grabbedSystemId, grabbedPlan]])
+    for (const [systemId, prepare] of preparedBySystem) {
+      if (systemId === grabbedSystemId) continue
+      const scale = systemScales.get(systemId)!
+      const plan = prepare({ x: effectiveSceneDelta.x / scale, y: effectiveSceneDelta.y / scale })
+      if (!plan) return null
+      systemPlans.set(systemId, plan)
+    }
+
+    const positions = new Map<string, Point>()
+    const movedObjectIds: string[] = []
+    const departingObjectIds = new Set<string>()
+    const arrivingObjectIds = new Set<string>()
+    const changes: OwnedSelectedObjectPlacementChange[] = []
+    const updates: OwnedSelectedObjectPlacementChange[] = []
+    for (const [systemId, plan] of systemPlans) {
+      for (const [objectId, position] of plan.positions) positions.set(objectId, position)
+      movedObjectIds.push(...plan.movedObjectIds)
+      for (const objectId of plan.departingObjectIds) departingObjectIds.add(objectId)
+      for (const objectId of plan.arrivingObjectIds) arrivingObjectIds.add(objectId)
+      changes.push(...plan.changes.map(change => ({ systemId, change })))
+      updates.push(...plan.updates.map(change => ({ systemId, change })))
+    }
+    return {
+      effectiveSceneDelta,
+      systemPlans,
+      objectSystemIds,
+      positions,
+      movedObjectIds,
+      departingObjectIds,
+      arrivingObjectIds,
+      changes,
+      updates,
+    }
+  }
+}
+
 /** One-shot compatibility entry point for callers that do not retain a drag gesture. */
 export function planSelectedObjectTranslation(
   workspace: LocalWorkspace,
@@ -499,6 +630,19 @@ export function applySelectedObjectTranslation(
         ? { angle: change.nextAngle }
         : undefined,
     )
+  }
+  return nextWorkspace
+}
+
+/** Applies every owner-local plan to one immutable workspace candidate. */
+export function applyContinuousSelectedObjectTranslation(
+  workspace: LocalWorkspace,
+  plan: ContinuousSelectedObjectTranslationPlan,
+): LocalWorkspace {
+  if (plan.updates.length === 0) return workspace
+  let nextWorkspace = workspace
+  for (const [systemId, systemPlan] of plan.systemPlans) {
+    nextWorkspace = applySelectedObjectTranslation(nextWorkspace, systemId, systemPlan)
   }
   return nextWorkspace
 }

@@ -1,10 +1,16 @@
-import { expect, preparedCampaignTest as test, type Locator } from './fixtures'
+import { readFile } from 'node:fs/promises'
+import { expect, preparedCampaignTest as test, test as freshTest, type Locator } from './fixtures'
 import {
   captureMapExportBlobs,
+  type DownloadWindow,
   downloadJson,
+  exposedContinuousObjectHitPoint,
+  type ExportedMap,
+  openMapFilesSection,
   openWorkspaceHierarchy,
   openWorkspaceZoomNavigation,
   returnToClusterMap,
+  setHeaderMapActionsOpen,
   snapshotSvgCoordinates,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
@@ -35,6 +41,26 @@ async function visibleIndicatorObjectIds(indicators: Locator): Promise<string[]>
     if (!id) throw new Error('A visible selection indicator has no object identity.')
     return id
   }).sort()
+}
+
+async function downloadJsonFromFile(
+  page: import('@playwright/test').Page,
+  buttonName: 'Export Jump Cluster JSON' | 'Export star system JSON',
+): Promise<ExportedMap> {
+  const itemName = buttonName === 'Export Jump Cluster JSON'
+    ? 'Download private Jump Cluster JSON'
+    : 'Download private Star System JSON'
+  const downloads = await openMapFilesSection(page, 'Download or back up')
+  try {
+    const downloadPromise = page.waitForEvent('download')
+    await downloads.getByRole('menuitem', { name: itemName, exact: true }).click()
+    const download = await downloadPromise
+    const json = await readFile(await download.path(), 'utf8')
+    await page.evaluate(() => (window as DownloadWindow).__mapExportBlobs?.splice(0))
+    return JSON.parse(json) as ExportedMap
+  } finally {
+    await setHeaderMapActionsOpen(page, false)
+  }
 }
 
 test('multi-select objects and preserve Hierarchy keyboard behavior through reflow', async ({
@@ -535,12 +561,104 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await expect(redo).toBeEnabled()
   await redo.click()
   await waitForWorkspaceSaved(page)
-  expect(await downloadJson(page, 'Export star system JSON')).toEqual(moved)
 
   await page.reload()
   await waitForWorkspaceStartup(page)
   await returnToClusterMap(page)
   const restoredHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   await restoredHierarchy.getByRole('button', { name: 'Open Vesper Prime system map', exact: true }).click()
-  expect(await downloadJson(page, 'Export star system JSON')).toEqual(moved)
+  expect(await downloadJsonFromFile(page, 'Export star system JSON')).toEqual(moved)
+})
+
+freshTest('continuous Warden group movement previews and commits across owning systems', async ({ page }) => {
+  freshTest.setTimeout(60_000)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/?map=continuous')
+  const fixture = JSON.parse(await readFile(new URL('./fixtures/workspace-data-campaign-baseline.json', import.meta.url), 'utf8')) as ExportedMap
+  const [sourceOwner, otherOwner] = fixture.cluster?.systems ?? []
+  const sourceObject = sourceOwner?.objects.find(candidate => candidate.name === 'Iria')
+  const otherOwnerObject = otherOwner?.objects.find(candidate => candidate.name === 'Harrow Arrival')
+  if (!sourceOwner || !sourceObject || !otherOwner || !otherOwnerObject || !fixture.cluster) {
+    throw new Error('The continuous group fixture needs an exposed object in each owner.')
+  }
+  fixture.layout.systemPositions = {
+    [sourceOwner.id]: { x: .44, y: .5 },
+    [otherOwner.id]: { x: .53, y: .5 },
+  }
+  otherOwnerObject.placement = { kind: 'system', x: .63, y: .59 }
+  const [picker] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.getByRole('button', { name: 'Open local Jump Cluster backup', exact: true }).click(),
+  ])
+  await picker.setFiles({
+    name: 'group-movement-fixture.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(fixture)),
+  })
+  const review = page.getByRole('dialog', { name: 'Open Jump Cluster', exact: true })
+  await review.getByRole('button', { name: 'Open Jump Cluster', exact: true }).click()
+  await waitForWorkspaceStartup(page)
+  const clusterBeforeGroupMove = await downloadJsonFromFile(page, 'Export Jump Cluster JSON')
+  await setWorkspaceMapMode(page, 'Select')
+  const continuousMap = page.getByRole('group', { name: `${fixture.cluster.name} continuous map`, exact: true })
+  const sourceMark = continuousMap.locator(
+    `.continuous-warden-object[data-system-id="${sourceOwner.id}"][data-object-id="${sourceObject.id}"]`,
+  )
+  const otherMark = continuousMap.locator(
+    `.continuous-warden-object[data-system-id="${otherOwner.id}"][data-object-id="${otherOwnerObject.id}"]`,
+  )
+  const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
+  let sourcePoint = null
+  let otherPoint = null
+  for (let step = 0; step < 12; step += 1) {
+    sourcePoint = await sourceMark.count() ? await exposedContinuousObjectHitPoint(sourceMark) : null
+    otherPoint = await otherMark.count() ? await exposedContinuousObjectHitPoint(otherMark) : null
+    if (sourcePoint && otherPoint) break
+    await zoomIn.click()
+  }
+  if (!sourcePoint || !otherPoint) throw new Error('The two owners need visible, hittable objects.')
+  await page.mouse.click(sourcePoint.x, sourcePoint.y)
+  await page.keyboard.down('Shift')
+  try {
+    await page.mouse.click(otherPoint.x, otherPoint.y)
+  } finally {
+    await page.keyboard.up('Shift')
+  }
+  await expect(sourceMark).toHaveAttribute('aria-pressed', 'true')
+  await expect(otherMark).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByText('2 objects selected', { exact: true })).toBeVisible()
+
+  await setWorkspaceMapMode(page, 'Move')
+  const originalTransform = await sourceMark.getAttribute('transform')
+  const start = await exposedContinuousObjectHitPoint(sourceMark)
+  if (!originalTransform || !start) throw new Error('The selected Warden group anchor has no exposed hit target.')
+  const moveSelectedGroup = async () => {
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    await page.mouse.move(start.x + 38, start.y + 26, { steps: 5 })
+  }
+
+  await moveSelectedGroup()
+  await expect(page.getByRole('status').filter({ hasText: /Moving 2 selected objects/ })).toBeVisible()
+  await expect(sourceMark).not.toHaveAttribute('transform', originalTransform)
+  await page.keyboard.press('Escape')
+  await page.mouse.up()
+  await expect(sourceMark).toHaveAttribute('transform', originalTransform)
+  expect(await downloadJsonFromFile(page, 'Export Jump Cluster JSON')).toEqual(clusterBeforeGroupMove)
+
+  await moveSelectedGroup()
+  await expect(page.getByRole('status').filter({ hasText: /Moving 2 selected objects/ })).toBeVisible()
+  await page.mouse.up()
+  await waitForWorkspaceSaved(page)
+  const clusterAfterGroupMove = await downloadJsonFromFile(page, 'Export Jump Cluster JSON')
+  const movedOwner = clusterAfterGroupMove.cluster?.systems.find(candidate => candidate.id === otherOwner.id)
+  const movedAcrossSystemObject = movedOwner?.objects.find(candidate => candidate.id === otherOwnerObject.id)
+  const groupObjectState = (snapshot: typeof clusterBeforeGroupMove, ownerId: string, objectId: string) => {
+    const object = snapshot.cluster?.systems.find(candidate => candidate.id === ownerId)?.objects.find(candidate => candidate.id === objectId)
+    if (!object) throw new Error(`The Jump Cluster export is missing object "${objectId}".`)
+    return { placement: object.placement, angle: snapshot.layout.objectAngles[objectId] }
+  }
+  expect(groupObjectState(clusterAfterGroupMove, otherOwner.id, otherOwnerObject.id))
+    .not.toEqual(groupObjectState(clusterBeforeGroupMove, otherOwner.id, otherOwnerObject.id))
+  expect(movedAcrossSystemObject).toBeDefined()
 })

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import type { JumpRoute, Point } from '../domain/workspace'
-import { projectContinuousSystemGeometry } from '../utils/continuous-map-projection'
+import { previewWardenSystemObjects, projectContinuousSystemGeometry } from '../utils/continuous-map-projection'
 import { buildContinuousMapRouteGeometries, continuousMapRouteCurve } from '../utils/continuous-map-route-geometry'
 import { buildContinuousWardenRouteGeometries } from '../utils/continuous-warden-routes'
 
@@ -44,6 +44,41 @@ test('a continuous route follows each attached Jump Point only at that end’s d
     start: { x: 100, y: 50 },
     end: { x: 520, y: 160 },
   })
+})
+
+test('held group object previews move detailed routes and hosted Orbit rings without changing committed projections', { tag: '@pure' }, () => {
+  const hosted = projectContinuousSystemGeometry({
+    id: 'hosted',
+    name: 'Hosted system',
+    anchor: { x: 160, y: 90 },
+    objects: [{ id: 'host', name: 'Host', locationKey: 'JP1', position: { x: 680, y: 180 } }],
+    orbits: [{
+      id: 'hosted-orbit',
+      center: { x: 680, y: 180 },
+      radii: { horizontal: 48, vertical: 24 },
+      rotation: 12,
+    }],
+  })
+  const committedStart = hosted.objects[0]!.scenePosition
+  const committedOrbitCenter = hosted.orbits[0]!.sceneCenter
+  const movedPosition = { x: 740, y: 220 }
+  const preview = previewWardenSystemObjects(
+    hosted,
+    new Map([['host', movedPosition]]),
+    new Map([['hosted-orbit', 'host']]),
+  )
+  const previewRoute = buildContinuousWardenRouteGeometries({
+    routes: [{ ...route, fromSystemId: hosted.id, fromPointId: 'host' }],
+    projections: [preview, to],
+    detailSystemIds: new Set([hosted.id]),
+  }).get(route.id)
+
+  expect(previewRoute?.start).toEqual(preview.objects[0]!.scenePosition)
+  expect(preview.objects[0]?.scenePosition).toEqual(hosted.projectLocalPoint(movedPosition))
+  expect(preview.orbits[0]?.center).toEqual(movedPosition)
+  expect(preview.orbits[0]?.sceneCenter).toEqual(hosted.projectLocalPoint(movedPosition))
+  expect(hosted.objects[0]?.scenePosition).toEqual(committedStart)
+  expect(hosted.orbits[0]?.sceneCenter).toEqual(committedOrbitCenter)
 })
 
 test('authored and previewed exits stay in scene space as automatic exits follow the origin anchor', { tag: '@pure' }, () => {
