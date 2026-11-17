@@ -25,8 +25,10 @@ import type { WorkspaceHistoryCoordinator } from './workspace-mutations'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type MapHistoryTarget =
-  | { kind: 'system' | 'route'; id: string }
-  | { kind: 'object' | 'orbit'; id: string; systemId: string }
+  | { kind: 'system'; id: string }
+  | { kind: 'route'; id: string }
+  | { kind: 'object'; id: string; systemId: string }
+  | { kind: 'orbit'; id: string; systemId: string }
 export type TransitionGuard = 'chart' | 'inspector' | null
 export type TransitionDecision = 'apply' | 'discard' | 'stay'
 export interface TransitionOptions {
@@ -317,6 +319,8 @@ export interface MapNavigationHandle extends MapImageExporter {
   endTouchNavigation(event: TouchEvent): void
   /** Minimally pans to reveal a retained-history target without changing zoom or panel state. */
   revealHistoryTarget?(target: MapHistoryTarget, usableRect?: SvgViewportRect): boolean
+  /** Fits the surviving Cluster after a history target was removed. */
+  revealHistoryCluster?(): boolean
   /** Resolves after this canvas has restored its initial visit and is ready for navigation. */
   whenReady?(): Promise<boolean>
   /** Camera input generation used to abandon a pending Search frame after manual movement. */

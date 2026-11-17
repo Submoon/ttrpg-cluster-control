@@ -562,12 +562,12 @@ function longPressInspection(target: EventTarget | null): (() => void) | null {
   if (!(target instanceof Element)) return null
   const objectTarget = target.closest<SVGGElement>('.continuous-warden-object[data-system-id][data-object-id]')
   const objectSystemId = objectTarget?.getAttribute('data-system-id')
-  const objectId = objectTarget?.getAttribute('data-object-id')
-  if (objectSystemId && objectId) return () => emit('select-continuous-object', objectSystemId, objectId)
+  const continuousObjectId = objectTarget?.getAttribute('data-object-id')
+  if (objectSystemId && continuousObjectId) return () => emit('select-continuous-object', objectSystemId, continuousObjectId)
   const orbitTarget = target.closest<SVGElement>('.continuous-warden-orbit-target[data-system-id][data-orbit-id]')
   const orbitSystemId = orbitTarget?.getAttribute('data-system-id')
-  const orbitId = orbitTarget?.getAttribute('data-orbit-id')
-  if (orbitSystemId && orbitId) return () => emit('select-continuous-orbit', orbitSystemId, orbitId)
+  const continuousOrbitId = orbitTarget?.getAttribute('data-orbit-id')
+  if (orbitSystemId && continuousOrbitId) return () => emit('select-continuous-orbit', orbitSystemId, continuousOrbitId)
   const systemId = target.closest<SVGGElement>('.cluster-system-node')?.getAttribute('data-system-id')
   if (systemId) {
     return () => emit('select-cluster-system', systemId)
@@ -717,7 +717,8 @@ function onKeyDownCapture(event: KeyboardEvent): void {
     const bounds = event.target.getBoundingClientRect()
     if (showPublicationMenu(event, { x: bounds.left, y: bounds.bottom })) return
   }
-  if (props.moveTargeting && props.mode === 'move' && event.target instanceof SVGElement) {
+  if ((props.moveTargeting || props.clusterMoveTargeting)
+    && props.mode === 'move' && event.target instanceof SVGElement) {
     const step = event.shiftKey ? 10 : 1
     const nudges: Record<string, Point> = {
       ArrowLeft: { x: -step, y: 0 },
@@ -770,7 +771,7 @@ function onKeyDownCapture(event: KeyboardEvent): void {
   if (!delta) return
   event.preventDefault()
   event.stopPropagation()
-  currentMap()?.panBy(delta[0], delta[1])
+  panBy(delta[0], delta[1])
 }
 
 function onWindowKeyDownCapture(event: KeyboardEvent): void {
@@ -783,7 +784,8 @@ function onWindowKeyDownCapture(event: KeyboardEvent): void {
 
 /** Forwards a scene-space destination only while the active Move controller owns targeting. */
 function forwardMoveTarget(point: Point): void {
-  if (props.moveTargeting && props.mode === 'move' && !suppressNextClick) emit('move-target', point)
+  if ((props.moveTargeting || props.clusterMoveTargeting)
+    && props.mode === 'move' && !suppressNextClick) emit('move-target', point)
 }
 
 function onWindowPointerMove(event: PointerEvent): void {
@@ -1228,15 +1230,14 @@ function fitMap(usableRect?: SvgViewportRect): void {
 
 /** Fits the whole cluster or one visible system node inside the post-overlay usable map area. */
 function frameSearchTarget(target: SearchTarget): boolean {
-  const map = currentMap()
   const usableRect = measureUnobstructedViewport()
-  if (!map || !usableRect) return false
+  if (!usableRect) return false
   if (target.kind === 'cluster') {
-    map.fitMap(usableRect)
+    currentMap()?.fitMap(usableRect)
     return true
   }
   if (props.continuousMap && props.activeView === 'cluster') {
-    return currentClusterMap()?.frameSearchTarget(target, usableRect) ?? false
+    return continuousWardenMapRef.value?.frameSearchTarget(target, usableRect) ?? false
   }
   if (target.kind === 'object') {
     return props.activeView === 'system'
@@ -1247,17 +1248,29 @@ function frameSearchTarget(target: SearchTarget): boolean {
       : false
   }
   return props.activeView === 'cluster'
-    ? currentClusterMap()?.frameSystem(target.systemId, usableRect) ?? false
+    ? clusterMapRef.value?.frameSystem(target.systemId, usableRect) ?? false
     : false
 }
 
 function centerInspectedTarget(target: InspectedMapTarget): boolean {
   if (!props.continuousMap || props.activeView !== 'cluster') return false
-  const map = currentClusterMap()
+  const map = continuousWardenMapRef.value
   const usableRect = measureUnobstructedViewport()
   if (!map || !usableRect) return false
   noteManualCameraInteraction()
   return map.centerInspectedTarget(target, usableRect)
+}
+
+function panBy(dx: number, dy: number): void {
+  noteManualCameraInteraction()
+  currentMap()?.panBy(dx, dy)
+}
+
+function revealHistoryCluster(): boolean {
+  if (!props.continuousMap || props.activeView !== 'cluster') return false
+  const usableRect = measureUnobstructedViewport()
+  if (!usableRect) return false
+  return continuousWardenMapRef.value?.revealHistoryCluster(usableRect) ?? false
 }
 
 function whenReady(): Promise<boolean> {
@@ -1404,14 +1417,12 @@ defineExpose({
     noteManualCameraInteraction()
     currentMap()?.zoomBy(factor)
   },
-  panBy: (dx: number, dy: number) => {
-    noteManualCameraInteraction()
-    currentMap()?.panBy(dx, dy)
-  },
+  panBy,
   revealHistoryTarget: (target: MapHistoryTarget) => {
     const usableRect = props.continuousMap ? measureUnobstructedViewport() : undefined
     return currentMap()?.revealHistoryTarget?.(target, usableRect) ?? false
   },
+  revealHistoryCluster,
   whenReady,
   frameSearchTarget,
   centerInspectedTarget,

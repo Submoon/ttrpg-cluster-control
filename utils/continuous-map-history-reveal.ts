@@ -30,6 +30,28 @@ export function minimumHistoryRevealViewport(options: MinimumHistoryRevealViewpo
   }
 }
 
+/** Centers a target in the usable area while retaining scale unless reveal needs to increase it. */
+export function centerMapTargetViewport(options: MinimumHistoryRevealViewportOptions): MapViewport | null {
+  const { current, targetBounds, usableRect } = options
+  if (![current.x, current.y, current.k, targetBounds.x, targetBounds.y, targetBounds.width, targetBounds.height,
+    usableRect.x, usableRect.y, usableRect.width, usableRect.height].every(Number.isFinite)
+    || current.k <= 0 || targetBounds.width < 0 || targetBounds.height < 0
+    || usableRect.width <= 0 || usableRect.height <= 0) return null
+
+  const maximumScale = options.maximumScale ?? Number.POSITIVE_INFINITY
+  if (!Number.isFinite(maximumScale) && maximumScale !== Number.POSITIVE_INFINITY) return null
+  const minimumScale = options.minimumScale ?? current.k
+  if (!Number.isFinite(minimumScale) || minimumScale <= 0 || maximumScale <= 0) return null
+  const k = Math.max(current.k, Math.min(maximumScale, minimumScale))
+  const targetCenterX = targetBounds.x + targetBounds.width / 2
+  const targetCenterY = targetBounds.y + targetBounds.height / 2
+  return {
+    x: usableRect.x + usableRect.width / 2 - targetCenterX * k,
+    y: usableRect.y + usableRect.height / 2 - targetCenterY * k,
+    k,
+  }
+}
+
 function minimumAxisTranslation(
   translation: number,
   targetStart: number,
@@ -51,7 +73,7 @@ function minimumAxisTranslation(
 
   // An oversized target only needs to intersect the usable area to count as revealed.
   if (projectedEnd < usableStart) return usableStart - targetStart * scale
-  if (projectedStart > usableEnd) return usableEnd - targetEnd * scale
+  if (projectedStart > usableEnd) return usableEnd - targetStart * scale
   return translation
 }
 

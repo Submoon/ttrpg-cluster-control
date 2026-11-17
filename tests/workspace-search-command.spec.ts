@@ -403,6 +403,64 @@ test('continuous route selection and Cluster details keep the Inspector target s
   }
 })
 
+test('continuous Cluster details guard a modified system chart across Stay, Discard, and Apply @pure', async () => {
+  for (const decision of ['stay', 'discard', 'apply'] as const) {
+    const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+    try {
+      const system = harness.workspace.value.cluster.systems[0]
+      if (!system) throw new Error('The local workspace did not create its first system.')
+      harness.store.setSelection({ activeView: 'cluster' })
+      expect(await harness.workflows.navigation.inspectContinuousTarget({ kind: 'system', systemId: system.id })).toBe(true)
+      await harness.workflows.charts.beginNamesEdit()
+      const session = harness.workflows.charts.session.value
+      if (!session) throw new Error('The system chart-name draft was not created.')
+      harness.workflows.charts.systemName.value = `Changed ${decision}`
+
+      const showClusterDetails = harness.workflows.navigation.showChartDetails()
+      await expect.poll(() => harness.workflows.charts.transitionGuard.value).toBe('chart')
+      await harness.workflows.charts.resolveTransitionChoice(decision)
+      await showClusterDetails
+
+      if (decision === 'stay') {
+        expect(harness.store.inspectedTarget).toEqual({ kind: 'system', systemId: system.id })
+        expect(harness.workflows.charts.session.value?.id).toBe(session.id)
+        expect(harness.workflows.charts.hasUncommittedNames.value).toBe(true)
+        expect(harness.workspace.value.cluster.systems.find(candidate => candidate.id === system.id)?.name)
+          .not.toBe('Changed stay')
+      } else {
+        expect(harness.store.inspectedTarget).toEqual({ kind: 'cluster' })
+        expect(harness.workflows.charts.session.value).toBeNull()
+        expect(harness.workspace.value.cluster.systems.find(candidate => candidate.id === system.id)?.name)
+          .toBe(decision === 'apply' ? `Changed ${decision}` : 'Vesper')
+      }
+    } finally {
+      harness.dispose()
+    }
+  }
+})
+
+test('continuous Cluster details reuse an already-open Cluster chart session @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const system = harness.workspace.value.cluster.systems[0]
+    if (!system) throw new Error('The local workspace did not create its first system.')
+    harness.store.setSelection({ activeView: 'cluster', selectedSystemId: system.id, inspectedTarget: { kind: 'cluster' } })
+    await harness.workflows.charts.beginNamesEdit()
+    const session = harness.workflows.charts.session.value
+    if (!session) throw new Error('The Cluster chart-name draft was not created.')
+    harness.workflows.charts.systemName.value = 'Retained Cluster chart'
+
+    await harness.workflows.navigation.showChartDetails()
+
+    expect(harness.workflows.charts.transitionGuard.value).toBeNull()
+    expect(harness.workflows.charts.session.value?.id).toBe(session.id)
+    expect(harness.workflows.charts.systemName.value).toBe('Retained Cluster chart')
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'cluster' })
+  } finally {
+    harness.dispose()
+  }
+})
+
 test('continuous history keeps route selection or falls back to Cluster in the Inspector @pure', async () => {
   const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
   try {
@@ -441,6 +499,45 @@ test('continuous history keeps route selection or falls back to Cluster in the I
 
     expect(harness.store.activeView).toBe('cluster')
     expect(harness.store.selectedRouteId).toBeNull()
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'cluster' })
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('continuous history refits the surviving Cluster after its inspected system is removed @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), 'Quill', undefined, false, true)
+  try {
+    const removedSystem = harness.workspace.value.cluster.systems[1]
+    if (!removedSystem) throw new Error('The local workspace did not create its additional system.')
+    const clusterId = harness.workspace.value.cluster.id
+    let clusterRevealCount = 0
+    harness.store.setSelection({
+      activeView: 'cluster',
+      inspectedTarget: { kind: 'system', systemId: removedSystem.id },
+      selectedSystemId: removedSystem.id,
+    })
+    harness.workflows.mapControls.clusterMapRef.value = createMapHandle({
+      whenReady: async () => true,
+      frameSearchTarget: () => true,
+      focusMap: () => undefined,
+      revealHistoryCluster: () => { clusterRevealCount += 1; return true },
+    })
+    const action = {
+      workspaceId: harness.workspace.value.id,
+      clusterId,
+      contextLabel: 'Star System',
+      kind: 'delete' as const,
+      label: 'Delete Star System',
+      target: { kind: 'system' as const, id: removedSystem.id },
+      parent: { kind: 'cluster' as const, id: clusterId },
+    }
+    harness.workspace.value.cluster.systems.splice(1, 1)
+
+    await harness.workflows.navigation.revealHistoryContext({ direction: 'undo', action })
+
+    expect(clusterRevealCount).toBe(1)
+    expect(harness.store.activeView).toBe('cluster')
     expect(harness.store.inspectedTarget).toEqual({ kind: 'cluster' })
   } finally {
     harness.dispose()
@@ -527,6 +624,7 @@ function createMapHandle(options: {
   frameSearchTarget: NonNullable<MapNavigationHandle['frameSearchTarget']>
   focusMap: () => void
   getCameraInteractionVersion?: NonNullable<MapNavigationHandle['getCameraInteractionVersion']>
+  revealHistoryCluster?: NonNullable<MapNavigationHandle['revealHistoryCluster']>
 }): MapNavigationHandle {
   return {
     exportImage: async () => new Blob(),
@@ -547,6 +645,7 @@ function createMapHandle(options: {
     whenReady: options.whenReady,
     getCameraInteractionVersion: options.getCameraInteractionVersion,
     frameSearchTarget: options.frameSearchTarget,
+    revealHistoryCluster: options.revealHistoryCluster,
   }
 }
 

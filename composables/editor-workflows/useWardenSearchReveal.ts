@@ -303,17 +303,19 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
   ): EditorUiSelection {
     if (!currentWorkspace) return selection
     const next = { ...selection }
-    if (next.inspectedTarget?.kind === 'system'
-      ? !currentWorkspace.cluster.systems.some(system => system.id === next.inspectedTarget!.systemId)
-      : next.inspectedTarget?.kind === 'object'
-        ? !currentWorkspace.cluster.systems.some(system => system.id === next.inspectedTarget!.systemId
-          && system.objects.some(object => object.id === next.inspectedTarget!.objectId))
-        : next.inspectedTarget?.kind === 'orbit'
-          ? !currentWorkspace.cluster.systems.some(system => system.id === next.inspectedTarget!.systemId
-            && system.orbits.some(orbit => orbit.id === next.inspectedTarget!.orbitId))
-          : next.inspectedTarget?.kind === 'route'
-            ? !currentWorkspace.cluster.routes.some(routeValue => routeValue.id === next.inspectedTarget!.routeId)
-            : false) next.inspectedTarget = null
+    const inspectedTarget = next.inspectedTarget
+    const inspectedTargetSurvives = inspectedTarget?.kind === 'system'
+      ? currentWorkspace.cluster.systems.some(system => system.id === inspectedTarget.systemId)
+      : inspectedTarget?.kind === 'object'
+        ? currentWorkspace.cluster.systems.some(system => system.id === inspectedTarget.systemId
+          && system.objects.some(object => object.id === inspectedTarget.objectId))
+        : inspectedTarget?.kind === 'orbit'
+          ? currentWorkspace.cluster.systems.some(system => system.id === inspectedTarget.systemId
+            && system.orbits.some(orbit => orbit.id === inspectedTarget.orbitId))
+          : inspectedTarget?.kind === 'route'
+            ? currentWorkspace.cluster.routes.some(routeValue => routeValue.id === inspectedTarget.routeId)
+            : true
+    if (!inspectedTargetSurvives) next.inspectedTarget = null
     const selectedSystem = currentWorkspace.cluster.systems.find(system => system.id === next.selectedSystemId)
     if (!selectedSystem) {
       next.selectedSystemId = currentWorkspace.cluster.systems[0]?.id ?? null

@@ -613,7 +613,9 @@ export function useEditorNavigation(options: {
   async function showChartDetails(): Promise<void> {
     const startingStamp = navigationContextStamp()
     const startingSessionId = chart.session.value?.id ?? null
-    if (!await transitions.resolveTransition({ leaveChart: false })
+    const keepsClusterChart = continuousMap.value && store.inspectedTarget?.kind === 'cluster'
+    const leaveChart = continuousMap.value && !keepsClusterChart && chart.session.value !== null
+    if (!await transitions.resolveTransition({ leaveChart })
       || !acceptNavigationTransition(startingStamp, startingSessionId)) return
     setSelection({
       selectedObjectId: null,
@@ -810,7 +812,8 @@ export function useEditorNavigation(options: {
     } else {
       mapControls.focusActiveMap()
     }
-    if (target && target.kind !== 'cluster') mapControls.revealHistoryTarget(target)
+    if (target?.kind === 'cluster' && continuousMap.value) mapControls.clusterMapRef.value?.revealHistoryCluster?.()
+    else if (target && target.kind !== 'cluster') mapControls.revealHistoryTarget(target)
     editorError.value = ''
   }
 

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
-import { minimumHistoryRevealViewport, rotatedEllipseBounds } from '../utils/continuous-map-history-reveal'
+import { centerMapTargetViewport, minimumHistoryRevealViewport, rotatedEllipseBounds } from '../utils/continuous-map-history-reveal'
+import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
 
 test('history reveal keeps an already visible target camera unchanged @pure', () => {
   const current = { x: -120, y: 32, k: 0.8 }
@@ -19,6 +20,22 @@ test('history reveal pans an offscreen target by the least distance without chan
   })).toEqual({ x: -290, y: 0, k: 1 })
 })
 
+test('history reveal exposes the near edge of an oversized target with minimum pan @pure', () => {
+  expect(minimumHistoryRevealViewport({
+    current: { x: 0, y: 0, k: 1 },
+    targetBounds: { x: 1200, y: 100, width: 1200, height: 40 },
+    usableRect: { x: 0, y: 0, width: 960, height: 560 },
+  })).toEqual({ x: -240, y: 0, k: 1 })
+})
+
+test('Center moves a target into the usable-area center without refitting its scale @pure', () => {
+  expect(centerMapTargetViewport({
+    current: { x: -120, y: 32, k: 0.8 },
+    targetBounds: { x: 300, y: 100, width: 80, height: 48 },
+    usableRect: { x: 0, y: 0, width: 960, height: 560 },
+  })).toEqual({ x: 208, y: 180.8, k: 0.8 })
+})
+
 test('history reveal only raises scale to a missing entity reveal threshold @pure', () => {
   expect(minimumHistoryRevealViewport({
     current: { x: 0, y: 0, k: 0.2 },
@@ -30,8 +47,32 @@ test('history reveal only raises scale to a missing entity reveal threshold @pur
 
 test('rotated Orbit bounds use the ellipse projected extents @pure', () => {
   const bounds = rotatedEllipseBounds({ x: 200, y: 120 }, { horizontal: 100, vertical: 50 }, 45)
+  if (!bounds) throw new Error('The finite rotated Orbit did not produce bounds.')
   expect(bounds.x).toBeCloseTo(120.943, 2)
   expect(bounds.y).toBeCloseTo(40.943, 2)
   expect(bounds.width).toBeCloseTo(158.114, 2)
   expect(bounds.height).toBeCloseTo(158.114, 2)
+})
+
+test('continuous keyboard activation honors Move and Add before entity inspection @pure', () => {
+  expect(continuousMapKeyboardIntent({
+    key: 'Enter', targetKind: 'object', addArmed: false, chooserOpen: false,
+    moveTargeting: true, clusterMoveTargeting: false,
+  })).toBe('move-target')
+  expect(continuousMapKeyboardIntent({
+    key: 'Enter', targetKind: 'orbit', addArmed: false, chooserOpen: false,
+    moveTargeting: false, clusterMoveTargeting: true,
+  })).toBe('move-target')
+  expect(continuousMapKeyboardIntent({
+    key: 'Enter', targetKind: 'orbit', addArmed: true, chooserOpen: false,
+    moveTargeting: false, clusterMoveTargeting: false,
+  })).toBe('add-target')
+  expect(continuousMapKeyboardIntent({
+    key: 'Enter', targetKind: 'map', addArmed: true, chooserOpen: false,
+    moveTargeting: false, clusterMoveTargeting: false,
+  })).toBe('add-target')
+  expect(continuousMapKeyboardIntent({
+    key: 'Enter', targetKind: 'object', addArmed: false, chooserOpen: true,
+    moveTargeting: false, clusterMoveTargeting: false,
+  })).toBeNull()
 })

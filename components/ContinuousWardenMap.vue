@@ -180,11 +180,16 @@ import {
   type ContinuousWardenSystemProjection,
 } from '../utils/continuous-map-projection'
 import { clusterSystemPosition } from '../utils/cluster-map-geometry'
-import { minimumHistoryRevealViewport, rotatedEllipseBounds } from '../utils/continuous-map-history-reveal'
+import {
+  centerMapTargetViewport,
+  minimumHistoryRevealViewport,
+  rotatedEllipseBounds,
+} from '../utils/continuous-map-history-reveal'
 import type { ClientRectBounds } from '../utils/map-usable-area'
 import { createMapTouchNavigation } from './maps/map-touch-navigation'
 import { exportMapImage, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
+import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
 
 const DETAIL_REVEAL_PIXELS = 250
 const DETAIL_HIDE_PIXELS = 210
@@ -600,20 +605,32 @@ function fitMap(usableRect?: SvgViewportRect): void {
   if (fitted) setViewport(fitted)
 }
 
-function frameSystem(systemId: string, usableRect?: SvgViewportRect): boolean {
+function frameSystem(systemId: string, usableRect?: SvgViewportRect, centerTarget = false): boolean {
   const projection = projections.value.find(candidate => candidate.id === systemId)
-  if (!projection || !svgElement.value || !zoomBehavior) return false
+  const element = svgElement.value
+  if (!projection || !element || !zoomBehavior) return false
   const delta = anchorDelta(projection)
-  const bounds = {
-    ...projection.envelope,
-    x: projection.envelope.x + delta.x,
-    y: projection.envelope.y + delta.y,
-  }
-  const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(svgElement.value))
+  const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
   if (!rect) return false
-  const fitted = fitMapViewport(bounds, rect, minimumZoomScale.value)
-  if (!fitted) return false
-  setViewport(fitted)
+  const current = getViewport()
+  const targetBounds = centerTarget
+    ? {
+        ...projection.envelope,
+        x: projection.envelope.x + delta.x,
+        y: projection.envelope.y + delta.y,
+      }
+    : {
+        x: projection.anchor.x + delta.x - 16,
+        y: projection.anchor.y + delta.y - 16,
+        width: 32,
+        height: 32,
+      }
+  const next = centerTarget
+    ? centerMapTargetViewport({ current, targetBounds, usableRect: rect })
+    : minimumHistoryRevealViewport({ current, targetBounds, usableRect: rect })
+  if (!next) return false
+  if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
+    || Math.abs(next.k - current.k) >= 0.0001) setViewport(next)
   return true
 }
 
@@ -622,6 +639,7 @@ function frameEntityTarget(
   kind: 'object' | 'orbit',
   entityId: string,
   usableRect?: SvgViewportRect,
+  centerTarget = false,
 ): boolean {
   const projection = projections.value.find(candidate => candidate.id === systemId)
   const element = svgElement.value
@@ -647,23 +665,28 @@ function frameEntityTarget(
   }
   const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
   if (!rect) return false
-  const fitted = fitMapViewport(bounds, rect, minimumZoomScale.value)
-  if (!fitted) return false
   const current = getViewport()
-  const revealScale = DETAIL_REVEAL_PIXELS
-    / (Math.max(projection.envelope.width, projection.envelope.height) * svgPixelScale.value)
-  const scale = Math.min(MAP_ZOOM_MAX_SCALE, Math.max(
-    minimumZoomScale.value,
-    revealScale,
-    Math.min(current.k, fitted.k),
-  ))
-  const nextViewport = {
-    x: rect.x + rect.width / 2 - center.x * scale,
-    y: rect.y + rect.height / 2 - center.y * scale,
-    k: scale,
-  }
-  if (![nextViewport.x, nextViewport.y, nextViewport.k].every(Number.isFinite)) return false
-  setViewport(nextViewport)
+  const minimumScale = detailSystemIds.value.has(projection.id)
+    ? undefined
+    : DETAIL_REVEAL_PIXELS / (Math.max(projection.envelope.width, projection.envelope.height) * svgPixelScale.value)
+  const next = centerTarget
+    ? centerMapTargetViewport({
+        current,
+        targetBounds: bounds,
+        usableRect: rect,
+        minimumScale,
+        maximumScale: MAP_ZOOM_MAX_SCALE,
+      })
+    : minimumHistoryRevealViewport({
+        current,
+        targetBounds: bounds,
+        usableRect: rect,
+        minimumScale,
+        maximumScale: MAP_ZOOM_MAX_SCALE,
+      })
+  if (!next) return false
+  if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
+    || Math.abs(next.k - current.k) >= 0.0001) setViewport(next)
   return true
 }
 
@@ -681,13 +704,14 @@ function centerInspectedTarget(target: InspectedMapTarget, usableRect?: SvgViewp
     fitMap(usableRect)
     return true
   }
-  if (target.kind === 'system') return frameSystem(target.systemId, usableRect)
+  if (target.kind === 'system') return frameSystem(target.systemId, usableRect, true)
   if (target.kind === 'object' || target.kind === 'orbit') {
     return frameEntityTarget(
       target.systemId,
       target.kind,
       target.kind === 'object' ? target.objectId : target.orbitId,
       usableRect,
+      true,
     )
   }
   return false
@@ -721,6 +745,7 @@ watch(() => props.inspectedTarget, (target) => {
 }, { flush: 'sync' })
 
 function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportRect): boolean {
+  if (!usableRect) return false
   if (target.kind === 'route') return false
   const systemId = target.kind === 'system' ? target.id : target.systemId
   const projection = projections.value.find(candidate => candidate.id === systemId)
@@ -771,6 +796,16 @@ function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportR
   if (Math.abs(next.x - current.x) < 0.01 && Math.abs(next.y - current.y) < 0.01
     && Math.abs(next.k - current.k) < 0.0001) return true
   setViewport(next)
+  return true
+}
+
+function revealHistoryCluster(usableRect?: SvgViewportRect): boolean {
+  const bounds = sceneBounds.value
+  const element = svgElement.value
+  if (!bounds || !element || !zoomBehavior) return false
+  const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
+  if (!rect) return false
+  fitMap(rect)
   return true
 }
 
@@ -963,39 +998,94 @@ function onClickCapture(event: MouseEvent): void {
 }
 
 function onKeydownCapture(event: KeyboardEvent): void {
-  if (event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) return
+  if (event.defaultPrevented) return
   const objectTarget = objectTargetAtTarget(event.target)
-  if (objectTarget) {
+  const orbitTarget = orbitTargetAtTarget(event.target)
+  const systemId = systemIdAtTarget(event.target)
+  const action = continuousMapKeyboardIntent({
+    key: event.key,
+    targetKind: objectTarget ? 'object' : orbitTarget ? 'orbit' : systemId ? 'system' : 'map',
+    addArmed: props.clusterAddType !== null,
+    chooserOpen: props.clusterChooserOpen,
+    moveTargeting: props.moveTargeting,
+    clusterMoveTargeting: props.clusterMoveTargeting,
+  })
+  if (!action) return
+
+  if (action === 'add-target' || action === 'move-target') {
+    const scenePoint = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget)
+    if (!scenePoint) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (action === 'move-target') {
+      emit('move-target', scenePoint)
+      return
+    }
+    const normalized = clampWardenClusterAnchor(unprojectWardenClusterAnchor(scenePoint))
+    const systemIds = systemId
+      ? [systemId]
+      : projections.value
+        .filter(projection => {
+          const delta = anchorDelta(projection)
+          const bounds = projection.envelope
+          return scenePoint.x >= bounds.x + delta.x && scenePoint.x <= bounds.x + delta.x + bounds.width
+            && scenePoint.y >= bounds.y + delta.y && scenePoint.y <= bounds.y + delta.y + bounds.height
+        })
+        .map(projection => projection.id)
+    emit('cluster-target', normalized, systemIds)
+    return
+  }
+
+  if (action === 'inspect-object' && objectTarget) {
     event.preventDefault()
     event.stopPropagation()
     emit('select-object', objectTarget.systemId, objectTarget.objectId)
     return
   }
-  const orbitTarget = orbitTargetAtTarget(event.target)
-  if (orbitTarget) {
+  if (action === 'inspect-orbit' && orbitTarget) {
     event.preventDefault()
     event.stopPropagation()
     emit('select-orbit', orbitTarget.systemId, orbitTarget.orbitId)
     return
   }
-  const systemId = systemIdAtTarget(event.target)
-  if (props.clusterAddType !== null && !props.clusterChooserOpen) {
-    const projection = projections.value.find(candidate => candidate.id === systemId)
-    const position = projection ? anchorFor(projection) : null
-    const point = position
-      ? clampWardenClusterAnchor(unprojectWardenClusterAnchor(position))
-      : null
-    if (point) {
-      event.preventDefault()
-      event.stopPropagation()
-      emit('cluster-target', point, systemId ? [systemId] : [])
-    }
-    return
-  }
-  if (!systemId) return
+  if (action !== 'activate-system' || !systemId) return
   event.preventDefault()
   event.stopPropagation()
   emit('activate-system', systemId)
+}
+
+function keyboardTargetScenePoint(
+  target: EventTarget | null,
+  systemId: string | null,
+  objectTarget: { systemId: string; objectId: string } | null,
+  orbitTarget: { systemId: string; orbitId: string } | null,
+): Point | null {
+  if (systemId) {
+    const projection = projections.value.find(candidate => candidate.id === systemId)
+    return projection ? anchorFor(projection) : null
+  }
+  const objectProjection = objectTarget
+    ? projections.value.find(candidate => candidate.id === objectTarget.systemId)
+    : undefined
+  if (objectTarget && objectProjection) {
+    const object = objectProjection.objects.find(candidate => candidate.id === objectTarget.objectId)
+    const delta = anchorDelta(objectProjection)
+    if (object) return { x: object.scenePosition.x + delta.x, y: object.scenePosition.y + delta.y }
+  }
+  const orbitProjection = orbitTarget
+    ? projections.value.find(candidate => candidate.id === orbitTarget.systemId)
+    : undefined
+  if (orbitTarget && orbitProjection) {
+    const orbit = orbitProjection.orbits.find(candidate => candidate.id === orbitTarget.orbitId)
+    const delta = anchorDelta(orbitProjection)
+    if (orbit) return { x: orbit.sceneCenter.x + delta.x, y: orbit.sceneCenter.y + delta.y }
+  }
+  if (!(target instanceof SVGSVGElement) || target !== svgElement.value) return null
+  const current = getViewport()
+  return {
+    x: (svgViewport.value.x + svgViewport.value.width / 2 - current.x) / current.k,
+    y: (svgViewport.value.y + svgViewport.value.height / 2 - current.y) / current.k,
+  }
 }
 
 function publishSystemPositionPreview(systemId: string, position: Point | null, expectedVersion?: number): number {
@@ -1138,6 +1228,7 @@ defineExpose({
   prepareSearchLocator,
   dismissSearchLocator,
   revealHistoryTarget,
+  revealHistoryCluster,
   focusMap,
   cancelActiveGesture,
   startViewPan,
