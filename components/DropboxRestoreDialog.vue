@@ -15,8 +15,8 @@
 
   <UModal
     v-model:open="dialogOpen"
-    title="Restore Jump Cluster from Dropbox"
-    description="Choose a complete Jump Cluster backup from this app’s Dropbox App Folder. Dated app backups can also be deleted from Dropbox."
+    title="Dropbox backups"
+    description="Jump Cluster backups in this app’s Dropbox App Folder."
     :dismissible="props.controller.canCancel.value"
     :close="props.controller.canCancel.value"
     :content="{ onCloseAutoFocus: restoreFocus }"
@@ -29,61 +29,68 @@
       <p v-if="restoreToastTitle" class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ restoreToastTitle }}</p>
       <div ref="backupListFocusTarget" tabindex="-1">
         <ol v-if="props.controller.backups.value.length" class="m-0 grid list-none gap-2 p-0" aria-label="Dropbox Jump Cluster backups">
-          <li v-for="backup in props.controller.backups.value" :key="backup.id">
-            <div class="grid gap-2">
-              <div class="flex flex-wrap items-stretch gap-2">
-                <UButton
-                  class="min-w-0 flex-1 justify-start text-start"
-                  color="neutral"
-                  variant="outline"
-                  :aria-label="`Restore ${backup.name}`"
-                  :disabled="props.controller.busy.value"
-                  @click="selectBackup(backup.id)"
-                >
-                  <span class="grid min-w-0 gap-1">
-                    <span class="break-all font-medium">{{ backup.name }}</span>
-                    <time class="text-xs text-muted" :datetime="backup.modifiedAt">{{ formatDate(backup.modifiedAt) }}</time>
-                  </span>
-                </UButton>
-                <UButton
-                  v-if="isDropboxDatedBackupName(backup.name)"
-                  color="neutral"
-                  variant="ghost"
-                  :aria-label="`Delete ${backup.name} from Dropbox`"
-                  :disabled="props.controller.busy.value || props.controller.refreshRequired.value"
-                  @click="openDeleteConfirmation(backup, $event)"
-                >
-                  Delete
-                </UButton>
-              </div>
+          <CloudBackupListItem
+            v-for="backup in props.controller.backups.value"
+            :key="backup.id"
+            :name="backup.name"
+            :timestamp="backup.modifiedAt"
+            :disabled="props.controller.busy.value"
+            @restore="selectBackup(backup.id)"
+            @download="props.controller.downloadBackup(backup.id)"
+          >
+            <template #delete>
+              <UButton
+                v-if="isDropboxDatedBackupName(backup.name)"
+                color="error"
+                variant="outline"
+                size="sm"
+                :aria-label="`Delete ${backup.name} from Dropbox`"
+                :disabled="props.controller.busy.value || props.controller.refreshRequired.value"
+                @click="openDeleteConfirmation(backup, $event)"
+              >
+                Delete
+              </UButton>
+            </template>
+            <template #confirmation>
               <div
                 v-if="isPendingDelete(backup)"
-                class="grid gap-2 rounded-md border border-default p-3"
+                class="grid gap-2 rounded-md border border-[var(--line-soft)] bg-[var(--panel-raised)] p-3 sm:col-span-2"
                 role="group"
                 :aria-label="`Confirm delete ${backup.name}`"
               >
                 <p class="m-0 text-sm">Delete <span class="break-all font-medium">{{ backup.name }}</span> from your Dropbox App Folder?</p>
-                <div class="flex flex-wrap items-center gap-2">
+                <div class="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
                   <UButton
                     color="error"
                     variant="soft"
                     :aria-label="`Confirm delete ${backup.name} from Dropbox`"
-                    :loading="props.controller.state.value === 'deleting' && isPendingDelete(backup)"
+                    :loading="state === 'deleting' && isPendingDelete(backup)"
                     :disabled="props.controller.busy.value"
                     @click="confirmDelete"
                   >
                     Delete backup
                   </UButton>
-                  <UButton :ref="setKeepBackupButton" color="neutral" variant="ghost" :disabled="props.controller.busy.value" @click="cancelDeleteConfirmation">
+                  <UButton :ref="setKeepBackupButton" color="neutral" variant="outline" :disabled="props.controller.busy.value" @click="cancelDeleteConfirmation">
                     Keep backup
                   </UButton>
                 </div>
               </div>
-            </div>
-          </li>
+            </template>
+          </CloudBackupListItem>
         </ol>
         <p v-else-if="!displayMessage" class="m-0 text-sm" role="status">No Dropbox backups are available yet.</p>
       </div>
+      <UButton
+        class="mt-3 justify-self-start"
+        color="neutral"
+        variant="outline"
+        size="sm"
+        :loading="state === 'refreshing'"
+        :disabled="props.controller.busy.value"
+        @click="refreshBackups"
+      >
+        Refresh backup list
+      </UButton>
     </template>
     <template #footer>
       <div class="grid w-full gap-3">
@@ -108,14 +115,6 @@
           </ToastViewport>
         </ToastProvider>
         <div class="flex w-full flex-wrap justify-end gap-2">
-          <UButton
-            color="neutral"
-            variant="outline"
-            :disabled="props.controller.busy.value"
-            @click="refreshBackups"
-          >
-            Refresh backups
-          </UButton>
           <UButton color="neutral" variant="ghost" :disabled="!props.controller.canCancel.value" @click="cancelRestore">
             Cancel
           </UButton>
@@ -155,12 +154,14 @@ const dialogOpen = computed({
 const displayMessage = computed(() => props.controller.message.value
   || (props.controller.state.value === 'authorizing' ? 'Signing in to Dropbox…' : '')
   || (props.controller.state.value === 'listing' ? 'Loading Dropbox backups…' : '')
-  || (props.controller.state.value === 'downloading' ? 'Opening the selected backup…' : '')
+  || (props.controller.state.value === 'reading' ? 'Opening the selected backup…' : '')
+  || (props.controller.state.value === 'downloading' ? 'Preparing the backup download…' : '')
   || (props.controller.state.value === 'deleting' ? 'Deleting the selected backup from Dropbox…' : '')
   || (props.controller.state.value === 'refreshing' ? 'Refreshing Dropbox backups…' : ''))
 const completedToastOpen = ref(false)
+const completedToastTitle = ref('')
 const completedToastVersion = ref(0)
-const restoreToastTitle = computed(() => completedToastOpen.value ? 'Backup deleted from Dropbox' : '')
+const restoreToastTitle = computed(() => completedToastOpen.value ? completedToastTitle.value : '')
 const pendingDelete = ref<Pick<DropboxRestoreBackup, 'id' | 'name' | 'rev'> | null>(null)
 const deleteTrigger = ref<HTMLElement | null>(null)
 const backupListFocusTarget = ref<HTMLElement | null>(null)
@@ -171,12 +172,20 @@ let focusAfterDeletion = false
 watch(props.controller.completedDeletions, (count, previousCount) => {
   if (count <= previousCount) return
   completedToastOpen.value = true
+  completedToastTitle.value = 'Backup deleted from Dropbox'
   completedToastVersion.value += 1
   pendingDelete.value = null
   if (focusAfterDeletion) {
     focusAfterDeletion = false
     void nextTick(() => backupListFocusTarget.value?.focus())
   }
+}, { flush: 'sync' })
+
+watch(props.controller.completedDownloads, (count, previousCount) => {
+  if (count <= previousCount) return
+  completedToastOpen.value = true
+  completedToastTitle.value = 'Backup downloaded from Dropbox'
+  completedToastVersion.value += 1
 }, { flush: 'sync' })
 
 function activateFrom(target: HTMLElement | null): void {
@@ -259,10 +268,6 @@ watch(state, (currentState, previousState) => {
 
 function onRestoreToastOpenChange(open: boolean): void {
   if (!open) completedToastOpen.value = false
-}
-
-function formatDate(value: string): string {
-  return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 defineExpose({ activateFrom })

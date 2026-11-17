@@ -234,13 +234,13 @@ export async function listDropboxBackups(
   throw invalidBackupList()
 }
 
-/** Reads the exact listed Dropbox revision and checks server identity before admitting its bytes. */
-export async function readDropboxBackup(
+/** Reads the exact listed Dropbox revision and checks server identity before returning its original bytes. */
+export async function readDropboxBackupBytes(
   accessToken: string,
   file: DropboxBackupFile,
   fetcher: DropboxFetcher = fetch,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<Uint8Array> {
   if (!isValidDropboxBackupFile(file)) {
     throw new DropboxApiError('request-failed', 'This is not a valid Dropbox JSON backup file.')
   }
@@ -273,8 +273,19 @@ export async function readDropboxBackup(
   if (!matchesListedDropboxRevision(metadata, file, response.bytes.byteLength)) {
     throw new DropboxApiError('request-failed', 'The selected backup changed or could not be verified. Refresh the Dropbox list and select it again.')
   }
+  return response.bytes
+}
+
+/** Decodes a verified listed revision for the workspace restore flow. */
+export async function readDropboxBackup(
+  accessToken: string,
+  file: DropboxBackupFile,
+  fetcher: DropboxFetcher = fetch,
+  signal?: AbortSignal,
+): Promise<string> {
+  const bytes = await readDropboxBackupBytes(accessToken, file, fetcher, signal)
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(response.bytes)
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
   } catch {
     throw new DropboxApiError('request-failed', 'The selected Dropbox backup is not valid UTF-8 JSON.')
   }

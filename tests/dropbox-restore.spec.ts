@@ -1,4 +1,5 @@
 import { computed, effectScope, ref } from 'vue'
+import { readFile } from 'node:fs/promises'
 import type { BrowserContext } from '@playwright/test'
 import { expect, test } from './fixtures'
 import { useDropboxRestore } from '../composables/useDropboxRestore'
@@ -12,6 +13,7 @@ import {
   deleteDropboxBackup,
   listDropboxBackups,
   readDropboxBackup,
+  readDropboxBackupBytes,
 } from '../utils/dropbox-api'
 import type { DropboxBackupFile } from '../utils/dropbox-api'
 import { DROPBOX_BACKUP_LIMIT, isDropboxDatedBackupName } from '../utils/dropbox-backup-snapshot'
@@ -140,6 +142,23 @@ test('Dropbox restore downloads the listed revision and verifies its file identi
   }])
 })
 
+test('Dropbox byte reads preserve a UTF-8 BOM while restore reads decode the same revision @pure', async () => {
+  const restoredContent = '{"cluster":"Ember Reach"}'
+  const contentBytes = Uint8Array.from([0xef, 0xbb, 0xbf, ...new TextEncoder().encode(restoredContent)])
+  const contentBuffer = new ArrayBuffer(contentBytes.byteLength)
+  new Uint8Array(contentBuffer).set(contentBytes)
+  const file = { ...datedBackup('id:backup-bom', '2026-11-13-10-00-00-000Z'), size: contentBytes.byteLength }
+  const fetcher = async () => new Response(contentBuffer, {
+    headers: { 'Dropbox-API-Result': JSON.stringify(fileMetadata(file)) },
+  })
+
+  const downloadedBytes = await readDropboxBackupBytes('token', file, fetcher)
+  const restoredText = await readDropboxBackup('token', file, fetcher)
+
+  expect(Array.from(downloadedBytes)).toEqual(Array.from(contentBytes))
+  expect(restoredText).toBe(restoredContent)
+})
+
 test('Dropbox restore rejects changed or substituted file revisions before admission @pure', async () => {
   const file = datedBackup('id:backup-one', '2026-11-13-10-00-00-000Z')
   const error = await readDropboxBackup('token', file, async () => new Response('{}', {
@@ -230,6 +249,74 @@ test('Dropbox chooser opens the restore owner before authorization and passes th
     }])
     expect(requestedSignals).toHaveLength(2)
     expect(requestedSignals.every(signal => signal === requestedSignals[0])).toBe(true)
+  } finally {
+    scope.stop()
+  }
+})
+
+test('Dropbox direct download uses the listed revision and leaves the chooser ready for restore @pure', async () => {
+  const older = { ...datedBackup('id:backup-older', '2026-11-13-10-00-00-000Z'), serverModified: '2026-11-13T11:30:00+02:00' }
+  const newer = { ...datedBackup('id:backup-newer', '2026-11-13-10-00-00-000Z'), name: 'Current: campaign?.json' }
+  const fileByteReads: Array<{ accessToken: string; file: DropboxBackupFile; signal?: AbortSignal }> = []
+  const downloads: Array<{ filename: string; content: number[] }> = []
+  const sources: WorkspaceRestoreSource[] = []
+  const restoreFinished = deferred<void>()
+  const { signIn } = readyDropboxSignIn()
+  const restore = {
+    async openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean> {
+      const source = await load(signal)
+      if (source) sources.push(source)
+      restoreFinished.resolve()
+      return true
+    },
+  }
+  const scope = effectScope()
+  const controller = scope.run(() => useDropboxRestore(restore, signIn, {
+    listBackups: async () => [older, newer],
+    readFile: async () => '{"backup":"unchanged"}',
+    readFileBytes: async (accessToken, file, signal) => {
+      fileByteReads.push({ accessToken, file, signal })
+      if (fileByteReads.length === 1) throw new Error('Dropbox could not read this backup.')
+      return Uint8Array.from([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('{"backup":"unchanged"}')])
+    },
+    deleteFile: async () => undefined,
+    downloadFile: (filename, content) => downloads.push({ filename, content: Array.from(content) }),
+  }))
+  if (!controller) throw new Error('The Dropbox restore controller did not initialize.')
+
+  try {
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('choosing')
+    expect(controller.backups.value.map(file => file.id)).toEqual([newer.id, older.id])
+
+    controller.downloadBackup(newer.id)
+    await expect.poll(() => controller.state.value).toBe('choosing')
+    expect(controller.message.value).toBe('Dropbox could not read this backup.')
+    expect(controller.completedDownloads.value).toBe(0)
+    expect(downloads).toEqual([])
+
+    controller.downloadBackup(newer.id)
+    await expect.poll(() => controller.completedDownloads.value).toBe(1)
+    expect(controller.state.value).toBe('choosing')
+    expect(controller.dialogOpen.value).toBe(true)
+    expect(controller.busy.value).toBe(false)
+    expect(fileByteReads).toHaveLength(2)
+    expect(fileByteReads[0]).toMatchObject({ accessToken: 'dropbox-token', file: newer })
+    expect(fileByteReads[0]?.file).toBe(newer)
+    expect(downloads).toEqual([{
+      filename: 'Current- campaign-.json',
+      content: [0xef, 0xbb, 0xbf, ...new TextEncoder().encode('{"backup":"unchanged"}')],
+    }])
+    expect(sources).toEqual([])
+    expect(newer.name).toBe('Current: campaign?.json')
+
+    controller.select(newer.id)
+    await restoreFinished.promise
+    expect(sources).toEqual([{
+      name: newer.name,
+      content: '{"backup":"unchanged"}',
+      sourceKind: 'dropbox',
+    }])
   } finally {
     scope.stop()
   }
@@ -549,9 +636,18 @@ test('a Warden backs up to Dropbox and restores the same Jump Cluster in a fresh
     await waitForWorkspaceStartup(fresh)
     await fresh.getByRole('button', { name: 'Restore Jump Cluster from Dropbox', exact: true }).click()
 
-    const chooser = fresh.getByRole('dialog', { name: 'Restore Jump Cluster from Dropbox', exact: true })
+    const chooser = fresh.getByRole('dialog', { name: 'Dropbox backups', exact: true })
     await expect(chooser.getByRole('button', { name: `Restore ${unrelatedFile.name}`, exact: true })).toBeVisible({ timeout: 15_000 })
     await expect(chooser.getByRole('button', { name: `Delete ${unrelatedFile.name} from Dropbox`, exact: true })).toHaveCount(0)
+    const backupDownload = fresh.waitForEvent('download')
+    await chooser.getByRole('button', { name: `Download JSON for ${saved.metadata.name}`, exact: true }).click()
+    const download = await backupDownload
+    expect(download.suggestedFilename()).toBe(saved.metadata.name)
+    const downloadPath = await download.path()
+    if (!downloadPath) throw new Error('The Dropbox backup download has no local file path.')
+    expect(await readFile(downloadPath, 'utf8')).toBe(saved.content)
+    await expect(chooser.getByLabel('Dropbox restore notifications').getByText('Backup downloaded from Dropbox', { exact: true })).toBeVisible()
+
     const manualDelete = olderFiles[2]!
     await chooser.getByRole('button', { name: `Delete ${manualDelete.name} from Dropbox`, exact: true }).click()
     const deleteConfirmation = chooser.getByRole('group', { name: `Confirm delete ${manualDelete.name}` })
