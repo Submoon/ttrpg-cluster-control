@@ -29,6 +29,11 @@ function expectPositionNear(
   expect(Math.abs(actual.y - expected.y)).toBeLessThan(tolerance)
 }
 
+function hierarchyObjectName(name: string, owner: string): RegExp {
+  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`^${escape(name)}.*${escape(owner)}`)
+}
+
 async function visibleIndicatorObjectIds(indicators: Locator): Promise<string[]> {
   const ids = await indicators.evaluateAll(marks => marks.map(mark => mark.getAttribute('data-selection-object-id')))
   return ids.map((id) => {
@@ -543,4 +548,78 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   const restoredHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   await restoredHierarchy.getByRole('button', { name: 'Open Vesper Prime system map', exact: true }).click()
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(moved)
+
+  await page.goto('/?map=continuous')
+  await waitForWorkspaceStartup(page)
+  const clusterBeforeGroupMove = await downloadJson(page, 'Export Jump Cluster JSON')
+  const cluster = clusterBeforeGroupMove.cluster
+  if (!cluster) throw new Error('The continuous Warden map did not export a Jump Cluster.')
+  const sourceOwner = cluster.systems.find(candidate => candidate.id === system.id)
+  const sourceObject = sourceOwner?.objects.find(candidate => candidate.id === iriaId)
+  const sameOwnerObject = sourceOwner?.objects.find(candidate => candidate.id === groupDepartureId)
+  const otherOwner = cluster.systems.find(candidate => candidate.id !== system.id && candidate.objects.length > 0)
+  const otherOwnerObject = otherOwner?.objects.find(candidate => candidate.placement.kind === 'system')
+    ?? otherOwner?.objects[0]
+  if (!sourceOwner || !sourceObject || !sameOwnerObject || !otherOwner || !otherOwnerObject) {
+    throw new Error('The continuous group fixture needs selected objects in two owning systems.')
+  }
+
+  const continuousMap = page.getByRole('group', { name: `${cluster.name} continuous map`, exact: true })
+  const groupHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  const groupTree = groupHierarchy.getByRole('tree', { name: `${cluster.name} object and Orbit hierarchy`, exact: true })
+  const sourceRow = groupTree.getByRole('treeitem', {
+    name: hierarchyObjectName(sourceObject.name, sourceOwner.name),
+  })
+  const otherOwnerRow = groupTree.getByRole('treeitem', {
+    name: hierarchyObjectName(otherOwnerObject.name, otherOwner.name),
+  })
+  await sourceRow.click()
+  const sameOwnerMark = continuousMap.locator(
+    `.continuous-warden-object[data-system-id="${sourceOwner.id}"][data-object-id="${sameOwnerObject.id}"]`,
+  )
+  await expect(sameOwnerMark).toBeVisible()
+  await sameOwnerMark.click({ modifiers: ['Shift'] })
+  await otherOwnerRow.click({ modifiers: ['Shift'] })
+  await expect(sourceRow).toHaveAttribute('aria-selected', 'true')
+  await expect(otherOwnerRow).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByText('3 objects selected', { exact: true })).toBeVisible()
+
+  await setWorkspaceMapMode(page, 'Move')
+  const sourceMark = continuousMap.locator(
+    `.continuous-warden-object[data-system-id="${sourceOwner.id}"][data-object-id="${sourceObject.id}"]`,
+  )
+  await expect(sourceMark).toBeVisible()
+  const originalTransform = await sourceMark.getAttribute('transform')
+  const startBounds = await sourceMark.boundingBox()
+  if (!originalTransform || !startBounds) throw new Error('The selected Warden group anchor is not measurable.')
+  const start = { x: startBounds.x + startBounds.width / 2, y: startBounds.y + startBounds.height / 2 }
+  const moveSelectedGroup = async () => {
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    await page.mouse.move(start.x + 38, start.y + 26, { steps: 5 })
+  }
+
+  await moveSelectedGroup()
+  await expect(page.getByRole('status').filter({ hasText: /Moving 3 selected objects/ })).toBeVisible()
+  await expect(sourceMark).not.toHaveAttribute('transform', originalTransform)
+  await page.keyboard.press('Escape')
+  await page.mouse.up()
+  await expect(sourceMark).toHaveAttribute('transform', originalTransform)
+  expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(clusterBeforeGroupMove)
+
+  await moveSelectedGroup()
+  await expect(page.getByRole('status').filter({ hasText: /Moving 3 selected objects/ })).toBeVisible()
+  await page.mouse.up()
+  await waitForWorkspaceSaved(page)
+  const clusterAfterGroupMove = await downloadJson(page, 'Export Jump Cluster JSON')
+  const movedOwner = clusterAfterGroupMove.cluster?.systems.find(candidate => candidate.id === otherOwner.id)
+  const movedAcrossSystemObject = movedOwner?.objects.find(candidate => candidate.id === otherOwnerObject.id)
+  const groupObjectState = (snapshot: typeof clusterBeforeGroupMove, ownerId: string, objectId: string) => {
+    const object = snapshot.cluster?.systems.find(candidate => candidate.id === ownerId)?.objects.find(candidate => candidate.id === objectId)
+    if (!object) throw new Error(`The Jump Cluster export is missing object "${objectId}".`)
+    return { placement: object.placement, angle: snapshot.layout.objectAngles[objectId] }
+  }
+  expect(groupObjectState(clusterAfterGroupMove, otherOwner.id, otherOwnerObject.id))
+    .not.toEqual(groupObjectState(clusterBeforeGroupMove, otherOwner.id, otherOwnerObject.id))
+  expect(movedAcrossSystemObject).toBeDefined()
 })

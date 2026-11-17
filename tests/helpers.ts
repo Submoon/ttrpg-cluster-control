@@ -1360,8 +1360,16 @@ export type DownloadedImage = {
 export async function downloadImage(
   page: import('@playwright/test').Page,
   mimeType: 'image/svg+xml' | 'image/png',
+  scope?: 'Entire Cluster' | 'Selected system' | 'Current viewport',
 ): Promise<DownloadedImage> {
   const images = await openMapFilesSection(page, 'Export an image')
+  if (scope) {
+    const scopeMenu = page.getByRole('menuitem', { name: /^Warden image scope/ })
+    if (await scopeMenu.count()) {
+      await scopeMenu.hover()
+      await page.getByRole('menuitem', { name: scope, exact: true }).click()
+    }
+  }
   const action = mimeType === 'image/png' ? 'Warden PNG' : 'Warden SVG'
   try {
     const downloadPromise = page.waitForEvent('download')

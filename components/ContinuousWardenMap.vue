@@ -1,5 +1,5 @@
 <template>
-  <div class="map-view flex h-full min-h-0 min-w-0 flex-1 flex-col">
+  <div class="map-view relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
     <svg
       ref="svgElement"
       class="cluster-map-svg continuous-warden-map-svg block h-full min-h-0 w-full flex-1"
@@ -150,9 +150,14 @@
                   :class="{
                     'is-selected': isSelectedObject(projection.id, object.id),
                     'is-search-result': searchLocatorId === object.id,
-                    'is-move-preview': isObjectMovePreview(projection.id, object.id),
+                    'is-dimmed': dimmedObjectIds.has(object.id),
+                    'is-move-preview': isObjectMovePreview(projection.id, object.id)
+                      || isGroupObjectMovePreview(projection.id, object.id),
+                    'is-group-move-preview': isGroupObjectMovePreview(projection.id, object.id),
+                    'is-group-arriving': isGroupObjectArriving(object.id),
+                    'is-group-departing': isGroupObjectDeparting(object.id),
                   }"
-                  :transform="`translate(${object.position.x} ${object.position.y})`"
+                  :transform="objectTransform(projection.id, object)"
                   :data-object-id="object.id"
                   :data-system-id="projection.id"
                   role="button"
@@ -283,6 +288,17 @@
         </g>
       </g>
     </svg>
+    <div
+      v-if="selectedObjectDragPreview"
+      class="continuous-warden-group-move-status pointer-events-none absolute left-3 top-3 z-10 max-w-[min(28rem,calc(100%-1.5rem))] rounded border border-[var(--line-strong)] bg-[var(--panel-bg)] px-2 py-1 text-xs shadow"
+      role="status"
+      aria-live="polite"
+    >
+      Moving {{ props.selectedObjectIds.length }} selected objects;
+      {{ selectedObjectDragPreview.arrivingObjectIds.size }} attach,
+      {{ selectedObjectDragPreview.departingObjectIds.size }} detach,
+      {{ hiddenSelectedObjectCount }} selected hidden at this detail.
+    </div>
   </div>
 </template>
 
@@ -340,17 +356,19 @@ import {
 } from '../utils/continuous-map-history-reveal'
 import type { ClientRectBounds } from '../utils/map-usable-area'
 import { createMapTouchNavigation } from './maps/map-touch-navigation'
-import { exportMapImage, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
+import type { MapImageExportOptions, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import { mapImageContextKey, type MapImageScope } from '../utils/map-image-scope'
+import { exportContinuousWardenMapImage } from '../utils/continuous-warden-image-export'
+import { CONTINUOUS_SYSTEM_NAME_FONT_PIXELS as SYSTEM_NAME_FONT_PIXELS, continuousMapNameLabels } from '../utils/continuous-map-name-labels'
+import type { ContinuousMapNameLabel } from '../utils/continuous-map-name-labels'
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
 import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
+import type { SelectedObjectDrag, SelectedObjectDragPreview } from '../composables/editor-workflows/selected-object-drag'
 import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
 
 const DETAIL_REVEAL_PIXELS = 250
 const DETAIL_HIDE_PIXELS = 210
 const MINIMUM_FIT_PADDING = 48
-const SYSTEM_NAME_FONT_PIXELS = 18
-const SYSTEM_NAME_HEIGHT_PIXELS = 28
-const SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS = 8
 const ROUTE_REVEAL_PADDING_PIXELS = 14
 const ROUTE_FAN_OUT_LIMIT_PIXELS = 96
 const OVERVIEW_DETAIL_SYSTEM_IDS: ReadonlySet<string> = new Set()
@@ -360,10 +378,12 @@ const props = defineProps<{
   workspace: LocalWorkspace
   systemPositions: Readonly<Record<string, Point>>
   unresolvedExitPositions?: Readonly<Record<string, Point>>
+  dimmedObjectIds?: readonly string[]
   objectAngles: Readonly<Record<string, number>>
   orbitRadii: Readonly<Record<string, { horizontal: number; vertical: number }>>
   orbitRotations: Readonly<Record<string, number>>
   selectedSystemId: string | null
+  selectedObjectIds: readonly string[]
   selectedRouteId: string | null
   inspectedTarget: InspectedMapTarget | null
   mode: MapInteractionMode
@@ -382,6 +402,7 @@ const props = defineProps<{
   initialViewport: MapViewport | null
   getUsableClientRect?: () => ClientRectBounds | undefined
   orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
+  beginSelectedObjectDrag?: (anchorId: string, continuousSystemScales: ReadonlyMap<string, number>) => SelectedObjectDrag | null
 }>()
 
 const emit = defineEmits<{
@@ -409,6 +430,7 @@ const svgElement = ref<SVGSVGElement | null>(null)
 const routeLayer = ref<InstanceType<typeof ContinuousMapRouteLayer> | null>(null)
 const viewport = ref<MapViewport>({ x: 0, y: 0, k: 1 })
 const previewPositions = ref(new Map<string, Point>())
+const selectedObjectDragPreview = shallowRef<SelectedObjectDragPreview | null>(null)
 const objectMovePreview = shallowRef<{ systemId: string; objectId: string; projection: ContinuousWardenSystemProjection } | null>(null)
 const preciseObjectPlacementPreview = shallowRef<{ systemId: string; objectId: string; projection: ContinuousWardenSystemProjection } | null>(null)
 const preciseOrbitCenterMovePreview = shallowRef<{ systemId: string; orbitId: string; projection: ContinuousWardenSystemProjection } | null>(null)
@@ -445,6 +467,18 @@ interface ActiveObjectDrag {
 }
 
 let activeObjectDrag: ActiveObjectDrag | null = null
+let activeSelectedObjectDrag: {
+  drag: SelectedObjectDrag | null
+  systemId: string
+  objectId: string
+  pointerId: number
+  startClient: Point
+  startScene: Point
+  camera: MapViewport
+  workspaceSnapshot: LocalWorkspace
+  delta: Point
+  moved: boolean
+} | null = null
 type PendingMapClickTarget =
   | { kind: 'object'; systemId: string; objectId: string }
   | { kind: 'orbit'; systemId: string; orbitId: string }
@@ -506,12 +540,20 @@ const systemGeometry = computed(() => ({
   orbitRadii: props.orbitRadii,
   orbitRotations: props.orbitRotations,
 }))
+const dimmedObjectIds = computed(() => new Set(props.dimmedObjectIds ?? []))
 
 const projections = computed(() => props.cluster.systems.map((system, index) => projectWardenSystem(
   system,
   props.systemPositions[system.id] ?? initialClusterSystemPosition(index),
   systemGeometry.value,
 )))
+const hiddenSelectedObjectCount = computed(() => {
+  const owners = new Map(props.cluster.systems.flatMap(system => system.objects.map(object => [object.id, system.id] as const)))
+  return props.selectedObjectIds.filter(objectId => {
+    const ownerId = owners.get(objectId)
+    return ownerId !== undefined && !detailSystemIds.value.has(ownerId)
+  }).length
+})
 const renderedProjections = computed(() => projections.value.map(projection => {
   const preview = objectMovePreview.value?.systemId === projection.id
     ? objectMovePreview.value
@@ -538,6 +580,31 @@ function isObjectMovePreview(systemId: string, objectId: string): boolean {
   return (objectMovePreview.value?.systemId === systemId && objectMovePreview.value.objectId === objectId)
     || (preciseObjectPlacementPreview.value?.systemId === systemId
       && preciseObjectPlacementPreview.value.objectId === objectId)
+}
+
+function groupObjectPreview(systemId: string, objectId: string): SelectedObjectDragPreview | null {
+  const preview = selectedObjectDragPreview.value
+  return preview?.objectSystemIds.get(objectId) === systemId && preview.positions.has(objectId) ? preview : null
+}
+
+function isGroupObjectMovePreview(systemId: string, objectId: string): boolean {
+  return groupObjectPreview(systemId, objectId) !== null
+}
+
+function isGroupObjectArriving(objectId: string): boolean {
+  return selectedObjectDragPreview.value?.arrivingObjectIds.has(objectId) ?? false
+}
+
+function isGroupObjectDeparting(objectId: string): boolean {
+  return selectedObjectDragPreview.value?.departingObjectIds.has(objectId) ?? false
+}
+
+function objectTransform(
+  systemId: string,
+  object: ContinuousWardenSystemProjection['objects'][number],
+): string {
+  const position = groupObjectPreview(systemId, object.id)?.positions.get(object.id) ?? object.position
+  return `translate(${position.x} ${position.y})`
 }
 
 const routeMarks = computed(() => {
@@ -640,48 +707,6 @@ const screenLayerTransform = computed(() => {
   return `translate(${-x / k} ${-y / k}) scale(${1 / k})`
 })
 
-interface NameLabel {
-  id: string
-  name: string
-  x: number
-  y: number
-  width: number
-  height: number
-  anchorX: number
-  anchorY: number
-  hasLeader: boolean
-}
-
-let textMeasureContext: CanvasRenderingContext2D | null | undefined
-
-function systemNameWidthPixels(name: string): number {
-  if (textMeasureContext === undefined && typeof document !== 'undefined') {
-    textMeasureContext = document.createElement('canvas').getContext('2d')
-    if (textMeasureContext) textMeasureContext.font = `600 ${SYSTEM_NAME_FONT_PIXELS}px Georgia, serif`
-  }
-  const textWidth = textMeasureContext?.measureText(name).width ?? name.length * 9
-  return Math.max(72, Math.ceil(textWidth + 24))
-}
-
-function namePlacementOffsets(widthPixels: number): Point[] {
-  const side = widthPixels / 2 + 10
-  const offsets: Point[] = []
-  for (let ring = 0; ring <= 12; ring += 1) {
-    const distance = ring * 38
-    offsets.push(
-      { x: 0, y: -SYSTEM_NAME_HEIGHT_PIXELS - 8 - distance },
-      { x: 0, y: 8 + distance },
-      { x: -side - distance, y: -SYSTEM_NAME_HEIGHT_PIXELS / 2 },
-      { x: side + distance, y: -SYSTEM_NAME_HEIGHT_PIXELS / 2 },
-      { x: -side - distance, y: -SYSTEM_NAME_HEIGHT_PIXELS - 8 },
-      { x: side + distance, y: -SYSTEM_NAME_HEIGHT_PIXELS - 8 },
-      { x: -side - distance, y: 8 },
-      { x: side + distance, y: 8 },
-    )
-  }
-  return offsets
-}
-
 function anchorFor(projection: ContinuousWardenSystemProjection): Point {
   const preview = previewPositions.value.get(projection.id)
   return preview
@@ -704,115 +729,13 @@ function anchorTransform(projection: ContinuousWardenSystemProjection): string {
   return `translate(${anchor.x} ${anchor.y}) scale(${1 / (viewport.value.k * svgPixelScale.value)})`
 }
 
-function clampToViewport(value: number, minimum: number, maximum: number): number {
-  return maximum < minimum ? (minimum + maximum) / 2 : Math.max(minimum, Math.min(maximum, value))
-}
-
-const nameLabels = computed<NameLabel[]>(() => {
-  const scale = svgPixelScale.value > 0 ? svgPixelScale.value : 1
-  const viewportRect = svgViewport.value
-  const margin = SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS / scale
-  const labels: NameLabel[] = []
-  const occupied: Array<{ left: number; top: number; right: number; bottom: number }> = []
-  const expandedViewport = {
-    left: viewportRect.x - 96 / scale,
-    top: viewportRect.y - 96 / scale,
-    right: viewportRect.x + viewportRect.width + 96 / scale,
-    bottom: viewportRect.y + viewportRect.height + 96 / scale,
-  }
-  const anchorPoints = projections.value.flatMap(projection => {
-    const anchor = anchorFor(projection)
-    const point = {
-      id: projection.id,
-      name: projection.name,
-      x: viewport.value.x + anchor.x * viewport.value.k,
-      y: viewport.value.y + anchor.y * viewport.value.k,
-    }
-    const delta = anchorDelta(projection)
-    const envelope = projection.envelope
-    const envelopeBounds = {
-      left: viewport.value.x + (envelope.x + delta.x) * viewport.value.k,
-      top: viewport.value.y + (envelope.y + delta.y) * viewport.value.k,
-      right: viewport.value.x + (envelope.x + delta.x + envelope.width) * viewport.value.k,
-      bottom: viewport.value.y + (envelope.y + delta.y + envelope.height) * viewport.value.k,
-    }
-    const anchorNearViewport = point.x >= expandedViewport.left && point.x <= expandedViewport.right
-      && point.y >= expandedViewport.top && point.y <= expandedViewport.bottom
-    const envelopeNearViewport = envelopeBounds.right >= expandedViewport.left
-      && envelopeBounds.left <= expandedViewport.right
-      && envelopeBounds.bottom >= expandedViewport.top
-      && envelopeBounds.top <= expandedViewport.bottom
-    return anchorNearViewport || envelopeNearViewport ? [point] : []
-  })
-  for (const anchor of anchorPoints) {
-    const widthPixels = systemNameWidthPixels(anchor.name)
-    const width = widthPixels / scale
-    const height = SYSTEM_NAME_HEIGHT_PIXELS / scale
-    const candidates = namePlacementOffsets(widthPixels).map(offset => ({ x: offset.x / scale, y: offset.y / scale }))
-    let chosen = candidates[0]!
-    let chosenScore = Number.POSITIVE_INFINITY
-    for (const offset of candidates) {
-      const centerX = clampToViewport(
-        anchor.x + offset.x,
-        viewportRect.x + margin + width / 2,
-        viewportRect.x + viewportRect.width - margin - width / 2,
-      )
-      const top = clampToViewport(
-        anchor.y + offset.y,
-        viewportRect.y + margin,
-        viewportRect.y + viewportRect.height - margin - height,
-      )
-      const candidateOffset = { x: centerX - anchor.x, y: top - anchor.y }
-      const bounds = {
-        left: centerX - width / 2,
-        right: centerX + width / 2,
-        top,
-        bottom: top + height,
-      }
-      const outsideWidth = Math.max(0, viewportRect.x + margin - bounds.left)
-        + Math.max(0, bounds.right - (viewportRect.x + viewportRect.width - margin))
-      const outsideHeight = Math.max(0, viewportRect.y + margin - bounds.top)
-        + Math.max(0, bounds.bottom - (viewportRect.y + viewportRect.height - margin))
-      const outsideArea = outsideWidth * height + outsideHeight * width
-      const labelOverlapArea = occupied.reduce((total, prior) => {
-        const overlapWidth = Math.max(0, Math.min(bounds.right + 6 / scale, prior.right) - Math.max(bounds.left - 6 / scale, prior.left))
-        const overlapHeight = Math.max(0, Math.min(bounds.bottom + 4 / scale, prior.bottom) - Math.max(bounds.top - 4 / scale, prior.top))
-        return total + overlapWidth * overlapHeight
-      }, 0)
-      const anchorOverlapArea = anchorPoints.reduce((total, other) => {
-        if (other.id === anchor.id) return total
-        const radius = 18 / scale
-        const overlapWidth = Math.max(0, Math.min(bounds.right, other.x + radius) - Math.max(bounds.left, other.x - radius))
-        const overlapHeight = Math.max(0, Math.min(bounds.bottom, other.y + radius) - Math.max(bounds.top, other.y - radius))
-        return total + overlapWidth * overlapHeight
-      }, 0)
-      const duplicatePosition = labels.some(prior => prior.x === centerX && prior.y === top)
-      const score = labelOverlapArea * 100 + anchorOverlapArea * 30 + outsideArea * 10
-        + (duplicatePosition ? 1_000_000_000 : 0) + Math.hypot(candidateOffset.x, candidateOffset.y) * 0.01
-      if (score < chosenScore) {
-        chosen = candidateOffset
-        chosenScore = score
-      }
-      if (labelOverlapArea === 0 && anchorOverlapArea === 0 && outsideArea === 0 && !duplicatePosition) break
-    }
-    const x = anchor.x + chosen.x
-    const y = anchor.y + chosen.y
-    occupied.push({ left: x - width / 2, top: y, right: x + width / 2, bottom: y + height })
-    labels.push({
-      id: anchor.id,
-      name: anchor.name,
-      x,
-      y,
-      width,
-      height,
-      anchorX: anchor.x,
-      anchorY: anchor.y,
-      hasLeader: Math.abs(chosen.x * scale) > 0
-        || Math.abs(chosen.y * scale + SYSTEM_NAME_HEIGHT_PIXELS + 8) > 6,
-    })
-  }
-  return labels
-})
+const nameLabels = computed<ContinuousMapNameLabel[]>(() => continuousMapNameLabels({
+  projections: projections.value,
+  viewport: viewport.value,
+  viewportRect: svgViewport.value,
+  svgPixelScale: svgPixelScale.value,
+  getAnchor: anchorFor,
+}))
 
 function localObject(projectionId: string, objectId: string): StarSystem['objects'][number] | undefined {
   return props.cluster.systems.find(system => system.id === projectionId)?.objects.find(object => object.id === objectId)
@@ -856,8 +779,8 @@ function orbitEditHandleRadius(projection: ContinuousWardenSystemProjection): nu
 }
 
 function isSelectedObject(systemId: string, objectId: string): boolean {
-  const target = props.inspectedTarget
-  return target?.kind === 'object' && target.systemId === systemId && target.objectId === objectId
+  return props.selectedObjectIds.includes(objectId)
+    && props.cluster.systems.some(system => system.id === systemId && system.objects.some(object => object.id === objectId))
 }
 
 function isSelectedOrbit(systemId: string, orbitId: string): boolean {
@@ -949,6 +872,22 @@ function getViewport(): MapViewport {
 
 function getRenderedSystemProjections(): readonly ContinuousWardenSystemProjection[] {
   return renderedProjections.value
+}
+
+/** Resolves the continuous scene's rendered object anchors against a client-space marquee. */
+function getObjectIdsWithinClientRect(rect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom'>): string[] {
+  const element = svgElement.value
+  if (!element) return []
+  return [...element.querySelectorAll<SVGGElement>('.continuous-warden-object[data-object-id]')]
+    .filter(mark => {
+      const matrix = mark.getScreenCTM()
+      if (!matrix) return false
+      const anchor = new DOMPoint(0, 0).matrixTransform(matrix)
+      return anchor.x >= rect.left && anchor.x <= rect.right
+        && anchor.y >= rect.top && anchor.y <= rect.bottom
+    })
+    .map(mark => mark.getAttribute('data-object-id'))
+    .filter((id): id is string => id !== null)
 }
 
 function getFitBounds(): SvgViewportRect | undefined {
@@ -1882,6 +1821,32 @@ function clearObjectMovePreview(): void {
   objectMovePreview.value = null
 }
 
+function updateSelectedObjectMovePreview(
+  drag: NonNullable<typeof activeSelectedObjectDrag>,
+  point: Point,
+): void {
+  drag.delta = { x: point.x - drag.startScene.x, y: point.y - drag.startScene.y }
+  selectedObjectDragPreview.value = drag.drag?.preview(drag.delta) ?? null
+}
+
+function finishSelectedObjectDrag(cancelled: boolean): void {
+  const drag = activeSelectedObjectDrag
+  if (!drag) return
+  activeSelectedObjectDrag = null
+  const element = svgElement.value
+  if (element?.hasPointerCapture(drag.pointerId)) {
+    try { element.releasePointerCapture(drag.pointerId) } catch { /* Capture may already have been released. */ }
+  }
+  emit('editing-gesture-change', false)
+  if (cancelled || drag.moved) suppressClickAfterOwnedGesture()
+  selectedObjectDragPreview.value = null
+  if (cancelled || !drag.moved) {
+    drag.drag?.cancel()
+    return
+  }
+  if (drag.drag) void drag.drag.complete(drag.delta)
+}
+
 function finishObjectDrag(cancelled: boolean): void {
   const drag = activeObjectDrag
   if (!drag) return
@@ -1902,7 +1867,10 @@ function finishObjectDrag(cancelled: boolean): void {
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
-  const ownedPointerId = activeOrbitGesture?.pointerId ?? activeObjectDrag?.pointerId ?? activeAnchorDrag?.pointerId
+  const ownedPointerId = activeOrbitGesture?.pointerId
+    ?? activeSelectedObjectDrag?.pointerId
+    ?? activeObjectDrag?.pointerId
+    ?? activeAnchorDrag?.pointerId
   if (ownedPointerId !== undefined && ownedPointerId !== event.pointerId) {
     cancelActiveGesture()
     return
@@ -1927,6 +1895,30 @@ function onPointerDownCapture(event: PointerEvent): void {
   }
   const objectTarget = moveTarget?.kind === 'object' ? moveTarget : null
   if (objectTarget && element) {
+    if (props.selectedObjectIds.length > 1 && props.selectedObjectIds.includes(objectTarget.objectId)) {
+      const scene = cameraPoint(event)
+      if (!scene) return
+      const camera = getViewport()
+      const systemScales = new Map(projections.value.map(projection => [projection.id, projection.scale] as const))
+      activeSelectedObjectDrag = {
+        drag: props.beginSelectedObjectDrag?.(objectTarget.objectId, systemScales) ?? null,
+        systemId: objectTarget.systemId,
+        objectId: objectTarget.objectId,
+        pointerId: event.pointerId,
+        startClient: { x: event.clientX, y: event.clientY },
+        startScene: scene,
+        camera,
+        workspaceSnapshot: props.workspace,
+        delta: { x: 0, y: 0 },
+        moved: false,
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      try { element.setPointerCapture(event.pointerId) } catch { /* Pointer capture is best effort for synthetic input. */ }
+      emit('editing-gesture-change', true)
+      return
+    }
     const projection = projections.value.find(candidate => candidate.id === objectTarget.systemId)
     const localObject = projection?.objects.find(candidate => candidate.id === objectTarget.objectId)
     const system = props.cluster.systems.find(candidate => candidate.id === objectTarget.systemId)
@@ -1985,6 +1977,16 @@ function onPointerMoveCapture(event: PointerEvent): void {
     orbitGesture.moved = true
     const point = orbitGestureLocalPoint(orbitGesture, event)
     if (point) previewOrbitGestureAt(orbitGesture, point)
+    event.preventDefault()
+    return
+  }
+  const selectedObjectDrag = activeSelectedObjectDrag
+  if (selectedObjectDrag?.pointerId === event.pointerId) {
+    if (!hasMapDragThreshold(selectedObjectDrag.startClient, { x: event.clientX, y: event.clientY })
+      && !selectedObjectDrag.moved) return
+    selectedObjectDrag.moved = true
+    const point = cameraPointAt(event, selectedObjectDrag.camera)
+    if (point) updateSelectedObjectMovePreview(selectedObjectDrag, point)
     event.preventDefault()
     return
   }
@@ -2049,6 +2051,26 @@ function onPointerEndCapture(event: PointerEvent): void {
     }
     return
   }
+  if (activeSelectedObjectDrag?.pointerId === event.pointerId) {
+    const drag = activeSelectedObjectDrag
+    if (event.type === 'pointerup' && (drag.moved || hasMapDragThreshold(drag.startClient, { x: event.clientX, y: event.clientY }))) {
+      drag.moved = true
+      const point = cameraPointAt(event, drag.camera)
+      if (point) updateSelectedObjectMovePreview(drag, point)
+    }
+    const moved = drag.moved
+    if (!moved && event.type === 'pointerup') {
+      deferMapClickTarget({ kind: 'object', systemId: drag.systemId, objectId: drag.objectId })
+    }
+    const cancelled = event.type === 'pointercancel'
+    finishSelectedObjectDrag(cancelled)
+    if (moved || cancelled) {
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+    }
+    return
+  }
   if (activeObjectDrag?.pointerId === event.pointerId) {
     const drag = activeObjectDrag
     if (event.type === 'pointerup' && (drag.moved || hasMapDragThreshold(drag.startClient, { x: event.clientX, y: event.clientY }))) {
@@ -2096,6 +2118,7 @@ function onPointerEndCapture(event: PointerEvent): void {
 
 function onLostPointerCapture(event: PointerEvent): void {
   if (activeOrbitGesture?.pointerId === event.pointerId) finishOrbitGesture(true)
+  if (activeSelectedObjectDrag?.pointerId === event.pointerId) finishSelectedObjectDrag(true)
   if (activeObjectDrag?.pointerId === event.pointerId) finishObjectDrag(true)
   if (activeAnchorDrag?.pointerId === event.pointerId) finishAnchorDrag(true)
 }
@@ -2496,17 +2519,48 @@ function setUnresolvedExitPositionPreview(routeId: string, position: Point | nul
   exitPositionOverrides.value = next
 }
 
-function exportImage(format: MapImageFormat, palette: MapImagePalette = 'active'): Promise<Blob> {
+function exportImage(
+  format: MapImageFormat,
+  palette: MapImagePalette = 'active',
+  options: MapImageExportOptions = {},
+): Promise<Blob | null> {
   const element = svgElement.value
-  return element ? exportMapImage(element, format, undefined, palette, clone => {
-    clone.querySelector('.continuous-warden-import-placement-preview')?.remove()
+  if (!element) return Promise.reject(new Error('The continuous map is not ready to export.'))
+  return exportContinuousWardenMapImage({
+    source: element,
+    cluster: props.cluster,
+    projections: projections.value,
+    unresolvedExitPositions: props.unresolvedExitPositions,
+    dimmedObjectIds: props.dimmedObjectIds,
+    scope: options.scope ?? 'viewport',
+    selectedSystemId: options.selectedSystemId,
+    selectedRouteId: props.selectedRouteId,
+    format,
+    palette,
+    viewport: getViewport(),
+    viewportRect: { ...svgViewport.value },
+    svgPixelScale: svgPixelScale.value,
+    detailSystemIds: new Set(detailSystemIds.value),
+    isCurrent: options.isCurrent,
   })
-    : Promise.reject(new Error('The continuous map is not ready to export.'))
+}
+
+function getImageContextKey(scope: MapImageScope | null = 'viewport'): string {
+  return mapImageContextKey(scope, {
+    clusterId: props.cluster.id,
+    viewport: getViewport(),
+    viewportRect: { ...svgViewport.value },
+    svgPixelScale: svgPixelScale.value,
+    detailSystemIds: [...detailSystemIds.value],
+    dimmedObjectIds: [...dimmedObjectIds.value],
+    selectedRouteId: props.selectedRouteId,
+  })
 }
 
 function cancelActiveGesture(): void {
   viewPan = null
   if (activeOrbitGesture) finishOrbitGesture(true)
+  if (activeSelectedObjectDrag) finishSelectedObjectDrag(true)
   if (activeObjectDrag) finishObjectDrag(true)
   if (activeAnchorDrag) finishAnchorDrag(true)
   touchCameraNavigation.cancel()
@@ -2527,17 +2581,21 @@ function startTouchNavigation(event: TouchEvent): void {
     if (event.touches.length <= 1) return
     finishObjectDrag(true)
   }
+  if (activeSelectedObjectDrag) {
+    if (event.touches.length <= 1) return
+    finishSelectedObjectDrag(true)
+  }
   if (activeAnchorDrag) return
   touchCameraNavigation.start(event)
 }
 
 function moveTouchNavigation(event: TouchEvent): void {
-  if (activeOrbitGesture || activeAnchorDrag || activeObjectDrag) return
+  if (activeOrbitGesture || activeAnchorDrag || activeObjectDrag || activeSelectedObjectDrag) return
   touchCameraNavigation.move(event)
 }
 
 function endTouchNavigation(event: TouchEvent): void {
-  if (activeOrbitGesture || activeAnchorDrag || activeObjectDrag) return
+  if (activeOrbitGesture || activeAnchorDrag || activeObjectDrag || activeSelectedObjectDrag) return
   touchCameraNavigation.end(event)
 }
 
@@ -2610,13 +2668,18 @@ onBeforeUnmount(() => {
 
 watch(() => props.mode, () => cancelActiveGesture(), { flush: 'sync' })
 watch(() => props.workspace, workspace => {
+  if (activeSelectedObjectDrag && toRaw(activeSelectedObjectDrag.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
   if (activeObjectDrag && toRaw(activeObjectDrag.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
   if (activeOrbitGesture && toRaw(activeOrbitGesture.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
 }, { flush: 'sync' })
 watch(() => props.cluster.systems.map(system => system.id).join('\u0000'), ids => {
+  if (activeSelectedObjectDrag && !ids.split('\u0000').includes(activeSelectedObjectDrag.systemId)) cancelActiveGesture()
   if (activeObjectDrag && !ids.split('\u0000').includes(activeObjectDrag.systemId)) cancelActiveGesture()
   if (activeOrbitGesture && !ids.split('\u0000').includes(activeOrbitGesture.systemId)) cancelActiveGesture()
   if (activeAnchorDrag && !ids.split('\u0000').includes(activeAnchorDrag.systemId)) cancelActiveGesture()
+})
+watch(() => props.selectedObjectIds.join('\u0000'), (ids, previousIds) => {
+  if (ids !== previousIds && activeSelectedObjectDrag) cancelActiveGesture()
 })
 watch(projections, () => {
   updateDetailReveal(viewport.value.k)
@@ -2636,7 +2699,9 @@ watch(projections, () => {
 
 defineExpose({
   exportImage,
+  getImageContextKey,
   getRenderedSystemProjections,
+  getObjectIdsWithinClientRect,
   getMinimumZoomScale: () => minimumZoomScale.value,
   getViewport,
   setViewport,
@@ -2791,6 +2856,13 @@ defineExpose({
   pointer-events: all;
 }
 
+.continuous-warden-object.is-dimmed .continuous-warden-star-halo,
+.continuous-warden-object.is-dimmed .continuous-warden-object-glyph,
+.continuous-warden-object.is-dimmed .continuous-warden-object-key,
+.continuous-warden-object.is-dimmed .continuous-warden-object-name {
+  opacity: 0.14;
+}
+
 .continuous-warden-object-hit-target {
   fill: transparent;
   pointer-events: all;
@@ -2812,6 +2884,14 @@ defineExpose({
   stroke-width: 2;
   stroke-dasharray: 3 3;
   vector-effect: non-scaling-stroke;
+}
+
+.continuous-warden-object.is-group-arriving .continuous-warden-object-hit-target {
+  stroke: var(--feedback-success, #16814a);
+}
+
+.continuous-warden-object.is-group-departing .continuous-warden-object-hit-target {
+  stroke: var(--map-unresolved);
 }
 
 .continuous-warden-search-locator {

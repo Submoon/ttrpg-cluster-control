@@ -88,12 +88,12 @@
       </button>
     </nav>
 
-    <section v-if="props.continuousMap && selectedSystem" class="mt-5 border-t border-[var(--line-soft)] pt-[0.65rem]">
+    <section v-if="props.continuousMap" class="mt-5 border-t border-[var(--line-soft)] pt-[0.65rem]">
       <div class="tree-heading flex justify-between gap-[0.4rem] pb-[0.45rem]">
-        <span class="subsection-label">OBJECTS / ORBITS · {{ selectedSystem.name }}</span>
-        <span class="tree-count whitespace-nowrap">{{ hierarchyRows.length }} records</span>
+        <span class="subsection-label">OBJECTS / ORBITS · ALL SYSTEMS</span>
+        <span class="tree-count whitespace-nowrap">{{ continuousHierarchyRecordCount }} records</span>
       </div>
-      <p v-if="hierarchyRows.length === 0" class="empty-copy my-[0.65rem]">No objects charted yet.</p>
+      <p v-if="props.workspace.cluster.systems.length === 0" class="empty-copy my-[0.65rem]">No systems charted yet.</p>
       <!-- @vue-generic {HierarchyTreeItem[], true} -->
       <UTree
         v-else
@@ -104,7 +104,7 @@
         :get-key="getHierarchyItemKey"
         label-key="label"
         class="object-tree"
-        :aria-label="`${selectedSystem.name} object and Orbit hierarchy`"
+        :aria-label="`${props.workspace.cluster.name} object and Orbit hierarchy`"
         :ui="{
           itemWithChildren: 'ps-0 -ms-px',
           listWithChildren: 'ms-[var(--hierarchy-indent-step)] border-s border-[var(--line-soft)]',
@@ -119,17 +119,22 @@
       >
         <template #item-leading="{ item }">
           <span class="tree-leading" aria-hidden="true">
-            <span v-if="item.kind === 'object'" class="tree-object-title"><span class="object-mark">{{ objectMark(item.row.object) }}</span></span>
+            <span v-if="item.kind === 'system'" class="system-seal grid size-[1.5rem] place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
+            <span v-else-if="item.kind === 'object'" class="tree-object-title"><span class="object-mark">{{ objectMark(item.row.object) }}</span></span>
             <span v-else class="orbit-mark">R</span>
           </span>
         </template>
         <template #item-label="{ item }">
           <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
             <span class="tree-object-name flex min-w-0 items-center gap-1">{{ item.label }}</span>
+            <small v-if="item.kind === 'system'" class="mt-[0.18rem] block">
+              {{ item.system.objects.length }} map objects
+            </small>
             <small v-if="item.kind === 'object'" class="mt-[0.18rem] block">
               <span class="key-tag">{{ item.row.object.locationKey }}</span>
               <span class="block">{{ item.parentContext }}</span>
             </small>
+            <small v-if="item.kind !== 'system'" class="mt-[0.12rem] block">{{ item.ownerSystemName }}</small>
           </span>
         </template>
       </UTree>
@@ -205,7 +210,7 @@
           :class="ui.link({
             class: [
               'tree-row grid min-h-[2.55rem] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-1 gap-y-0 rounded-[2px] border border-transparent bg-transparent px-0.5 py-1 text-left',
-              item.kind === 'object' ? 'object-row' : 'orbit-row',
+              item.kind === 'system' ? 'system-row' : item.kind === 'object' ? 'object-row' : 'orbit-row',
               { active: selected },
             ],
             selected,
@@ -245,7 +250,7 @@
             </span>
             <span class="key-tag col-start-1 row-start-2 block min-w-0 [overflow-wrap:anywhere]">{{ item.row.object.locationKey }}</span>
           </template>
-          <template v-else>
+          <template v-else-if="item.kind === 'orbit'">
             <span class="tree-copy col-start-1 row-span-2 block min-w-0 [overflow-wrap:anywhere]">
               <span class="tree-orbit-title flex min-w-0 items-start gap-1">
                 <span class="orbit-mark shrink-0 text-[var(--map-muted)]" aria-hidden="true">○</span>
@@ -254,6 +259,12 @@
               <small class="mt-[0.18rem] block [overflow-wrap:anywhere]">
                 {{ item.row.host?.name ?? 'Unoccupied center' }} / {{ item.row.childCount }} object{{ item.row.childCount === 1 ? '' : 's' }}
               </small>
+            </span>
+          </template>
+          <template v-else>
+            <span class="tree-copy col-start-1 row-span-2 block min-w-0 [overflow-wrap:anywhere]">
+              <span class="tree-object-name">{{ item.system.name }}</span>
+              <small class="mt-[0.18rem] block">{{ item.system.objects.length }} map objects</small>
             </span>
           </template>
           <div class="col-start-2 row-span-2 flex min-w-0 flex-col items-center gap-0.5 self-center">
@@ -299,6 +310,7 @@
 import { computed, ref, watch } from 'vue'
 import {
   type LocalWorkspace,
+  type StarSystem,
 } from '../domain/workspace'
 import { objectMark } from '../utils/catalogue-marks'
 import { catalogueFamilyLabel, catalogueSubtypeLabel } from '../utils/catalogue-labels'
@@ -328,8 +340,9 @@ interface HierarchyTreeItemBase {
 }
 
 type HierarchyTreeItem = HierarchyTreeItemBase & (
-  | { kind: 'object'; row: ObjectHierarchyRow }
-  | { kind: 'orbit'; row: OrbitHierarchyRow }
+  | { kind: 'system'; system: StarSystem }
+  | { kind: 'object'; row: ObjectHierarchyRow; ownerSystemId: string; ownerSystemName: string }
+  | { kind: 'orbit'; row: OrbitHierarchyRow; ownerSystemId: string; ownerSystemName: string }
 )
 
 const props = defineProps<{
@@ -355,29 +368,42 @@ const selectedSystem = computed(() =>
 )
 
 const hierarchyRows = computed(() => buildMapHierarchy(selectedSystem.value))
-const hierarchyItems = computed(() => buildHierarchyTreeItems(hierarchyRows.value))
-const flatHierarchyItems = computed(() => flattenHierarchyTreeItems(hierarchyItems.value))
-const maximumHierarchyLevel = computed(() => hierarchyRows.value.reduce(
-  (maximum, row) => Math.max(maximum, row.depth + 1),
-  1,
+const continuousHierarchyRecordCount = computed(() => props.workspace.cluster.systems.reduce(
+  (count, system) => count + buildMapHierarchy(system).length,
+  0,
 ))
+const hierarchyItems = computed(() => props.continuousMap
+  ? props.workspace.cluster.systems.flatMap(system => buildHierarchyTreeItems(buildMapHierarchy(system), system, true))
+  : buildHierarchyTreeItems(hierarchyRows.value, selectedSystem.value))
+const flatHierarchyItems = computed(() => flattenHierarchyTreeItems(hierarchyItems.value))
+const maximumHierarchyLevel = computed(() => props.continuousMap
+  ? flatHierarchyItems.value.reduce((maximum, item) => Math.max(maximum, item.ancestorKeys.length + 1), 1)
+  : hierarchyRows.value.reduce((maximum, row) => Math.max(maximum, row.depth + 1), 1))
 const hierarchyIndentStep = computed(() => `${Math.min(5, 40 / Math.max(1, maximumHierarchyLevel.value - 1))}px`)
 const selectedHierarchyKey = computed(() => {
   const target = props.inspectedTarget
-  if (props.continuousMap && target?.kind === 'object') return `object:${target.objectId}`
-  if (props.continuousMap && target?.kind === 'orbit') return `orbit:${target.orbitId}`
+  if (props.continuousMap && target?.kind === 'object') return `object:${target.systemId}:${target.objectId}`
+  if (props.continuousMap && target?.kind === 'orbit') return `orbit:${target.systemId}:${target.orbitId}`
+  if (props.continuousMap && target?.kind === 'system') return `system:${target.systemId}`
   const lastSelectedObjectId = store.selectedObjectIds[store.selectedObjectIds.length - 1]
-  if (lastSelectedObjectId) return `object:${lastSelectedObjectId}`
-  if (store.selectedObjectId) return `object:${store.selectedObjectId}`
+  if (lastSelectedObjectId) return objectHierarchyKey(lastSelectedObjectId)
+  if (store.selectedObjectId) return objectHierarchyKey(store.selectedObjectId)
   if (store.selectedOrbitId) return `orbit:${store.selectedOrbitId}`
   return ''
 })
 const selectedHierarchyItem = computed(() => flatHierarchyItems.value.find(item => item.key === selectedHierarchyKey.value))
 const selectedHierarchyItems = computed(() => {
   const target = props.inspectedTarget
-  const selectedKeys = new Set(props.continuousMap && (target?.kind === 'object' || target?.kind === 'orbit')
-    ? [target.kind === 'object' ? `object:${target.objectId}` : `orbit:${target.orbitId}`]
-    : store.selectedObjectIds.length
+  if (props.continuousMap) {
+    const selectedKeys = new Set(store.selectedObjectIds.map(objectHierarchyKey))
+    if (store.selectedObjectIds.length === 0 && target?.kind === 'orbit') {
+      selectedKeys.add(`orbit:${target.systemId}:${target.orbitId}`)
+    } else if (store.selectedObjectIds.length === 0 && target?.kind === 'system') {
+      selectedKeys.add(`system:${target.systemId}`)
+    }
+    return flatHierarchyItems.value.filter(item => selectedKeys.has(item.key))
+  }
+  const selectedKeys = new Set(store.selectedObjectIds.length
     ? store.selectedObjectIds.map(id => `object:${id}`)
     : selectedHierarchyKey.value ? [selectedHierarchyKey.value] : [])
   return flatHierarchyItems.value.filter(item => selectedKeys.has(item.key))
@@ -385,7 +411,7 @@ const selectedHierarchyItems = computed(() => {
 const selectedHierarchyPath = computed(() => selectedHierarchyItem.value?.ancestorKeys.join('\u001f') ?? '')
 const hierarchyIdentity = computed(() => JSON.stringify([
   props.workspace.cluster.id,
-  selectedSystem.value?.id ?? null,
+  props.continuousMap ? 'all-systems' : selectedSystem.value?.id ?? null,
 ]))
 const hierarchyBranchKeys = computed(() => flatHierarchyItems.value
   .filter(item => item.children?.length)
@@ -414,19 +440,46 @@ watch(
   { immediate: true },
 )
 
-function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
-  const roots: HierarchyTreeItem[] = []
+function objectHierarchyKey(objectId: string): string {
+  if (!props.continuousMap) return `object:${objectId}`
+  const owner = ownerSystemForObject(objectId)
+  return owner ? `object:${owner.id}:${objectId}` : `object:${objectId}`
+}
+
+function ownerSystemForObject(objectId: string): StarSystem | undefined {
+  return props.workspace.cluster.systems.find(system => system.objects.some(object => object.id === objectId))
+}
+
+function buildHierarchyTreeItems(
+  rows: MapHierarchyRow[],
+  ownerSystem = selectedSystem.value,
+  includeSystemRoot = false,
+): HierarchyTreeItem[] {
+  const systemRoot: HierarchyTreeItem | undefined = includeSystemRoot && ownerSystem
+    ? {
+        kind: 'system',
+        system: ownerSystem,
+        key: `system:${ownerSystem.id}`,
+        label: ownerSystem.name,
+        textValue: ownerSystem.name,
+        ariaLabel: `Inspect ${ownerSystem.name}`,
+        ariaDescription: `${ownerSystem.objects.length} map objects`,
+        ancestorKeys: [],
+        children: [],
+      }
+    : undefined
+  const roots: HierarchyTreeItem[] = systemRoot ? [systemRoot] : []
   const parentsAtDepth: HierarchyTreeItem[] = []
   const dimmedObjectIds = new Set(props.dimmedObjectIds ?? [])
 
   for (const row of rows) {
-    const parent = row.depth > 0 ? parentsAtDepth[row.depth - 1] : undefined
+    const parent = row.depth > 0 ? parentsAtDepth[row.depth - 1] : systemRoot
     const ancestorKeys = parent ? [...parent.ancestorKeys, parent.key] : []
     const parentContext = row.kind === 'object'
       ? hierarchyParentContext(parent)
       : undefined
     const publicationDescription = row.kind === 'object'
-      ? publicationStatus(row.object.publication, selectedSystem.value?.publication).description
+      ? publicationStatus(row.object.publication, ownerSystem?.publication).description
       : undefined
     const isDimmed = row.kind === 'object'
       && dimmedObjectIds.has(row.object.id)
@@ -434,10 +487,16 @@ function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
       ? {
           kind: 'object',
           row,
-          key: `object:${row.object.id}`,
+          ownerSystemId: ownerSystem?.id ?? '',
+          ownerSystemName: ownerSystem?.name ?? '',
+          key: props.continuousMap && ownerSystem
+            ? `object:${ownerSystem.id}:${row.object.id}`
+            : `object:${row.object.id}`,
           label: row.object.name,
-          textValue: row.object.name,
-          ariaLabel: `Select ${row.object.locationKey}, ${row.object.name}`,
+          textValue: props.continuousMap && ownerSystem ? `${row.object.name}, ${ownerSystem.name}` : row.object.name,
+          ariaLabel: props.continuousMap && ownerSystem
+            ? `Select ${row.object.locationKey}, ${row.object.name} in ${ownerSystem.name}`
+            : `Select ${row.object.locationKey}, ${row.object.name}`,
           ariaDescription: `${catalogueFamilyLabel(row.object.family)} / ${catalogueSubtypeLabel(row.object)}. ${parentContext}. ${publicationDescription}${isDimmed ? ' Dimmed on map because it does not match the active filters.' : ''}`,
           isDimmed,
           parentContext,
@@ -446,10 +505,16 @@ function buildHierarchyTreeItems(rows: MapHierarchyRow[]): HierarchyTreeItem[] {
       : {
           kind: 'orbit',
           row,
-          key: `orbit:${row.orbit.id}`,
+          ownerSystemId: ownerSystem?.id ?? '',
+          ownerSystemName: ownerSystem?.name ?? '',
+          key: props.continuousMap && ownerSystem ? `orbit:${ownerSystem.id}:${row.orbit.id}` : `orbit:${row.orbit.id}`,
           label: `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`,
-          textValue: `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`,
-          ariaLabel: `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`,
+          textValue: props.continuousMap && ownerSystem
+            ? `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'} in ${ownerSystem.name}`
+            : `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`,
+          ariaLabel: props.continuousMap && ownerSystem
+            ? `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'} in ${ownerSystem.name}`
+            : `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`,
           ancestorKeys,
         }
 
@@ -490,17 +555,26 @@ function updateExpandedHierarchyKeys(keys: string[]): void {
 
 function selectHierarchyItem(event: TreeItemSelectEvent<HierarchyTreeItem>, item: HierarchyTreeItem): void {
   event.preventDefault()
-  if (props.continuousMap && selectedSystem.value) {
-    if (item.kind === 'object') {
+  if (props.continuousMap) {
+    if (item.kind === 'system') {
+      void commands.navigation.inspectContinuousTarget({ kind: 'system', systemId: item.system.id })
+    } else if (item.kind === 'object') {
+      const sourceEvent = event.detail.originalEvent
+      const modified = sourceEvent instanceof MouseEvent
+        && (sourceEvent.shiftKey || sourceEvent.ctrlKey || sourceEvent.metaKey)
+      if (modified && store.mapMode === 'select') {
+        void commands.navigation.toggleObjectSelection(item.row.object.id)
+        return
+      }
       void commands.navigation.inspectContinuousTarget({
         kind: 'object',
-        systemId: selectedSystem.value.id,
+        systemId: item.ownerSystemId,
         objectId: item.row.object.id,
       })
     } else {
       void commands.navigation.inspectContinuousTarget({
         kind: 'orbit',
-        systemId: selectedSystem.value.id,
+        systemId: item.ownerSystemId,
         orbitId: item.row.orbit.id,
       })
     }
@@ -508,21 +582,26 @@ function selectHierarchyItem(event: TreeItemSelectEvent<HierarchyTreeItem>, item
   }
   if (item.kind === 'object') {
     const sourceEvent = event.detail.originalEvent
-    if (sourceEvent instanceof MouseEvent && sourceEvent.shiftKey && store.mapMode === 'select') {
+    if (sourceEvent instanceof MouseEvent
+      && (sourceEvent.shiftKey || sourceEvent.ctrlKey || sourceEvent.metaKey)
+      && store.mapMode === 'select') {
       void commands.navigation.toggleObjectSelection(item.row.object.id)
     } else {
       void commands.navigation.selectObject(item.row.object.id)
     }
   }
-  else void commands.navigation.selectOrbit(item.row.orbit.id)
+  else if (item.kind === 'orbit') void commands.navigation.selectOrbit(item.row.orbit.id)
+  else void commands.navigation.selectSystem(item.system.id)
 }
 
 function systemTarget(systemId: string): PublicationTarget {
   return { kind: 'system', id: systemId, systemId }
 }
 
-function objectTarget(objectId: string): PublicationTarget | null {
-  const system = selectedSystem.value
+function objectTarget(objectId: string, ownerSystemId?: string): PublicationTarget | null {
+  const system = ownerSystemId
+    ? props.workspace.cluster.systems.find(candidate => candidate.id === ownerSystemId)
+    : selectedSystem.value
   return system ? { kind: 'object', id: objectId, systemId: system.id } : null
 }
 
@@ -570,10 +649,11 @@ function openObjectMenu(
   opener: HTMLElement,
   point: { x: number; y: number },
   selectObjectForContext = false,
+  ownerSystemId?: string,
 ): void {
   event.preventDefault()
   event.stopPropagation()
-  const target = objectTarget(objectId)
+  const target = objectTarget(objectId, ownerSystemId ?? (props.continuousMap ? ownerSystemForObject(objectId)?.id : undefined))
   if (!target) return
   commands.publication.openMenu(
     { target, clientPoint: point, opener, source: 'hierarchy' },
@@ -584,7 +664,7 @@ function openObjectMenu(
 function openHierarchyMenu(event: MouseEvent, item: HierarchyTreeItem): void {
   if (item.kind !== 'object' || !(event.currentTarget instanceof HTMLElement)) return
   const opener = event.currentTarget.closest<HTMLElement>('[role="treeitem"]') ?? event.currentTarget
-  openObjectMenu(event, item.row.object.id, opener, { x: event.clientX, y: event.clientY }, true)
+  openObjectMenu(event, item.row.object.id, opener, { x: event.clientX, y: event.clientY }, true, item.ownerSystemId)
 }
 
 function openHierarchyMenuFromKeyboard(event: KeyboardEvent, item: HierarchyTreeItem): void {
@@ -592,7 +672,7 @@ function openHierarchyMenuFromKeyboard(event: KeyboardEvent, item: HierarchyTree
   if (!(event.currentTarget instanceof HTMLElement)) return
   const opener = event.currentTarget.closest<HTMLElement>('[role="treeitem"]') ?? event.currentTarget
   const bounds = opener.getBoundingClientRect()
-  openObjectMenu(event, item.row.object.id, opener, { x: bounds.left, y: bounds.bottom }, true)
+  openObjectMenu(event, item.row.object.id, opener, { x: bounds.left, y: bounds.bottom }, true, item.ownerSystemId)
 }
 
 function openObjectMenuFromButton(event: MouseEvent, objectId: string): void {

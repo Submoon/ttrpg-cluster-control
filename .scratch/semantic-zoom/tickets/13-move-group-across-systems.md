@@ -1,6 +1,7 @@
 ---
 title: "Select and move an object group across systems"
-status: open
+status: in-progress
+assignee: Codex
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md

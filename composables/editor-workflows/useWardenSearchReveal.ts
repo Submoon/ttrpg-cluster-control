@@ -317,7 +317,14 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
             : true
     if (!inspectedTargetSurvives) next.inspectedTarget = null
     const selectedSystem = currentWorkspace.cluster.systems.find(system => system.id === next.selectedSystemId)
-    if (!selectedSystem) {
+    if (continuousMap.value && next.activeView === 'cluster') {
+      const availableObjectIds = new Set(currentWorkspace.cluster.systems.flatMap(system => system.objects.map(object => object.id)))
+      if (!selectedSystem) next.selectedSystemId = currentWorkspace.cluster.systems[0]?.id ?? null
+      if (next.selectedObjectId && !availableObjectIds.has(next.selectedObjectId)) next.selectedObjectId = null
+      next.selectedObjectIds = next.selectedObjectIds.filter(id => availableObjectIds.has(id))
+      const availableOrbitIds = new Set(currentWorkspace.cluster.systems.flatMap(system => system.orbits.map(orbit => orbit.id)))
+      if (next.selectedOrbitId && !availableOrbitIds.has(next.selectedOrbitId)) next.selectedOrbitId = null
+    } else if (!selectedSystem) {
       next.selectedSystemId = currentWorkspace.cluster.systems[0]?.id ?? null
       next.activeView = 'cluster'
       next.selectedObjectId = null

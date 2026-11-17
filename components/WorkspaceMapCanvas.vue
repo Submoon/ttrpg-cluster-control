@@ -36,12 +36,15 @@
       :workspace="props.workspace"
       :system-positions="props.workspace.layout.systemPositions"
       :unresolved-exit-positions="props.workspace.layout.unresolvedExitPositions"
+      :dimmed-object-ids="props.dimmedObjectIds ?? []"
       :object-angles="props.workspace.layout.objectAngles"
       :orbit-radii="props.workspace.layout.orbitRadii"
       :orbit-rotations="props.workspace.layout.orbitRotations"
       :selected-system-id="props.inspectedTarget?.kind === 'system' || props.inspectedTarget?.kind === 'object' || props.inspectedTarget?.kind === 'orbit'
         ? props.inspectedTarget.systemId
         : props.selectedSystemId"
+      :selected-object-ids="props.selectedObjectIds"
+      :begin-selected-object-drag="commands.move.beginSelectedObjectDrag"
       :inspected-target="props.inspectedTarget ?? null"
       :selected-route-id="props.selectedRouteId"
       :mode="props.mode"
@@ -180,7 +183,8 @@ import type {
   OrbitAdjustmentIntent,
   OrbitAdjustmentPreview,
 } from '../composables/editor-workflows/continuous-orbit-adjustments'
-import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { MapImageExportOptions, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { MapImageScope } from '../utils/map-image-scope'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import type { PublicationMenuLease, PublicationTarget } from '../composables/editor-workflows/publication-types'
 import type { MapViewport } from '../utils/map-zoom'
@@ -320,6 +324,7 @@ let pointerLongPress: {
   y: number
   target: EventTarget | null
   addHold: boolean
+  toggleSelection: boolean
   timer: ReturnType<typeof setTimeout>
 } | null = null
 let consumedAddPointerId: number | null = null
@@ -348,6 +353,7 @@ let touchReleaseGuard: ReturnType<typeof createOwnedTouchReleaseGuard> | null = 
 let selectionRectangleGesture: {
   pointerId: number
   svg: SVGSVGElement
+  view: 'system' | 'continuous'
   mapKey: string
   systemId: string | undefined
   start: Point
@@ -369,34 +375,46 @@ function setOrbitOrChildGestureActive(active: boolean): void {
 }
 
 function canContinueSelectionRectangle(gesture: NonNullable<typeof selectionRectangleGesture>): boolean {
+  const expectedMap = gesture.view === 'system'
+    ? props.activeView === 'system'
+    : props.activeView === 'cluster' && props.continuousMap === true
   return gesture.svg.isConnected
-    && props.activeView === 'system'
+    && expectedMap
     && props.mode === 'select'
     && !props.moveTargeting
     && !props.creationType
     && !props.creationChooserOpen
+    && !props.clusterAddType
+    && !props.clusterChooserOpen
+    && !props.clusterMoveTargeting
+    && !props.standaloneImportPlacementEnabled
     && props.mapKey === gesture.mapKey
-    && props.system?.id === gesture.systemId
+    && (gesture.view === 'continuous' || props.system?.id === gesture.systemId)
 }
 
-function isSystemMapEmptySpace(target: EventTarget | null): { svg: SVGSVGElement; canvas: HTMLElement } | null {
-  if (props.activeView !== 'system' || props.mode !== 'select' || props.moveTargeting
-    || props.creationType || props.creationChooserOpen) return null
-  if (!(target instanceof Element) || !canvasRoot.value
-    || target.closest('.system-object, .orbit-mark, .orbit-hit-target, .orbit-edit-control')) return null
-  const svg = target.closest<SVGSVGElement>('svg.system-map-svg')
-  return svg && canvasRoot.value.contains(svg) ? { svg, canvas: canvasRoot.value } : null
+function isSelectableMapEmptySpace(target: EventTarget | null): { svg: SVGSVGElement; canvas: HTMLElement; view: 'system' | 'continuous' } | null {
+  const systemView = props.activeView === 'system'
+  const continuousView = props.activeView === 'cluster' && props.continuousMap === true
+  if ((!systemView && !continuousView) || props.mode !== 'select' || props.moveTargeting
+    || props.creationType || props.creationChooserOpen || props.clusterAddType
+    || props.clusterChooserOpen || props.clusterMoveTargeting || props.standaloneImportPlacementEnabled) return null
+  if (!(target instanceof Element) || !canvasRoot.value || isMapEntityTarget(target)) return null
+  const svg = target.closest<SVGSVGElement>(systemView ? 'svg.system-map-svg' : 'svg.continuous-warden-map-svg')
+  return svg && canvasRoot.value.contains(svg)
+    ? { svg, canvas: canvasRoot.value, view: systemView ? 'system' : 'continuous' }
+    : null
 }
 
 function beginSelectionRectangle(event: PointerEvent): boolean {
   if (event.pointerType === 'touch' || event.button !== 0 || !event.isPrimary
-    || event.ctrlKey || event.metaKey || event.altKey) return false
-  const target = isSystemMapEmptySpace(event.target)
+    || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false
+  const target = isSelectableMapEmptySpace(event.target)
   if (!target) return false
   if (selectionRectangleGesture) finishSelectionRectangle(true)
   selectionRectangleGesture = {
     pointerId: event.pointerId,
     svg: target.svg,
+    view: target.view,
     mapKey: props.mapKey,
     systemId: props.system?.id,
     start: { x: event.clientX, y: event.clientY },
@@ -450,12 +468,16 @@ function finishSelectionRectangle(cancelled: boolean): void {
     void commands.navigation.replaceObjectSelection([])
     return
   }
-  void commands.navigation.replaceObjectSelection(systemMapRef.value?.getObjectIdsWithinClientRect({
+  const rect = {
     left: Math.min(gesture.start.x, gesture.current.x),
     top: Math.min(gesture.start.y, gesture.current.y),
     right: Math.max(gesture.start.x, gesture.current.x),
     bottom: Math.max(gesture.start.y, gesture.current.y),
-  }) ?? [])
+  }
+  const objectIds = gesture.view === 'continuous'
+    ? continuousWardenMapRef.value?.getObjectIdsWithinClientRect(rect)
+    : systemMapRef.value?.getObjectIdsWithinClientRect(rect)
+  void commands.navigation.replaceObjectSelection(objectIds ?? [])
 }
 
 const orbitInput = useOrbitPlacementInput({
@@ -641,6 +663,12 @@ function longPressInspection(target: EventTarget | null): (() => void) | null {
   return orbitId ? () => emit('select-orbit', orbitId) : null
 }
 
+function continuousObjectSelectionTarget(target: EventTarget | null): string | null {
+  if (!(target instanceof Element) || props.activeView !== 'cluster' || !props.continuousMap
+    || props.mode !== 'select' || hasMapAddIntent() || props.moveTargeting || props.clusterMoveTargeting) return null
+  return target.closest<SVGGElement>('.continuous-warden-object[data-object-id]')?.getAttribute('data-object-id') ?? null
+}
+
 function inspectLongPress(target: EventTarget | null): void {
   longPressInspection(target)?.()
 }
@@ -686,11 +714,13 @@ function onPointerDownCapture(event: PointerEvent): void {
   }
   const entityPress = event.button === 0 && isMapEntityTarget(event.target)
   const addHold = hasMapAddIntent() && entityPress
+  const toggleSelection = event.pointerType === 'pen'
+    && props.mode === 'select' && continuousObjectSelectionTarget(event.target) !== null
   const inspectHold = !hasMapAddIntent()
     && !props.moveTargeting
     && (props.mode === 'navigate' || props.mode === 'move')
     && entityPress
-  if (addHold || inspectHold) {
+  if (addHold || inspectHold || toggleSelection) {
     clearPointerLongPress()
     const pointerId = event.pointerId
     const target = event.target
@@ -702,6 +732,13 @@ function onPointerDownCapture(event: PointerEvent): void {
         cancelMapGesture()
         return
       }
+      if (toggleSelection) {
+        const objectId = continuousObjectSelectionTarget(target)
+        cancelMapGesture()
+        holdClickSuppression()
+        if (objectId) void commands.navigation.toggleObjectSelection(objectId)
+        return
+      }
       if (props.activeView === 'cluster') emit('cancel-cluster-preview')
       if (props.activeView === 'system') {
         emit('cancel-object-placement-preview')
@@ -711,7 +748,7 @@ function onPointerDownCapture(event: PointerEvent): void {
       holdClickSuppression()
       inspectLongPress(target)
     }, 560)
-    pointerLongPress = { id: pointerId, x: event.clientX, y: event.clientY, target, addHold, timer }
+    pointerLongPress = { id: pointerId, x: event.clientX, y: event.clientY, target, addHold, toggleSelection, timer }
   }
   const isRightPan = event.button === 2
   const isBackgroundPan = props.mode === 'move' && !hasContinuousObjectAddIntent() && !props.moveTargeting
@@ -816,7 +853,9 @@ function onKeyDownCapture(event: KeyboardEvent): void {
       return
     }
   }
-  if (event.key === 'Escape' && props.activeView === 'system' && props.mode === 'select') {
+  if (event.key === 'Escape'
+    && (props.activeView === 'system' || props.activeView === 'cluster' && props.continuousMap)
+    && props.mode === 'select') {
     if (selectionRectangleGesture) {
       event.preventDefault()
       event.stopPropagation()
@@ -824,18 +863,21 @@ function onKeyDownCapture(event: KeyboardEvent): void {
       return
     }
   }
-  if (event.key === 'Escape' && props.activeView === 'system') {
-    const focusedSystemMap = event.target instanceof Element
-      ? event.target.closest<SVGSVGElement>('svg.system-map-svg')
+  const continuousSelectionMap = props.activeView === 'cluster' && props.continuousMap === true
+  if (event.key === 'Escape' && (props.activeView === 'system' || continuousSelectionMap)) {
+    const focusedSelectionMap = event.target instanceof Element
+      ? event.target.closest<SVGSVGElement>(continuousSelectionMap
+        ? 'svg.continuous-warden-map-svg'
+        : 'svg.system-map-svg')
       : null
     const clearSelectionInSelect = props.mode === 'select'
-      && (props.selectedObjectIds.length > 0 || props.selectedObjectId !== null)
+      && (props.selectedObjectIds.length > 0 || !continuousSelectionMap && props.selectedObjectId !== null)
     const clearGroupInMove = props.mode === 'move' && props.selectedObjectIds.length > 1
       && !props.moveTargeting && !props.creationType && !props.creationChooserOpen
     if ((clearSelectionInSelect || clearGroupInMove)
       && !activePointerPan && !touchStart && !touchPanStarted && livePointerSequences.size === 0
       && !editingGestureActive
-      && focusedSystemMap && canvasRoot.value?.contains(focusedSystemMap)) {
+      && focusedSelectionMap && canvasRoot.value?.contains(focusedSelectionMap)) {
       event.preventDefault()
       event.stopPropagation()
       void commands.navigation.replaceObjectSelection([])
@@ -963,7 +1005,7 @@ function onWindowPointerUp(event: PointerEvent): void {
     const gesture = selectionRectangleGesture
     updateSelectionRectangle(event)
     finishSelectionRectangle(!canContinueSelectionRectangle(gesture)
-      || (!gesture.moved && !isSystemMapEmptySpace(event.target)))
+      || (!gesture.moved && !isSelectableMapEmptySpace(event.target)))
     return
   }
   if (ownsActiveMousePointer && !activePointerPan && isDisabledObstructionRelease(event)) {
@@ -1106,7 +1148,18 @@ function onClickCapture(event: MouseEvent): void {
     if (suppressClickTimer) clearTimeout(suppressClickTimer)
     return
   }
-  if (event.detail > 0 && isSystemMapEmptySpace(event.target)) {
+  const modifiedContinuousObjectId = props.mode === 'select'
+    && (event.shiftKey || event.ctrlKey || event.metaKey)
+    ? continuousObjectSelectionTarget(event.target)
+    : null
+  if (event.detail > 0 && modifiedContinuousObjectId) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    void commands.navigation.toggleObjectSelection(modifiedContinuousObjectId)
+    return
+  }
+  if (event.detail > 0 && isSelectableMapEmptySpace(event.target)) {
     void commands.navigation.replaceObjectSelection([])
   }
 }
@@ -1141,6 +1194,24 @@ function onTouchStartCapture(event: TouchEvent): void {
       longPressTimer = undefined
       // Consume placement on release while leaving this contact available to pan.
       consumedAddTouchId = touchId
+    }, 560)
+    return
+  }
+  const selectionToggleObjectId = props.mode === 'select'
+    ? continuousObjectSelectionTarget(event.target)
+    : null
+  if (selectionToggleObjectId) {
+    const touchId = touch.identifier
+    longPressTimer = setTimeout(() => {
+      const contact = touchStart
+      if (!contact || contact.id !== touchId) return
+      longPressTimer = undefined
+      const touchPointerId = touchReleaseGuard?.pointerIdForTouch(touchId) ?? null
+      cancelMapGesture()
+      touchReleaseGuard?.arm({ touchId, pointerId: touchPointerId, x: contact.x, y: contact.y })
+      holdClickSuppression()
+      void commands.navigation.toggleObjectSelection(selectionToggleObjectId)
+      touchStart = null
     }, 560)
     return
   }
@@ -1511,6 +1582,10 @@ watch(
   [
     () => props.creationChooserOpen,
     () => props.moveTargeting,
+    () => props.clusterAddType,
+    () => props.clusterChooserOpen,
+    () => props.clusterMoveTargeting,
+    () => props.standaloneImportPlacementEnabled,
   ],
   () => {
     pendingRightClickContextMenu = null
@@ -1549,8 +1624,19 @@ watch(
 )
 
 defineExpose({
-  exportImage: async (format: MapImageFormat, palette: MapImagePalette = 'active') => currentMap()?.exportImage(format, palette)
-    ?? Promise.reject(new Error('The map is not ready to export.')),
+  exportImage: async (
+    format: MapImageFormat,
+    palette: MapImagePalette = 'active',
+    options?: MapImageExportOptions,
+  ) => {
+    if (props.continuousMap && props.activeView === 'cluster') {
+      return continuousWardenMapRef.value?.exportImage(format, palette, options)
+        ?? Promise.reject(new Error('The map is not ready to export.'))
+    }
+    return currentMap()?.exportImage(format, palette)
+      ?? Promise.reject(new Error('The map is not ready to export.'))
+  },
+  getImageContextKey: (scope?: MapImageScope | null) => continuousWardenMapRef.value?.getImageContextKey(scope ?? null) ?? '',
   getViewport: () => currentMap()?.getViewport() ?? { x: 0, y: 0, k: 1 },
   getMinimumZoomScale: () => props.activeView === 'cluster'
     ? currentClusterMap()?.getMinimumZoomScale?.() ?? MAP_ZOOM_MIN_SCALE
