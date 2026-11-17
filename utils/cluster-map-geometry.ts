@@ -54,7 +54,8 @@ export function clusterRouteLabelWidth(route: JumpRoute): number {
   return clusterRoutePresentationLabelWidth(route.jumpLevel)
 }
 
-function automaticExitPosition(start: Point, ordinal: number): Point {
+/** Keeps automatic exits in legacy stored-order slots relative to their system anchor. */
+export function clusterAutomaticExitPosition(start: Point, ordinal: number): Point {
   return {
     x: start.x + 135 + Math.floor(ordinal / AUTOMATIC_EXIT_ROWS.length) * 180,
     y: start.y + AUTOMATIC_EXIT_ROWS[ordinal % AUTOMATIC_EXIT_ROWS.length]!,
@@ -306,7 +307,7 @@ export function clusterRouteGeometry(
     ? undefined
     : exitPositionOverrides?.get(route.id)
       ?? savedExitPoint
-      ?? automaticExitPosition(start, unresolvedExitOrdinal)
+      ?? clusterAutomaticExitPosition(start, unresolvedExitOrdinal)
   const end = to
     ? clusterSystemPosition(systemPositions, to.id, positionOverrides)
     : exitPoint!
