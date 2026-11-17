@@ -161,7 +161,7 @@ export async function exportContinuousWardenMapImage(
     outputHeight,
     ariaLabel: imageAccessibleName(request, selected),
   }
-  const dimmedObjectIds = new Set(request.dimmedObjectIds ?? [])
+  const dimmedObjectIds = new Set(request.scope === 'viewport' ? request.dimmedObjectIds : undefined)
   const incidentRoutes = request.scope === 'system' ? new Set(routeRecords.map(route => route.id)) : new Set<string>()
   const sceneViewport = request.scope === 'viewport'
     ? request.viewport

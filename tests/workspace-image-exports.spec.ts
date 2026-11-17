@@ -1226,6 +1226,7 @@ test('system image exports retain applied geometry during local and parent-owned
   ])
   expect(selectedScene.dashedRouteIds.sort()).toEqual(selectedScene.routeIds.sort())
   expect(selectedScene.routeLabelIds).toEqual([])
+  expect(selectedScene.dimmedObjectIds).toEqual([])
   expect(selectedScene.texts).not.toContain(longCaption)
   for (const routeId of selectedScene.routeIds) {
     const path = selectedScene.routePaths[routeId]
