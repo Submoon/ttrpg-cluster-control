@@ -15,6 +15,9 @@
       <p v-if="dropboxBackupMessage && !dropboxBackupDialogOpen" class="feedback m-0 break-words" role="status">
         {{ dropboxBackupMessage }}
       </p>
+      <p v-if="dropboxRestore.message.value && !dropboxRestore.dialogOpen.value" class="feedback m-0 break-words" role="status">
+        {{ dropboxRestore.message.value }}
+      </p>
       <p
         v-if="activeView === 'system' && mapMode === 'move' && selectedObjectIds.length > 1 && moveSelectionError"
         class="feedback m-0 error-text"
@@ -34,7 +37,7 @@
         :save-error="saveError"
         :form-error="formError"
         :restore-loading="localWorkspaceRestoreLoading"
-        @retry="hydrate"
+        @retry="retryWorkspaceHydration"
         @restore-backup="restoreLastValidWorkspace"
         @restore-file="openLocalWorkspaceRestore"
         @submit="submitNames"
@@ -43,6 +46,17 @@
           <GoogleDriveRestoreButton
             :controller="googleDriveRestore"
             :sign-in="googleDriveSignIn"
+            surface="welcome"
+            :backup-in-progress="dropboxRestore.dialogOpen.value"
+            :review-open="workspaceRestoreReview !== null"
+            :fallback-focus-target="workspaceMain"
+            @restore-review-open="workspaceRestoreReturnTarget = $event"
+            @restore-canceled="workspaceRestoreReturnTarget = null"
+          />
+          <DropboxRestoreDialog
+            :controller="dropboxRestore"
+            :available="dropboxSignIn.ready.value"
+            :blocked="dropboxRestoreBlocked"
             surface="welcome"
             :review-open="workspaceRestoreReview !== null"
             :fallback-focus-target="workspaceMain"
@@ -224,7 +238,18 @@
               :controller="googleDriveRestore"
               :sign-in="googleDriveSignIn"
               surface="menu"
-              :backup-in-progress="googleDriveBackup.busy.value"
+              :backup-in-progress="cloudBackupInProgress || dropboxRestore.dialogOpen.value"
+              :review-open="workspaceRestoreReview !== null"
+              :fallback-focus-target="workspaceMain"
+              @restore-review-open="workspaceRestoreReturnTarget = $event"
+              @restore-canceled="workspaceRestoreReturnTarget = null"
+            />
+            <DropboxRestoreDialog
+              ref="dropboxRestoreDialog"
+              :controller="dropboxRestore"
+              :available="dropboxSignIn.ready.value"
+              :blocked="dropboxRestoreBlocked"
+              surface="menu"
               :review-open="workspaceRestoreReview !== null"
               :fallback-focus-target="workspaceMain"
               @restore-review-open="workspaceRestoreReturnTarget = $event"
@@ -635,6 +660,7 @@ import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
 import { useWorkspaceRestore } from '../composables/useWorkspaceRestore'
 import { useDropboxBackup } from '../composables/useDropboxBackup'
+import { useDropboxRestore } from '../composables/useDropboxRestore'
 import { useDropboxSignIn } from '../composables/useDropboxSignIn'
 import { useGoogleDriveRestore } from '../composables/useGoogleDriveRestore'
 import { useGoogleDriveSignIn } from '../composables/useGoogleDriveSignIn'
@@ -654,6 +680,7 @@ import WorkspaceFeedback from './WorkspaceFeedback.vue'
 import PlayerViewPreviewDialog from './PlayerViewPreviewDialog.vue'
 import WorkspaceMapChrome from './WorkspaceMapChrome.vue'
 import DropboxBackupDialog from './DropboxBackupDialog.vue'
+import DropboxRestoreDialog from './DropboxRestoreDialog.vue'
 import GoogleDriveBackupButton from './GoogleDriveBackupButton.vue'
 import GoogleDriveRestoreButton from './GoogleDriveRestoreButton.vue'
 import WorkspaceMapHelp from './WorkspaceMapHelp.vue'
@@ -1605,12 +1632,23 @@ const workspaceRestore = useWorkspaceRestore({
     if (sourceKind === 'google-drive') {
       toast.add({ title: 'Restored from Google Drive', color: 'success', icon: 'i-lucide-check' })
     }
+    if (sourceKind === 'dropbox') {
+      toast.add({ title: 'Restored from Dropbox', color: 'success', icon: 'i-lucide-check' })
+    }
   },
 })
 const googleDriveRestore = useGoogleDriveRestore(workspaceRestore, googleDriveSignIn, undefined, {
   onCanceled: () => toast.add({ title: 'Google Drive restore canceled', color: 'neutral', icon: 'i-lucide-info' }),
 })
 const googleDriveRestoreButton = ref<InstanceType<typeof GoogleDriveRestoreButton> | null>(null)
+const dropboxRestore = useDropboxRestore(workspaceRestore, dropboxSignIn)
+const dropboxRestoreDialog = ref<InstanceType<typeof DropboxRestoreDialog> | null>(null)
+const cloudBackupInProgress = computed(() => googleDriveBackup.busy.value || dropboxBackup.busy.value)
+const googleDriveRestoreInProgress = computed(() => googleDriveRestore.busy.value || googleDriveRestore.dialogOpen.value)
+const cloudRestoreInProgress = computed(() => googleDriveRestoreInProgress.value || dropboxRestore.dialogOpen.value)
+const dropboxRestoreBlocked = computed(() => cloudBackupInProgress.value || googleDriveRestoreInProgress.value
+  || workspaceRestoreReview.value !== null
+  || (workspaceRestoreLoading.value && !dropboxRestore.canCancel.value))
 const cloudBackupItems = computed<DropdownMenuItem[]>(() => {
   const items: DropdownMenuItem[] = [{
     label: 'Back up Jump Cluster to Google Drive',
@@ -1619,11 +1657,7 @@ const cloudBackupItems = computed<DropdownMenuItem[]>(() => {
       || (googleDriveSignIn.status.value === 'warming' ? 'Loading Google Drive…' : undefined),
     icon: 'i-lucide-cloud-upload',
     googleDrive: true,
-    disabled: googleDriveBackup.busy.value
-      || dropboxBackup.busy.value
-      || googleDriveRestore.busy.value
-      || googleDriveRestore.dialogOpen.value
-      || !googleDriveSignIn.ready.value,
+    disabled: cloudBackupInProgress.value || cloudRestoreInProgress.value || !googleDriveSignIn.ready.value,
     onSelect: (event) => {
       event.preventDefault()
       void openBackupDialog(googleDriveBackupDialogOpen)
@@ -1632,8 +1666,7 @@ const cloudBackupItems = computed<DropdownMenuItem[]>(() => {
     label: 'Back up Jump Cluster to Dropbox',
     description: dropboxBackupMessage.value || dropboxSignIn.message.value || undefined,
     icon: 'i-lucide-cloud-upload',
-    disabled: dropboxBackup.busy.value || googleDriveBackup.busy.value
-      || workspaceRestoreLoading.value || !dropboxSignIn.ready.value,
+    disabled: cloudBackupInProgress.value || workspaceRestoreLoading.value || !dropboxSignIn.ready.value,
     onSelect: (event) => {
       event.preventDefault()
       void openBackupDialog(dropboxBackupDialogOpen, dropboxBackup)
@@ -1669,12 +1702,17 @@ const cloudRestoreItems = computed<DropdownMenuItem[]>(() => {
     description: restoreStatus || undefined,
     icon: 'i-lucide-cloud-download',
     googleDrive: true,
-    disabled: googleDriveRestore.dialogOpen.value
-      || googleDriveRestore.busy.value
-      || googleDriveBackup.busy.value
-      || dropboxBackup.busy.value
-      || !googleDriveSignIn.ready.value,
+    disabled: cloudBackupInProgress.value || cloudRestoreInProgress.value || !googleDriveSignIn.ready.value,
     onSelect: () => googleDriveRestoreButton.value?.activateFrom(
+      workspaceMapChrome.value?.mapFilesTriggerElement() ?? null,
+    ),
+  }, {
+    label: 'Restore Jump Cluster from Dropbox',
+    description: dropboxRestore.message.value || dropboxSignIn.message.value || undefined,
+    icon: 'i-lucide-cloud-download',
+    disabled: dropboxRestoreBlocked.value || dropboxRestore.busy.value
+      || dropboxRestore.dialogOpen.value || !dropboxSignIn.ready.value,
+    onSelect: () => dropboxRestoreDialog.value?.activateFrom(
       workspaceMapChrome.value?.mapFilesTriggerElement() ?? null,
     ),
   }]
@@ -1745,23 +1783,34 @@ const workspaceRestoreLoading = workspaceRestore.loading
 const workspaceRestoreError = workspaceRestore.error
 const workspaceMain = ref<HTMLElement | null>(null)
 const workspaceRestoreReturnTarget = ref<HTMLElement | null>(null)
-const localWorkspaceRestoreLoading = computed(() => workspaceRestoreLoading.value && !googleDriveRestore.canCancel.value)
+const localWorkspaceRestoreLoading = computed(() => workspaceRestoreLoading.value
+  && !googleDriveRestore.canCancel.value && !dropboxRestore.canCancel.value)
 
 watch(workspaceRestoreError, error => {
   if (error) workspaceRestoreReturnTarget.value = null
 })
 
 function openLocalWorkspaceRestore(event: Event, returnFocusTarget: HTMLElement | null): void {
-  if (googleDriveRestore.canCancel.value) googleDriveRestore.cancel(false)
+  cancelCloudRestore()
   workspaceRestoreReturnTarget.value = returnFocusTarget
   cancelJsonImport()
   void workspaceRestore.openLocalFile(event)
 }
 
 function restoreLastValidWorkspace(): void {
-  if (googleDriveRestore.canCancel.value) googleDriveRestore.cancel(false)
+  cancelCloudRestore()
   workspaceRestoreReturnTarget.value = null
   void restoreBackup()
+}
+
+function retryWorkspaceHydration(): void {
+  cancelCloudRestore()
+  void hydrate()
+}
+
+function cancelCloudRestore(): void {
+  if (googleDriveRestore.canCancel.value) googleDriveRestore.cancel(false)
+  if (dropboxRestore.canCancel.value) dropboxRestore.cancel(false)
 }
 
 const {
