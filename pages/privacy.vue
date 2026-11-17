@@ -44,6 +44,11 @@
           same account before retrying. Reloading the page clears those credentials.
         </p>
         <p>
+          The app keeps the ten newest dated backups in the App Folder for your Dropbox account
+          across all Jump Clusters. It deletes older dated backups after confirming a new backup.
+          You can also delete a dated backup by selecting it and confirming in the backup list.
+        </p>
+        <p>
           You manage your saved files and any sharing you configure in Dropbox. See the
           <a href="https://www.dropbox.com/privacy">Dropbox Privacy Policy</a> for how Dropbox
           handles data in your account.

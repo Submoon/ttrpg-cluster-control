@@ -2,17 +2,19 @@ import { computed, onScopeDispose, ref, watch } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 import type { WorkspaceRestoreSource } from './useWorkspaceRestore'
 import type { DropboxSignInController } from './useDropboxSignIn'
-import { DropboxApiError, listDropboxBackups, readDropboxBackup } from '../utils/dropbox-api'
+import { DropboxApiError, deleteDropboxBackup, listDropboxBackups, readDropboxBackup } from '../utils/dropbox-api'
 import type { DropboxBackupFile } from '../utils/dropbox-api'
+import { isDropboxDatedBackupName } from '../utils/dropbox-backup-snapshot'
 import { DropboxCancelledError } from '../utils/dropbox-auth'
 
 export interface DropboxRestoreBackup {
   id: string
   name: string
+  rev: string
   modifiedAt: string
 }
 
-export type DropboxRestoreState = 'idle' | 'authorizing' | 'listing' | 'choosing' | 'downloading'
+export type DropboxRestoreState = 'idle' | 'authorizing' | 'listing' | 'choosing' | 'downloading' | 'deleting' | 'refreshing'
 
 interface WorkspaceRestoreOwner {
   openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean>
@@ -21,6 +23,7 @@ interface WorkspaceRestoreOwner {
 export interface DropboxRestoreDependencies {
   listBackups(accessToken: string, signal?: AbortSignal): Promise<DropboxBackupFile[]>
   readFile(accessToken: string, file: DropboxBackupFile, signal?: AbortSignal): Promise<string>
+  deleteFile(accessToken: string, file: DropboxBackupFile, signal?: AbortSignal): Promise<void>
 }
 
 export interface DropboxRestoreOptions {
@@ -31,17 +34,22 @@ export interface DropboxRestoreController {
   readonly state: Readonly<Ref<DropboxRestoreState>>
   readonly message: Readonly<Ref<string>>
   readonly backups: Readonly<Ref<readonly DropboxRestoreBackup[]>>
+  readonly completedDeletions: Readonly<Ref<number>>
+  readonly refreshRequired: Readonly<Ref<boolean>>
   readonly dialogOpen: ComputedRef<boolean>
   readonly busy: ComputedRef<boolean>
   readonly canCancel: ComputedRef<boolean>
   activate(): void
   cancel(notifyCancellation?: boolean): void
   select(id: string): void
+  deleteBackup(id: string, rev: string): void
+  refresh(): void
 }
 
 const defaultDependencies: DropboxRestoreDependencies = {
   listBackups: (accessToken, signal) => listDropboxBackups(accessToken, fetch, signal),
   readFile: (accessToken, file, signal) => readDropboxBackup(accessToken, file, fetch, signal),
+  deleteFile: (accessToken, file, signal) => deleteDropboxBackup(accessToken, file, fetch, signal),
 }
 
 /** Starts the shared restore lease before Dropbox authorization and keeps each selection tied to its account and revision. */
@@ -54,9 +62,11 @@ export function useDropboxRestore(
   const state = ref<DropboxRestoreState>('idle')
   const message = ref('')
   const backups = ref<DropboxRestoreBackup[]>([])
+  const completedDeletions = ref(0)
+  const refreshRequired = ref(false)
   const dialogOpen = computed(() => state.value !== 'idle')
   const busy = computed(() => state.value !== 'idle' && state.value !== 'choosing')
-  const canCancel = computed(() => state.value !== 'idle')
+  const canCancel = computed(() => state.value !== 'idle' && state.value !== 'deleting' && state.value !== 'refreshing')
   let operationSequence = 0
   let activeOperation = 0
   let activeAbortController: AbortController | undefined
@@ -79,6 +89,7 @@ export function useDropboxRestore(
     activeAccountId = undefined
     listedFiles = []
     backups.value = []
+    refreshRequired.value = false
     message.value = ''
     activeOperation = ++operationSequence
     return activeOperation
@@ -119,12 +130,7 @@ export function useDropboxRestore(
         const files = await dependencies.listBackups(grant.accessToken, operationSignal)
         if (!isCurrent(operation, operationSignal)) return null
         if (!accountIsCurrent(operation, operationSignal)) return null
-        listedFiles = files
-        backups.value = files.map(file => ({
-          id: file.id,
-          name: file.name,
-          modifiedAt: file.serverModified,
-        }))
+        setListedFiles(files)
         state.value = 'choosing'
         message.value = files.length ? '' : 'No Dropbox Jump Cluster backups are available in this App Folder.'
         return await waitForSelection(operationSignal)
@@ -196,22 +202,106 @@ export function useDropboxRestore(
     })
   }
 
+  function deleteBackup(id: string, rev: string): void {
+    if (state.value !== 'choosing' || !activeAccessToken || !activeProviderSignal || activeProviderSignal.aborted) return
+    if (refreshRequired.value) {
+      message.value = 'Refresh the Dropbox list before trying another delete.'
+      return
+    }
+    if (!accountIsCurrent(activeOperation, activeProviderSignal)) return
+    const file = listedFiles.find(candidate => candidate.id === id && candidate.rev === rev)
+    if (!file) return
+    if (!isDropboxDatedBackupName(file.name)) {
+      message.value = 'Only dated Jump Cluster backups can be deleted from this list.'
+      return
+    }
+
+    const operation = activeOperation
+    const accessToken = activeAccessToken
+    const signal = activeProviderSignal
+    state.value = 'deleting'
+    message.value = ''
+
+    void dependencies.deleteFile(accessToken, file, signal).then(() => {
+      if (!isCurrent(operation, signal) || !accountIsCurrent(operation, signal)) return
+      setListedFiles(listedFiles.filter(candidate => candidate.id !== file.id || candidate.rev !== file.rev))
+      refreshRequired.value = false
+      state.value = 'choosing'
+      message.value = ''
+      completedDeletions.value += 1
+    }).catch((error: unknown) => {
+      if (!isCurrent(operation, signal)) return
+      if (closeForUnauthorized(error, accessToken)) return
+      if (!accountIsCurrent(operation, signal)) return
+      state.value = 'choosing'
+      refreshRequired.value = true
+      message.value = error instanceof DropboxApiError && error.outcomeUncertain
+        ? `Dropbox could not confirm whether ${file.name} was deleted. Refresh the list or reopen Dropbox restore before trying again.`
+        : `Dropbox could not delete ${file.name}. ${getErrorMessage(error, 'Refresh the list and try again.')}`
+    })
+  }
+
+  function refresh(): void {
+    if (state.value !== 'choosing' || !activeAccessToken || !activeProviderSignal || activeProviderSignal.aborted) return
+    if (!accountIsCurrent(activeOperation, activeProviderSignal)) return
+
+    const operation = activeOperation
+    const accessToken = activeAccessToken
+    const signal = activeProviderSignal
+    state.value = 'refreshing'
+    message.value = ''
+
+    void dependencies.listBackups(accessToken, signal).then((files) => {
+      if (!isCurrent(operation, signal) || !accountIsCurrent(operation, signal)) return
+      setListedFiles(files)
+      refreshRequired.value = false
+      state.value = 'choosing'
+      message.value = files.length ? '' : 'No Dropbox Jump Cluster backups are available in this App Folder.'
+    }).catch((error: unknown) => {
+      if (!isCurrent(operation, signal)) return
+      if (closeForUnauthorized(error, accessToken)) return
+      if (!accountIsCurrent(operation, signal)) return
+      state.value = 'choosing'
+      refreshRequired.value = true
+      message.value = getErrorMessage(error, 'Dropbox could not refresh your backups. Try again.')
+    })
+  }
+
+  function setListedFiles(files: DropboxBackupFile[]): void {
+    listedFiles = files
+    backups.value = files.map(file => ({
+      id: file.id,
+      name: file.name,
+      rev: file.rev,
+      modifiedAt: file.serverModified,
+    }))
+  }
+
   function accountIsCurrent(operation: number, signal?: AbortSignal): boolean {
     if (!isCurrent(operation, signal)) return false
     if (activeAccountId && signIn.accountId.value === activeAccountId) return true
-    cancel(false)
+    stopForAccountChange()
     message.value = 'The Dropbox account changed. Open Dropbox restore again to refresh its backup list.'
     return false
   }
 
   function cancel(notifyCancellation = true): void {
     if (!canCancel.value) return
+    abortCurrentOperation()
+    if (notifyCancellation) options.onCanceled?.()
+  }
+
+  function abortCurrentOperation(): void {
     activeAbortController?.abort()
     activeAbortController = undefined
     activeOperation = ++operationSequence
     settleSelection(null)
     clearOperationState()
-    if (notifyCancellation) options.onCanceled?.()
+  }
+
+  function stopForAccountChange(): void {
+    if (state.value === 'idle') return
+    abortCurrentOperation()
   }
 
   function clearOperationState(): void {
@@ -221,6 +311,7 @@ export function useDropboxRestore(
     activeAbortController = undefined
     listedFiles = []
     backups.value = []
+    refreshRequired.value = false
     state.value = 'idle'
   }
 
@@ -232,14 +323,14 @@ export function useDropboxRestore(
 
   function closeForUnauthorized(error: unknown, accessToken: string): boolean {
     if (!invalidateAfterUnauthorized(error, accessToken)) return false
-    cancel(false)
+    abortCurrentOperation()
     message.value = 'Dropbox authorization expired. Open Dropbox restore again to authorize and refresh the list.'
     return true
   }
 
   watch(() => signIn.accountId.value, (accountId) => {
-    if (!activeAccountId || accountId === activeAccountId || !canCancel.value) return
-    cancel(false)
+    if (!activeAccountId || accountId === activeAccountId || state.value === 'idle') return
+    stopForAccountChange()
     message.value = 'The Dropbox account changed. Open Dropbox restore again to refresh its backup list.'
   })
 
@@ -249,7 +340,7 @@ export function useDropboxRestore(
     settleSelection(null)
   })
 
-  return { state, message, backups, dialogOpen, busy, canCancel, activate, cancel, select }
+  return { state, message, backups, completedDeletions, refreshRequired, dialogOpen, busy, canCancel, activate, cancel, select, deleteBackup, refresh }
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {

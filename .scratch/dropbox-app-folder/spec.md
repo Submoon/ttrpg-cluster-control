@@ -14,6 +14,10 @@ triage_labels:
 
 After fetching `origin`, `main` and `origin/main` both point to `88d84f1749c7615b6dc5179f2bd4f24040d79f6a`. That revision is the planning baseline. The detached planning worktree at `dc5edb282087458c1bc6dd26287c96a974662c3b` is six commits behind. Implementation should use the fetched main baseline or record a more recent revision after refreshing it.
 
+For the backup-management follow-up, `origin/main` was refreshed and remained at the same revision. The integrated Dropbox baseline for this follow-up is `02fc55b678af34609eb835c24dc04719b01a8a1f`. After reporting a successful Firefox test, the user requested a direct backup action and the Google Drive backup limit and deletion controls for Dropbox.
+
+The pull request is prepared against `origin/main` at `6b15a9e5`, which includes the map object marker color work from issue #54.
+
 ## Problem Statement
 
 A Warden who uses Dropbox wants an off-device copy of their Jump Cluster and a way to recover it after losing local browser data or moving to another browser profile. The portable JSON and the local replacement flow already preserve the complete Jump Cluster. The missing workflow is saving that file to Dropbox and opening a saved copy directly through the application.
@@ -41,13 +45,15 @@ Add a Dropbox backup action alongside the existing actions in **Map files**. Eac
 15. As a Warden, I want a completed restore to remain active after reload so that I know the replacement was saved locally.
 16. As a Warden, I want local editing, autosave, JSON download, and file restore available while Dropbox is disconnected or unavailable so that I can work offline.
 17. As a Warden, I want to continue managing any sharing of these files in Dropbox so that I control access to my own copies.
+18. As a Warden, I want the Dropbox backup command to begin immediately and retain the ten newest dated backups for my account across all Jump Clusters.
+19. As a Warden, I want to select and confirm deletion of a dated Dropbox backup from the backup list.
 
 ## Implementation Decisions
 
 ### Destination and authorization
 
 - Use one configured Dropbox app with App Folder content access. Backups go to that dedicated folder for the authorized account. Show the destination and explain that a complete Jump Cluster may contain GM notes. Dropbox account owners manage any sharing they configure in Dropbox. [Dropbox App Folder](https://docs.dropboxapi.com/dropbox-api/docs/oauth#content-access)
-- Request `files.metadata.read`, `files.content.write`, and `files.content.read` for listing and reconciling files, creating backups, and reading selected backups. Document supported account types. Start support verification with Dropbox Personal and declare further account types once their real round trips are verified. [List folder](https://docs.dropboxapi.com/dropbox-api/api-reference/user-endpoints/files/list-folder) · [Upload](https://docs.dropboxapi.com/dropbox-api/api-reference/user-endpoints/files/upload) · [Download](https://docs.dropboxapi.com/dropbox-api/api-reference/user-endpoints/files/download)
+- Request `files.metadata.read`, `files.content.write`, and `files.content.read` for listing and reconciling files, creating and deleting backups, and reading selected backups. Document supported account types. Start support verification with Dropbox Personal and declare further account types once their real round trips are verified. [List folder](https://docs.dropboxapi.com/dropbox-api/api-reference/user-endpoints/files/list-folder) · [Upload](https://docs.dropboxapi.com/dropbox-api/api-reference/user-endpoints/files/upload) · [Download](https://docs.dropboxapi.com/dropbox-api/api-reference/user-endpoints/files/download)
 - Start Dropbox authorization from an explicit action. Use the public app key, an exact registered redirect URI, and authorization code with PKCE S256. Validate the returned OAuth state against the initiating attempt and discard expired, canceled, or replayed callbacks. Keep short-lived access credentials in memory and obtain fresh consent or authorization when needed. Keep the initiating workspace and its drafts intact over authorization. Use the Dropbox account identifier returned by authorization to bind any in-flight operation to its account. [Dropbox authorization reference](https://docs.dropboxapi.com/dropbox-api/docs/get-started/authorization)
 - Transfer JSON directly between the browser and Dropbox. Keep Dropbox configuration, connectivity, and authorization independent of local workflows. Use the existing **Map files**, welcome, and local recovery entry points and the established patterns for busy states, feedback, and focus. [Dropbox browser requests](https://docs.dropboxapi.com/dropbox-api/docs/technical-reference/request-response-formats#browser-based-javascript-and-cors-pre-flight-requests)
 
@@ -57,6 +63,8 @@ Add a Dropbox backup action alongside the existing actions in **Map files**. Eac
 - Create a dated `.json` file at a unique path per backup action. Use Dropbox add mode with automatic renaming disabled. For a retry, retain the captured bytes, path, and account of that action. Prevent overwrites when requests race or a path already exists. [Dropbox upload modes](https://docs.dropboxapi.com/dropbox-api/api-reference/user-endpoints/files/upload)
 - Show success after Dropbox confirms the file. Display its returned filename and its destination within the application's App Folder. If a response is lost after dispatch, report that the outcome is uncertain and inspect the intended path in the same account. Confirm the expected copy only when Dropbox metadata or downloaded bytes establish a match. Retry the same create only when the destination is confirmed absent. A collision or unavailable verification leaves earlier copies intact and surfaces an unresolved result. [Dropbox file metadata](https://docs.dropboxapi.com/dropbox-api/api-reference/user-endpoints/files/get-metadata)
 - Authorization cancellation and a failed or canceled transfer preserve the active workspace and earlier backups. If a request was already sent, reflect that Dropbox may have completed the write. Keep autosave and editing independent while the backup is pending.
+- Start the backup from the **Map files** command. Disclose the complete JSON contents and retention next to that action. Reuse a valid Dropbox grant when available and let Dropbox prompt for authorization when a new grant is needed.
+- After a new backup is confirmed, keep the ten newest files with this app's dated backup naming pattern in the App Folder root. Apply the limit per account across all Jump Clusters. Use Dropbox modification time and a deterministic tie-break. Verify the complete listing and the confirmed backup before pruning. If cleanup fails, report that the upload was saved and allow the same account to retry cleanup without uploading another file.
 
 ### Open a Dropbox backup
 
@@ -64,22 +72,24 @@ Add a Dropbox backup action alongside the existing actions in **Map files**. Eac
 - Offer Dropbox restore on welcome, in local recovery, and in the editor. Send the selected file through the existing portable Jump Cluster admission and restore owner. Keep supported older versions within that contract. Reject incompatible, damaged, player-only, or standalone star-system documents before modifying the workspace. The existing standalone star-system import owns its separate workflow.
 - Reuse the current replacement review when a Jump Cluster is active. Show the incoming and active names, offer a local download before replacement, require consent for replacement and any draft discard, and require a fresh review when that consent is stale. The workspace owner commits the replacement before publishing it to the editor. Preserve the rolling recovery policy, the fresh local workspace identity and undo baseline, and stale-tab write protection. Announce a successful restore after local persistence confirms it. [ADR 0003](../../docs/adr/0003-restore-complete-jump-cluster-backups.md)
 - Cancel a pending list or download cleanly. A canceled review, invalid file, interrupted download, authorization failure, or local commit failure preserves the active workspace and recovery state under the same restore contract.
+- Offer file-specific deletion with confirmation for dated backups in the Dropbox list. Bind deletion to the listed account, root path, and revision. Keep other root JSON available to restore and outside automated retention. [Dropbox delete API](https://docs.dropboxapi.com/dropbox-api/api-reference/user-endpoints/files/delete-v-2)
 
 ## Testing Decisions
 
 - Exercise the real Dropbox backup and restore orchestration with controlled authorization, Dropbox responses, and local persistence at the existing controller boundaries. Assert receipts, resolved account and path, retained files and snapshots, and visible operation outcomes. Cover denial or cancellation, invalid or replayed authorization callbacks, account changes, pagination, snapshot capture, path collisions, a committed upload whose response was lost, and a retry that preserves earlier copies. Start from the analogous Drive controller tests and use the existing portable validation and workspace replacement coverage for shared invariants.
 - Use one representative browser journey with controlled Dropbox responses and real IndexedDB storage to exercise the new UI wiring. Start from **Map files** in one context, restore from welcome in an isolated context, and reopen after reload. Use existing workspace restore browser coverage for local confirmation and recovery behavior and target the Dropbox integration boundary for provider-specific failures. Follow the project's [test guidance](../../docs/agents/testing.md) for narrower checks and browser coverage.
 - Before delivery, run the browser flow with a real Dropbox Personal account and two isolated browser profiles on a configured origin. In the first profile, save a synthetic Jump Cluster with GM notes, Fields, player publication settings, relationships, and saved layout. Verify the actual filename and destination shown after Dropbox confirms the write. In a fresh profile, authorize the same account, locate the saved file, restore it, verify the full portable data against the source fixture, and reload to confirm the restored Jump Cluster persists. Repeat the live acceptance test for each additional supported account type. Record real-account evidence separately from simulated coverage.
+- The follow-up Chromium test with controlled Dropbox responses verified direct saves with one grant, automatic removal of the oldest dated copies, confirmed deletion from the list, and exact restoration after reload. The user reported a successful Firefox save and restore and confirmed that manual deletion works on the test account. Live verification of automatic retention remains pending.
 
 ## Out of Scope
 
 - Dropbox sharing management and audits, Full Dropbox access, arbitrary destination browsing, and team-space administration.
-- Automatic backups, synchronization between profiles, Dropbox deletion or retention, and application-operated backup storage.
+- Automatic backups, synchronization between profiles, and application-operated backup storage.
 - Changes to the portable Jump Cluster JSON format, player document format, or publication rules.
 
 ## Further Notes
 
-The [App Folder test record](qualification.md) confirms creation and metadata access with a console-generated token on a personal account. Browser authorization, authenticated file download, and the two-profile restore remain delivery checks. The [provider research](provider-research.md) records the earlier exploration of API behavior. Use the project's Sensitive development route for authorization and persistence review.
+The [App Folder test record](qualification.md) confirms creation and metadata access with a console-generated token on a personal account. The user reported a successful manual Firefox save and restore. See the [restore ticket](tickets/02-restore-jump-cluster-from-dropbox.md) for the scope of the result. The [provider research](provider-research.md) records the earlier exploration of API behavior. Use the project's Sensitive development route for authorization and persistence review.
 
 ## Implementation tickets
 

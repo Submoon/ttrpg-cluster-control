@@ -9,10 +9,12 @@ import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline
 import { captureMapExportBlobs, downloadJson, openMapFilesSection, waitForWorkspaceSaved, waitForWorkspaceStartup } from './helpers'
 import {
   DropboxApiError,
+  deleteDropboxBackup,
   listDropboxBackups,
   readDropboxBackup,
 } from '../utils/dropbox-api'
 import type { DropboxBackupFile } from '../utils/dropbox-api'
+import { DROPBOX_BACKUP_LIMIT, isDropboxDatedBackupName } from '../utils/dropbox-backup-snapshot'
 
 function jsonResponse(value: unknown, status = 200, headers?: HeadersInit): Response {
   return new Response(JSON.stringify(value), {
@@ -39,7 +41,7 @@ function datedBackup(id: string, date: string): DropboxBackupFile {
   return {
     id: id.startsWith('id:') ? id : `id:${id}`,
     name: `Ember Reach-jump-cluster-${date}-${filenameId}.json`,
-    rev: `rev-${id}`,
+    rev: id.replace(/[^a-f\d]/gi, '').toLowerCase().padEnd(10, 'a').slice(0, 16),
     serverModified: `${date.slice(0, 10)}T10:00:00Z`,
     size: 24,
   }
@@ -150,6 +152,20 @@ test('Dropbox restore rejects changed or substituted file revisions before admis
   expect((error as Error).message).toMatch(/selected backup changed/i)
 })
 
+test('Dropbox manual deletion is bound to the listed root path and revision @pure', async () => {
+  const file = { ...datedBackup('id:backup-delete', '2026-11-13-10-00-00-000Z'), rev: 'a1b2c3d4e5' }
+  const requests: Array<{ url: string; body: string }> = []
+  await deleteDropboxBackup('token', file, async (input, init) => {
+    requests.push({ url: String(input), body: String(init?.body) })
+    return jsonResponse({ metadata: fileMetadata(file) })
+  })
+
+  expect(requests).toEqual([{
+    url: 'https://api.dropboxapi.com/2/files/delete_v2',
+    body: JSON.stringify({ path: `/${file.name}`, parent_rev: file.rev }),
+  }])
+})
+
 test('Dropbox chooser opens the restore owner before authorization and passes the selected backup unchanged @pure', async () => {
   const file = datedBackup('id:backup-one', '2026-11-13-10-00-00-000Z')
   const events: string[] = []
@@ -184,6 +200,7 @@ test('Dropbox chooser opens the restore owner before authorization and passes th
       fileReads.push({ accessToken, file: listedFile, signal })
       return '{"backup":"unchanged"}'
     },
+    deleteFile: async () => undefined,
   }))
   if (!controller) throw new Error('The Dropbox restore controller did not initialize.')
 
@@ -196,6 +213,7 @@ test('Dropbox chooser opens the restore owner before authorization and passes th
     expect(controller.backups.value).toEqual([{
       id: file.id,
       name: file.name,
+      rev: file.rev,
       modifiedAt: file.serverModified,
     }])
 
@@ -213,6 +231,122 @@ test('Dropbox chooser opens the restore owner before authorization and passes th
     expect(requestedSignals).toHaveLength(2)
     expect(requestedSignals.every(signal => signal === requestedSignals[0])).toBe(true)
   } finally {
+    scope.stop()
+  }
+})
+
+test('Dropbox dated-file deletion stays in the restore lease and requires the listed revision @pure', async () => {
+  const dated = datedBackup('id:backup-to-delete', '2026-11-13-10-00-00-000Z')
+  const generic = { ...datedBackup('id:legacy-json', '2026-11-12-10-00-00-000Z'), name: 'Legacy campaign.json' }
+  const deleteStarted = deferred<void>()
+  const deletion = deferred<void>()
+  const restoreFinished = deferred<void>()
+  const deleteRequests: Array<{ accessToken: string; file: DropboxBackupFile; signal?: AbortSignal }> = []
+  const sources: WorkspaceRestoreSource[] = []
+  const { signIn } = readyDropboxSignIn()
+  const restore = {
+    async openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean> {
+      const source = await load(signal)
+      if (source) sources.push(source)
+      restoreFinished.resolve()
+      return true
+    },
+  }
+  const scope = effectScope()
+  const controller = scope.run(() => useDropboxRestore(restore, signIn, {
+    listBackups: async () => [dated, generic],
+    readFile: async () => '{"restored":"legacy"}',
+    deleteFile: async (accessToken, file, signal) => {
+      deleteRequests.push({ accessToken, file, signal })
+      deleteStarted.resolve()
+      await deletion.promise
+    },
+  }))
+  if (!controller) throw new Error('The Dropbox restore controller did not initialize.')
+
+  try {
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('choosing')
+    controller.deleteBackup(dated.id, 'stale-revision')
+    expect(deleteRequests).toEqual([])
+
+    controller.deleteBackup(dated.id, dated.rev)
+    await deleteStarted.promise
+    expect(controller.state.value).toBe('deleting')
+    expect(controller.dialogOpen.value).toBe(true)
+    expect(controller.busy.value).toBe(true)
+    expect(controller.canCancel.value).toBe(false)
+    expect(deleteRequests).toHaveLength(1)
+    expect(deleteRequests[0]).toMatchObject({ accessToken: 'dropbox-token', file: dated })
+    expect(deleteRequests[0]?.signal?.aborted).toBe(false)
+
+    controller.cancel(false)
+    expect(controller.state.value).toBe('deleting')
+    deletion.resolve()
+    await expect.poll(() => controller.state.value).toBe('choosing')
+
+    expect(controller.backups.value.map(backup => backup.id)).toEqual([generic.id])
+    expect(controller.completedDeletions.value).toBe(1)
+    expect(controller.message.value).toBe('')
+    controller.deleteBackup(generic.id, generic.rev)
+    expect(deleteRequests).toHaveLength(1)
+    expect(controller.message.value).toMatch(/only dated Jump Cluster backups/i)
+
+    controller.select(generic.id)
+    await restoreFinished.promise
+    expect(sources).toEqual([{
+      name: generic.name,
+      content: '{"restored":"legacy"}',
+      sourceKind: 'dropbox',
+    }])
+  } finally {
+    scope.stop()
+  }
+})
+
+test('an uncertain Dropbox delete requires a fresh listing before another delete @pure', async () => {
+  const file = datedBackup('id:backup-uncertain-delete', '2026-11-13-10-00-00-000Z')
+  let listCount = 0
+  let deleteCount = 0
+  const { signIn } = readyDropboxSignIn()
+  const restore = {
+    async openFrom(load: (signal?: AbortSignal) => Promise<WorkspaceRestoreSource | null>, signal?: AbortSignal): Promise<boolean> {
+      await load(signal)
+      return true
+    },
+  }
+  const scope = effectScope()
+  const controller = scope.run(() => useDropboxRestore(restore, signIn, {
+    listBackups: async () => {
+      listCount += 1
+      return listCount === 1 ? [file] : []
+    },
+    readFile: async () => '{}',
+    deleteFile: async () => {
+      deleteCount += 1
+      throw new DropboxApiError('outcome-uncertain', 'Dropbox connection closed before the result arrived.', true)
+    },
+  }))
+  if (!controller) throw new Error('The Dropbox restore controller did not initialize.')
+
+  try {
+    controller.activate()
+    await expect.poll(() => controller.state.value).toBe('choosing')
+    controller.deleteBackup(file.id, file.rev)
+    await expect.poll(() => controller.state.value).toBe('choosing')
+
+    expect(controller.refreshRequired.value).toBe(true)
+    expect(controller.backups.value).toHaveLength(1)
+    expect(controller.message.value).toMatch(/could not confirm whether .* was deleted/i)
+    controller.deleteBackup(file.id, file.rev)
+    expect(deleteCount).toBe(1)
+
+    controller.refresh()
+    await expect.poll(() => controller.backups.value).toEqual([])
+    expect(controller.refreshRequired.value).toBe(false)
+    expect(listCount).toBe(2)
+  } finally {
+    controller.cancel(false)
     scope.stop()
   }
 })
@@ -240,6 +374,7 @@ test('a Dropbox list failure stays in its provider message without reaching the 
       throw listError
     },
     readFile: async () => '{}',
+    deleteFile: async () => undefined,
   }))
   if (!controller) throw new Error('The Dropbox restore controller did not initialize.')
 
@@ -272,6 +407,7 @@ test('Dropbox restore rejects a selection after the authorized account changes @
   const controller = scope.run(() => useDropboxRestore(restore, signIn, {
     listBackups: async () => [file],
     readFile: async () => { readCount += 1; return '{}' },
+    deleteFile: async () => undefined,
   }))
   if (!controller) throw new Error('The Dropbox restore controller did not initialize.')
 
@@ -312,6 +448,7 @@ test('canceling a Dropbox restore aborts a pending list and ignores its late res
       return pendingList.promise
     },
     readFile: async () => '{}',
+    deleteFile: async () => undefined,
   }))
   if (!controller) throw new Error('The Dropbox restore controller did not initialize.')
 
@@ -332,9 +469,17 @@ test('canceling a Dropbox restore aborts a pending list and ignores its late res
 })
 
 test('a Warden backs up to Dropbox and restores the same Jump Cluster in a fresh profile', async ({ page, context, browser, baseURL, previewCookies }) => {
-  test.setTimeout(60_000)
+  // Each isolated profile loads the editor and OAuth callback and closes its browser context.
+  test.setTimeout(150_000)
   const appKey = 'controlled-public-app-key'
-  const backups: ControlledDropboxBackup[] = []
+  const olderFiles = Array.from({ length: DROPBOX_BACKUP_LIMIT }, (_, index) =>
+    datedBackup(`id:retention-seed-${index}`, `2026-10-${String(index + 1).padStart(2, '0')}-10-00-00-000Z`))
+  const unrelatedFile = { ...datedBackup('id:unrelated-json', '2026-09-30-10-00-00-000Z'), name: 'Reference campaign.json' }
+  const unrelatedBackup = createControlledDropboxBackup(unrelatedFile, JSON.stringify(campaignBaselineFixture))
+  const backups: ControlledDropboxBackup[] = [
+    ...olderFiles.map(file => createControlledDropboxBackup(file, JSON.stringify(campaignBaselineFixture))),
+    unrelatedBackup,
+  ]
   const providerCalls: string[] = []
 
   await injectDropboxPublicKey(context, appKey)
@@ -356,18 +501,42 @@ test('a Warden backs up to Dropbox and restores the same Jump Cluster in a fresh
   const original = await downloadJson(page, 'Export Jump Cluster JSON')
 
   const backupMenu = await openMapFilesSection(page, 'Download or back up')
-  await backupMenu.getByRole('menuitem', { name: 'Back up Jump Cluster to Dropbox', exact: true }).click()
-  const backupDialog = page.getByRole('dialog', { name: 'Back up Jump Cluster to Dropbox', exact: true })
-  await expect(backupDialog).toContainText('Dropbox App Folder')
-  await backupDialog.getByRole('button', { name: 'Back up to Dropbox', exact: true }).click()
+  const dropboxBackupItem = backupMenu.getByRole('menuitem', { name: /^Back up Jump Cluster to Dropbox/ })
+  const retentionHint = 'Saves complete JSON, including GM notes, in the Dropbox App Folder. After a successful save, only the 10 newest dated backups are kept per account.'
+  await expect(dropboxBackupItem).toBeEnabled()
+  await expect(dropboxBackupItem).toHaveText('Back up Jump Cluster to Dropbox', { useInnerText: true })
+  await expect(dropboxBackupItem).toHaveAccessibleDescription(retentionHint)
+  await dropboxBackupItem.hover()
+  // The tooltip renders a separate accessibility node alongside its painted message.
+  await expect(page.getByText(retentionHint, { exact: true }).and(page.locator('[data-slot="text"]'))).toBeVisible()
+  await dropboxBackupItem.click()
+  await expect(page.getByRole('dialog', { name: 'Back up Jump Cluster to Dropbox' })).toHaveCount(0)
   const backupNotifications = page.getByLabel('Notifications (F8)')
-  await expect(backupNotifications.getByText('Backed up to Dropbox', { exact: true })).toBeVisible()
-  expect(backups).toHaveLength(1)
-  const saved = backups[0]!
-  const backupFilename = saved.metadata.name
+  await expect(backupNotifications.getByText('Backed up to Dropbox', { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect.poll(() => backups.filter(backup => isDropboxDatedBackupName(backup.metadata.name)).length).toBe(DROPBOX_BACKUP_LIMIT)
+  expect(backups.some(backup => backup.metadata.id === olderFiles[0]?.id)).toBe(false)
+  expect(backups.some(backup => backup.metadata.id === unrelatedFile.id)).toBe(true)
+  const firstSaved = backups.find(backup => !olderFiles.some(file => file.id === backup.metadata.id)
+    && backup.metadata.id !== unrelatedFile.id)
+  expect(firstSaved).toBeDefined()
+  const backupFilename = firstSaved!.metadata.name
   expect(backupFilename).toMatch(/Kestrel Reach Prime-jump-cluster-.+\.json$/)
-  expect(JSON.parse(saved.content)).toEqual(original)
+  expect(JSON.parse(firstSaved!.content)).toEqual(original)
   await expect(backupNotifications.getByText(`${backupFilename} in this app’s Dropbox App Folder`, { exact: true })).toBeVisible()
+
+  const secondBackupMenu = await openMapFilesSection(page, 'Download or back up')
+  await secondBackupMenu.getByRole('menuitem', { name: /^Back up Jump Cluster to Dropbox/ }).click()
+  await expect.poll(() => providerCalls.filter(call => call === 'upload to App Folder').length).toBe(2)
+  await expect.poll(() => backups.filter(backup => isDropboxDatedBackupName(backup.metadata.name)).length).toBe(DROPBOX_BACKUP_LIMIT)
+  expect(backups.some(backup => backup.metadata.id === olderFiles[1]?.id)).toBe(false)
+  expect(providerCalls.filter(call => call === 'token exchange')).toHaveLength(1)
+  const savedFiles = backups
+    .filter(backup => !olderFiles.some(file => file.id === backup.metadata.id) && backup.metadata.id !== unrelatedFile.id)
+    .sort((left, right) => left.metadata.server_modified.localeCompare(right.metadata.server_modified))
+  expect(savedFiles).toHaveLength(2)
+  const saved = savedFiles.at(-1)!
+  expect(saved.metadata.name).not.toBe(firstSaved!.metadata.name)
+  expect(JSON.parse(saved.content)).toEqual(original)
 
   const freshContext = await browser.newContext({ baseURL })
   try {
@@ -381,18 +550,29 @@ test('a Warden backs up to Dropbox and restores the same Jump Cluster in a fresh
     await fresh.getByRole('button', { name: 'Restore Jump Cluster from Dropbox', exact: true }).click()
 
     const chooser = fresh.getByRole('dialog', { name: 'Restore Jump Cluster from Dropbox', exact: true })
-    await chooser.getByRole('button', { name: `Restore ${backupFilename}`, exact: true }).click()
+    await expect(chooser.getByRole('button', { name: `Restore ${unrelatedFile.name}`, exact: true })).toBeVisible({ timeout: 15_000 })
+    await expect(chooser.getByRole('button', { name: `Delete ${unrelatedFile.name} from Dropbox`, exact: true })).toHaveCount(0)
+    const manualDelete = olderFiles[2]!
+    await chooser.getByRole('button', { name: `Delete ${manualDelete.name} from Dropbox`, exact: true }).click()
+    const deleteConfirmation = chooser.getByRole('group', { name: `Confirm delete ${manualDelete.name}` })
+    await expect(deleteConfirmation).toContainText(manualDelete.name)
+    await expect(deleteConfirmation.getByRole('button', { name: 'Keep backup', exact: true })).toBeFocused()
+    await deleteConfirmation.getByRole('button', { name: `Confirm delete ${manualDelete.name} from Dropbox`, exact: true }).click()
+    await expect(chooser.getByLabel('Dropbox restore notifications').getByText('Backup deleted from Dropbox', { exact: true })).toBeVisible()
+    await expect(chooser.getByText(`Deleted ${manualDelete.name} from Dropbox.`, { exact: true })).toHaveCount(0)
+    await expect(chooser.getByRole('button', { name: `Restore ${manualDelete.name}`, exact: true })).toHaveCount(0)
+    await chooser.getByRole('button', { name: `Restore ${saved.metadata.name}`, exact: true }).click()
     const review = fresh.getByRole('dialog', { name: 'Open Jump Cluster', exact: true })
     await expect(review).toContainText(campaignBaselineFixture.cluster.name)
-    await expect(review).toContainText(backupFilename)
+    await expect(review).toContainText(saved.metadata.name)
     await review.getByRole('button', { name: 'Open Jump Cluster', exact: true }).click()
 
     await expect(fresh.getByLabel('Notifications (F8)').getByText('Restored from Dropbox', { exact: true })).toBeVisible()
     await waitForWorkspaceSaved(fresh)
-    expect(providerCalls).toEqual([
-      'authorization', 'token exchange', 'upload to App Folder',
-      'authorization', 'token exchange', 'list App Folder', 'download selected revision',
-    ])
+    expect(providerCalls.filter(call => call === 'token exchange')).toHaveLength(2)
+    expect(providerCalls.filter(call => call === 'upload to App Folder')).toHaveLength(2)
+    expect(providerCalls.filter(call => call === 'delete from App Folder').length).toBeGreaterThanOrEqual(3)
+    expect(providerCalls).toContain('download selected revision')
     await fresh.reload()
     await waitForWorkspaceStartup(fresh)
     expect(await downloadJson(fresh, 'Export Jump Cluster JSON')).toEqual(original)
@@ -443,12 +623,27 @@ interface ControlledDropboxBackup {
   content: string
 }
 
+function createControlledDropboxBackup(file: DropboxBackupFile, content: string): ControlledDropboxBackup {
+  return {
+    metadata: {
+      id: file.id,
+      name: file.name,
+      rev: file.rev,
+      path_display: `/${file.name}`,
+      server_modified: file.serverModified,
+      size: file.size,
+    },
+    content,
+  }
+}
+
 async function installControlledDropbox(
   context: BrowserContext,
   appKey: string,
   backups: ControlledDropboxBackup[],
   calls: string[],
 ): Promise<void> {
+  let uploadSequence = 0
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -508,12 +703,13 @@ async function installControlledDropbox(
     const args = JSON.parse(route.request().headers()['dropbox-api-arg'] ?? '{}') as { path: string }
     expect(args.path).toMatch(/^\/[^/]+\.json$/)
     const content = route.request().postData() ?? ''
+    uploadSequence += 1
     const metadata = {
-      id: 'id:controlled-restore',
+      id: `id:controlled-${uploadSequence}`,
       name: args.path.slice(1),
-      rev: 'a1b2c3d4e5',
+      rev: `abcde${uploadSequence.toString(16).padStart(8, '0')}`,
       path_display: args.path,
-      server_modified: '2026-11-13T10:00:00Z',
+      server_modified: new Date(Date.now() + uploadSequence * 1_000).toISOString(),
       size: new TextEncoder().encode(content).byteLength,
     }
     backups.push({ metadata, content })
@@ -530,6 +726,21 @@ async function installControlledDropbox(
     calls.push('list App Folder')
     const entries = backups.map(backup => ({ '.tag': 'file', ...backup.metadata }))
     await fulfillCors(route, JSON.stringify({ entries, cursor: 'controlled-cursor', has_more: false }))
+  })
+  await context.route('https://api.dropboxapi.com/2/files/delete_v2', async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      await fulfillCors(route, '')
+      return
+    }
+    const request = JSON.parse(route.request().postData() ?? '{}') as { path?: string; parent_rev?: string }
+    expect(request.path).toMatch(/^\/[^/]+\.json$/)
+    const index = backups.findIndex(backup => `/${backup.metadata.name}` === request.path)
+    if (index < 0) throw new Error('Dropbox delete must target an existing file in the App Folder root.')
+    const backup = backups[index]!
+    expect(request.parent_rev).toBe(backup.metadata.rev)
+    backups.splice(index, 1)
+    calls.push('delete from App Folder')
+    await fulfillCors(route, JSON.stringify({ metadata: { '.tag': 'file', ...backup.metadata } }))
   })
   await context.route('https://content.dropboxapi.com/2/files/download', async (route) => {
     if (route.request().method() === 'OPTIONS') {

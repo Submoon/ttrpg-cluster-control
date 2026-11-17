@@ -4,6 +4,8 @@ import { exportFileName } from './browser-download'
 
 const DROPBOX_FILENAME_MAX_BYTES = 255
 
+export const DROPBOX_BACKUP_LIMIT = 10
+
 export interface DropboxBackupSnapshot {
   filename: string
   path: string
@@ -41,6 +43,23 @@ export function createDropboxBackupId(): string {
   const bytes = new Uint8Array(16)
   globalThis.crypto.getRandomValues(bytes)
   return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+/** True only for names produced by the dated backup format, including a real UTC capture date. */
+export function isDropboxDatedBackupName(name: string): boolean {
+  return getDropboxBackupCapturedAt(name) !== undefined
+}
+
+/** Returns the UTC capture time embedded in a generated backup name. */
+export function getDropboxBackupCapturedAt(name: string): number | undefined {
+  const match = /^[^/\\]+-(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-\d{3}Z)-([a-f\d]{32})\.json$/i.exec(name)
+  if (!match?.[1]) return undefined
+  const timestamp = match[1]
+  const isoTimestamp = `${timestamp.slice(0, 10)}T${timestamp.slice(11, 19).replaceAll('-', ':')}.${timestamp.slice(20, 23)}Z`
+  const parsedTimestamp = new Date(isoTimestamp)
+  return Number.isFinite(parsedTimestamp.getTime()) && parsedTimestamp.toISOString() === isoTimestamp
+    ? parsedTimestamp.getTime()
+    : undefined
 }
 
 function truncateUtf8(value: string, maxBytes: number): string {

@@ -35,4 +35,4 @@ Let a Warden locate and open a saved Dropbox backup from the welcome screen, loc
 
 The integration branch contains the Dropbox restore entry points and controller. The targeted Chromium run passed the two-profile save and restore using controlled Dropbox responses and real IndexedDB. The exported Jump Cluster after reload matched the original JSON data exactly.
 
-The live Chrome attempt reached Dropbox sign-in. Dropbox reported that the CAPTCHA response could not be verified, and the application received no OAuth callback. The real Dropbox Personal test continues in Firefox with the same local production build and synthetic fixture.
+The live Chrome attempt reached Dropbox sign-in. Dropbox reported that the CAPTCHA response could not be verified, and the application received no OAuth callback. On 2026-11-17 the user reported that the manual Firefox test with the Dropbox Personal account succeeded. The real-account result is operator-reported. The exact JSON comparison above used controlled provider responses.

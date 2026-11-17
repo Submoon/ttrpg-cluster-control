@@ -5,11 +5,13 @@ import { DropboxApiError, createDropboxBackup, reconcileDropboxBackup } from '..
 import type { DropboxBackupReceipt, DropboxBackupReconciliation } from '../utils/dropbox-api'
 import { DropboxCancelledError } from '../utils/dropbox-auth'
 import type { DropboxGrant } from '../utils/dropbox-auth'
+import { pruneDropboxBackups } from '../utils/dropbox-backup-retention'
+import type { DropboxBackupRetentionResult } from '../utils/dropbox-backup-retention'
 import { createDropboxBackupSnapshot } from '../utils/dropbox-backup-snapshot'
 import type { DropboxBackupSnapshot } from '../utils/dropbox-backup-snapshot'
 import type { DropboxSignInController } from './useDropboxSignIn'
 
-export type DropboxBackupState = 'idle' | 'prepared' | 'authorizing' | 'uploading' | 'retry' | 'conflict'
+export type DropboxBackupState = 'idle' | 'authorizing' | 'uploading' | 'retry' | 'cleanup-retry'
 
 export interface DropboxBackupRequest {
   accessToken: string
@@ -18,9 +20,17 @@ export interface DropboxBackupRequest {
   signal?: AbortSignal
 }
 
+export interface DropboxBackupCleanupRequest {
+  accessToken: string
+  receipt: DropboxBackupReceipt
+  signal?: AbortSignal
+  requireReceipt?: boolean
+}
+
 export interface DropboxBackupDependencies {
   createBackup(request: DropboxBackupRequest): Promise<DropboxBackupReceipt>
   reconcileBackup(request: DropboxBackupRequest): Promise<DropboxBackupReconciliation>
+  pruneBackups(request: DropboxBackupCleanupRequest): Promise<DropboxBackupRetentionResult>
 }
 
 export interface DropboxBackupController {
@@ -29,14 +39,9 @@ export interface DropboxBackupController {
   readonly lastSaved: Readonly<Ref<DropboxBackupReceipt | undefined>>
   readonly busy: ComputedRef<boolean>
   readonly canCancel: ComputedRef<boolean>
-  readonly buttonLabel: ComputedRef<string>
-  /** Captures applied data synchronously before the user confirms the transfer. */
-  prepare(): boolean
-  /** Clears only an unsubmitted snapshot; unresolved writes remain available for same-path retry. */
-  discardPrepared(): void
   activate(): void
   cancelBeforeUpload(): void
-  /** Captures a new path without transferring until the user explicitly activates it. */
+  /** Captures current applied data synchronously and starts a new OAuth/upload attempt. */
   startNewBackup(): void
 }
 
@@ -50,22 +55,33 @@ interface BackupAttempt {
   hadAmbiguousDispatch: boolean
 }
 
+interface CleanupAttempt {
+  receipt: DropboxBackupReceipt
+  accountId: string
+}
+
 const defaultDependencies: DropboxBackupDependencies = {
   createBackup: request => createDropboxBackup(request),
   reconcileBackup: request => reconcileDropboxBackup(request),
+  pruneBackups: request => pruneDropboxBackups(request),
 }
 
-/** Owns one captured, dated Dropbox backup and its account-bound uncertain-write retry. */
+/** Owns one captured Dropbox backup, its account-bound retry, and post-save retention cleanup. */
 export function useDropboxBackup(
   workspace: () => LocalWorkspace | null | undefined,
   signIn: DropboxSignInController,
-  dependencies: DropboxBackupDependencies = defaultDependencies,
+  dependencies: Partial<DropboxBackupDependencies> = {},
   options: DropboxBackupOptions = {},
 ): DropboxBackupController {
+  const actions = { ...defaultDependencies, ...dependencies }
   const state = ref<DropboxBackupState>('idle')
   const operationMessage = ref('')
   const lastSaved = ref<DropboxBackupReceipt>()
   const unresolvedPaths = ref<string[]>([])
+  const pendingCleanups = ref<CleanupAttempt[]>([])
+  const cleanupAttempt = ref<CleanupAttempt>()
+  const cleaning = ref(false)
+  const disposed = ref(false)
   const uncertaintyNotice = computed(() => unresolvedPaths.value.length > 0
     ? unresolvedPaths.value.length === 1
       ? `An earlier Dropbox backup may still be saved at ${unresolvedPaths.value[0]}, but Dropbox could not verify it.`
@@ -73,121 +89,91 @@ export function useDropboxBackup(
     : '')
   const message = computed(() => [uncertaintyNotice.value, operationMessage.value].filter(Boolean).join(' '))
   const busy = computed(() => state.value === 'authorizing' || state.value === 'uploading')
-  const canCancel = computed(() => state.value === 'authorizing')
-  const buttonLabel = computed(() => {
-    if (state.value === 'retry') return 'Retry the same Dropbox backup'
-    if (state.value === 'conflict') return 'Prepare a new Dropbox backup'
-    if (state.value === 'authorizing') return 'Authorizing Dropbox…'
-    if (state.value === 'uploading') return 'Saving to Dropbox…'
-    return 'Back up to Dropbox'
-  })
-  let snapshot: DropboxBackupSnapshot | undefined
+  const canCancel = computed(() => state.value === 'authorizing' && !cleaning.value)
   let retryAttempt: BackupAttempt | undefined
-  let disposed = false
   let operationSequence = 0
   let activeOperation = 0
   let activeAbortController: AbortController | undefined
-
-  function prepare(): boolean {
-    if (state.value === 'retry') return true
-    if (state.value === 'prepared') return true
-    if (state.value === 'conflict') {
-      return stageNewSnapshot('The previous path was already occupied. A new dated path is ready.')
-    }
-    if (busy.value || !signIn.ready.value) {
-      if (!signIn.ready.value) operationMessage.value = signIn.message.value || 'Dropbox is not ready. Configure the App Folder app and try again.'
-      return false
-    }
-    return stageNewSnapshot('')
-  }
-
-  function discardPrepared(): void {
-    if (state.value === 'authorizing') {
-      cancelBeforeUpload()
-      if (retryAttempt) return
-    }
-    if (state.value !== 'prepared') return
-    snapshot = undefined
-    retryAttempt = undefined
-    state.value = 'idle'
-    operationMessage.value = ''
-  }
+  const unresolvedAttemptPaths = new Set<string>()
 
   function activate(): void {
-    if (state.value === 'conflict') {
-      stageNewSnapshot('The previous path was already occupied. A new dated path is ready.')
+    if (state.value === 'retry') {
+      retryUncertainBackup()
       return
     }
-    if (state.value !== 'prepared' && state.value !== 'retry') return
-    const operation = beginOperation()
-    void authorizeAndSave(operation)
-  }
-
-  function cancelBeforeUpload(): void {
-    if (!canCancel.value) return
-    activeAbortController?.abort()
-    activeOperation = ++operationSequence
-    activeAbortController = undefined
-    if (retryAttempt) {
-      state.value = 'retry'
-      operationMessage.value = 'Dropbox authorization was canceled. The earlier upload outcome is still unconfirmed; retry the same backup or start a new one.'
-    } else {
-      state.value = 'prepared'
-      operationMessage.value = 'Dropbox authorization was canceled. Your captured backup is ready if you want to try again.'
+    if (state.value === 'cleanup-retry') {
+      retryPendingCleanup()
+      return
     }
-    options.onCanceled?.()
+    if (state.value === 'idle') startBackup()
   }
 
   function startNewBackup(): void {
     if (busy.value) return
-    if (retryAttempt) unresolvedPaths.value = [...unresolvedPaths.value, retryAttempt.snapshot.path]
-    retryAttempt = undefined
-    snapshot = undefined
-    state.value = 'idle'
-    stageNewSnapshot('')
+    const previousRetry = retryAttempt
+    startBackup(
+      previousRetry ? 'uncertain' : state.value === 'cleanup-retry' ? 'cleanup' : undefined,
+      previousRetry,
+    )
   }
 
-  function stageNewSnapshot(notice: string): boolean {
+  function retryPendingCleanup(): void {
+    if (busy.value || !signIn.ready.value) return
+    const pending = pendingCleanups.value.at(-1)
+    if (!pending) return
+    cleanupAttempt.value = pending
+    const operation = beginOperation()
+    void authorizeAndRetryCleanup(operation)
+  }
+
+  function startBackup(reason?: 'uncertain' | 'cleanup', supersededRetry?: BackupAttempt): void {
+    if (!signIn.ready.value) {
+      operationMessage.value = signIn.message.value || 'Dropbox is not ready. Configure the App Folder app and try again.'
+      restorePendingCleanupState()
+      return
+    }
+
     const appliedWorkspace = workspace()
     if (!appliedWorkspace) {
       operationMessage.value = 'Open a Jump Cluster before starting a Dropbox backup.'
-      return false
+      restorePendingCleanupState()
+      return
     }
+
+    let snapshot: DropboxBackupSnapshot
     try {
-      // Synchronous serialization freezes the applied export before authorization can yield.
+      // Capture applied data synchronously in the user gesture before OAuth can open or yield.
       snapshot = createDropboxBackupSnapshot(appliedWorkspace)
-      retryAttempt = undefined
-      lastSaved.value = undefined
-      operationMessage.value = notice
-      state.value = 'prepared'
-      return true
     } catch (error) {
       operationMessage.value = getErrorMessage(error, 'The applied Jump Cluster could not be captured for backup.')
-      state.value = 'idle'
-      return false
+      restorePendingCleanupState()
+      return
     }
+
+    if (supersededRetry) {
+      rememberUncertainty(supersededRetry)
+      retryAttempt = undefined
+    }
+
+    const operation = beginOperation()
+    lastSaved.value = undefined
+    cleanupAttempt.value = undefined
+    operationMessage.value = reason === 'uncertain'
+      ? 'Starting a separate dated backup. The earlier backup may still be saved in Dropbox.'
+      : reason === 'cleanup'
+        ? 'Starting another dated backup. Cleanup for the previously saved backup remains pending for its original Dropbox account.'
+        : ''
+    void authorizeAndSave(snapshot, operation)
   }
 
-  async function authorizeAndSave(operation: number): Promise<void> {
-    if (!snapshot || !isCurrent(operation)) return
+  async function authorizeAndSave(snapshot: DropboxBackupSnapshot, operation: number): Promise<void> {
+    if (!isCurrent(operation)) return
     state.value = 'authorizing'
-    const signal = activeAbortController?.signal
     let grant: DropboxGrant | undefined
     try {
-      // This is called in the explicit consent click stack so the popup is not blocked.
-      grant = await signIn.requestGrant(signal)
+      // This call stays in the explicit click stack so Dropbox can open its authorization window.
+      grant = await signIn.requestGrant(activeAbortController?.signal)
       if (!isCurrent(operation)) return
-      if (retryAttempt) {
-        if (grant.accountId !== retryAttempt.accountId) {
-          signIn.invalidateAccessToken(grant.accessToken)
-          state.value = 'retry'
-          operationMessage.value = 'This backup belongs to a different Dropbox account. Choose the same account to retry its file safely.'
-          return
-        }
-        await retrySameBackup(grant, retryAttempt, operation)
-        return
-      }
-
       const attempt: BackupAttempt = { snapshot, accountId: grant.accountId, hadAmbiguousDispatch: false }
       retryAttempt = attempt
       await createBackup(grant, attempt, operation, false)
@@ -195,20 +181,85 @@ export function useDropboxBackup(
       if (!isCurrent(operation)) return
       invalidateAfterUnauthorized(error, grant?.accessToken)
       if (error instanceof DropboxCancelledError) {
-        state.value = retryAttempt ? 'retry' : 'prepared'
-        operationMessage.value = retryAttempt
-          ? 'Dropbox authorization was canceled. The earlier upload outcome is still unconfirmed; retry the same backup or start a new one.'
-          : 'Dropbox authorization was canceled. Your captured backup is ready if you want to try again.'
+        state.value = 'idle'
+        operationMessage.value = 'Dropbox authorization was canceled. No backup was uploaded.'
+        restorePendingCleanupState()
         options.onCanceled?.()
         return
       }
-      if (retryAttempt) {
+      finishFailedAttempt(operation, error)
+    }
+  }
+
+  function retryUncertainBackup(): void {
+    const attempt = retryAttempt
+    if (!attempt || busy.value || !signIn.ready.value) return
+    const operation = beginOperation()
+    void authorizeAndRetryBackup(attempt, operation)
+  }
+
+  async function authorizeAndRetryBackup(attempt: BackupAttempt, operation: number): Promise<void> {
+    if (!isCurrent(operation)) return
+    state.value = 'authorizing'
+    let grant: DropboxGrant | undefined
+    try {
+      grant = await signIn.requestGrant(activeAbortController?.signal)
+      if (!isCurrent(operation)) return
+      if (grant.accountId !== attempt.accountId) {
+        signIn.invalidateAccessToken(grant.accessToken)
         state.value = 'retry'
-        operationMessage.value = `${getErrorMessage(error, 'Dropbox could not check the backup.')} The earlier upload outcome is still unconfirmed; retry the same backup or start a new one.`
-      } else {
-        state.value = 'prepared'
-        operationMessage.value = getErrorMessage(error, 'Dropbox authorization failed. Your local map is unchanged.')
+        operationMessage.value = 'This backup belongs to a different Dropbox account. Choose the same account to retry its file safely.'
+        return
       }
+      await retrySameBackup(grant, attempt, operation)
+    } catch (error) {
+      if (!isCurrent(operation)) return
+      invalidateAfterUnauthorized(error, grant?.accessToken)
+      if (error instanceof DropboxCancelledError) {
+        state.value = 'retry'
+        operationMessage.value = 'Dropbox authorization was canceled. The earlier upload outcome is still unconfirmed; retry the same backup or start a new one.'
+        options.onCanceled?.()
+        return
+      }
+      state.value = 'retry'
+      operationMessage.value = `${getErrorMessage(error, 'Dropbox could not check the backup.')} The earlier upload outcome is still unconfirmed; retry the same backup or start a new one.`
+    }
+  }
+
+  async function authorizeAndRetryCleanup(operation: number): Promise<void> {
+    let attempt = cleanupAttempt.value
+    if (!attempt || !isCurrent(operation)) return
+    state.value = 'authorizing'
+    let grant: DropboxGrant | undefined
+    try {
+      grant = await signIn.requestGrant(activeAbortController?.signal)
+      if (!isCurrent(operation)) return
+      const matchingAttempt = pendingCleanups.value.find(pending => pending.accountId === grant?.accountId)
+        ?? pendingCleanups.value.at(-1)
+      if (!matchingAttempt) {
+        cleanupAttempt.value = undefined
+        state.value = 'idle'
+        operationMessage.value = ''
+        return
+      }
+      attempt = matchingAttempt
+      cleanupAttempt.value = attempt
+      if (grant.accountId !== attempt.accountId) {
+        signIn.invalidateAccessToken(grant.accessToken)
+        throw new Error('This backup belongs to a different Dropbox account. Choose the account that saved it to retry cleanup safely.')
+      }
+      await cleanUpBackups(grant, attempt, operation, false)
+    } catch (error) {
+      if (!isCurrent(operation)) return
+      invalidateAfterUnauthorized(error, grant?.accessToken)
+      if (error instanceof DropboxCancelledError) {
+        state.value = 'cleanup-retry'
+        operationMessage.value = 'The backup was saved. Cleanup was canceled; retry it to remove older backups.'
+        options.onCanceled?.()
+        return
+      }
+      const failedAttempt = attempt ?? cleanupAttempt.value
+      if (failedAttempt) finishCleanupFailure(operation, failedAttempt, error)
     }
   }
 
@@ -221,7 +272,7 @@ export function useDropboxBackup(
     if (!isCurrent(operation)) return
     state.value = 'uploading'
     try {
-      const receipt = await dependencies.createBackup({
+      const receipt = await actions.createBackup({
         accessToken: grant.accessToken,
         path: attempt.snapshot.path,
         contents: attempt.snapshot.contents,
@@ -229,22 +280,20 @@ export function useDropboxBackup(
       })
       if (!isCurrent(operation)) return
       if (!isValidReceipt(receipt, attempt.snapshot)) {
-        if (fromRetry) {
-          await reconcileAfterAmbiguousCreate(grant, attempt, operation, 'Dropbox returned a receipt for a different path.')
-        } else {
-          attempt.hadAmbiguousDispatch = true
-          await reconcileAfterAmbiguousCreate(grant, attempt, operation, 'Dropbox returned an incomplete receipt.')
-        }
+        if (!fromRetry) attempt.hadAmbiguousDispatch = true
+        await reconcileAfterAmbiguousCreate(grant, attempt, operation, 'Dropbox returned an incomplete receipt.')
         return
       }
-      finishSaved(receipt, attempt)
+      if (fromRetry) resolveUncertainty(attempt)
+      await finishConfirmedSave(grant, attempt, receipt, operation)
     } catch (error) {
       if (!isCurrent(operation)) return
       invalidateAfterUnauthorized(error, grant.accessToken)
       if (error instanceof DropboxApiError && error.code === 'path-conflict' && !attempt.hadAmbiguousDispatch) {
         retryAttempt = undefined
-        state.value = 'conflict'
+        state.value = 'idle'
         operationMessage.value = error.message
+        restorePendingCleanupState()
         return
       }
       if (error instanceof DropboxApiError && error.outcomeUncertain) {
@@ -257,8 +306,9 @@ export function useDropboxBackup(
         operationMessage.value = `${getErrorMessage(error, 'Dropbox could not retry the backup.')} The earlier upload outcome remains unconfirmed.`
       } else {
         retryAttempt = undefined
-        state.value = 'prepared'
+        state.value = 'idle'
         operationMessage.value = getErrorMessage(error, 'Dropbox rejected the backup. Your local map and earlier backups are unchanged.')
+        restorePendingCleanupState()
       }
     }
   }
@@ -267,7 +317,7 @@ export function useDropboxBackup(
     state.value = 'uploading'
     let reconciliation: DropboxBackupReconciliation
     try {
-      reconciliation = await dependencies.reconcileBackup({
+      reconciliation = await actions.reconcileBackup({
         accessToken: grant.accessToken,
         path: attempt.snapshot.path,
         contents: attempt.snapshot.contents,
@@ -278,7 +328,8 @@ export function useDropboxBackup(
     }
     if (!isCurrent(operation)) return
     if (reconciliation.kind === 'confirmed' && isValidReceipt(reconciliation.receipt, attempt.snapshot)) {
-      finishSaved(reconciliation.receipt, attempt)
+      resolveUncertainty(attempt)
+      await finishConfirmedSave(grant, attempt, reconciliation.receipt, operation)
       return
     }
     if (reconciliation.kind !== 'not-found') {
@@ -301,7 +352,7 @@ export function useDropboxBackup(
   ): Promise<void> {
     let reconciliation: DropboxBackupReconciliation
     try {
-      reconciliation = await dependencies.reconcileBackup({
+      reconciliation = await actions.reconcileBackup({
         accessToken: grant.accessToken,
         path: attempt.snapshot.path,
         contents: attempt.snapshot.contents,
@@ -312,7 +363,8 @@ export function useDropboxBackup(
     }
     if (!isCurrent(operation)) return
     if (reconciliation.kind === 'confirmed' && isValidReceipt(reconciliation.receipt, attempt.snapshot)) {
-      finishSaved(reconciliation.receipt, attempt)
+      resolveUncertainty(attempt)
+      await finishConfirmedSave(grant, attempt, reconciliation.receipt, operation)
       return
     }
     if (reconciliation.kind === 'unauthorized') signIn.invalidateAccessToken(grant.accessToken)
@@ -322,12 +374,117 @@ export function useDropboxBackup(
       : `${providerMessage} Retry the same backup to check ${attempt.snapshot.path}; Dropbox will only create it after a typed not-found result.`
   }
 
-  function finishSaved(receipt: DropboxBackupReceipt, attempt: BackupAttempt): void {
-    lastSaved.value = receipt
-    if (retryAttempt?.snapshot.path === attempt.snapshot.path) retryAttempt = undefined
-    snapshot = undefined
+  async function finishConfirmedSave(
+    grant: DropboxGrant,
+    attempt: BackupAttempt,
+    receipt: DropboxBackupReceipt,
+    operation: number,
+  ): Promise<void> {
+    if (!isCurrent(operation)) return
+    retryAttempt = undefined
+    const cleanup = { receipt, accountId: attempt.accountId }
+    rememberCleanup(cleanup)
+    cleanupAttempt.value = cleanup
+    await cleanUpBackups(grant, cleanup, operation, true)
+  }
+
+  async function cleanUpBackups(
+    grant: DropboxGrant,
+    attempt: CleanupAttempt,
+    operation: number,
+    requireReceipt: boolean,
+  ): Promise<DropboxBackupRetentionResult | undefined> {
+    if (!isCurrent(operation)) return undefined
+    state.value = 'uploading'
+    cleaning.value = true
+    try {
+      const result = await actions.pruneBackups({
+        accessToken: grant.accessToken,
+        receipt: attempt.receipt,
+        signal: activeAbortController?.signal,
+        requireReceipt,
+      })
+      if (!isCurrent(operation)) return undefined
+      pendingCleanups.value = pendingCleanups.value.filter(pending => pending.accountId !== attempt.accountId)
+      cleanupAttempt.value = undefined
+      cleaning.value = false
+      if (result === 'retained') lastSaved.value = attempt.receipt
+      setCleanupCompletionMessage(result)
+      state.value = 'idle'
+      restorePendingCleanupState()
+      return result
+    } catch (error) {
+      if (!isCurrent(operation)) return undefined
+      invalidateAfterUnauthorized(error, grant.accessToken)
+      finishCleanupFailure(operation, attempt, error)
+      return undefined
+    }
+  }
+
+  function cancelBeforeUpload(): void {
+    if (!canCancel.value) return
+    const wasRetry = retryAttempt !== undefined && state.value === 'authorizing'
+    const wasCleanupRetry = cleanupAttempt.value !== undefined && state.value === 'authorizing'
+    activeAbortController?.abort()
+    activeOperation = ++operationSequence
+    activeAbortController = undefined
+    cleaning.value = false
+    if (wasRetry) {
+      state.value = 'retry'
+      operationMessage.value = 'Dropbox authorization was canceled. The earlier upload outcome is still unconfirmed; retry the same backup or start a new one.'
+    } else if (wasCleanupRetry) {
+      state.value = 'cleanup-retry'
+      operationMessage.value = 'The backup was saved. Cleanup was canceled; retry it to remove older backups.'
+    } else {
+      state.value = 'idle'
+      operationMessage.value = 'Dropbox authorization was canceled. No backup was uploaded.'
+      restorePendingCleanupState()
+    }
+    options.onCanceled?.()
+  }
+
+  function finishFailedAttempt(operation: number, error: unknown): void {
+    if (!isCurrent(operation)) return
+    retryAttempt = undefined
+    cleanupAttempt.value = undefined
+    cleaning.value = false
     state.value = 'idle'
-    operationMessage.value = ''
+    operationMessage.value = getErrorMessage(error, 'Dropbox backup failed. Your local map is unchanged.')
+    restorePendingCleanupState()
+  }
+
+  function finishCleanupFailure(operation: number, attempt: CleanupAttempt, error: unknown): void {
+    if (!isCurrent(operation)) return
+    cleaning.value = false
+    state.value = 'cleanup-retry'
+    operationMessage.value = `Dropbox confirmed that ${attempt.receipt.name} was saved, but older backups could not all be removed. ${getErrorMessage(error, 'Retry cleanup to finish keeping the newest ten backups.')}`
+  }
+
+  function rememberCleanup(attempt: CleanupAttempt): void {
+    pendingCleanups.value = [
+      ...pendingCleanups.value.filter(pending => pending.accountId !== attempt.accountId),
+      attempt,
+    ]
+  }
+
+  function setCleanupCompletionMessage(result: DropboxBackupRetentionResult): void {
+    if (result === 'removed') {
+      operationMessage.value = 'Cleanup completed, but the saved backup was removed to keep only the ten newest backups.'
+    } else if (result === 'absent') {
+      operationMessage.value = 'Cleanup completed. The previously saved backup is no longer listed in Dropbox.'
+    } else {
+      operationMessage.value = ''
+    }
+  }
+
+  function restorePendingCleanupState(): void {
+    if (state.value === 'authorizing' || state.value === 'uploading' || state.value === 'retry') return
+    if (pendingCleanups.value.length > 0) {
+      state.value = 'cleanup-retry'
+      if (!operationMessage.value) operationMessage.value = 'A saved Dropbox backup still needs cleanup; retry it or save another backup.'
+    } else if (state.value === 'cleanup-retry') {
+      state.value = 'idle'
+    }
   }
 
   function beginOperation(): number {
@@ -337,12 +494,25 @@ export function useDropboxBackup(
     return activeOperation
   }
 
+  function rememberUncertainty(attempt: BackupAttempt): void {
+    if (unresolvedAttemptPaths.has(attempt.snapshot.path)) return
+    unresolvedAttemptPaths.add(attempt.snapshot.path)
+    unresolvedPaths.value = [...unresolvedAttemptPaths]
+  }
+
+  function resolveUncertainty(attempt: BackupAttempt): void {
+    if (!unresolvedAttemptPaths.delete(attempt.snapshot.path)) return
+    unresolvedPaths.value = [...unresolvedAttemptPaths]
+  }
+
   function invalidateAfterUnauthorized(error: unknown, accessToken: string | undefined): void {
-    if (accessToken && error instanceof DropboxApiError && error.httpStatus === 401) signIn.invalidateAccessToken(accessToken)
+    if (accessToken && error instanceof DropboxApiError && error.httpStatus === 401) {
+      signIn.invalidateAccessToken(accessToken)
+    }
   }
 
   function isCurrent(operation: number): boolean {
-    return !disposed && operation === activeOperation
+    return !disposed.value && operation === activeOperation
   }
 
   function isValidReceipt(receipt: DropboxBackupReceipt, backup: DropboxBackupSnapshot): boolean {
@@ -350,26 +520,12 @@ export function useDropboxBackup(
   }
 
   onScopeDispose(() => {
-    disposed = true
+    disposed.value = true
     activeAbortController?.abort()
     activeOperation = ++operationSequence
-    snapshot = undefined
-    retryAttempt = undefined
   })
 
-  return {
-    state,
-    message,
-    lastSaved,
-    busy,
-    canCancel,
-    buttonLabel,
-    prepare,
-    discardPrepared,
-    activate,
-    cancelBeforeUpload,
-    startNewBackup,
-  }
+  return { state, message, lastSaved, busy, canCancel, activate, cancelBeforeUpload, startNewBackup }
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {

@@ -6,7 +6,7 @@ const REQUEST_TIMEOUT_MS = 60_000
 
 export type DropboxApiErrorCode = 'request-failed' | 'outcome-uncertain' | 'path-conflict'
 
-/** A Dropbox failure with safe feedback and an explicit indication of whether a create may have landed. */
+/** A Dropbox failure with safe feedback and an explicit indication when a write outcome is uncertain. */
 export class DropboxApiError extends Error {
   readonly code: DropboxApiErrorCode
   readonly outcomeUncertain: boolean
@@ -280,6 +280,55 @@ export async function readDropboxBackup(
   }
 }
 
+/** Deletes only the listed root file revision; a changed revision is never deleted by path alone. */
+export async function deleteDropboxBackup(
+  accessToken: string,
+  file: DropboxBackupFile,
+  fetcher: DropboxFetcher = fetch,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (!isValidDropboxDeleteTarget(file)) {
+    throw new DropboxApiError('request-failed', 'This is not a valid listed Dropbox JSON backup file.')
+  }
+  if (signal?.aborted) throw createAbortError()
+
+  let response: ProviderResponse
+  try {
+    response = await providerFetch(fetcher, `${API}/files/delete_v2`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ path: `/${file.name}`, parent_rev: file.rev }),
+    }, signal)
+  } catch {
+    if (signal?.aborted) throw createAbortError()
+    throw uncertainOutcome('Dropbox could not confirm whether this backup was deleted. Refresh the backup list or retry cleanup to check the current files.')
+  }
+  if (response.status === 401) throw expiredAuthorizationError()
+  if (!response.ok) {
+    if (isTypedDeleteNotFound(parseJson(response.bytes))) {
+      throw new DropboxApiError('request-failed', 'Dropbox no longer has this backup at its listed path. Refresh the backup list to check the current files.', false, response.status)
+    }
+    if (isAmbiguousStatus(response.status)) {
+      throw uncertainOutcome('Dropbox could not confirm whether this backup was deleted. Refresh the backup list or retry cleanup to check the current files.', response.status)
+    }
+    throw new DropboxApiError(
+      'request-failed',
+      'Dropbox could not delete this backup. Refresh the list and try again.',
+      false,
+      response.status,
+    )
+  }
+
+  const result = parseJson(response.bytes)
+  const metadata = isRecord(result) ? result.metadata : undefined
+  if (!matchesDeletedDropboxFile(metadata, file)) {
+    throw uncertainOutcome('Dropbox returned incomplete deletion details. Refresh the backup list or retry cleanup to check the current files.')
+  }
+}
+
 /** True for root filenames that can contain portable JSON; the restore owner validates their document type. */
 export function isDropboxJsonFileName(name: string): boolean {
   return /\.json$/i.test(name)
@@ -346,6 +395,22 @@ function isValidDropboxBackupFile(value: DropboxBackupFile): boolean {
     && typeof value.size === 'number' && Number.isSafeInteger(value.size) && value.size >= 0
 }
 
+function isValidDropboxDeleteTarget(value: DropboxBackupFile): boolean {
+  return isValidDropboxBackupFile(value)
+    && /^id:.+/.test(value.id)
+    && /^[^/\\]+$/.test(value.name)
+    && /^[a-f\d]{9,}$/i.test(value.rev)
+}
+
+function matchesDeletedDropboxFile(value: unknown, file: DropboxBackupFile): boolean {
+  return isRecord(value)
+    && value['.tag'] === 'file'
+    && value.id === file.id
+    && value.name === file.name
+    && value.path_display === `/${file.name}`
+    && value.rev === file.rev
+}
+
 function matchesListedDropboxRevision(value: unknown, file: DropboxBackupFile, byteLength: number): boolean {
   return isRecord(value)
     && (value['.tag'] === undefined || value['.tag'] === 'file')
@@ -410,6 +475,14 @@ function isPathNotFound(value: unknown): boolean {
   if (!isRecord(value) || !isRecord(value.error)) return false
   const error = value.error
   return error['.tag'] === 'path' && isRecord(error.path) && error.path['.tag'] === 'not_found'
+}
+
+function isTypedDeleteNotFound(value: unknown): boolean {
+  if (!isRecord(value) || !isRecord(value.error)) return false
+  const error = value.error
+  return error['.tag'] === 'path_lookup'
+    && isRecord(error.path_lookup)
+    && error.path_lookup['.tag'] === 'not_found'
 }
 
 function parseJson(bytes: Uint8Array): unknown {
