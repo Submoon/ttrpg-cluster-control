@@ -164,7 +164,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const mapControls = useEditorMapControls(workspace, store, {
     orbitPlacementPreview: entity.orbitPlacementPreview,
     entitySession: entity.entitySession,
-  })
+  }, options.continuousMap)
   const viewport = useEditorViewport(store)
   const navigation = useEditorNavigation({
     workspace,
@@ -221,7 +221,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const map = useMapWorkflows({
     workspace,
     mutations,
-    systemMapRef: mapControls.systemMapRef,
+    systemMapRef: mapControls.placementMapRef,
+    continuousMap: options.continuousMap,
     resolveTransition: transitions.resolveTransition,
     beginObjectSession: entity.beginObjectSession,
     beginOrbitSession: entity.beginOrbitSession,
@@ -266,7 +267,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const systemObjectPlacement = useSystemObjectPlacement({
     workspace,
     creationActive: computed(() => systemCreation.creationSession.value !== null),
-    systemMapRef: mapControls.systemMapRef,
+    systemMapRef: mapControls.placementMapRef,
+    continuousMap: options.continuousMap,
     mutations,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
     beforeWorkspaceOperation,
@@ -282,7 +284,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const orbitCenterPlacement = useOrbitCenterPlacement({
     workspace,
     creationActive: computed(() => systemCreation.creationSession.value !== null),
-    systemMapRef: mapControls.systemMapRef,
+    systemMapRef: mapControls.placementMapRef,
+    continuousMap: options.continuousMap,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
     moveOrbitCenter: map.moveMapOrbitCenter,
   })
@@ -333,6 +336,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     creation: systemCreation,
     viewport,
     beginOrbitEdit: map.beginOrbitEdit,
+    continuousMap: options.continuousMap,
   })
 
   const historyGuards = computed(() => {

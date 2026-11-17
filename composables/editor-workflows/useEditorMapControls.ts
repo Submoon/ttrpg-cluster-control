@@ -14,9 +14,14 @@ export function useEditorMapControls(
     orbitPlacementPreview: Readonly<Ref<{ sessionId: number; orbitId: string; preview: OrbitPlacementPreview } | null>>
     entitySession: Readonly<Ref<EntityInspectorSession | null>>
   },
+  continuousMap?: Readonly<Ref<boolean>>,
 ) {
   const clusterMapRef = shallowRef<MapNavigationHandle | null>(null)
   const systemMapRef = shallowRef<SystemMapHandle | null>(null)
+  const placementMapRef = computed<MapNavigationHandle | null>(() => {
+    if (store.activeView === 'system') return systemMapRef.value
+    return continuousMap?.value ? clusterMapRef.value : null
+  })
   const editingGestureActive = ref(false)
   const searchContextChangeRequestId = ref<number | null>(null)
   function setEditingGestureActive(active: boolean): void {
@@ -42,32 +47,39 @@ export function useEditorMapControls(
   })
   const minimumZoomLevel = computed(() => minimumZoomScale.value * 100)
 
-  let appliedOrbitPreview: { map: SystemMapHandle; orbitId: string } | null = null
+  let appliedOrbitPreview: { map: MapNavigationHandle; orbitId: string; systemId: string } | null = null
   watch(
-    [systemMapRef, previews.orbitPlacementPreview, () => store.activeView, () => store.selectedSystemId, previews.entitySession],
-    ([map, preview, view, systemId, session]) => {
+    [placementMapRef, previews.orbitPlacementPreview, () => store.activeView, () => store.selectedSystemId,
+      () => store.inspectedTarget, previews.entitySession],
+    ([map, preview, view, selectedSystemId, inspectedTarget, session]) => {
+      const systemId = view === 'cluster'
+        ? inspectedTarget?.kind === 'object' || inspectedTarget?.kind === 'orbit' || inspectedTarget?.kind === 'system'
+          ? inspectedTarget.systemId
+          : null
+        : selectedSystemId
       const activePreview = preview !== null
-        && view === 'system'
+        && (view === 'system' || (continuousMap?.value === true && view === 'cluster'))
         && session?.kind === 'orbit'
         && session.id === preview.sessionId
         && session.systemId === systemId
         ? preview
         : null
       if (appliedOrbitPreview && (appliedOrbitPreview.map !== map
-        || !activePreview || appliedOrbitPreview.orbitId !== activePreview.orbitId)) {
-        appliedOrbitPreview.map.setOrbitPlacementPreview(appliedOrbitPreview.orbitId, null)
+        || !activePreview || appliedOrbitPreview.orbitId !== activePreview.orbitId
+        || appliedOrbitPreview.systemId !== systemId)) {
+        appliedOrbitPreview.map.setOrbitPlacementPreview?.(appliedOrbitPreview.orbitId, null, appliedOrbitPreview.systemId)
         appliedOrbitPreview = null
       }
       if (map && activePreview) {
-        map.setOrbitPlacementPreview(activePreview.orbitId, activePreview.preview)
-        appliedOrbitPreview = { map, orbitId: activePreview.orbitId }
+        map.setOrbitPlacementPreview?.(activePreview.orbitId, activePreview.preview, systemId ?? undefined)
+        if (systemId) appliedOrbitPreview = { map, orbitId: activePreview.orbitId, systemId }
       }
     },
     { flush: 'post', immediate: true },
   )
   onBeforeUnmount(() => {
     editingGestureActive.value = false
-    appliedOrbitPreview?.map.setOrbitPlacementPreview(appliedOrbitPreview.orbitId, null)
+    appliedOrbitPreview?.map.setOrbitPlacementPreview?.(appliedOrbitPreview.orbitId, null, appliedOrbitPreview.systemId)
     appliedOrbitPreview = null
   })
 
@@ -209,6 +221,7 @@ export function useEditorMapControls(
   return {
     clusterMapRef,
     systemMapRef,
+    placementMapRef,
     activeMapKey,
     searchContextChangeRequestId,
     editingGestureActive,

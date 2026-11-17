@@ -8,6 +8,7 @@ import {
   selectContinuousObjectAddCandidate,
   continuousOrbitAddKeyboardPoint,
 } from '../utils/continuous-map-editing'
+import { continuousObjectDragTarget, hasMapDragThreshold } from '../utils/continuous-object-drag'
 
 const systems = [
   { id: 'vesper', envelope: { x: 0, y: 0, width: 100, height: 100 } },
@@ -105,4 +106,21 @@ test('clearing an older Add request cannot cancel a newer Add operation @pure', 
   expect(lease.isCurrent(newer)).toBe(true)
   expect(lease.clear(newer)).toBe(true)
   expect(lease.isCurrent(newer)).toBe(false)
+})
+
+test('continuous Move preserves the off-center grab point and uses a client-pixel threshold @pure', () => {
+  const projection = {
+    unprojectLocalPoint: (point: { x: number; y: number }) => ({
+      x: (point.x - 100) / 0.2,
+      y: (point.y - 60) / 0.2,
+    }),
+  }
+  const anchorDelta = { x: 12, y: -8 }
+  const pointerStart = { x: 100 + 500 * 0.2 + anchorDelta.x, y: 60 + 280 * 0.2 + anchorDelta.y }
+  const pointerCurrent = { x: pointerStart.x + 2, y: pointerStart.y + 1 }
+
+  expect(continuousObjectDragTarget(projection, anchorDelta, { x: 560, y: 315 }, pointerStart, pointerCurrent))
+    .toEqual({ x: 570, y: 320 })
+  expect(hasMapDragThreshold({ x: 100, y: 100 }, { x: 103.9, y: 100 })).toBe(false)
+  expect(hasMapDragThreshold({ x: 100, y: 100 }, { x: 104, y: 100 })).toBe(true)
 })
