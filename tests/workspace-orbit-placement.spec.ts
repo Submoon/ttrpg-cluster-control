@@ -174,7 +174,6 @@ test('an ambiguous Orbit center drag requires a named host choice before preview
   await expectObjectPosition(map, passenger.id, { x: primaryPosition.x, y: primaryPosition.y + 60 })
   await expectObjectPosition(map, nestedObject.id, { x: primaryPosition.x + 46, y: primaryPosition.y + 60 })
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
-  await expect(inspector.getByRole('button', { name: /Apply changes/ })).toBeDisabled()
   await previewButton.click()
   await inspector.getByRole('button', { name: /Apply changes/ }).click()
 

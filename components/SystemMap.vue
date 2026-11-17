@@ -550,13 +550,11 @@ async function exportImage(format: MapImageFormat, palette: MapImagePalette = 'a
     format,
     props.system.name,
     palette,
-    props.presentation
-      ? clone => renderAppliedExportScene(clone)
-      : clone => mapRenderer?.prepareExportClone(clone),
+    clone => renderAppliedExportScene(clone),
   )
 }
 
-/** Rebuilds only the isolated export copy from applied data when the live scene has draft presentation. */
+/** Rebuilds the isolated export copy from applied data to keep every export path visually identical. */
 function renderAppliedExportScene(clone: SVGSVGElement): void {
   clone.setAttribute('aria-label', `${props.system.name} star system map`)
   clone.removeAttribute('data-system-object-move-targeting')
@@ -566,20 +564,20 @@ function renderAppliedExportScene(clone: SVGSVGElement): void {
     geometry: mapGeometry.value,
     appliedSystem: props.system,
     appliedGeometry: mapGeometry.value,
-    dimmedObjectIds: [],
-    selectedObjectId: null,
-    selectedObjectIds: [],
-    selectedOrbitId: null,
+    dimmedObjectIds: props.dimmedObjectIds,
+    selectedObjectId: props.selectedObjectId,
+    selectedObjectIds: props.selectedObjectIds ?? [],
+    selectedOrbitId: props.selectedOrbitId,
     creationType: null,
     creationPreview: null,
     creationChooserOpen: false,
-    moveTargeting: false,
+    moveTargeting: props.moveTargeting,
     objectPlacementPreviews: new Map(),
     orbitPlacementPreviews: new Map(),
     orbitAdjustmentPreview: null,
     orbitCenterMovePreviews: new Map(),
-    moveEnabled: false,
-    touchNavigation: true,
+    moveEnabled: props.moveEnabled ?? true,
+    touchNavigation: props.touchNavigation,
     orbitRotationWheelEvents: new WeakSet<Event>(),
     handlers: exportRenderHandlers,
     setZoomLevel: () => undefined,

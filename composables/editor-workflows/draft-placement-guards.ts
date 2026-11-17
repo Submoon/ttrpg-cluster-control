@@ -23,13 +23,16 @@ export function draftPlacementGuard(
 
   const projectedOrbits = new Map(projected.orbits.map(orbit => [orbit.id, orbit]))
   const movedOrbits = new Set<string>()
+  const movedOrbitCenters = new Set<string>()
   for (const orbit of applied.orbits) {
     const preview = projectedOrbits.get(orbit.id)
     if (!preview) continue
     const radii = orbitRadii(applied, orbit, appliedLayout)
     const previewRadii = orbitRadii(projected, preview, projectedLayout)
-    if (orbit.hostId !== preview.hostId
+    const centerChanged = orbit.hostId !== preview.hostId
       || !samePoint(orbitCenter(orbit, appliedPositions), orbitCenter(preview, projectedPositions))
+    if (centerChanged) movedOrbitCenters.add(orbit.id)
+    if (centerChanged
       || radii.horizontal !== previewRadii.horizontal || radii.vertical !== previewRadii.vertical
       || orbitRotation(orbit, appliedLayout) !== orbitRotation(preview, projectedLayout)) {
       movedOrbits.add(orbit.id)
@@ -45,8 +48,9 @@ export function draftPlacementGuard(
       case 'object-create':
         return orbitChanged(command.orbitId)
       case 'orbit-geometry':
-      case 'orbit-center-position':
         return orbitChanged(command.orbitId)
+      case 'orbit-center-position':
+        return movedOrbitCenters.has(command.orbitId)
       case 'orbit-host':
         return orbitChanged(command.orbitId) || objectChanged(command.hostId)
       case 'orbit-create':
