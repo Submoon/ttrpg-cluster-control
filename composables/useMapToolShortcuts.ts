@@ -9,14 +9,24 @@ interface MapToolShortcutOptions {
   editingGestureActive(): boolean
   activeMapKey(): string | null
   mapMode(): MapInteractionMode
+  continuousMapEnabled(): boolean
   addIntentActive(): boolean
   changeMapMode(mode: MapToolMode): Promise<void>
   openAddChooser(): void
   focusActiveMap(): void
 }
 
-const mapRootSelector = 'svg.cluster-map-svg, svg.system-map-svg'
-const mapMarkSelector = '.cluster-system-node, .cluster-route, .system-object, .orbit-hit-target'
+const mapRootSelector = 'svg.cluster-map-svg, svg.system-map-svg, svg.continuous-warden-map-svg'
+const mapMarkSelector = '.cluster-system-node, .cluster-route, .system-object, .orbit-hit-target, .continuous-warden-object, .continuous-warden-orbit-target'
+
+export function mapModeForShortcut(key: string, continuousMapEnabled = false): MapToolMode | null {
+  switch (key) {
+    case 'n': return continuousMapEnabled ? null : 'navigate'
+    case 's': return 'select'
+    case 'm': return 'move'
+    default: return null
+  }
+}
 
 /** Owns map-scoped, single-letter tool shortcuts and their temporary browser input state. */
 export function useMapToolShortcuts(options: MapToolShortcutOptions): { isMapInputActive(): boolean } {
@@ -27,7 +37,7 @@ export function useMapToolShortcuts(options: MapToolShortcutOptions): { isMapInp
 
   function keydown(event: KeyboardEvent): void {
     const key = event.key.toLowerCase()
-    const mode = mapModeForShortcut(key)
+    const mode = mapModeForShortcut(key, options.continuousMapEnabled())
     if ((!mode && key !== 'a') || event.defaultPrevented || event.repeat
       || event.isComposing || event.keyCode === 229 || compositionActive
       || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey
@@ -55,15 +65,6 @@ export function useMapToolShortcuts(options: MapToolShortcutOptions): { isMapInp
       || document.activeElement !== document.body || !document.hasFocus()
       || options.activeMapKey() !== contextKey) return
     options.focusActiveMap()
-  }
-
-  function mapModeForShortcut(key: string): MapToolMode | null {
-    switch (key) {
-      case 'n': return 'navigate'
-      case 's': return 'select'
-      case 'm': return 'move'
-      default: return null
-    }
   }
 
   function isMapShortcutTarget(target: EventTarget | null): boolean {

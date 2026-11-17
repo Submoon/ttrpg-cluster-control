@@ -168,6 +168,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const viewport = useEditorViewport(store)
   const navigation = useEditorNavigation({
     workspace,
+    continuousMap: options.continuousMap,
     waitForSearchPresentation: options.waitForSearchPresentation,
     captureAddCleanup: () => {
       const clearSystemCreation = systemCreation.captureSearchContextCleanup()
@@ -590,6 +591,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       recordViewport: mapControls.recordViewport,
       setViewportPercentage: mapControls.setViewportPercentage,
       fitActiveMap: mapControls.fitActiveMap,
+      centerInspectedTarget: mapControls.centerInspectedTarget,
       zoomActiveMap: mapControls.zoomActiveMap,
       panActiveMap: mapControls.panActiveMap,
       setMapMode: navigation.setMapMode,
@@ -604,6 +606,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       editorError,
     },
     navigation: {
+      continuousMapEnabled: navigation.continuousMapEnabled,
       activeView: navigation.activeView,
       mapMode: navigation.mapMode,
       selectedSystemId: navigation.selectedSystemId,
@@ -615,6 +618,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       selectedSystem: navigation.selectedSystem,
       clusterSelectedSystem: navigation.clusterSelectedSystem,
       inspectedClusterSystem: navigation.inspectedClusterSystem,
+      inspectedTarget: navigation.inspectedTarget,
       selectedObject: navigation.selectedObject,
       selectedOrbit: navigation.selectedOrbit,
       selectedRoute: navigation.selectedRoute,
@@ -622,6 +626,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       showClusterMap: navigation.showClusterMap,
       selectSystem: navigation.selectSystem,
       selectClusterSystem: navigation.selectClusterSystem,
+      inspectContinuousTarget: navigation.inspectContinuousTarget,
       selectObject: navigation.selectObject,
       replaceObjectSelection: navigation.replaceObjectSelection,
       toggleObjectSelection: navigation.toggleObjectSelection,

@@ -45,13 +45,18 @@
               v-if="detailSystemIds.has(projection.id)"
               class="continuous-warden-system-detail"
               :transform="systemTransform(projection)"
-              aria-hidden="true"
             >
               <g class="system-orbits">
                 <ellipse
                   v-for="orbit in projection.orbits"
                   :key="orbit.id"
-                  class="orbit-ring"
+                  class="orbit-ring continuous-warden-orbit-target"
+                  :class="{ 'is-selected': isSelectedOrbit(projection.id, orbit.id) }"
+                  :data-system-id="projection.id"
+                  :data-orbit-id="orbit.id"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="orbitLabel(projection.id, orbit.id)"
                   :cx="orbit.center.x"
                   :cy="orbit.center.y"
                   :rx="orbit.radii.horizontal"
@@ -64,9 +69,17 @@
                   v-for="object in projection.objects"
                   :key="object.id"
                   class="continuous-warden-object"
+                  :class="{ 'is-selected': isSelectedObject(projection.id, object.id), 'is-search-result': searchLocatorId === object.id }"
                   :transform="`translate(${object.position.x} ${object.position.y})`"
                   :data-object-id="object.id"
+                  :data-system-id="projection.id"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="`Select ${object.locationKey}, ${object.name}`"
+                  :aria-pressed="isSelectedObject(projection.id, object.id)"
                 >
+                  <circle class="continuous-warden-object-hit-target" r="18" />
+                  <circle v-if="searchLocatorId === object.id" class="continuous-warden-search-locator" r="25" aria-hidden="true" />
                   <circle v-if="objectSubtype(projection.id, object.id) === 'star'" class="continuous-warden-star-halo" r="18" />
                   <text class="continuous-warden-object-glyph" y="8" text-anchor="middle">
                     {{ objectGlyph(projection.id, object.id) }}
@@ -87,7 +100,7 @@
               :data-system-id="projection.id"
               :transform="anchorTransform(projection)"
               role="button"
-              tabindex="-1"
+              tabindex="0"
               :aria-label="`Select ${projection.name}`"
             >
               <circle class="continuous-warden-anchor-hit-target" r="16" />
@@ -113,7 +126,7 @@
               :data-system-id="label.id"
               :transform="`translate(${label.x} ${label.y})`"
               role="button"
-              tabindex="-1"
+              tabindex="0"
               :aria-label="`Select ${label.name}`"
             >
               <rect
@@ -146,6 +159,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
 import type { JumpCluster, Point, StarSystem } from '../domain/workspace'
 import type { MapHistoryTarget, MapInteractionMode } from '../composables/editor-workflows/types'
+import type { InspectedMapTarget } from '../stores/editor-ui'
 import { initialClusterSystemPosition } from '../domain/workspace-cluster'
 import type { MapViewport, SvgViewportRect } from '../utils/map-zoom'
 import {
@@ -166,9 +180,17 @@ import {
   type ContinuousWardenSystemProjection,
 } from '../utils/continuous-map-projection'
 import { clusterSystemPosition } from '../utils/cluster-map-geometry'
+import {
+  centerMapTargetViewport,
+  minimumHistoryRevealViewport,
+  revealNearestAnchorViewport,
+  rotatedEllipseBounds,
+} from '../utils/continuous-map-history-reveal'
+import type { ClientRectBounds } from '../utils/map-usable-area'
 import { createMapTouchNavigation } from './maps/map-touch-navigation'
 import { exportMapImage, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
+import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
 
 const DETAIL_REVEAL_PIXELS = 250
 const DETAIL_HIDE_PIXELS = 210
@@ -184,6 +206,7 @@ const props = defineProps<{
   orbitRadii: Readonly<Record<string, { horizontal: number; vertical: number }>>
   orbitRotations: Readonly<Record<string, number>>
   selectedSystemId: string | null
+  inspectedTarget: InspectedMapTarget | null
   mode: MapInteractionMode
   clusterAddType: 'system' | 'route' | null
   clusterChooserOpen: boolean
@@ -191,10 +214,13 @@ const props = defineProps<{
   moveTargeting: boolean
   touchNavigation?: boolean
   initialViewport: MapViewport | null
+  getUsableClientRect?: () => ClientRectBounds | undefined
 }>()
 
 const emit = defineEmits<{
   'activate-system': [id: string]
+  'select-object': [systemId: string, objectId: string]
+  'select-orbit': [systemId: string, orbitId: string]
   'cluster-target': [point: Point, systemIds: string[]]
   'move-system': [id: string, position: Point]
   'move-target': [point: Point]
@@ -211,9 +237,12 @@ const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
 const svgPixelScale = ref(1)
 const svgViewport = ref<SvgViewportRect>({ x: 0, y: 0, width: 960, height: 560 })
 const ready = ref(false)
+const searchLocatorId = ref<string | null>(null)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 let resizeObserver: ResizeObserver | undefined
 let cameraInitialized = false
+let searchInteractionGeneration = 0
+let focusFallbackGeneration = 0
 let viewPan: { transform: MapViewport; start: [number, number] } | null = null
 let activeAnchorDrag: {
   systemId: string
@@ -455,6 +484,21 @@ function objectSubtype(projectionId: string, objectId: string): string {
   return localObject(projectionId, objectId)?.subtype ?? ''
 }
 
+function isSelectedObject(systemId: string, objectId: string): boolean {
+  const target = props.inspectedTarget
+  return target?.kind === 'object' && target.systemId === systemId && target.objectId === objectId
+}
+
+function isSelectedOrbit(systemId: string, orbitId: string): boolean {
+  const target = props.inspectedTarget
+  return target?.kind === 'orbit' && target.systemId === systemId && target.orbitId === orbitId
+}
+
+function orbitLabel(systemId: string, orbitId: string): string {
+  const orbit = props.cluster.systems.find(system => system.id === systemId)?.orbits.find(value => value.id === orbitId)
+  return orbit ? `Select Orbit ${orbit.order}` : 'Select Orbit'
+}
+
 function updateDetailReveal(cameraScale: number): void {
   if (!cameraInitialized) return
   const current = detailSystemIds.value
@@ -465,7 +509,38 @@ function updateDetailReveal(cameraScale: number): void {
       next.add(projection.id)
     }
   }
-  if (next.size !== current.size || [...next].some(id => !current.has(id))) detailSystemIds.value = next
+  if (next.size !== current.size || [...next].some(id => !current.has(id))) {
+    preserveFocusBeforeDetailCollapse(next)
+    detailSystemIds.value = next
+  }
+}
+
+function preserveFocusBeforeDetailCollapse(nextDetailSystemIds: ReadonlySet<string>): void {
+  if (typeof document === 'undefined' || typeof Element === 'undefined') return
+  const focusedMark = document.activeElement
+  if (!(focusedMark instanceof Element)) return
+  const focusedEntity = focusedMark.closest<SVGElement>(
+    '.continuous-warden-object[data-system-id], .continuous-warden-orbit-target[data-system-id]',
+  )
+  const systemId = focusedEntity?.getAttribute('data-system-id')
+  if (!focusedEntity || !systemId || nextDetailSystemIds.has(systemId)) return
+  const capturedGeneration = ++focusFallbackGeneration
+  void nextTick(() => {
+    if (capturedGeneration !== focusFallbackGeneration || focusedEntity.isConnected) return
+    const currentFocus = document.activeElement
+    if (currentFocus !== document.body && currentFocus !== svgElement.value && currentFocus !== focusedMark) return
+    const visibleName = [...(svgElement.value?.querySelectorAll<SVGElement>('.continuous-warden-name-target[data-system-id]') ?? [])]
+      .find((candidate) => {
+        if (candidate.getAttribute('data-system-id') !== systemId || candidate.getClientRects().length === 0) return false
+        const usable = props.getUsableClientRect?.()
+        if (!usable) return false
+        const bounds = candidate.getBoundingClientRect()
+        return bounds.left >= usable.left && bounds.top >= usable.top
+          && bounds.right <= usable.right && bounds.bottom <= usable.bottom
+      })
+    if (visibleName) visibleName.focus({ preventScroll: true })
+    else focusMap()
+  })
 }
 
 function updateSvgPixelScale(): void {
@@ -533,23 +608,213 @@ function fitMap(usableRect?: SvgViewportRect): void {
 
 function frameSystem(systemId: string, usableRect?: SvgViewportRect): boolean {
   const projection = projections.value.find(candidate => candidate.id === systemId)
-  if (!projection || !svgElement.value || !zoomBehavior) return false
+  const element = svgElement.value
+  if (!projection || !element || !zoomBehavior) return false
   const delta = anchorDelta(projection)
-  const bounds = {
+  const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
+  if (!rect) return false
+  const current = getViewport()
+  const targetBounds = {
     ...projection.envelope,
     x: projection.envelope.x + delta.x,
     y: projection.envelope.y + delta.y,
   }
-  const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(svgElement.value))
-  if (!rect) return false
-  const fitted = fitMapViewport(bounds, rect, minimumZoomScale.value)
-  if (!fitted) return false
-  setViewport(fitted)
+  const detailScaleFloor = (detailSystemIds.value.has(projection.id) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS)
+    / (Math.max(projection.envelope.width, projection.envelope.height) * svgPixelScale.value)
+  const next = centerMapTargetViewport({
+    current,
+    targetBounds,
+    usableRect: rect,
+    minimumScale: detailScaleFloor,
+    maximumScale: MAP_ZOOM_MAX_SCALE,
+  })
+  if (!next) return false
+  if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
+    || Math.abs(next.k - current.k) >= 0.0001) setViewport(next)
   return true
 }
 
-function revealHistoryTarget(target: MapHistoryTarget): boolean {
-  return target.kind === 'system' ? frameSystem(target.id) : false
+function frameEntityTarget(
+  systemId: string,
+  kind: 'object' | 'orbit',
+  entityId: string,
+  usableRect?: SvgViewportRect,
+  centerTarget = false,
+): boolean {
+  const projection = projections.value.find(candidate => candidate.id === systemId)
+  const element = svgElement.value
+  if (!projection || !element || !zoomBehavior) return false
+  const targetPoint = kind === 'object'
+    ? projection.objects.find(object => object.id === entityId)?.scenePosition
+    : projection.orbits.find(orbit => orbit.id === entityId)?.sceneCenter
+  if (!targetPoint) return false
+  const delta = anchorDelta(projection)
+  const center = { x: targetPoint.x + delta.x, y: targetPoint.y + delta.y }
+  const object = kind === 'object' ? projection.objects.find(candidate => candidate.id === entityId) : undefined
+  const orbit = kind === 'orbit' ? projection.orbits.find(candidate => candidate.id === entityId) : undefined
+  const orbitBounds = orbit
+    ? rotatedEllipseBounds(center, orbit.sceneRadii, orbit.rotation, 2)
+    : null
+  const halfWidth = object ? Math.max(18, object.name.length * 3.6, object.locationKey.length * 2.8) : 18
+  const halfHeight = object ? 27 : 18
+  const bounds = orbitBounds ?? {
+    x: center.x - halfWidth,
+    y: center.y - halfHeight,
+    width: halfWidth * 2,
+    height: halfHeight * 2,
+  }
+  const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
+  if (!rect) return false
+  const current = getViewport()
+  const minimumScale = detailSystemIds.value.has(projection.id)
+    ? undefined
+    : DETAIL_REVEAL_PIXELS / (Math.max(projection.envelope.width, projection.envelope.height) * svgPixelScale.value)
+  const next = centerTarget
+    ? centerMapTargetViewport({
+        current,
+        targetBounds: bounds,
+        usableRect: rect,
+        minimumScale,
+        maximumScale: MAP_ZOOM_MAX_SCALE,
+      })
+    : minimumHistoryRevealViewport({
+        current,
+        targetBounds: bounds,
+        usableRect: rect,
+        minimumScale,
+        maximumScale: MAP_ZOOM_MAX_SCALE,
+      })
+  if (!next) return false
+  if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
+    || Math.abs(next.k - current.k) >= 0.0001) setViewport(next)
+  return true
+}
+
+function frameSearchTarget(target: import('../utils/workspace-search').SearchTarget, usableRect?: SvgViewportRect): boolean {
+  if (target.kind === 'cluster') {
+    fitMap(usableRect)
+    return true
+  }
+  if (target.kind === 'system') return frameSystem(target.systemId, usableRect)
+  return frameEntityTarget(target.systemId, 'object', target.objectId, usableRect)
+}
+
+function centerInspectedTarget(target: InspectedMapTarget, usableRect?: SvgViewportRect): boolean {
+  if (target.kind === 'cluster') {
+    fitMap(usableRect)
+    return true
+  }
+  if (target.kind === 'system') return frameSystem(target.systemId, usableRect)
+  if (target.kind === 'object' || target.kind === 'orbit') {
+    return frameEntityTarget(
+      target.systemId,
+      target.kind,
+      target.kind === 'object' ? target.objectId : target.orbitId,
+      usableRect,
+      true,
+    )
+  }
+  return false
+}
+
+function prepareSearchLocator(objectId: string): () => void {
+  const generation = searchInteractionGeneration
+  const clusterId = props.cluster.id
+  const target = props.inspectedTarget
+  return () => {
+    const currentTarget = props.inspectedTarget
+    if (generation !== searchInteractionGeneration
+      || props.cluster.id !== clusterId
+      || currentTarget?.kind !== 'object'
+      || target?.kind !== 'object'
+      || target.objectId !== objectId
+      || currentTarget.systemId !== target.systemId
+      || currentTarget.objectId !== objectId) return
+    searchLocatorId.value = objectId
+  }
+}
+
+function dismissSearchLocator(): void {
+  searchInteractionGeneration += 1
+  searchLocatorId.value = null
+}
+
+watch(() => props.inspectedTarget, (target) => {
+  if (searchLocatorId.value !== null
+    && !(target?.kind === 'object' && target.objectId === searchLocatorId.value)) dismissSearchLocator()
+}, { flush: 'sync' })
+
+function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportRect): boolean {
+  if (!usableRect) return false
+  if (target.kind === 'route') return false
+  const systemId = target.kind === 'system' ? target.id : target.systemId
+  const projection = projections.value.find(candidate => candidate.id === systemId)
+  const element = svgElement.value
+  const rect = normalizeSvgViewportRect(usableRect)
+  if (!projection || !element || !zoomBehavior || !rect) return false
+
+  const delta = anchorDelta(projection)
+  const current = getViewport()
+  let bounds: SvgViewportRect
+  let minimumScale: number | undefined
+  if (target.kind === 'system') {
+    const anchor = { x: projection.anchor.x + delta.x, y: projection.anchor.y + delta.y }
+    bounds = { x: anchor.x - 16, y: anchor.y - 16, width: 32, height: 32 }
+  } else if (target.kind === 'object') {
+    const object = projection.objects.find(candidate => candidate.id === target.id)
+    if (!object) return false
+    const center = { x: object.scenePosition.x + delta.x, y: object.scenePosition.y + delta.y }
+    const halfWidth = Math.max(18, object.name.length * 3.6, object.locationKey.length * 2.8)
+    bounds = { x: center.x - halfWidth, y: center.y - 27, width: halfWidth * 2, height: 54 }
+    if (!detailSystemIds.value.has(projection.id)) {
+      minimumScale = DETAIL_REVEAL_PIXELS
+        / (Math.max(projection.envelope.width, projection.envelope.height) * svgPixelScale.value)
+    }
+  } else if (target.kind === 'orbit') {
+    const orbit = projection.orbits.find(candidate => candidate.id === target.id)
+    if (!orbit) return false
+    const center = { x: orbit.sceneCenter.x + delta.x, y: orbit.sceneCenter.y + delta.y }
+    const orbitBounds = rotatedEllipseBounds(center, orbit.sceneRadii, orbit.rotation, 2)
+    if (!orbitBounds) return false
+    bounds = orbitBounds
+    if (!detailSystemIds.value.has(projection.id)) {
+      minimumScale = DETAIL_REVEAL_PIXELS
+        / (Math.max(projection.envelope.width, projection.envelope.height) * svgPixelScale.value)
+    }
+  } else {
+    return false
+  }
+
+  const next = minimumHistoryRevealViewport({
+    current,
+    targetBounds: bounds,
+    usableRect: rect,
+    minimumScale,
+    maximumScale: MAP_ZOOM_MAX_SCALE,
+  })
+  if (!next) return false
+  if (Math.abs(next.x - current.x) < 0.01 && Math.abs(next.y - current.y) < 0.01
+    && Math.abs(next.k - current.k) < 0.0001) return true
+  setViewport(next)
+  return true
+}
+
+function revealHistoryCluster(usableRect?: SvgViewportRect): boolean {
+  const element = svgElement.value
+  if (projections.value.length === 0 || !element || !zoomBehavior) return false
+  const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
+  if (!rect) return false
+  const anchorBounds = projections.value.map((projection) => {
+    const delta = anchorDelta(projection)
+    const anchor = { x: projection.anchor.x + delta.x, y: projection.anchor.y + delta.y }
+    return { x: anchor.x - 16, y: anchor.y - 16, width: 32, height: 32 }
+  })
+  const current = getViewport()
+  const next = revealNearestAnchorViewport({ current, anchorBounds, usableRect: rect })
+  if (!next) return false
+  if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
+    || Math.abs(next.k - current.k) >= 0.0001) setViewport(next)
+  return true
 }
 
 function zoomBy(factor: number): void {
@@ -598,6 +863,22 @@ function systemIdAtTarget(target: EventTarget | null): string | null {
   if (!(target instanceof Element)) return null
   const mark = target.closest<SVGElement>('.cluster-system-node[data-system-id]')
   return mark?.getAttribute('data-system-id') ?? null
+}
+
+function objectTargetAtTarget(target: EventTarget | null): { systemId: string; objectId: string } | null {
+  if (!(target instanceof Element)) return null
+  const mark = target.closest<SVGElement>('.continuous-warden-object[data-system-id][data-object-id]')
+  const systemId = mark?.getAttribute('data-system-id')
+  const objectId = mark?.getAttribute('data-object-id')
+  return systemId && objectId ? { systemId, objectId } : null
+}
+
+function orbitTargetAtTarget(target: EventTarget | null): { systemId: string; orbitId: string } | null {
+  if (!(target instanceof Element)) return null
+  const mark = target.closest<SVGElement>('.continuous-warden-orbit-target[data-system-id][data-orbit-id]')
+  const systemId = mark?.getAttribute('data-system-id')
+  const orbitId = mark?.getAttribute('data-orbit-id')
+  return systemId && orbitId ? { systemId, orbitId } : null
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
@@ -704,30 +985,115 @@ function onClickCapture(event: MouseEvent): void {
     emit('cluster-target', normalized, systemIds)
     return
   }
+  const objectTarget = objectTargetAtTarget(event.target)
+  if (objectTarget) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    emit('select-object', objectTarget.systemId, objectTarget.objectId)
+    return
+  }
+  const orbitTarget = orbitTargetAtTarget(event.target)
+  if (orbitTarget) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    emit('select-orbit', orbitTarget.systemId, orbitTarget.orbitId)
+    return
+  }
   const systemId = systemIdAtTarget(event.target)
   if (systemId) emit('activate-system', systemId)
 }
 
 function onKeydownCapture(event: KeyboardEvent): void {
-  if (event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) return
+  if (event.defaultPrevented) return
+  const objectTarget = objectTargetAtTarget(event.target)
+  const orbitTarget = orbitTargetAtTarget(event.target)
   const systemId = systemIdAtTarget(event.target)
-  if (props.clusterAddType !== null && !props.clusterChooserOpen) {
-    const projection = projections.value.find(candidate => candidate.id === systemId)
-    const position = projection ? anchorFor(projection) : null
-    const point = position
-      ? clampWardenClusterAnchor(unprojectWardenClusterAnchor(position))
-      : null
-    if (point) {
-      event.preventDefault()
-      event.stopPropagation()
-      emit('cluster-target', point, systemId ? [systemId] : [])
+  const action = continuousMapKeyboardIntent({
+    key: event.key,
+    targetKind: objectTarget ? 'object' : orbitTarget ? 'orbit' : systemId ? 'system' : 'map',
+    addArmed: props.clusterAddType !== null,
+    chooserOpen: props.clusterChooserOpen,
+    moveTargeting: props.moveTargeting,
+    clusterMoveTargeting: props.clusterMoveTargeting,
+  })
+  if (!action) return
+
+  if (action === 'add-target' || action === 'move-target') {
+    const scenePoint = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget)
+    if (!scenePoint) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (action === 'move-target') {
+      emit('move-target', scenePoint)
+      return
     }
+    const normalized = clampWardenClusterAnchor(unprojectWardenClusterAnchor(scenePoint))
+    const systemIds = systemId
+      ? [systemId]
+      : projections.value
+        .filter(projection => {
+          const delta = anchorDelta(projection)
+          const bounds = projection.envelope
+          return scenePoint.x >= bounds.x + delta.x && scenePoint.x <= bounds.x + delta.x + bounds.width
+            && scenePoint.y >= bounds.y + delta.y && scenePoint.y <= bounds.y + delta.y + bounds.height
+        })
+        .map(projection => projection.id)
+    emit('cluster-target', normalized, systemIds)
     return
   }
-  if (!systemId) return
+
+  if (action === 'inspect-object' && objectTarget) {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('select-object', objectTarget.systemId, objectTarget.objectId)
+    return
+  }
+  if (action === 'inspect-orbit' && orbitTarget) {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('select-orbit', orbitTarget.systemId, orbitTarget.orbitId)
+    return
+  }
+  if (action !== 'activate-system' || !systemId) return
   event.preventDefault()
   event.stopPropagation()
   emit('activate-system', systemId)
+}
+
+function keyboardTargetScenePoint(
+  target: EventTarget | null,
+  systemId: string | null,
+  objectTarget: { systemId: string; objectId: string } | null,
+  orbitTarget: { systemId: string; orbitId: string } | null,
+): Point | null {
+  if (systemId) {
+    const projection = projections.value.find(candidate => candidate.id === systemId)
+    return projection ? anchorFor(projection) : null
+  }
+  const objectProjection = objectTarget
+    ? projections.value.find(candidate => candidate.id === objectTarget.systemId)
+    : undefined
+  if (objectTarget && objectProjection) {
+    const object = objectProjection.objects.find(candidate => candidate.id === objectTarget.objectId)
+    const delta = anchorDelta(objectProjection)
+    if (object) return { x: object.scenePosition.x + delta.x, y: object.scenePosition.y + delta.y }
+  }
+  const orbitProjection = orbitTarget
+    ? projections.value.find(candidate => candidate.id === orbitTarget.systemId)
+    : undefined
+  if (orbitTarget && orbitProjection) {
+    const orbit = orbitProjection.orbits.find(candidate => candidate.id === orbitTarget.orbitId)
+    const delta = anchorDelta(orbitProjection)
+    if (orbit) return { x: orbit.sceneCenter.x + delta.x, y: orbit.sceneCenter.y + delta.y }
+  }
+  if (!(target instanceof SVGSVGElement) || target !== svgElement.value) return null
+  const current = getViewport()
+  return {
+    x: (svgViewport.value.x + svgViewport.value.width / 2 - current.x) / current.k,
+    y: (svgViewport.value.y + svgViewport.value.height / 2 - current.y) / current.k,
+  }
 }
 
 function publishSystemPositionPreview(systemId: string, position: Point | null, expectedVersion?: number): number {
@@ -865,7 +1231,12 @@ defineExpose({
   panBy,
   fitMap,
   frameSystem,
+  frameSearchTarget,
+  centerInspectedTarget,
+  prepareSearchLocator,
+  dismissSearchLocator,
   revealHistoryTarget,
+  revealHistoryCluster,
   focusMap,
   cancelActiveGesture,
   startViewPan,
@@ -911,6 +1282,11 @@ defineExpose({
   pointer-events: none;
 }
 
+.continuous-warden-system-detail .continuous-warden-orbit-target {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
 .continuous-warden-system-detail .orbit-ring {
   fill: none;
   stroke: var(--map-orbit);
@@ -921,6 +1297,35 @@ defineExpose({
 
 .continuous-warden-object {
   fill: var(--map-text);
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.continuous-warden-object-hit-target {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.continuous-warden-object.is-selected .continuous-warden-object-hit-target,
+.continuous-warden-object:focus .continuous-warden-object-hit-target {
+  stroke: var(--map-selected);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.continuous-warden-search-locator {
+  fill: none;
+  stroke: var(--focus);
+  stroke-width: 2;
+  stroke-dasharray: 2 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.continuous-warden-orbit-target.is-selected,
+.continuous-warden-orbit-target:focus {
+  stroke: var(--map-selected);
+  stroke-width: 3;
 }
 
 .continuous-warden-star-halo {

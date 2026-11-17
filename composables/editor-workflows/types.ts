@@ -20,12 +20,15 @@ import type {
 import type { MapImageExporter } from '../../utils/map-image-export'
 import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
 import type { SearchTarget } from '../../utils/workspace-search'
+import type { InspectedMapTarget } from '../../stores/editor-ui'
 import type { WorkspaceHistoryCoordinator } from './workspace-mutations'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type MapHistoryTarget =
-  | { kind: 'system' | 'route'; id: string }
-  | { kind: 'object' | 'orbit'; id: string; systemId: string }
+  | { kind: 'system'; id: string }
+  | { kind: 'route'; id: string }
+  | { kind: 'object'; id: string; systemId: string }
+  | { kind: 'orbit'; id: string; systemId: string }
 export type TransitionGuard = 'chart' | 'inspector' | null
 export type TransitionDecision = 'apply' | 'discard' | 'stay'
 export interface TransitionOptions {
@@ -266,6 +269,8 @@ export interface EditorWorkflowOptions {
   appliedRevision?: Readonly<Ref<number>>
   /** Resolves after guarded navigation overlays have completed their presentation teardown. */
   waitForSearchPresentation?: (signal: AbortSignal) => Promise<SearchPresentationSettlement>
+  /** Keeps Warden inspection on the continuous Cluster canvas while legacy map views remain available. */
+  continuousMap?: Readonly<Ref<boolean>>
   /** Shared application boundary for ordinary editor mutations. */
   mutations: WorkspaceHistoryCoordinator
   /** Publishes the first workspace as an explicit baseline, not as an editing action. */
@@ -313,11 +318,19 @@ export interface MapNavigationHandle extends MapImageExporter {
   moveTouchNavigation(event: TouchEvent): void
   endTouchNavigation(event: TouchEvent): void
   /** Minimally pans to reveal a retained-history target without changing zoom or panel state. */
-  revealHistoryTarget?(target: MapHistoryTarget): boolean
+  revealHistoryTarget?(target: MapHistoryTarget, usableRect?: SvgViewportRect): boolean
+  /** Fits the surviving Cluster after a history target was removed. */
+  revealHistoryCluster?(): boolean
   /** Resolves after this canvas has restored its initial visit and is ready for navigation. */
   whenReady?(): Promise<boolean>
+  /** Camera input generation used to abandon a pending Search frame after manual movement. */
+  getCameraInteractionVersion?(): number
+  /** Records a toolbar-driven camera change as user input without tagging programmatic Search framing. */
+  noteManualCameraInteraction?(): void
   /** Frames a search destination inside the current obstruction-aware map area. */
   frameSearchTarget?(target: SearchTarget): boolean
+  /** Centers the current independent Inspector target inside the unobstructed map area. */
+  centerInspectedTarget?(target: InspectedMapTarget, usableRect?: SvgViewportRect): boolean
   /** Captures a locator attempt for the current map, published only after accepted Search framing. */
   prepareSearchLocator?(objectId: string): (() => void) | undefined
   dismissSearchLocator?(): void

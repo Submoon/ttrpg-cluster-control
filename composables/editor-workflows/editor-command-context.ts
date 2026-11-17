@@ -4,10 +4,12 @@ import type { MapInteractionMode } from './types'
 import type { PublicationMenuLease, PublicationMenuOptions, PublicationMenuRequest, PublicationRequest } from './publication-types'
 import type { WorkspaceMutationResult } from './workspace-mutations'
 import type { SelectedObjectDrag } from './selected-object-drag'
+import type { InspectedMapTarget } from '../../stores/editor-ui'
 
 export interface EditorCommandContext {
   navigation: {
     selectSystem(systemId: string): Promise<void>
+    inspectContinuousTarget(target: Extract<InspectedMapTarget, { kind: 'system' | 'object' | 'orbit' }>, openInspector?: boolean): Promise<boolean>
     selectObject(objectId: string, openInspector?: boolean): Promise<void>
     replaceObjectSelection(objectIds: readonly string[], isCurrent?: () => boolean): Promise<boolean>
     toggleObjectSelection(objectId: string): Promise<void>

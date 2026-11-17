@@ -1,6 +1,6 @@
 import { getCurrentScope, nextTick, onScopeDispose, watch, type Ref } from 'vue'
 import type { LocalWorkspace } from '../../domain/workspace'
-import type { EditorUiSelection, useEditorUiStore } from '../../stores/editor-ui'
+import type { EditorUiSelection, InspectedMapTarget, useEditorUiStore } from '../../stores/editor-ui'
 import type {
   MapInteractionMode,
   MapNavigationHandle,
@@ -53,6 +53,7 @@ interface SearchAcceptedState {
 
 interface SearchRevealOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
+  continuousMap?: Readonly<Ref<boolean>>
   store: EditorUiStore
   mapControls: MapControls
   resolveTransition: ResolveTransition
@@ -80,6 +81,7 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
     setSelection,
     restoreActiveSelection,
   } = options
+  const continuousMap = options.continuousMap ?? { value: false }
   let searchContextGeneration = 0
   let searchRequestSequence = 0
   let activeSearchContextLease: SearchContextLeaseState | null = null
@@ -136,12 +138,14 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
     () => store.selectedSystemId,
     () => store.clusterSelectedSystemId,
     () => store.inspectedClusterSystemId,
+    () => store.inspectedTarget,
     () => store.selectedObjectId,
     () => store.selectedObjectIds,
     () => store.selectedOrbitId,
     () => store.selectedRouteId,
     () => store.searchOpen,
     () => store.compactPanel,
+    () => continuousMap.value,
   ], () => {
     if (!publishingSearchContext) {
       searchContextGeneration += 1
@@ -187,6 +191,8 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
 
   function searchTargetIsSelected(target: SearchTarget, signature: SearchDestinationSignature): boolean {
     const selection = signature.selection
+    if (continuousMap.value) return selection.activeView === 'cluster'
+      && JSON.stringify(selection.inspectedTarget) === JSON.stringify(inspectedTargetForSearch(target))
     if (target.kind === 'cluster') return selection.activeView === 'cluster'
     if (target.kind === 'system') {
       return selection.activeView === 'cluster'
@@ -207,13 +213,21 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
   }
 
   function searchDestinationMap(target: SearchTarget): MapNavigationHandle | null {
+    if (continuousMap.value) return mapControls.clusterMapRef.value
     return target.kind === 'object' ? mapControls.systemMapRef.value : mapControls.clusterMapRef.value
   }
 
   function ownsSearchDestinationMap(target: SearchTarget, destinationMap: MapNavigationHandle): boolean {
+    if (continuousMap.value) return store.activeView === 'cluster' && mapControls.clusterMapRef.value === destinationMap
     return target.kind === 'object'
       ? store.activeView === 'system' && mapControls.systemMapRef.value === destinationMap
       : store.activeView === 'cluster' && mapControls.clusterMapRef.value === destinationMap
+  }
+
+  function inspectedTargetForSearch(target: SearchTarget): InspectedMapTarget {
+    if (target.kind === 'cluster') return { kind: 'cluster' }
+    if (target.kind === 'system') return { kind: 'system', systemId: target.systemId }
+    return { kind: 'object', systemId: target.systemId, objectId: target.objectId }
   }
 
   function ownsAcceptedSearchState(
@@ -244,6 +258,9 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
       selection: snapshotEditorSelection(acceptedDestination.selection),
     }
     if (target.kind === 'object') {
+      if (JSON.stringify(next.selection.inspectedTarget) === JSON.stringify(inspectedTargetForSearch(target))) {
+        next.selection.inspectedTarget = null
+      }
       next.selection.selectedObjectId = null
       next.selection.selectedObjectIds = next.selection.selectedObjectIds.filter(id => id !== target.objectId)
       if (!currentWorkspace.cluster.systems.some(system => system.id === target.systemId)) {
@@ -251,6 +268,9 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
         next.selection.selectedOrbitId = null
       }
     } else if (target.kind === 'system') {
+      if (JSON.stringify(next.selection.inspectedTarget) === JSON.stringify(inspectedTargetForSearch(target))) {
+        next.selection.inspectedTarget = null
+      }
       if (next.selection.clusterSelectedSystemId === target.systemId) next.selection.clusterSelectedSystemId = null
       if (next.selection.inspectedClusterSystemId === target.systemId) next.selection.inspectedClusterSystemId = null
       if (!currentWorkspace.cluster.systems.some(system => system.id === target.systemId)
@@ -283,6 +303,19 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
   ): EditorUiSelection {
     if (!currentWorkspace) return selection
     const next = { ...selection }
+    const inspectedTarget = next.inspectedTarget
+    const inspectedTargetSurvives = inspectedTarget?.kind === 'system'
+      ? currentWorkspace.cluster.systems.some(system => system.id === inspectedTarget.systemId)
+      : inspectedTarget?.kind === 'object'
+        ? currentWorkspace.cluster.systems.some(system => system.id === inspectedTarget.systemId
+          && system.objects.some(object => object.id === inspectedTarget.objectId))
+        : inspectedTarget?.kind === 'orbit'
+          ? currentWorkspace.cluster.systems.some(system => system.id === inspectedTarget.systemId
+            && system.orbits.some(orbit => orbit.id === inspectedTarget.orbitId))
+          : inspectedTarget?.kind === 'route'
+            ? currentWorkspace.cluster.routes.some(routeValue => routeValue.id === inspectedTarget.routeId)
+            : true
+    if (!inspectedTargetSurvives) next.inspectedTarget = null
     const selectedSystem = currentWorkspace.cluster.systems.find(system => system.id === next.selectedSystemId)
     if (!selectedSystem) {
       next.selectedSystemId = currentWorkspace.cluster.systems[0]?.id ?? null
@@ -358,7 +391,24 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
       const currentWorkspace = workspace.value
       if (!searchTargetExists(currentWorkspace, target)) return { status: 'rejected', reason: 'unavailable' }
 
-      const activeMap = store.activeView === 'cluster' ? mapControls.clusterMapRef.value : mapControls.systemMapRef.value
+      const activeMap = continuousMap.value || store.activeView === 'cluster'
+        ? mapControls.clusterMapRef.value
+        : mapControls.systemMapRef.value
+      let continuousCameraOwner = continuousMap.value ? activeMap : null
+      let continuousCameraVersion = continuousCameraOwner?.getCameraInteractionVersion?.()
+      const cameraInteractionIsCurrent = (): boolean => {
+        if (!continuousMap.value) return true
+        const currentMap = mapControls.clusterMapRef.value
+        if (!continuousCameraOwner) {
+          if (!currentMap) return true
+          continuousCameraOwner = currentMap
+          continuousCameraVersion = currentMap.getCameraInteractionVersion?.()
+          return true
+        }
+        return currentMap === continuousCameraOwner
+          && (continuousCameraVersion === undefined
+            || currentMap?.getCameraInteractionVersion?.() === continuousCameraVersion)
+      }
       activeMap?.cancelActiveGesture()
       const chartSessionMatches = target.kind === 'system' && getChartSession()?.systemId === target.systemId
       const entityDraft = getEntitySession()
@@ -373,7 +423,9 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
       })
       if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
       if (!accepted) return { status: 'rejected', reason: 'guard' }
-      if (searchContextGeneration !== startingGeneration) return { status: 'rejected', reason: 'stale' }
+      if (searchContextGeneration !== startingGeneration || !cameraInteractionIsCurrent()) {
+        return { status: 'rejected', reason: 'stale' }
+      }
 
       const latestWorkspace = workspace.value
       if (!searchTargetExists(latestWorkspace, target)) return { status: 'rejected', reason: 'unavailable' }
@@ -397,7 +449,20 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
       activeSearchContextLease = leaseState
 
       publishingSearchContext = true
-      if (target.kind === 'cluster') {
+      if (continuousMap.value) {
+        const targetSelection = inspectedTargetForSearch(target)
+        setSelection({
+          activeView: 'cluster',
+          inspectedTarget: targetSelection,
+          selectedSystemId: target.kind === 'cluster' ? store.selectedSystemId : target.systemId,
+          clusterSelectedSystemId: target.kind === 'cluster' ? null : target.systemId,
+          inspectedClusterSystemId: target.kind === 'cluster' ? null : target.systemId,
+          selectedObjectId: target.kind === 'object' ? target.objectId : null,
+          selectedObjectIds: [],
+          selectedOrbitId: null,
+          selectedRouteId: null,
+        })
+      } else if (target.kind === 'cluster') {
         setSelection({ activeView: 'cluster' })
         restoreActiveSelection()
       } else if (target.kind === 'system') {
@@ -443,12 +508,17 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
     }
 
     const destinationMap = searchDestinationMap(target)
+    if (continuousMap.value && !continuousCameraOwner && destinationMap) {
+      continuousCameraOwner = destinationMap
+      continuousCameraVersion = destinationMap.getCameraInteractionVersion?.()
+    }
     if (!destinationMap?.whenReady) {
       return rejectSearchAfterAcceptedState(requestId, target, 'unavailable', acceptedState, markRestored)
     }
     const destinationReady = await destinationMap.whenReady()
     const workspaceAfterReady = workspace.value
     if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
+    if (!cameraInteractionIsCurrent()) return { status: 'rejected', reason: 'stale' }
     if (!sameSearchWorkspace(workspaceAfterReady, target)) return { status: 'rejected', reason: 'stale' }
     if (!searchTargetExists(workspaceAfterReady, target)) {
       return rejectSearchAfterAcceptedState(requestId, target, 'unavailable', acceptedState, markRestored)
@@ -471,6 +541,7 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
       ? await options.waitForSearchPresentation(presentationController.signal)
       : 'settled'
     if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
+    if (!cameraInteractionIsCurrent()) return { status: 'rejected', reason: 'stale' }
     const workspaceAfterPresentation = workspace.value
     if (!sameSearchWorkspace(workspaceAfterPresentation, target)) return { status: 'rejected', reason: 'stale' }
     if (!searchTargetExists(workspaceAfterPresentation, target)) {
@@ -486,6 +557,7 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
 
     await nextTick()
     if (searchRequestSequence !== requestId) return { status: 'rejected', reason: 'stale' }
+    if (!cameraInteractionIsCurrent()) return { status: 'rejected', reason: 'stale' }
     const workspaceAfterPresentationTick = workspace.value
     if (!sameSearchWorkspace(workspaceAfterPresentationTick, target)) return { status: 'rejected', reason: 'stale' }
     if (!searchTargetExists(workspaceAfterPresentationTick, target)) {
@@ -507,6 +579,7 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
     if (!ownsSearchDestinationMap(target, destinationMap)) {
       return rejectSearchAfterAcceptedState(requestId, target, 'stale', acceptedState, markRestored)
     }
+    if (!cameraInteractionIsCurrent()) return { status: 'rejected', reason: 'stale' }
 
     const framed = destinationMap.frameSearchTarget?.(target) ?? false
     const workspaceAfterFrame = workspace.value

@@ -50,12 +50,12 @@
       </WorkspaceWelcome>
       <section v-else-if="workspace" class="editor">
           <MapEditorLayout
-          :mode="activeView"
+          :mode="continuousMapEnabled ? 'cluster' : activeView"
           :hierarchy-label="activeView === 'cluster' ? 'Jump Cluster contents' : 'System hierarchy'"
           :inspector-label="activeView === 'cluster' ? 'Jump Route inspector' : 'Object inspector'"
           :hierarchy-visible="hierarchyPanelVisible"
           :inspector-visible="inspectorPanelVisible"
-          :entity-inspector-active="!chartEditing && activeView === 'system' && Boolean(selectedObject || selectedOrbit)"
+          :entity-inspector-active="!chartEditing && inspectorMode === 'system' && Boolean(inspectorSelectedObject || inspectorSelectedOrbit)"
           :route-session-active="!chartEditing && activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelPresentationOpen"
           :compact-panel="compactPanel"
@@ -112,6 +112,7 @@
                 />
                 <WorkspaceMapHelp
                   v-model:open="helpOpen"
+                  :continuous-map="continuousMapEnabled"
                   @active-change="helpOwnsFocus = $event"
                 />
               </template>
@@ -219,6 +220,7 @@
           <template #dock>
             <WorkspaceDock
               ref="workspaceDockRef"
+              :continuous-map="continuousMapEnabled"
               v-model:add-open="creationChooserOpen"
               :creation-session="activeView === 'system' ? creationSession : null"
               :creation-type-label="creationTypeLabel"
@@ -281,10 +283,12 @@
             <WorkspaceZoomControls
               :zoom-level="zoomLevel"
               :minimum-zoom-level="minimumZoomLevel"
+              :center-available="continuousMapEnabled && inspectedTarget !== null && inspectedTarget.kind !== 'route'"
               :compact-modal-open="compactPanelOpen"
               @zoom-by="zoomActiveMap"
               @zoom-to="setViewportPercentage"
               @fit-map="fitActiveMap"
+              @center-map="centerInspectedTarget"
               @pan-by="panActiveMap"
             />
           </template>
@@ -292,6 +296,8 @@
           <template #hierarchy>
             <MapHierarchy
               :workspace="workspace"
+              :continuous-map="continuousMapEnabled"
+              :inspected-target="inspectedTarget"
               :dimmed-object-ids="dimmedMapObjectIds"
               :has-chart-name-draft="hasChartNameDraft"
               :saving="saveState === 'saving'"
@@ -315,6 +321,7 @@
                     @editing-gesture-change="mapControls.setEditingGestureActive"
                     :active-view="activeView"
                     :continuous-map="continuousMapEnabled"
+                    :inspected-target="inspectedTarget"
                     :map-key="activeMapKey ?? ''"
                     :initial-viewport="initialViewport"
                     :workspace="workspace"
@@ -336,6 +343,8 @@
                     @navigate-system="selectSystem"
                     @select-cluster-system="selectClusterSystem"
                     @move-select-cluster-system="selectClusterSystem($event, false)"
+                    @select-continuous-object="(systemId, objectId) => inspectContinuousTarget({ kind: 'object', systemId, objectId })"
+                    @select-continuous-orbit="(systemId, orbitId) => inspectContinuousTarget({ kind: 'orbit', systemId, orbitId })"
                     @select-route="selectRoute"
                     @move-select-route="selectRoute($event, false)"
                     @select-object="selectObject"
@@ -467,16 +476,16 @@
 
           <template #inspector>
             <MapInspector
-              :mode="activeView"
+              :mode="inspectorMode"
               :workspace="workspace"
               :publication-busy="publicationBusy"
-              :selected-system="selectedSystem"
-              :inspected-cluster-system="inspectedClusterSystem"
-              :selected-object="selectedObject"
-              :selected-object-count="selectedObjectIds.length"
+              :selected-system="inspectorSelectedSystem"
+              :inspected-cluster-system="inspectorClusterSystem"
+              :selected-object="inspectorSelectedObject"
+              :selected-object-count="continuousMapEnabled ? (inspectedTarget?.kind === 'object' ? 1 : 0) : selectedObjectIds.length"
               :object-focus-request="objectInspectorFocusRequest"
               :inspector-visible="inspectorPanelVisible"
-              :selected-orbit="selectedOrbit"
+              :selected-orbit="inspectorSelectedOrbit"
               :selected-route="selectedRoute"
               :route-session="routeSession"
               :selected-route-summary="selectedRoute ? routeEndpointSummary(selectedRoute) : ''"
@@ -877,6 +886,7 @@ async function waitForSearchPresentation(signal: AbortSignal): Promise<SearchPre
 
 const workflows = useEditorWorkflows({
   workspace,
+  continuousMap: continuousMapEnabled,
   saveState,
   saveError,
   appliedRevision,
@@ -911,6 +921,10 @@ watch(
   },
   { flush: 'sync', immediate: true },
 )
+watch(continuousMapEnabled, enabled => {
+  if (enabled && editorUi.mapMode === 'navigate') editorUi.setMode('select')
+  else if (!enabled && editorUi.inspectedTarget) editorUi.setInspectedTarget(null)
+}, { flush: 'sync', immediate: true })
 const publicationControls = workflows.publication
 const publicationMenuRequest = publicationControls.menuRequest
 const publicationBusy = publicationControls.busy
@@ -988,9 +1002,38 @@ revealHistoryContext = navigation.revealHistoryContext
 const {
   activeView, mapMode, selectedSystemId, clusterSelectedSystemId, selectedObjectId, selectedObjectIds, selectedOrbitId,
   selectedRouteId, selectedSystem, selectedObject, selectedOrbit, selectedRoute, clusterSelectedSystem,
-  inspectedClusterSystem, routeEndpointSummary, showClusterMap, selectSystem,
-  selectClusterSystem, selectObject, replaceObjectSelection, toggleObjectSelection, selectOrbit, selectRoute, showChartDetails,
+  inspectedClusterSystem, inspectedTarget, routeEndpointSummary, showClusterMap, selectSystem,
+  selectClusterSystem, inspectContinuousTarget, selectObject, replaceObjectSelection, toggleObjectSelection, selectOrbit, selectRoute, showChartDetails,
 } = navigation
+const continuousInspectorSystemId = computed(() => {
+  const target = inspectedTarget.value
+  return target?.kind === 'system' || target?.kind === 'object' || target?.kind === 'orbit'
+    ? target.systemId
+    : null
+})
+const inspectorSelectedSystem = computed(() => continuousMapEnabled.value && continuousInspectorSystemId.value
+  ? workspace.value?.cluster.systems.find(system => system.id === continuousInspectorSystemId.value)
+  : selectedSystem.value)
+const inspectorSelectedObject = computed(() => {
+  const target = inspectedTarget.value
+  if (!continuousMapEnabled.value || target?.kind !== 'object') return selectedObject.value
+  return workspace.value?.cluster.systems.find(system => system.id === target.systemId)?.objects
+    .find(object => object.id === target.objectId)
+})
+const inspectorSelectedOrbit = computed(() => {
+  const target = inspectedTarget.value
+  if (!continuousMapEnabled.value || target?.kind !== 'orbit') return selectedOrbit.value
+  return workspace.value?.cluster.systems.find(system => system.id === target.systemId)?.orbits
+    .find(orbit => orbit.id === target.orbitId)
+})
+const inspectorClusterSystem = computed(() => continuousMapEnabled.value
+  ? continuousInspectorSystemId.value
+    ? workspace.value?.cluster.systems.find(system => system.id === continuousInspectorSystemId.value)
+    : undefined
+  : inspectedClusterSystem.value)
+const inspectorMode = computed(() => continuousMapEnabled.value
+  ? inspectedTarget.value?.kind === 'object' || inspectedTarget.value?.kind === 'orbit' ? 'system' : 'cluster'
+  : activeView.value)
 const mapTypeFiltersOpen = computed({
   get: () => editorUi.mapTypeFiltersOpen,
   set: open => editorUi.setMapTypeFiltersOpen(open),
@@ -1040,7 +1083,7 @@ const {
   clusterMapRef, systemMapRef, activeMapKey, initialViewport, hierarchyPanelVisible, inspectorPanelVisible,
   isCompactViewport, compactPanelOpen, compactPanel, editingGestureActive, zoomLevel, minimumZoomLevel,
   requestPanel, closePanel, togglePanel,
-  zoomActiveMap, panActiveMap, setViewportPercentage, fitActiveMap, recordViewport, setMapMode,
+  zoomActiveMap, panActiveMap, setViewportPercentage, fitActiveMap, centerInspectedTarget, recordViewport, setMapMode,
 } = mapControls
 
 watch(inspectorPanelVisible, visible => {
@@ -1158,6 +1201,7 @@ const {
 provideEditorCommands({
   navigation: {
     selectSystem,
+    inspectContinuousTarget,
     selectObject,
     replaceObjectSelection,
     toggleObjectSelection,
@@ -1848,6 +1892,7 @@ const mapToolShortcuts = useMapToolShortcuts({
   editingGestureActive: () => editingGestureActive.value,
   activeMapKey: () => activeMapKey.value,
   mapMode: () => mapMode.value,
+  continuousMapEnabled: () => continuousMapEnabled.value,
   addIntentActive: () => creationSession.value !== null || clusterAddType.value !== null,
   changeMapMode,
   openAddChooser: openMapAddChooserFromKeyboard,

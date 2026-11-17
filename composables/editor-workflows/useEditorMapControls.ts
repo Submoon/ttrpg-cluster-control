@@ -171,11 +171,17 @@ export function useEditorMapControls(
     const map = activeMapHandle()
     if (!map || !Number.isFinite(percentage)) return
     map.dismissSearchLocator?.()
+    map.noteManualCameraInteraction?.()
     const viewport = map.getViewport()
     map.setViewport({ ...viewport, k: Math.max(minimumZoomScale.value, Math.min(MAP_ZOOM_MAX_SCALE, percentage / 100)) })
   }
 
   function fitActiveMap(): void { activeMapHandle()?.fitMap() }
+  function centerInspectedTarget(): boolean {
+    const target = store.inspectedTarget
+    if (!target) return false
+    return activeMapHandle()?.centerInspectedTarget?.(target) ?? false
+  }
   function zoomActiveMap(factor: number): void { activeMapHandle()?.zoomBy(factor) }
   function panActiveMap(dx: number, dy: number): void { activeMapHandle()?.panBy(dx, dy) }
   function revealHistoryTarget(target: MapHistoryTarget): boolean {
@@ -218,6 +224,7 @@ export function useEditorMapControls(
     pruneVisits,
     setViewportPercentage,
     fitActiveMap,
+    centerInspectedTarget,
     zoomActiveMap,
     panActiveMap,
     revealHistoryTarget,
