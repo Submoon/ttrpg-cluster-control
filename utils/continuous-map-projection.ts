@@ -6,6 +6,7 @@ import {
   orbitCenter,
   orbitRadii,
   orbitRotation,
+  toNormalizedMapPoint,
   type SystemMapGeometry,
 } from './system-map-geometry'
 import type { SvgViewportRect } from './map-zoom'
@@ -243,6 +244,17 @@ export function projectContinuousSystemGeometry(
 /** Inverts the common Cluster camera-space conversion back to this system's local scene coordinates. */
 export function unprojectWardenLocalPoint(projection: ContinuousWardenSystemProjection, point: Point): Point {
   return projection.unprojectLocalPoint(point)
+}
+
+/** Converts a continuous Cluster scene point into the owning system's normalized placement coordinates. */
+export function unprojectWardenSystemMapPoint(
+  projection: ContinuousWardenSystemProjection,
+  point: Point,
+): Point {
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+    throw new Error('A continuous map position must contain finite coordinates.')
+  }
+  return toNormalizedMapPoint(unprojectWardenLocalPoint(projection, point))
 }
 
 /** Converts a Cluster-space scene point to the legacy normalized anchor coordinates used by workspace data. */

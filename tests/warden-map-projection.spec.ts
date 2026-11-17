@@ -7,6 +7,7 @@ import {
   moveWardenClusterAnchorBySceneDelta,
   projectContinuousSystemGeometry,
   projectWardenSystem,
+  unprojectWardenSystemMapPoint,
   unprojectWardenClusterAnchor,
   unprojectWardenLocalPoint,
 } from '../utils/continuous-map-projection'
@@ -119,6 +120,21 @@ test('continuous Warden projection keeps the legacy anchor and all local geometr
   const detachedOrbit = projected.orbits.find(orbit => orbit.id === 'detached')!
   expect(detachedOrbit.center).toEqual({ x: 1187.2, y: 155.2 })
   expect(detachedOrbit.sceneCenter).toEqual({ x: 474.24, y: 291.84 })
+})
+
+test('a continuous scene point resolves to normalized coordinates in its owning system map', { tag: '@pure' }, () => {
+  const projected = projectContinuousSystemGeometry({
+    id: 'system-offset',
+    name: 'Offset Reach',
+    anchor: { x: 250, y: 150 },
+    objects: [],
+    orbits: [],
+  })
+  const scenePoint = projected.projectLocalPoint({ x: 812, y: 176 })
+
+  const position = unprojectWardenSystemMapPoint(projected, scenePoint)
+  expect(position.x).toBeCloseTo((812 - 64) / 832)
+  expect(position.y).toBeCloseTo((176 - 72) / 416)
 })
 
 test('system envelopes contain rotated Orbits, off-center objects, anchors, and empty-system minimum frames', { tag: '@pure' }, () => {

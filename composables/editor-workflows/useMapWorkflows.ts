@@ -4,15 +4,18 @@
 import { computed, type Ref, type ShallowRef } from 'vue'
 import {
   canPlaceObjectInOrbit,
+  captureEffectiveObjectAngles,
   defaultObjectOrbitAngle,
   defaultOrbitRadius,
   detachOrbit,
+  createSystemObject,
   minimumOrbitRadius,
   moveOrbitCenter,
   normalizeOrbitRotation,
   replaceWorkspaceSystem,
   updateWorkspaceObject,
   type LocalWorkspace,
+  type CatalogueSubtype,
   type ObjectPlacement,
   type OrbitRadii,
   type Point,
@@ -28,11 +31,14 @@ import type {
   EntityCommand,
   SystemMapHandle,
   TransitionOptions,
+  SystemCreationTarget,
 } from './types'
 import type { WorkspaceMutationExecutor, WorkspaceMutationRequest, WorkspaceMutationResult } from './workspace-mutations'
 import { useEditorUiStore } from '../../stores/editor-ui'
-import { objectPositions, orbitCenter as resolveOrbitCenter, orbitRadii as resolveOrbitRadii, orbitRotation as resolveOrbitRotation, toNormalizedMapPoint } from '../../utils/system-map-geometry'
+import { applySelectedObjectTranslation, planSelectedObjectTranslation } from '../../utils/selected-object-placement'
+import { fromNormalizedMapPoint, objectPositions, orbitCenter as resolveOrbitCenter, orbitRadii as resolveOrbitRadii, orbitRotation as resolveOrbitRotation, toNormalizedMapPoint } from '../../utils/system-map-geometry'
 import { clampWardenClusterAnchor } from '../../utils/continuous-map-projection'
+import { validName } from '../../domain/workspace-validation'
 
 export interface CapturedClusterSystemMove {
   workspaceId: string
@@ -410,6 +416,187 @@ export function useMapWorkflows({
       editorError.value = ''
     } catch (error) {
       editorError.value = errorText(error)
+    }
+  }
+
+  /**
+   * Moves one object using an explicit owning system, independent of the current Inspector target.
+   * The point is normalized in that system's legacy local map coordinates; eligible same-system Orbits
+   * and the object's hosted branch are resolved by the existing translation planner.
+   */
+  async function moveMapObjectInSystem(systemId: string, objectId: string, position: Point): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
+    const currentWorkspace = workspace.value
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
+    const object = system?.objects.find(candidate => candidate.id === objectId)
+    if (!currentWorkspace || !system || !object) return
+
+    try {
+      if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+        throw new Error('A map position must contain finite coordinates.')
+      }
+      const sourcePlacement = object.placement
+      const geometry = {
+        objectAngles: currentWorkspace.layout.objectAngles,
+        orbitRadii: currentWorkspace.layout.orbitRadii,
+        orbitRotations: currentWorkspace.layout.orbitRotations,
+      }
+      const sourcePoint = objectPositions(system, geometry).get(objectId)
+      if (!sourcePoint) throw new Error('The selected map object position is no longer available.')
+      const targetPoint = fromNormalizedMapPoint(position)
+      const delta = { x: targetPoint.x - sourcePoint.x, y: targetPoint.y - sourcePoint.y }
+      const plan = planSelectedObjectTranslation(currentWorkspace, systemId, [objectId], delta)
+      if (!plan) throw new Error('The selected map object is no longer available.')
+      if (plan.updates.length === 0) {
+        editorError.value = ''
+        return
+      }
+
+      const placementCommand = (change: typeof plan.changes[number]): EntityCommand => ({
+        kind: 'object-placement',
+        objectId: change.objectId,
+        fromOrbitId: change.previousPlacement.kind === 'orbit' ? change.previousPlacement.orbitId : null,
+        toOrbitId: change.nextPlacement.kind === 'orbit' ? change.nextPlacement.orbitId : null,
+      })
+      const blockedCommand = plan.changes.map(placementCommand).find(isEntityCommandBlocked)
+      if (blockedCommand) {
+        rejectBlockedEntityCommand(blockedCommand)
+        return
+      }
+
+      const clusterId = currentWorkspace.cluster.id
+      const onAppliedHandlers = plan.updates
+        .map(change => createCommittedPositionAppliedHandler?.({
+          objectId: change.objectId,
+          previousPlacement: change.previousPlacement,
+          nextPlacement: change.nextPlacement,
+          ...(change.previousAngle !== undefined ? { previousAngle: change.previousAngle } : {}),
+          ...(change.nextAngle !== undefined ? { nextAngle: change.nextAngle } : {}),
+          command: placementCommand(change) as Extract<EntityCommand, { kind: 'object-placement' }>,
+        }))
+        .filter((handler): handler is () => void => handler !== undefined)
+      const contextIsCurrent = (): boolean => {
+        const latest = workspace.value
+        const latestObject = latest?.cluster.systems.find(candidate => candidate.id === systemId)
+          ?.objects.find(candidate => candidate.id === objectId)
+        return latest !== null && latest.id === currentWorkspace.id && latest.cluster.id === clusterId
+          && latestObject !== undefined
+          && JSON.stringify(latestObject.placement) === JSON.stringify(sourcePlacement)
+          && store.activeView === 'cluster' && store.mapMode === 'move'
+      }
+      const result = await mutations.execute({
+        action: {
+          kind: 'move',
+          label: `Move ${object.name}`,
+          target: { kind: 'object', id: object.id, systemId },
+          parent: { kind: 'system', id: systemId },
+        },
+        isCurrent: contextIsCurrent,
+        ...(onAppliedHandlers.length
+          ? { onApplied: () => onAppliedHandlers.forEach(handler => handler()) }
+          : {}),
+        prepare: latest => {
+          if (!contextIsCurrent()) throw new Error('The selected map object or map context changed before the move could be applied.')
+          const latestSystem = latest.cluster.systems.find(candidate => candidate.id === systemId)
+          const latestObject = latestSystem?.objects.find(candidate => candidate.id === objectId)
+          if (!latestSystem || !latestObject) throw new Error('The selected map object is no longer available.')
+          const latestBlocked = plan.changes.map(placementCommand).find(isEntityCommandBlocked)
+          if (latestBlocked) throw new Error('Resolve the Inspector draft before changing this object or its placement.')
+          return applySelectedObjectTranslation(latest, systemId, plan)
+        },
+      })
+      throwIfRejected(result)
+      if (result.status === 'applied') await result.durable
+      editorError.value = ''
+    } catch (error) {
+      editorError.value = errorText(error)
+    }
+  }
+
+  /** Adds a catalogue object to an explicitly resolved system without changing Inspector selection. */
+  async function addMapObjectInSystem(
+    systemId: string,
+    subtype: CatalogueSubtype,
+    target: Extract<SystemCreationTarget, { kind: 'free' | 'orbit' }>,
+    otherType?: string,
+  ): Promise<boolean> {
+    if (!await beforeWorkspaceOperation()) return false
+    const currentWorkspace = workspace.value
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
+    if (!currentWorkspace || !system) return false
+
+    try {
+      if (target.kind === 'free' && (!Number.isFinite(target.point.x) || !Number.isFinite(target.point.y))) {
+        throw new Error('A map position must contain finite coordinates.')
+      }
+      if (target.kind === 'orbit' && (!Number.isFinite(target.angle)
+        || !canPlaceObjectInOrbit(system, '__new-object__', target.orbitId))) {
+        throw new Error('Choose a valid Orbit for this object.')
+      }
+      const otherTypeLabel = subtype === 'other' ? validName(otherType ?? '', 'Object type') : undefined
+      const orbitId = target.kind === 'orbit' ? target.orbitId : undefined
+      const identity = createSystemObject(system, subtype, orbitId)
+      const command: EntityCommand = { kind: 'object-create', orbitId: orbitId ?? null }
+      if (rejectBlockedEntityCommand(command)) return false
+
+      const clusterId = currentWorkspace.cluster.id
+      const contextIsCurrent = (): boolean => {
+        const latest = workspace.value
+        const latestSystem = latest?.cluster.systems.find(candidate => candidate.id === systemId)
+        return latest !== null && latest.id === currentWorkspace.id && latest.cluster.id === clusterId
+          && latestSystem !== undefined
+          && (target.kind !== 'orbit' || latestSystem.orbits.some(orbit => orbit.id === target.orbitId))
+          && store.activeView === 'cluster' && store.mapMode === 'add'
+      }
+      const result = await mutations.execute({
+        action: {
+          kind: 'create',
+          label: `Add ${identity.name}`,
+          target: { kind: 'object', id: identity.id, systemId },
+          parent: { kind: 'system', id: systemId },
+        },
+        isCurrent: contextIsCurrent,
+        prepare: latest => {
+          if (!contextIsCurrent()) throw new Error('The selected star system or Add target changed before this object could be added.')
+          const latestSystem = latest.cluster.systems.find(candidate => candidate.id === systemId)
+          if (!latestSystem) throw new Error('The star system for this Add action is no longer available.')
+          if (isEntityCommandBlocked(command)) {
+            throw new Error('Resolve the Inspector draft before adding an object to this Orbit.')
+          }
+          const latestGenerated = createSystemObject(latestSystem, subtype, orbitId)
+          const object = {
+            ...latestGenerated,
+            id: identity.id,
+            ...(otherTypeLabel ? { subtype: otherTypeLabel } : {}),
+            placement: target.kind === 'free'
+              ? { kind: 'system' as const, x: target.point.x, y: target.point.y }
+              : { kind: 'orbit' as const, orbitId: target.orbitId },
+          }
+          const candidate = replaceWorkspaceSystem(latest, {
+            ...latestSystem,
+            objects: [...latestSystem.objects, object],
+          })
+          if (target.kind !== 'orbit') return candidate
+          return {
+            ...candidate,
+            layout: {
+              ...candidate.layout,
+              objectAngles: {
+                ...candidate.layout.objectAngles,
+                ...captureEffectiveObjectAngles(latest, latestSystem, [target.orbitId]),
+                [object.id]: target.angle,
+              },
+            },
+          }
+        },
+      })
+      throwIfRejected(result)
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      editorError.value = ''
+      return result.status === 'applied'
+    } catch (error) {
+      editorError.value = errorText(error)
+      return false
     }
   }
 
@@ -928,6 +1115,8 @@ export function useMapWorkflows({
     updateOrbitAdjustment,
     moveSystem,
     moveMapObject,
+    moveMapObjectInSystem,
+    addMapObjectInSystem,
     placeMapObjectInOrbit,
     rotateMapObject,
     resizeMapOrbit,
