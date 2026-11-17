@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { expect, preparedCampaignTest as test, type Locator } from './fixtures'
+import { expect, preparedCampaignTest as test, test as freshTest, type Locator } from './fixtures'
 import {
   captureMapExportBlobs,
   type DownloadWindow,
@@ -570,8 +570,8 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   expect(await downloadJsonFromFile(page, 'Export star system JSON')).toEqual(moved)
 })
 
-test('continuous Warden group movement previews and commits across owning systems', async ({ page }) => {
-  test.setTimeout(60_000)
+freshTest('continuous Warden group movement previews and commits across owning systems', async ({ page }) => {
+  freshTest.setTimeout(60_000)
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/?map=continuous')
   const fixture = JSON.parse(await readFile(new URL('./fixtures/workspace-data-campaign-baseline.json', import.meta.url), 'utf8')) as ExportedMap
