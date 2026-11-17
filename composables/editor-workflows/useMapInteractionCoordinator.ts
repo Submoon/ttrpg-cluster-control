@@ -7,6 +7,7 @@ import type { useSystemObjectPlacement } from './useSystemObjectPlacement'
 import type { useEditorNavigation } from './useEditorNavigation'
 import type { useSystemCreationWorkflows } from './useSystemCreationWorkflows'
 import type { useEditorViewport } from './useEditorViewport'
+import { isExpectedContinuousOrbitHandoff, type ExpectedContinuousOrbitHandoff } from '../../utils/continuous-orbit-interaction'
 
 /** Coordinates complete asynchronous map-candidate selection and session handoff sequences. */
 export function useMapInteractionCoordinator(options: {
@@ -24,20 +25,20 @@ export function useMapInteractionCoordinator(options: {
   const { workspace, store, selectedSystem, entity, navigation, placement, creation, viewport, beginOrbitEdit, continuousMap } = options
   let objectMoveCandidateRequestId = 0
   let orbitCenterCandidateRequestId = 0
-  let expectedContinuousOrbitCandidate: { clusterId: string; systemId: string; orbitId: string } | null = null
+  let expectedContinuousOrbitCandidate: ExpectedContinuousOrbitHandoff | null = null
 
-  watch([() => workspace.value?.cluster.id, () => store.activeView, () => store.selectedSystemId,
+  watch([() => workspace.value?.id, () => workspace.value?.cluster.id, () => store.activeView, () => store.selectedSystemId,
     () => store.mapMode, () => store.inspectedTarget], () => {
     const expected = expectedContinuousOrbitCandidate
-    if (expected && continuousMap?.value && store.activeView === 'cluster' && store.mapMode === 'move'
-      && workspace.value?.cluster.id === expected.clusterId
-      && store.selectedSystemId === expected.systemId
-      && store.inspectedTarget?.kind === 'orbit'
-      && store.inspectedTarget.systemId === expected.systemId
-      && store.inspectedTarget.orbitId === expected.orbitId) {
-      expectedContinuousOrbitCandidate = null
-      return
-    }
+    if (expected && isExpectedContinuousOrbitHandoff(expected, {
+      continuousMap: continuousMap?.value === true,
+      activeView: store.activeView,
+      mapMode: store.mapMode,
+      workspaceId: workspace.value?.id,
+      clusterId: workspace.value?.cluster.id,
+      selectedSystemId: store.selectedSystemId,
+      inspectedTarget: store.inspectedTarget,
+    })) return
     objectMoveCandidateRequestId += 1
     orbitCenterCandidateRequestId += 1
   }, { flush: 'sync' })
@@ -74,13 +75,14 @@ export function useMapInteractionCoordinator(options: {
     explicitSystemId?: string,
   ): Promise<void> {
     const requestId = ++orbitCenterCandidateRequestId
+    const workspaceId = workspace.value?.id
     const clusterId = workspace.value?.cluster.id
     const continuousOwner = continuousMap?.value === true && store.activeView === 'cluster'
     const systemId = continuousOwner ? explicitSystemId : store.selectedSystemId
     const view = store.activeView
     const mode = store.mapMode
     const ownerSystem = systemId ? workspace.value?.cluster.systems.find(system => system.id === systemId) : undefined
-    if (!clusterId || !systemId || (continuousOwner ? view !== 'cluster' : view !== 'system')
+    if (!workspaceId || !clusterId || !systemId || (continuousOwner ? view !== 'cluster' : view !== 'system')
       || mode !== 'move' || creation.creationSession.value) return
     const sourceOrbit = ownerSystem?.orbits.find(orbit => orbit.id === orbitId)
     if (!sourceOrbit || sourceOrbit.hostId !== null) return
@@ -90,6 +92,7 @@ export function useMapInteractionCoordinator(options: {
       && !(startingSession.kind === 'orbit' && startingSession.targetId === orbitId)) return
 
     const matchesCurrentContext = (): boolean => requestId === orbitCenterCandidateRequestId
+      && workspace.value?.id === workspaceId
       && workspace.value?.cluster.id === clusterId
       && store.activeView === view
       && store.selectedSystemId === systemId
@@ -104,7 +107,14 @@ export function useMapInteractionCoordinator(options: {
     }
 
     if (continuousOwner) {
-      expectedContinuousOrbitCandidate = { clusterId, systemId, orbitId }
+      expectedContinuousOrbitCandidate = {
+        workspaceId,
+        clusterId,
+        systemId,
+        orbitId,
+        startingSelectedSystemId: store.selectedSystemId,
+        startingInspectedTarget: store.inspectedTarget,
+      }
       const inspected = await navigation.inspectContinuousTarget({ kind: 'orbit', systemId, orbitId }, false)
       if (!inspected) {
         expectedContinuousOrbitCandidate = null

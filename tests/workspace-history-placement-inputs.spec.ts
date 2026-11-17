@@ -11,6 +11,7 @@ import { useSystemObjectPlacement } from '../composables/editor-workflows/useSys
 import { useEditorUiStore } from '../stores/editor-ui'
 import { nearestAvailableCircularOrbitRadius } from '../utils/orbit-drag-geometry'
 import { objectPositions } from '../utils/system-map-geometry'
+import { orbitGeometrySource } from '../utils/orbit-geometry-source'
 
 function createHistoryHarness(initial: LocalWorkspace) {
   const workspace = ref<LocalWorkspace | null>(initial)
@@ -737,5 +738,71 @@ test('accepted geometry changes preserve genuinely edited placement inputs and b
 
   controller.dispose()
   stopGuard()
+  harness.dispose()
+})
+
+test('a continuous direct resize cannot overwrite an Orbit adjustment published by its async preflight @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = initial.cluster.systems[0]!
+  const orbit = createOrbit(system, null)
+  const initialRadii = { horizontal: 220, vertical: 180 }
+  const prepared: LocalWorkspace = {
+    ...initial,
+    cluster: { ...initial.cluster, systems: [{ ...system, orbits: [orbit] }] },
+    layout: {
+      ...initial.layout,
+      orbitRadii: { ...initial.layout.orbitRadii, [orbit.id]: initialRadii },
+    },
+  }
+  const sourceGeometry = orbitGeometrySource(prepared, prepared.cluster.systems[0]!, orbit)
+  const harness = createHistoryHarness(prepared)
+  const store = useEditorUiStore()
+  store.setSelection({
+    activeView: 'cluster',
+    selectedSystemId: system.id,
+    inspectedTarget: { kind: 'orbit', systemId: system.id, orbitId: orbit.id },
+  })
+  store.setMode('move')
+  const orbitAdjustments = createContinuousOrbitAdjustmentController({ history: harness.history })
+  const editorError = ref('')
+  const preflightRadii = { horizontal: 246, vertical: 180 }
+  const mapWorkflows = useMapWorkflows({
+    workspace: harness.workspace,
+    mutations: harness.history,
+    systemMapRef: shallowRef(null),
+    continuousMap: ref(true),
+    resolveTransition: async () => true,
+    beginObjectSession: () => undefined,
+    beginOrbitSession: () => undefined,
+    isEntityCommandBlocked: () => false,
+    editorError,
+    orbitAdjustments,
+    beforeWorkspaceOperation: async () => {
+      const result = await harness.history.execute({
+        action: {
+          kind: 'resize',
+          label: 'Finish pending Orbit adjustment',
+          target: { kind: 'orbit', id: orbit.id, systemId: system.id },
+          parent: { kind: 'system', id: system.id },
+        },
+        prepare: current => ({
+          ...current,
+          layout: {
+            ...current.layout,
+            orbitRadii: { ...current.layout.orbitRadii, [orbit.id]: preflightRadii },
+          },
+        }),
+      })
+      return result.status === 'applied' || result.status === 'unchanged'
+    },
+  })
+
+  await mapWorkflows.resizeMapOrbit(orbit.id, { horizontal: 340, vertical: 290 }, system.id, sourceGeometry)
+
+  expect(harness.workspace.value?.layout.orbitRadii[orbit.id]).toEqual(preflightRadii)
+  expect(editorError.value).toBe('The Orbit geometry changed before this resize could be applied.')
+
+  orbitAdjustments.dispose()
   harness.dispose()
 })

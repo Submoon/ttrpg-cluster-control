@@ -293,6 +293,8 @@ import { pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior }
 import { jumpPointsInCluster, minimumOrbitRadius, type CatalogueSubtype, type JumpCluster, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem } from '../domain/workspace'
 import { normalizeOrbitRotation } from '../domain/workspace-orbits'
 import { getDetachedOrbitCenter, objectPositions, objectsMovedWithOrbit, orbitCenter, orbitPointAtAngle, orbitRadii as readOrbitRadii, orbitRotation, orbitRotationHandlePoint, rotatePoint, requiredPosition } from '../utils/system-map-geometry'
+import { orbitGeometrySource } from '../utils/orbit-geometry-source'
+import { continuousOrbitKeyboardChange } from '../utils/continuous-orbit-interaction'
 import type { EntityCommand, MapHistoryTarget, MapInteractionMode, OrbitCenterMoveCandidate, SystemCreationType, SystemObjectMoveTarget } from '../composables/editor-workflows/types'
 import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
@@ -392,10 +394,10 @@ const emit = defineEmits<{
   'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace]
   'orbit-adjustment': [input: OrbitAdjustmentInput]
   'entity-command-blocked': [command: EntityCommand]
-  'move-orbit-center': [orbitId: string, center: Point, hostId: string | null, systemId: string]
+  'move-orbit-center': [orbitId: string, center: Point, hostId: string | null, systemId: string, sourceGeometry: string]
   'orbit-center-candidates': [orbitId: string, candidates: OrbitCenterMoveCandidate[], systemId: string]
-  'resize-orbit': [orbitId: string, radii: OrbitRadii, systemId: string]
-  'rotate-orbit': [orbitId: string, rotation: number, systemId: string]
+  'resize-orbit': [orbitId: string, radii: OrbitRadii, systemId: string, sourceGeometry: string]
+  'rotate-orbit': [orbitId: string, rotation: number, systemId: string, sourceGeometry: string]
   'move-system': [id: string, position: Point]
   'move-target': [point: Point]
   'standalone-import-placement-anchor': [anchor: Point]
@@ -443,8 +445,12 @@ interface ActiveObjectDrag {
 }
 
 let activeObjectDrag: ActiveObjectDrag | null = null
-let pendingObjectClickTarget: { systemId: string; objectId: string } | null = null
-let pendingObjectClickTimer: ReturnType<typeof setTimeout> | undefined
+type PendingMapClickTarget =
+  | { kind: 'object'; systemId: string; objectId: string }
+  | { kind: 'orbit'; systemId: string; orbitId: string }
+  | { kind: 'system'; systemId: string }
+let pendingMapClickTarget: PendingMapClickTarget | null = null
+let pendingMapClickTimer: ReturnType<typeof setTimeout> | undefined
 let activeAnchorDrag: {
   systemId: string
   pointerId: number
@@ -466,6 +472,7 @@ type OrbitGestureBase = {
   workspaceSnapshot: LocalWorkspace
   systemSnapshot: StarSystem
   orbitSnapshot: Orbit
+  sourceGeometry: string
   center: Point
   startRadii: OrbitRadii
   startRotation: number
@@ -488,6 +495,7 @@ type WardenMovePointerTarget =
   | { kind: 'object'; systemId: string; objectId: string }
   | { kind: 'anchor'; systemId: string }
   | { kind: 'orbit'; target: OrbitEditTarget }
+type WardenMoveHit = { target: WardenMovePointerTarget | null; blockedCommand: EntityCommand | null }
 let suppressNextMapClick = false
 let suppressNextMapClickTimer: ReturnType<typeof setTimeout> | undefined
 let resolveReady: (value: boolean) => void = () => undefined
@@ -1342,27 +1350,41 @@ function routeIdAtTarget(target: EventTarget | null): string | null {
   return target.closest('.cluster-route[data-route-id]')?.getAttribute('data-route-id') ?? null
 }
 
-function moveTargetAtPoint(event: PointerEvent, element: SVGSVGElement | null): WardenMovePointerTarget | null {
-  if (!element) return null
+function orbitEditCommand(target: OrbitEditTarget): EntityCommand {
+  return target.kind === 'center'
+    ? { kind: 'orbit-center-position', orbitId: target.orbitId }
+    : { kind: 'orbit-geometry', orbitId: target.orbitId }
+}
+
+function moveTargetAtPoint(event: PointerEvent, element: SVGSVGElement | null): WardenMoveHit {
+  if (!element) return { target: null, blockedCommand: null }
   const hits = element.ownerDocument.elementsFromPoint(event.clientX, event.clientY)
     .filter(hit => hit === element || element.contains(hit))
   const orderedHits = hits.length ? hits : [event.target]
+  let blockedCommand: EntityCommand | null = null
   for (const hit of orderedHits) {
     const systemId = systemIdAtTarget(hit)
-    if (systemId) return { kind: 'anchor', systemId }
+    if (systemId) return { target: { kind: 'anchor', systemId }, blockedCommand }
     const editTarget = orbitEditTargetAtTarget(hit)
-    if (editTarget) return { kind: 'orbit', target: editTarget }
+    if (editTarget) {
+      const command = orbitEditCommand(editTarget)
+      if (props.isEntityCommandBlocked?.(command)) {
+        blockedCommand ??= command
+        continue
+      }
+      return { target: { kind: 'orbit', target: editTarget }, blockedCommand }
+    }
     const objectTarget = objectTargetAtTarget(hit)
     if (objectTarget) {
-      if (canMoveObjectInSystem(objectTarget)) return { kind: 'object', ...objectTarget }
+      if (canMoveObjectInSystem(objectTarget)) return { target: { kind: 'object', ...objectTarget }, blockedCommand }
       continue
     }
     const orbitTarget = orbitTargetAtTarget(hit)
     if (orbitTarget) {
-      return { kind: 'orbit', target: { ...orbitTarget, kind: 'resize', axis: 'global' } }
+      return { target: { kind: 'orbit', target: { ...orbitTarget, kind: 'resize', axis: 'global' } }, blockedCommand }
     }
   }
-  return null
+  return { target: null, blockedCommand }
 }
 
 function systemMapGeometry(workspace: LocalWorkspace): SystemMapGeometry {
@@ -1453,24 +1475,28 @@ function emitOrbitAdjustment(event: KeyboardEvent | WheelEvent, input: OrbitAdju
 }
 
 function onOrbitAdjustmentKeydown(event: KeyboardEvent): boolean {
-  if (event.defaultPrevented || props.mode !== 'move'
+  if (event.defaultPrevented || props.standaloneImportPlacementEnabled || props.mode !== 'move'
     || props.creationType != null || props.clusterAddType != null || props.clusterChooserOpen
     || props.moveTargeting || props.clusterMoveTargeting
     || !['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return false
   const target = orbitTargetAtTarget(event.target)
   if (!target) return false
+  const editTarget = orbitEditTargetAtTarget(event.target)
+  if (!editTarget || editTarget.kind === 'center') return false
   const system = props.cluster.systems.find(candidate => candidate.id === target.systemId)
   const orbit = system?.orbits.find(candidate => candidate.id === target.orbitId)
   if (!system || !orbit) return false
   const step = event.shiftKey ? 10 : 1
   const minimum = minimumOrbitRadius(system, orbit)
-  let change: OrbitAdjustmentInput['change']
-  if (event.key === 'ArrowLeft') change = { kind: 'radii', axis: 'horizontal', operation: 'delta', delta: -step, minimum }
-  else if (event.key === 'ArrowRight') change = { kind: 'radii', axis: 'horizontal', operation: 'delta', delta: step, minimum }
-  else if (event.key === 'ArrowDown') change = { kind: 'radii', axis: 'vertical', operation: 'delta', delta: -step, minimum }
-  else if (event.key === 'ArrowUp') change = { kind: 'radii', axis: 'vertical', operation: 'delta', delta: step, minimum }
-  else if (event.key === 'Home') change = { kind: 'radii', axis: 'both', operation: 'minimum', minimum }
-  else change = { kind: 'radii', axis: 'both', operation: 'delta', delta: 400, minimum }
+  const change = continuousOrbitKeyboardChange(
+    editTarget.kind === 'rotation'
+      ? { kind: 'rotation' }
+      : { kind: 'resize', axis: editTarget.axis },
+    event.key,
+    step,
+    minimum,
+  )
+  if (!change) return false
   return emitOrbitAdjustment(event, {
     systemId: system.id,
     orbitId: orbit.id,
@@ -1759,6 +1785,7 @@ function startOrbitGesture(
     workspaceSnapshot,
     systemSnapshot,
     orbitSnapshot,
+    sourceGeometry: orbitGeometrySource(workspaceSnapshot, systemSnapshot, orbitSnapshot),
     center,
     startRadii,
     startRotation,
@@ -1810,13 +1837,30 @@ function finishOrbitGesture(cancelled: boolean): void {
   directOrbitPreview.value = null
   if (cancelled || gesture.moved) suppressClickAfterOwnedGesture()
   if (cancelled || !gesture.moved || !orbitGestureSourceIsCurrent(gesture)) return
-  if (gesture.kind === 'resize') emit('resize-orbit', gesture.orbitId, gesture.previewRadii, gesture.systemId)
-  else if (gesture.kind === 'rotation') emit('rotate-orbit', gesture.orbitId, gesture.previewRotation, gesture.systemId)
+  if (gesture.kind === 'resize') emit('resize-orbit', gesture.orbitId, gesture.previewRadii, gesture.systemId, gesture.sourceGeometry)
+  else if (gesture.kind === 'rotation') emit('rotate-orbit', gesture.orbitId, gesture.previewRotation, gesture.systemId, gesture.sourceGeometry)
   else if (gesture.hasResolvedCandidate) {
-    emit('move-orbit-center', gesture.orbitId, toNormalizedMapPoint(gesture.previewCenter), gesture.previewHostId, gesture.systemId)
+    emit('move-orbit-center', gesture.orbitId, toNormalizedMapPoint(gesture.previewCenter), gesture.previewHostId, gesture.systemId, gesture.sourceGeometry)
   } else if (gesture.candidates.length > 0) {
     emit('orbit-center-candidates', gesture.orbitId, gesture.candidates, gesture.systemId)
   }
+}
+
+function deferMapClickTarget(target: PendingMapClickTarget): void {
+  pendingMapClickTarget = target
+  if (pendingMapClickTimer) clearTimeout(pendingMapClickTimer)
+  pendingMapClickTimer = setTimeout(() => {
+    pendingMapClickTarget = null
+    pendingMapClickTimer = undefined
+  }, 900)
+}
+
+function takePendingMapClickTarget(): PendingMapClickTarget | null {
+  const target = pendingMapClickTarget
+  pendingMapClickTarget = null
+  if (pendingMapClickTimer) clearTimeout(pendingMapClickTimer)
+  pendingMapClickTimer = undefined
+  return target
 }
 
 function suppressClickAfterOwnedGesture(): void {
@@ -1864,13 +1908,19 @@ function onPointerDownCapture(event: PointerEvent): void {
     return
   }
   clearOwnedGestureClickSuppression()
-  pendingObjectClickTarget = null
-  if (pendingObjectClickTimer) clearTimeout(pendingObjectClickTimer)
-  pendingObjectClickTimer = undefined
+  takePendingMapClickTarget()
   if (props.standaloneImportPlacementEnabled || event.button !== 0 || props.mode !== 'move' || props.moveTargeting || props.clusterMoveTargeting
     || props.clusterAddType != null || props.creationType != null) return
   const element = svgElement.value
-  const moveTarget = moveTargetAtPoint(event, element)
+  const moveHit = moveTargetAtPoint(event, element)
+  const moveTarget = moveHit.target
+  if (!moveTarget && moveHit.blockedCommand) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    emit('entity-command-blocked', moveHit.blockedCommand)
+    return
+  }
   if (moveTarget?.kind === 'orbit') {
     startOrbitGesture(event, element, moveTarget.target)
     return
@@ -1988,6 +2038,9 @@ function onPointerEndCapture(event: PointerEvent): void {
       if (point) previewOrbitGestureAt(gesture, point)
     }
     const moved = gesture.moved
+    if (!cancelled && !moved && event.type === 'pointerup') {
+      deferMapClickTarget({ kind: 'orbit', systemId: gesture.systemId, orbitId: gesture.orbitId })
+    }
     finishOrbitGesture(cancelled)
     if (moved || cancelled) {
       event.preventDefault()
@@ -2005,9 +2058,7 @@ function onPointerEndCapture(event: PointerEvent): void {
     }
     const moved = drag.moved
     if (!moved && event.type === 'pointerup') {
-      pendingObjectClickTarget = { systemId: drag.systemId, objectId: drag.objectId }
-      if (pendingObjectClickTimer) clearTimeout(pendingObjectClickTimer)
-      pendingObjectClickTimer = setTimeout(() => { pendingObjectClickTarget = null }, 900)
+      deferMapClickTarget({ kind: 'object', systemId: drag.systemId, objectId: drag.objectId })
     }
     const cancelled = event.type === 'pointercancel'
     finishObjectDrag(cancelled)
@@ -2030,6 +2081,9 @@ function onPointerEndCapture(event: PointerEvent): void {
       })
       publishSystemPositionPreview(activeAnchorDrag.systemId, activeAnchorDrag.preview)
     }
+  }
+  if (event.type === 'pointerup' && !activeAnchorDrag.moved) {
+    deferMapClickTarget({ kind: 'system', systemId: activeAnchorDrag.systemId })
   }
   const moved = activeAnchorDrag.moved
   finishAnchorDrag(event.type === 'pointercancel')
@@ -2105,10 +2159,9 @@ function onClickCapture(event: MouseEvent): void {
     offerObjectAdd(point, event.target)
     return
   }
-  const objectTarget = objectTargetAtTarget(event.target) ?? pendingObjectClickTarget
-  pendingObjectClickTarget = null
-  if (pendingObjectClickTimer) clearTimeout(pendingObjectClickTimer)
-  pendingObjectClickTimer = undefined
+  const pendingTarget = takePendingMapClickTarget()
+  const objectTarget = objectTargetAtTarget(event.target)
+    ?? (pendingTarget?.kind === 'object' ? pendingTarget : null)
   if (objectTarget) {
     event.preventDefault()
     event.stopPropagation()
@@ -2124,6 +2177,7 @@ function onClickCapture(event: MouseEvent): void {
     return
   }
   const orbitTarget = orbitTargetAtTarget(event.target)
+    ?? (pendingTarget?.kind === 'orbit' ? pendingTarget : null)
   if (orbitTarget) {
     event.preventDefault()
     event.stopPropagation()
@@ -2132,6 +2186,7 @@ function onClickCapture(event: MouseEvent): void {
     return
   }
   const systemId = systemIdAtTarget(event.target)
+    ?? (pendingTarget?.kind === 'system' ? pendingTarget.systemId : null)
   if (systemId) emit('activate-system', systemId)
 }
 
@@ -2543,9 +2598,9 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('blur', cancelActiveGesture)
-  if (pendingObjectClickTimer) clearTimeout(pendingObjectClickTimer)
-  pendingObjectClickTimer = undefined
-  pendingObjectClickTarget = null
+  if (pendingMapClickTimer) clearTimeout(pendingMapClickTimer)
+  pendingMapClickTimer = undefined
+  pendingMapClickTarget = null
   clearOwnedGestureClickSuppression()
   resizeObserver?.disconnect()
   resizeObserver = undefined
