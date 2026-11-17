@@ -1,13 +1,15 @@
 /**
  * Browser file actions use domain codecs and import preparation; persistence and selection remain page-owned.
  */
-import { readonly, ref, type Ref } from 'vue'
+import { computed, readonly, ref, type Ref } from 'vue'
 import {
   exportJumpCluster,
   exportStarSystem,
   prepareJsonImport,
   type JsonImportSummary,
   type LocalWorkspace,
+  type OrbitRadii,
+  type Point,
   type StarSystem,
 } from '../domain/workspace'
 import { jsonImportReviewEffects } from '../domain/workspace-json-import'
@@ -47,6 +49,44 @@ interface ImportEpoch {
   operation: number
 }
 
+interface StandaloneImportPlacement {
+  /** Current proposed Cluster-space anchor. This is view-only until the existing review is confirmed. */
+  anchor: Point
+  /** Detached copy with safely remapped entity identities. */
+  system: StarSystem
+  /** Complete imported local geometry needed to calculate its Warden projection and envelope. */
+  geometry: {
+    objectAngles: Record<string, number>
+    orbitRadii: Record<string, OrbitRadii>
+    orbitRotations: Record<string, number>
+  }
+}
+
+function isFinitePoint(value: unknown): value is Point {
+  if (!value || typeof value !== 'object' || !('x' in value) || !('y' in value)) return false
+  return typeof value.x === 'number'
+    && Number.isFinite(value.x)
+    && typeof value.y === 'number'
+    && Number.isFinite(value.y)
+}
+
+function importedSystemGeometry(
+  workspace: LocalWorkspace,
+  system: StarSystem,
+): StandaloneImportPlacement['geometry'] {
+  const orbitIds = new Set(system.orbits.map(orbit => orbit.id))
+  const orbitalObjectIds = new Set(system.objects
+    .filter(object => object.placement.kind === 'orbit')
+    .map(object => object.id))
+  const matchingValues = <T>(values: Record<string, T>, ids: Set<string>): Record<string, T> =>
+    Object.fromEntries(Object.entries(values).filter(([id]) => ids.has(id)))
+  return {
+    objectAngles: matchingValues(workspace.layout.objectAngles, orbitalObjectIds),
+    orbitRadii: matchingValues(workspace.layout.orbitRadii, orbitIds),
+    orbitRotations: matchingValues(workspace.layout.orbitRotations, orbitIds),
+  }
+}
+
 /**
  * Composes local JSON/image export and copy-import actions around the page's commit and selection callbacks.
  * @param options Current workspace/selection refs and page-owned persistence, transition, and import callbacks.
@@ -71,12 +111,22 @@ export function useWorkspaceFiles({
     error: '',
     fieldConflict: null,
   })
+  const mutableStandaloneImportPlacement = ref<StandaloneImportPlacement | null>(null)
   let operationCounter = 0
   let currentImportEpoch: ImportEpoch | null = null
   let importContent: unknown
+  let importAnchor: Point | null = null
   let importReviewSignature = ''
 
   const importReview = readonly(mutableImportReview)
+  const standaloneImportPlacement = readonly(mutableStandaloneImportPlacement)
+  const standaloneImportPlacementEnabled = computed(() => {
+    const epoch = currentImportEpoch
+    return mutableStandaloneImportPlacement.value !== null
+      && epoch !== null
+      && epochIsCurrent(epoch)
+      && !mutableImportReview.value.open
+  })
 
   function errorText(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
@@ -117,7 +167,9 @@ export function useWorkspaceFiles({
     operationCounter += 1
     currentImportEpoch = null
     importContent = undefined
+    importAnchor = null
     importReviewSignature = ''
+    mutableStandaloneImportPlacement.value = null
     mutableImportReview.value = {
       open: false,
       suspended: false,
@@ -228,17 +280,17 @@ export function useWorkspaceFiles({
   }
 
   /**
-   * Parses and validates a selected JSON file before opening the independent-copy review.
+   * Parses and validates a selected standalone JSON file before opening its detached placement preview.
    * The input is cleared immediately so selecting the same file again still emits a change event.
    * @param event File-input change event.
-   * @returns A promise that resolves after validation; invalid files populate importError.
+   * @returns A promise that resolves after admission; invalid files populate importError.
    */
   async function importJsonFile(event: Event): Promise<void> {
     const input = event.target
     if (!(input instanceof HTMLInputElement)) return
     const file = input.files?.[0]
     input.value = ''
-    if (!file || !await beforeWorkspaceOperation()) return
+    if (!file) return
     const initialWorkspace = workspace.value
     if (!initialWorkspace) return
 
@@ -251,6 +303,19 @@ export function useWorkspaceFiles({
     }
     currentImportEpoch = epoch
     try {
+      if (!epochIsCurrent(epoch)) {
+        abandonStaleImport(epoch)
+        return
+      }
+      if (!await beforeWorkspaceOperation()) {
+        if (importOperationIsCurrent(epoch)) clearImportReview()
+        return
+      }
+      if (!epochIsCurrent(epoch)) {
+        abandonStaleImport(epoch)
+        return
+      }
+
       let content: unknown
       try {
         content = freezeJson(JSON.parse(await file.text()))
@@ -264,15 +329,92 @@ export function useWorkspaceFiles({
       if (!content || typeof content !== 'object' || !('type' in content) || content.type !== 'system') {
         throw new Error('Choose a standalone star system JSON file. Use Restore Jump Cluster for a complete Cluster backup.')
       }
-      if (!await beforeWorkspaceOperation()) return
+      if (!await beforeWorkspaceOperation()) {
+        if (importOperationIsCurrent(epoch)) clearImportReview()
+        return
+      }
+      if (!epochIsCurrent(epoch)) {
+        abandonStaleImport(epoch)
+        return
+      }
       const currentWorkspace = workspace.value
-      if (!currentWorkspace) return
+      if (!currentWorkspace) {
+        abandonStaleImport(epoch)
+        return
+      }
       const prepared = prepareJsonImport(currentWorkspace, content)
-      const effects = jsonImportReviewEffects(currentWorkspace, content, prepared)
-      if (!epochIsCurrent(epoch)) return
+      if (!epochIsCurrent(epoch)) {
+        abandonStaleImport(epoch)
+        return
+      }
+      const importedSystemId = prepared.addedSystemIds[0]
+      const system = prepared.workspace.cluster.systems.find(candidate => candidate.id === importedSystemId)
+      const anchor = importedSystemId
+        ? prepared.workspace.layout.systemPositions[importedSystemId]
+        : undefined
+      if (!importedSystemId || !system || !anchor || !isFinitePoint(anchor)) {
+        throw new Error('The imported star system could not be prepared for placement.')
+      }
 
       importContent = content
+      importAnchor = { x: anchor.x, y: anchor.y }
+      mutableStandaloneImportPlacement.value = {
+        anchor: { ...importAnchor },
+        system,
+        geometry: importedSystemGeometry(prepared.workspace, system),
+      }
+    } catch (error) {
+      if (epochIsCurrent(epoch)) {
+        importError.value = errorText(error)
+        clearImportReview()
+      }
+      else abandonStaleImport(epoch)
+    }
+  }
+
+  /** Updates only the detached standalone-system placement preview; it never publishes workspace data. */
+  function previewStandaloneImportAnchor(anchor: Point): boolean {
+    const epoch = currentImportEpoch
+    const placement = mutableStandaloneImportPlacement.value
+    if (!epoch || !placement || !standaloneImportPlacementEnabled.value) {
+      if (epoch && !epochIsCurrent(epoch)) abandonStaleImport(epoch)
+      return false
+    }
+    if (!isFinitePoint(anchor)) return false
+
+    const evaluatedAnchor = { x: anchor.x, y: anchor.y }
+    importAnchor = evaluatedAnchor
+    mutableStandaloneImportPlacement.value = { ...placement, anchor: evaluatedAnchor }
+    return true
+  }
+
+  /** Moves a valid standalone placement into the existing effect review without committing it. */
+  function reviewStandaloneImportPlacement(): void {
+    const epoch = currentImportEpoch
+    const content = importContent
+    const anchor = importAnchor
+    if (!epoch || content === undefined || !anchor || !mutableStandaloneImportPlacement.value) return
+    if (!epochIsCurrent(epoch)) {
+      abandonStaleImport(epoch)
+      return
+    }
+
+    const currentWorkspace = workspace.value
+    if (!currentWorkspace) {
+      abandonStaleImport(epoch)
+      return
+    }
+
+    try {
+      const prepared = prepareJsonImport(currentWorkspace, content, anchor)
+      const effects = jsonImportReviewEffects(currentWorkspace, content, prepared)
+      if (!epochIsCurrent(epoch)) {
+        abandonStaleImport(epoch)
+        return
+      }
+
       importReviewSignature = effects.signature
+      mutableStandaloneImportPlacement.value = null
       mutableImportReview.value = {
         open: true,
         suspended: false,
@@ -282,9 +424,20 @@ export function useWorkspaceFiles({
         fieldConflict: null,
       }
     } catch (error) {
-      if (epochIsCurrent(epoch)) importError.value = errorText(error)
-      else abandonStaleImport(epoch)
+      if (epochIsCurrent(epoch)) {
+        importError.value = errorText(error)
+        clearImportReview()
+      } else {
+        abandonStaleImport(epoch)
+      }
     }
+  }
+
+  /** Cancels the placement stage without changing the active Cluster or any retained draft. */
+  function cancelStandaloneImportPlacement(): void {
+    if (!mutableStandaloneImportPlacement.value) return
+    clearImportReview()
+    importError.value = ''
   }
 
   /**
@@ -294,8 +447,9 @@ export function useWorkspaceFiles({
   async function confirmJsonImport(): Promise<void> {
     const epoch = currentImportEpoch
     const content = importContent
+    const anchor = importAnchor
     if (!epoch || content === undefined || !mutableImportReview.value.open
-      || mutableImportReview.value.confirming) return
+      || mutableImportReview.value.confirming || !anchor) return
     if (!epochIsCurrent(epoch)) {
       clearImportReview()
       return
@@ -307,9 +461,16 @@ export function useWorkspaceFiles({
 
     try {
       if (!await beforeWorkspaceOperation()) return
+      if (!epochIsCurrent(epoch)) {
+        abandonStaleImport(epoch)
+        return
+      }
       const firstWorkspace = workspace.value
-      if (!firstWorkspace) return
-      const firstPrepared = prepareJsonImport(firstWorkspace, content)
+      if (!firstWorkspace) {
+        abandonStaleImport(epoch)
+        return
+      }
+      const firstPrepared = prepareJsonImport(firstWorkspace, content, anchor)
       const firstEffects = jsonImportReviewEffects(firstWorkspace, content, firstPrepared)
       const initialConflict = getFieldDefinitionImportConflict(firstPrepared.workspace)
       if (firstEffects.signature !== importReviewSignature) {
@@ -340,7 +501,7 @@ export function useWorkspaceFiles({
           abandonStaleImport(epoch)
           return
         }
-        const latestPrepared = prepareJsonImport(latestWorkspace, content)
+        const latestPrepared = prepareJsonImport(latestWorkspace, content, anchor)
         const latestEffects = jsonImportReviewEffects(latestWorkspace, content, latestPrepared)
         const latestConflict = getFieldDefinitionImportConflict(latestPrepared.workspace)
         if (latestEffects.signature !== importReviewSignature) {
@@ -358,10 +519,16 @@ export function useWorkspaceFiles({
         }
       }
 
-      if (!epochIsCurrent(epoch)) return
+      if (!epochIsCurrent(epoch)) {
+        abandonStaleImport(epoch)
+        return
+      }
       const finalWorkspace = workspace.value
-      if (!finalWorkspace) return
-      const finalPrepared = prepareJsonImport(finalWorkspace, content)
+      if (!finalWorkspace) {
+        abandonStaleImport(epoch)
+        return
+      }
+      const finalPrepared = prepareJsonImport(finalWorkspace, content, anchor)
       const finalEffects = jsonImportReviewEffects(finalWorkspace, content, finalPrepared)
       const finalConflict = getFieldDefinitionImportConflict(finalPrepared.workspace)
       if (finalEffects.signature !== importReviewSignature) {
@@ -377,12 +544,17 @@ export function useWorkspaceFiles({
         mutableImportReview.value.fieldConflict = finalConflict
         return
       }
-      if (!epochIsCurrent(epoch)) return
+      if (!epochIsCurrent(epoch)) {
+        abandonStaleImport(epoch)
+        return
+      }
 
       const submittedSignature = finalEffects.signature
       const isSubmittedImportCurrent = (): boolean => importOperationIsCurrent(epoch)
         && epochIsCurrent(epoch)
         && importContent === content
+        && importAnchor?.x === anchor.x
+        && importAnchor?.y === anchor.y
         && importReviewSignature === submittedSignature
         && mutableImportReview.value.open
         && mutableImportReview.value.confirming
@@ -392,7 +564,7 @@ export function useWorkspaceFiles({
           label: 'Import independent copy',
           target: { kind: 'cluster', id: finalWorkspace.cluster.id },
         },
-        prepare: current => prepareJsonImport(current, content).workspace,
+        prepare: current => prepareJsonImport(current, content, anchor).workspace,
         isCurrent: isSubmittedImportCurrent,
       })
       if (result.status === 'applied') void result.durable.catch(() => undefined)
@@ -407,7 +579,7 @@ export function useWorkspaceFiles({
             abandonStaleImport(epoch)
             return
           }
-          const latestPrepared = prepareJsonImport(latestWorkspace, content)
+          const latestPrepared = prepareJsonImport(latestWorkspace, content, anchor)
           const latestEffects = jsonImportReviewEffects(latestWorkspace, content, latestPrepared)
           const latestConflict = getFieldDefinitionImportConflict(latestPrepared.workspace)
           if (latestEffects.signature !== submittedSignature) {
@@ -466,6 +638,11 @@ export function useWorkspaceFiles({
     downloadMapImage,
     importJsonFile,
     importReview,
+    standaloneImportPlacement,
+    standaloneImportPlacementEnabled,
+    previewStandaloneImportAnchor,
+    reviewStandaloneImportPlacement,
+    cancelStandaloneImportPlacement,
     confirmJsonImport,
     cancelJsonImport,
     reviewImportFields,
