@@ -51,7 +51,7 @@
     <UModal
       v-model:open="dialogOpen"
       title="Google Drive backups"
-      description="Choose a complete Jump Cluster backup from this app's private Google Drive storage. These files do not appear in regular Drive folders."
+      description="Jump Cluster backups in this app’s private Google Drive storage."
       :close="state !== 'deleting'"
       :dismissible="state !== 'deleting' && !busy"
       :content="{ onCloseAutoFocus: restoreFocus }"
@@ -60,7 +60,6 @@
       <template #body>
         <div class="grid gap-3">
           <p class="m-0 text-sm text-muted">{{ retentionMessage }}</p>
-          <p class="m-0 text-sm text-muted">Choose Restore to review a backup before applying it, or Download JSON to save a copy.</p>
           <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ restoreToastTitle }}</p>
           <UAlert
             v-if="selectionError"
@@ -234,7 +233,7 @@ const restoreToastKey = computed(() => restoreProgressTitle.value
   ? `progress:${restoreProgressTitle.value}`
   : `completed:${completedToastVersion.value}`)
 const restoreToastUi = computed(() => ({ icon: restoreProgressTitle.value ? 'motion-safe:animate-spin' : undefined }))
-const retentionMessage = `This app keeps the ${GOOGLE_DRIVE_BACKUP_LIMIT} newest Google Drive backups for this account across all Jump Clusters. Older backups are permanently deleted after a new backup is saved. Download JSON to keep a copy.`
+const retentionMessage = `The app keeps the ${GOOGLE_DRIVE_BACKUP_LIMIT} newest dated backups for this account across all Jump Clusters. Older backups are permanently deleted after a new save.`
 const triggerClass = computed(() => props.surface === 'welcome'
   ? 'secondary-button launch-action'
   : 'workspace-control workspace-map-import-button w-full')

@@ -16,7 +16,7 @@
   <UModal
     v-model:open="dialogOpen"
     title="Dropbox backups"
-    description="Choose a complete Jump Cluster backup from the Dropbox App Folder. Restore opens a review before replacing your current workspace. Download JSON keeps a copy, and dated app backups can be deleted."
+    description="Jump Cluster backups in this app’s Dropbox App Folder."
     :dismissible="props.controller.canCancel.value"
     :close="props.controller.canCancel.value"
     :content="{ onCloseAutoFocus: restoreFocus }"
@@ -26,7 +26,6 @@
       <p v-if="displayMessage" class="m-0 mb-3 text-sm" role="status" aria-live="polite">
         {{ displayMessage }}
       </p>
-      <p class="m-0 mb-3 text-sm text-muted">Choose Restore to review a backup before applying it, or Download JSON to save a copy.</p>
       <p v-if="restoreToastTitle" class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ restoreToastTitle }}</p>
       <div ref="backupListFocusTarget" tabindex="-1">
         <ol v-if="props.controller.backups.value.length" class="m-0 grid list-none gap-2 p-0" aria-label="Dropbox Jump Cluster backups">
@@ -82,7 +81,7 @@
         <p v-else-if="!displayMessage" class="m-0 text-sm" role="status">No Dropbox backups are available yet.</p>
       </div>
       <UButton
-        class="justify-self-start"
+        class="mt-3 justify-self-start"
         color="neutral"
         variant="outline"
         size="sm"
