@@ -201,6 +201,7 @@
             :y1="label.anchorY - label.y"
             :x2="0"
             :y2="label.height / 2"
+            pointer-events="none"
             aria-hidden="true"
           />
           <rect class="player-continuous-name-background" :x="-label.width / 2" :width="label.width" :height="label.height" rx="5" aria-hidden="true" />
