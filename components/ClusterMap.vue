@@ -303,8 +303,8 @@ function prepareExportClone(clone: SVGSVGElement): void {
       props.unresolvedExitPositions,
     )
     const labelWidth = clusterRouteLabelWidth(route)
-    mark.classList.toggle('is-unresolved', route.toPointId === null)
-    mark.setAttribute('aria-label', clusterRouteLabel(route, jumpPoints))
+    mark.classList.toggle('is-unresolved', route.toSystemId === null)
+    mark.setAttribute('aria-label', clusterRouteLabel(route, cluster, jumpPoints))
     mark.querySelector<SVGPathElement>('.cluster-route-line')?.setAttribute('d', geometry.path)
     const labelBackground = mark.querySelector<SVGRectElement>('.cluster-route-label-bg')
     labelBackground?.setAttribute('x', String(geometry.labelX - labelWidth / 2))
@@ -351,7 +351,7 @@ function prepareExportClone(clone: SVGSVGElement): void {
       exitHitTarget?.remove()
       exitLabel?.remove()
     }
-    const sharingStatus = routeSharingStatus(cluster, route, jumpPoints)
+    const sharingStatus = routeSharingStatus(cluster, route)
     describeRouteSharing(mark, `route-${route.id}`, sharingStatus)
   })
 
@@ -370,7 +370,7 @@ function prepareExportClone(clone: SVGSVGElement): void {
     publicationLayer.replaceChildren()
     for (const route of cluster.routes) {
       const geometry = clusterRouteGeometry(route, cluster, jumpPoints, props.systemPositions, undefined, props.unresolvedExitPositions)
-      const status = routeSharingStatus(cluster, route, jumpPoints)
+      const status = routeSharingStatus(cluster, route)
       const badgeGroup = clone.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'g')
       badgeGroup.setAttribute('class', 'cluster-route-publication')
       badgeGroup.setAttribute('data-route-id', route.id)
@@ -750,7 +750,7 @@ function render(): void {
     .attr('font-size', CLUSTER_ROUTE_PRESENTATION.labelFontSize)
     .attr('role', 'button')
     .attr('tabindex', 0)
-    .attr('aria-label', route => clusterRouteLabel(route, props.cluster, jumpPoints))
+    .attr('aria-label', route => clusterRouteLabel(route, sceneCluster, jumpPoints))
 
   const routePublicationBadges = new Map<string, SVGGElement>()
   routeMarks.each(function (route) {

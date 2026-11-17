@@ -690,7 +690,7 @@ test('player JSON byte accounting includes the optional marker color property @p
     playerText: '',
     fields: [],
   }))
-  const document: PlayerClusterDocument = {
+  const legacyDocument: Omit<PlayerClusterDocument, 'version'> & { version: 1 } = {
     format: 'ttrpg-cluster-control-player',
     version: 1,
     title: 'Public Reach',
@@ -704,7 +704,10 @@ test('player JSON byte accounting includes the optional marker color property @p
     }],
     routes: [],
   }
-  const emptyTextBytes = new TextEncoder().encode(serializePlayerJson(document)).byteLength
+  const legacyProjectionBytes = () => new TextEncoder().encode(
+    serializePlayerJson(restorePlayerDocument(legacyDocument)),
+  ).byteLength
+  const emptyTextBytes = legacyProjectionBytes()
   const lastTextLength = MAX_PLAYER_JSON_BYTES - emptyTextBytes - 15 * textLimit
   for (const object of objects.slice(0, 15)) {
     if (object.disclosure !== 'revealed') throw new Error('Expected a Revealed object.')
@@ -714,7 +717,7 @@ test('player JSON byte accounting includes the optional marker color property @p
   if (!finalObject || finalObject.disclosure !== 'revealed') throw new Error('Expected a final Revealed object.')
   finalObject.playerText = 'x'.repeat(lastTextLength)
 
-  expect(new TextEncoder().encode(serializePlayerJson(document)).byteLength).toBe(MAX_PLAYER_JSON_BYTES)
+  expect(legacyProjectionBytes()).toBe(MAX_PLAYER_JSON_BYTES)
   Object.assign(objects[0]!, { markerColor: '#123456' })
-  expectPlayerDocumentError(() => restorePlayerDocument(document), 'too-large')
+  expectPlayerDocumentError(() => restorePlayerDocument(legacyDocument), 'too-large')
 })
