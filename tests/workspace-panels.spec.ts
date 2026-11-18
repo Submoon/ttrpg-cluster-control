@@ -1,13 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from './fixtures'
-import { activeWorkspaceFeedback, createSingleSystemWorkspace, exposedContinuousObjectHitPoint, type ExportedMap, waitForWorkspaceSaved, openMapFilesSection, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, wardenMap, wardenObjectMark, workspaceNavigation } from './helpers'
+import { activeWorkspaceFeedback, centerWorkspaceSelection, createSingleSystemWorkspace, exposedContinuousObjectHitPoint, type ExportedMap, waitForWorkspaceSaved, openMapFilesSection, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, wardenMap, wardenObjectMark, workspaceNavigation } from './helpers'
 
-async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }, systemName = 'Vesper'): Promise<void> {
+async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }): Promise<void> {
   await page.setViewportSize(viewport)
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible({ timeout: 30_000 })
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill(systemName)
+  await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
 }
@@ -38,13 +38,16 @@ async function expectCompactPanel(
   expect(bounds.height).toBeGreaterThan(200)
 }
 
-test('desktop Hierarchy and Inspector start open while Map files exports system and Jump Cluster JSON from Star System view @ui-smoke', async ({ page }) => {
+test('desktop panels start open and Map files exports the inspected system and whole Jump Cluster @ui-smoke', async ({ page }) => {
   await createWorkspace(page)
 
   const hierarchy = page.locator('#workspace-hierarchy-panel')
   const inspector = page.locator('#workspace-inspector-panel')
   await expect(hierarchy).toBeVisible()
   await expect(inspector).toBeVisible()
+  await hierarchy.getByRole('button', { name: 'Inspect Vesper', exact: true }).click()
+  await expect(inspector).toHaveAccessibleName('Star System details')
+  await expect(wardenMap(page)).toHaveAccessibleName('Kestrel Reach continuous map')
 
   const filesToggle = page.getByRole('button', { name: 'Map files', exact: true })
   const filesHint = page.getByRole('tooltip', { name: 'Map files', exact: true })
@@ -86,7 +89,10 @@ test('desktop Hierarchy and Inspector start open while Map files exports system 
 
   const downloadPromise = page.waitForEvent('download')
   await exportButton.click()
-  await downloadPromise
+  const systemDownload = await downloadPromise
+  const systemExport = JSON.parse(await readFile(await systemDownload.path(), 'utf8')) as ExportedMap
+  expect(systemExport.type).toBe('system')
+  expect(systemExport.system?.name).toBe('Vesper')
 
   const clusterFiles = await openMapFilesSection(page, 'Download or back up')
   const clusterBackupButton = clusterFiles.getByRole('menuitem', { name: 'Download private Jump Cluster JSON', exact: true })
@@ -97,6 +103,7 @@ test('desktop Hierarchy and Inspector start open while Map files exports system 
   expect(clusterExport.type).toBe('cluster')
   expect(clusterExport.cluster?.name).toBe('Kestrel Reach')
   expect(clusterExport.cluster?.systems.map(system => system.name)).toEqual(['Vesper'])
+  expect(clusterExport.cluster?.systems[0]?.id).toBe(systemExport.system?.id)
 
   const restore = await openMapFilesSection(page, 'Import or restore')
   const restoreJson = restore.getByRole('menuitem', { name: 'Restore Jump Cluster from JSON', exact: true })
@@ -108,15 +115,18 @@ test('desktop Hierarchy and Inspector start open while Map files exports system 
 })
 
 test('short landscape Header, Select, and Hierarchy entries open one exclusive fullscreen panel and return focus @ui-smoke', async ({ page }) => {
-  const systemName = 'Vesper Observatory and the Outer Beacon of the Meridian Expanse'
-  await createWorkspace(page, { width: 390, height: 844 }, systemName)
+  const clusterName = 'Vesper Observatory and the Outer Beacon of the Meridian Expanse'
+  const { systemId, primaryObjectId, systemName } = await createSingleSystemWorkspace(page, {
+    clusterName,
+    viewport: { width: 390, height: 844 },
+  })
 
   const toolbar = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
-  await expect(toolbar.getByRole('heading', { name: systemName, exact: true })).toBeInViewport({ ratio: 1 })
-  const nameLabel = `${systemName}, show full map name`
+  await expect(toolbar.getByRole('heading', { name: clusterName, exact: true })).toBeInViewport({ ratio: 1 })
+  const nameLabel = `${clusterName}, show full map name`
   const showName = toolbar.getByRole('button', { name: nameLabel, exact: true })
   await showName.press('Enter')
-  const fullName = page.getByRole('dialog', { name: nameLabel, exact: true }).getByText(systemName, { exact: true })
+  const fullName = page.getByRole('dialog', { name: nameLabel, exact: true }).getByText(clusterName, { exact: true })
   await expect(fullName).toBeInViewport({ ratio: 1 })
   await page.keyboard.press('Escape')
   await expect(fullName).toBeHidden()
@@ -153,8 +163,8 @@ test('short landscape Header, Select, and Hierarchy entries open one exclusive f
   const selectMode = dock.getByRole('button', { name: 'Select', exact: true })
   await selectMode.click()
   await expect(selectMode).toHaveAttribute('aria-pressed', 'true')
-  const map = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
-  const primaryStar = map.getByRole('button', { name: /Select A, Primary Star/ })
+  await centerWorkspaceSelection(page)
+  const primaryStar = wardenObjectMark(page, systemId, primaryObjectId)
   await primaryStar.focus()
   await page.keyboard.press('Enter')
   await expectCompactPanel(page, 'inspector')
@@ -171,7 +181,7 @@ test('short landscape Header, Select, and Hierarchy entries open one exclusive f
 
   await hierarchyToggle.click()
   await expectCompactPanel(page, 'hierarchy')
-  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
+  await hierarchy.getByRole('treeitem', { name: `Select A, Primary Star in ${systemName}`, exact: true }).click()
   await expectCompactPanel(page, 'inspector')
 })
 
