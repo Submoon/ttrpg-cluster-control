@@ -1696,7 +1696,7 @@ function getOrbitDragSceneClearance(systemId: string): number | null {
   return Number.isFinite(scale) && scale > 0 ? 4 / scale + (2.4 + 2.5) / 2 : null
 }
 
-function isOrbitDragPointOnMap(clientX: number, clientY: number): boolean {
+function isClientPointOnMap(clientX: number, clientY: number): boolean {
   const element = svgElement.value
   const hit = element?.ownerDocument.elementFromPoint(clientX, clientY)
   return !!hit && !!element?.contains(hit)
@@ -2303,13 +2303,17 @@ function finishExitDrag(cancelled: boolean): void {
   if (!cancelled && drag.position !== null) emit('move-unresolved-exit', drag.routeId, drag.position)
 }
 
-function onPointerDownCapture(event: PointerEvent): void {
-  if (event.pointerType !== 'touch') touchCameraNavigation.clearDoubleTap()
-  const ownedPointerId = activeOrbitGesture?.pointerId
+function editingPointerId(): number | undefined {
+  return activeOrbitGesture?.pointerId
     ?? activeSelectedObjectDrag?.pointerId
     ?? activeObjectDrag?.pointerId
     ?? activeAnchorDrag?.pointerId
     ?? activeExitDrag?.pointerId
+}
+
+function onPointerDownCapture(event: PointerEvent): void {
+  if (event.pointerType !== 'touch') touchCameraNavigation.clearDoubleTap()
+  const ownedPointerId = editingPointerId()
   if (ownedPointerId !== undefined && ownedPointerId !== event.pointerId) {
     cancelActiveGesture()
     return
@@ -2478,9 +2482,11 @@ function finishAnchorDrag(cancelled: boolean): void {
 }
 
 function onPointerEndCapture(event: PointerEvent): void {
+  if (editingPointerId() !== event.pointerId) return
+  // Pointer capture retargets the event to the SVG even when chrome covers the actual release.
+  const cancelled = event.type === 'pointercancel' || !isClientPointOnMap(event.clientX, event.clientY)
   const exitDrag = activeExitDrag
   if (exitDrag?.pointerId === event.pointerId) {
-    const cancelled = event.type === 'pointercancel'
     if (!cancelled) {
       updateExitDrag(exitDrag, event)
       if (exitDrag.position === null) deferMapClickTarget({ kind: 'route', routeId: exitDrag.routeId })
@@ -2494,14 +2500,13 @@ function onPointerEndCapture(event: PointerEvent): void {
   }
   if (activeOrbitGesture?.pointerId === event.pointerId) {
     const gesture = activeOrbitGesture
-    const cancelled = event.type === 'pointercancel'
     if (!cancelled && (gesture.moved || hasMapDragThreshold(gesture.startClient, { x: event.clientX, y: event.clientY }))) {
       gesture.moved = true
       const point = orbitGestureLocalPoint(gesture, event)
       if (point) previewOrbitGestureAt(gesture, point)
     }
     const moved = gesture.moved
-    if (!cancelled && !moved && event.type === 'pointerup') {
+    if (!cancelled && !moved) {
       deferMapClickTarget({ kind: 'orbit', systemId: gesture.systemId, orbitId: gesture.orbitId })
     }
     finishOrbitGesture(cancelled)
@@ -2514,16 +2519,15 @@ function onPointerEndCapture(event: PointerEvent): void {
   }
   if (activeSelectedObjectDrag?.pointerId === event.pointerId) {
     const drag = activeSelectedObjectDrag
-    if (event.type === 'pointerup' && (drag.moved || hasMapDragThreshold(drag.startClient, { x: event.clientX, y: event.clientY }))) {
+    if (!cancelled && (drag.moved || hasMapDragThreshold(drag.startClient, { x: event.clientX, y: event.clientY }))) {
       drag.moved = true
       const point = cameraPointAt(event, drag.camera)
       if (point) updateSelectedObjectMovePreview(drag, point)
     }
     const moved = drag.moved
-    if (!moved && event.type === 'pointerup') {
+    if (!cancelled && !moved) {
       deferMapClickTarget({ kind: 'object', systemId: drag.systemId, objectId: drag.objectId })
     }
-    const cancelled = event.type === 'pointercancel'
     finishSelectedObjectDrag(cancelled)
     if (moved || cancelled) {
       event.preventDefault()
@@ -2534,16 +2538,15 @@ function onPointerEndCapture(event: PointerEvent): void {
   }
   if (activeObjectDrag?.pointerId === event.pointerId) {
     const drag = activeObjectDrag
-    if (event.type === 'pointerup' && (drag.moved || hasMapDragThreshold(drag.startClient, { x: event.clientX, y: event.clientY }))) {
+    if (!cancelled && (drag.moved || hasMapDragThreshold(drag.startClient, { x: event.clientX, y: event.clientY }))) {
       drag.moved = true
       const point = cameraPointAt(event, drag.camera)
       if (point) updateObjectMovePreview(drag, point)
     }
     const moved = drag.moved
-    if (!moved && event.type === 'pointerup') {
+    if (!cancelled && !moved) {
       deferMapClickTarget({ kind: 'object', systemId: drag.systemId, objectId: drag.objectId })
     }
-    const cancelled = event.type === 'pointercancel'
     finishObjectDrag(cancelled)
     if (moved || cancelled) {
       event.preventDefault()
@@ -2553,7 +2556,7 @@ function onPointerEndCapture(event: PointerEvent): void {
     return
   }
   if (activeAnchorDrag?.pointerId !== event.pointerId) return
-  if (event.type === 'pointerup' && (activeAnchorDrag.moved
+  if (!cancelled && (activeAnchorDrag.moved
     || hasMapDragThreshold(activeAnchorDrag.startClient, { x: event.clientX, y: event.clientY }))) {
     activeAnchorDrag.moved = true
     const point = cameraPoint(event)
@@ -2565,12 +2568,12 @@ function onPointerEndCapture(event: PointerEvent): void {
       publishSystemPositionPreview(activeAnchorDrag.systemId, activeAnchorDrag.preview)
     }
   }
-  if (event.type === 'pointerup' && !activeAnchorDrag.moved) {
+  if (!cancelled && !activeAnchorDrag.moved) {
     deferMapClickTarget({ kind: 'system', systemId: activeAnchorDrag.systemId })
   }
   const moved = activeAnchorDrag.moved
-  finishAnchorDrag(event.type === 'pointercancel')
-  if (moved || event.type === 'pointercancel') {
+  finishAnchorDrag(cancelled)
+  if (moved || cancelled) {
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
@@ -3217,7 +3220,8 @@ defineExpose({
   orbitDragPointFromClient,
   getOrbitDragStart,
   getOrbitDragSceneClearance,
-  isOrbitDragPointOnMap,
+  isClientPointOnMap,
+  isOrbitDragPointOnMap: isClientPointOnMap,
   startOrbitTouchPinch: touchCameraNavigation.startPinch,
   moveOrbitTouchPinch: touchCameraNavigation.movePinch,
   endOrbitTouchPinch: touchCameraNavigation.endPinch,
