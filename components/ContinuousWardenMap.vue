@@ -205,7 +205,7 @@
                     <circle class="system-object-selection-outline" r="15.5" />
                     <circle class="system-object-selection-dashes" r="19.5" pathLength="100" stroke-dasharray="6 4" />
                   </g>
-                  <circle v-if="searchLocatorId === object.id" class="continuous-warden-search-locator" r="25" aria-hidden="true" />
+                  <circle v-if="searchLocatorId === object.id" class="continuous-warden-search-locator" :r="searchLocatorRadius(projection)" aria-hidden="true" />
                   <circle v-if="objectSubtype(projection.id, object.id) === 'star'" class="continuous-warden-star-halo" r="18" />
                   <text
                     class="continuous-warden-object-glyph"
@@ -394,6 +394,7 @@ import { jumpPointsInCluster, minimumOrbitRadius, type CatalogueSubtype, type Ju
 import { normalizeOrbitRotation } from '../domain/workspace-orbits'
 import { getDetachedOrbitCenter, objectPositions, objectsMovedWithOrbit, orbitCenter, orbitPointAtAngle, orbitRadii as readOrbitRadii, orbitRotation, orbitRotationHandlePoint, rotatePoint, requiredPosition } from '../utils/system-map-geometry'
 import { orbitGeometrySource } from '../utils/orbit-geometry-source'
+import { measureSystemObjectBranchBounds, resolveSystemObjectBranch } from '../utils/system-object-branch'
 import { continuousOrbitKeyboardChange } from '../utils/continuous-orbit-interaction'
 import type { EntityCommand, MapHistoryTarget, MapInteractionMode, OrbitCenterMoveCandidate, OrbitCreationMapPreview, SystemCreationCandidate, SystemCreationType, SystemObjectMoveTarget } from '../composables/editor-workflows/types'
 import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../composables/editor-workflows/continuous-orbit-adjustments'
@@ -456,6 +457,9 @@ import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
 
 const DETAIL_REVEAL_PIXELS = 250
 const DETAIL_HIDE_PIXELS = 210
+const SEARCH_BRANCH_MAX_LOCAL_SCALE = 2
+const SEARCH_LOCATOR_LOCAL_RADIUS = 25
+const SEARCH_LOCATOR_MIN_SCREEN_RADIUS = 10
 const MINIMUM_FIT_PADDING = 48
 const ROUTE_REVEAL_PADDING_PIXELS = 14
 const ROUTE_FAN_OUT_LIMIT_PIXELS = 96
@@ -1010,9 +1014,20 @@ function orbitRadiusSliderValues(
   }
 }
 
+function systemScreenScale(projection: ContinuousWardenSystemProjection): number {
+  return projection.scale * viewport.value.k * svgPixelScale.value
+}
+
 function orbitEditHandleRadius(projection: ContinuousWardenSystemProjection): number {
-  const screenScale = projection.scale * viewport.value.k * svgPixelScale.value
+  const screenScale = systemScreenScale(projection)
   return screenScale > 0 ? 7 / screenScale : 7
+}
+
+function searchLocatorRadius(projection: ContinuousWardenSystemProjection): number {
+  const screenScale = systemScreenScale(projection)
+  return screenScale > 0
+    ? Math.max(SEARCH_LOCATOR_LOCAL_RADIUS, SEARCH_LOCATOR_MIN_SCREEN_RADIUS / screenScale)
+    : SEARCH_LOCATOR_LOCAL_RADIUS
 }
 
 function isSelectedObject(systemId: string, objectId: string): boolean {
@@ -1351,13 +1366,91 @@ function frameEntityTarget(
   return true
 }
 
+/** Measures applied labels even when the owning system has no mounted interior marks yet. */
+function measureSearchBranchGlyphs(
+  document: Document,
+  system: StarSystem,
+  objectIds: readonly string[],
+): ReadonlyMap<string, SvgViewportRect> {
+  const text = document.createElement('canvas').getContext('2d')
+  if (text) text.textAlign = 'center'
+
+  function textHalfWidth(label: string, size: number, family: string): number {
+    if (!text) return Array.from(label).length * size / 2
+    text.font = `${size}px ${family}`
+    const measure = text.measureText(label)
+    return Math.max(measure.width / 2, measure.actualBoundingBoxLeft ?? 0, measure.actualBoundingBoxRight ?? 0)
+  }
+
+  const objects = new Map(system.objects.map(object => [object.id, object]))
+  const glyphs = new Map<string, SvgViewportRect>()
+  for (const id of objectIds) {
+    const object = objects.get(id)
+    if (!object) continue
+    const halfWidth = Math.max(
+      SEARCH_LOCATOR_LOCAL_RADIUS,
+      textHalfWidth(object.name, 12, 'Georgia, serif') + 2,
+      textHalfWidth(object.locationKey, 9, 'Consolas, monospace') + 2,
+    )
+    // The glyph is centered on the mark. The name baseline is 46 local units below it.
+    glyphs.set(id, {
+      x: -halfWidth,
+      y: -SEARCH_LOCATOR_LOCAL_RADIUS,
+      width: halfWidth * 2,
+      height: SEARCH_LOCATOR_LOCAL_RADIUS + 52,
+    })
+  }
+  return glyphs
+}
+
+function frameSearchObjectBranch(systemId: string, objectId: string, usableRect?: SvgViewportRect): boolean {
+  const element = svgElement.value
+  const system = props.cluster.systems.find(candidate => candidate.id === systemId)
+  const projection = projections.value.find(candidate => candidate.id === systemId)
+  if (!element || !zoomBehavior || !system || !projection) return false
+  const branch = resolveSystemObjectBranch(system, objectId)
+  if (!branch) return false
+  if (!branch.orbitIds.length) return frameEntityTarget(systemId, 'object', objectId, usableRect)
+
+  const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
+  if (!rect) return false
+  const glyphs = measureSearchBranchGlyphs(element.ownerDocument, system, branch.objectIds)
+  const measured = measureSystemObjectBranchBounds(system, objectId, systemGeometry.value, glyphs)
+  if (!measured) return false
+  const origin = projection.projectLocalPoint(measured.bounds)
+  const targetBounds = {
+    ...origin,
+    width: measured.bounds.width * projection.scale,
+    height: measured.bounds.height * projection.scale,
+  }
+  const fitted = fitMapViewport(targetBounds, rect, Number.MIN_VALUE)
+  if (!fitted) return false
+
+  const current = getViewport()
+  const next = centerMapTargetViewport({
+    current: { ...current, k: Math.max(current.k, Math.min(fitted.k, SEARCH_BRANCH_MAX_LOCAL_SCALE / projection.scale)) },
+    targetBounds,
+    usableRect: rect,
+    minimumScale: continuousMapDetailScale(
+      projection.envelope,
+      svgPixelScale.value,
+      detailSystemIds.value.has(systemId) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS,
+    ),
+    maximumScale: fitted.k,
+  })
+  if (!next) return false
+  if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
+    || next.k !== current.k) setViewport(next)
+  return true
+}
+
 function frameSearchTarget(target: import('../utils/workspace-search').SearchTarget, usableRect?: SvgViewportRect): boolean {
   if (target.kind === 'cluster') {
     fitMap(usableRect)
     return true
   }
   if (target.kind === 'system') return frameSystem(target.systemId, usableRect)
-  return frameEntityTarget(target.systemId, 'object', target.objectId, usableRect)
+  return frameSearchObjectBranch(target.systemId, target.objectId, usableRect)
 }
 
 function centerInspectedTarget(target: InspectedMapTarget, usableRect?: SvgViewportRect): boolean {
