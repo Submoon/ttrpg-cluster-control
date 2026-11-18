@@ -16,6 +16,7 @@ import type {
   Point,
   PublicationMode,
   SystemObject,
+  SystemObjectTransferPlacement,
 } from '../../domain/workspace'
 import type { MapImageExporter } from '../../utils/map-image-export'
 import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
@@ -361,6 +362,14 @@ export interface MapNavigationHandle extends MapImageExporter {
   isSystemTransferMapOwnerCurrent?(systemId: string, owner: object): boolean
   /** Converts a client point to the requested owner's normalized local map coordinates. */
   systemTransferPointAtClient?(systemId: string, clientX: number, clientY: number): Point | null
+  /** Resolves map input against the transfer's captured Free or Orbit destination choice. */
+  systemTransferPlacementAtClient?(
+    systemId: string,
+    rootObjectId: string,
+    selectedPlacement: Readonly<SystemObjectTransferPlacement>,
+    clientX: number,
+    clientY: number,
+  ): SystemObjectTransferPlacement | null
   /** Frames the requested destination so its placement surface and Orbits are accessible. */
   frameSystemTransferDestination?(systemId: string): boolean
   /** Paints a pointer-transparent transfer ghost that is excluded from map exports. */

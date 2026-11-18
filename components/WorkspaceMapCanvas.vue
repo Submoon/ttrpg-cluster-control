@@ -183,6 +183,7 @@ import type {
   OrbitRadii,
   Point,
   StarSystem,
+  SystemObjectTransferPlacement,
 } from '../domain/workspace'
 import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
 import type {
@@ -352,6 +353,8 @@ let activeSystemTransferPointer: {
   lease: SystemObjectTransferMapPlacementLease
   pointerId: number
 } | null = null
+const systemTransferSuppressedReleaseIds = new Set<number>()
+let transferTouchContact: { touchId: number; x: number; y: number } | null = null
 let systemTransferKeyboardPoint: Point | null = null
 let activeMousePointerId: number | null = null
 let editingGestureActive = false
@@ -850,6 +853,21 @@ function systemTransferPointAtClient(systemId: string, clientX: number, clientY:
   return continuousWardenMapRef.value?.systemTransferPointAtClient(systemId, clientX, clientY) ?? null
 }
 
+function systemTransferPlacementAtClient(
+  lease: SystemObjectTransferMapPlacementLease,
+  clientX: number,
+  clientY: number,
+): SystemObjectTransferPlacement | null {
+  if (!isSystemTransferDestination(lease.destinationSystemId)) return null
+  return continuousWardenMapRef.value?.systemTransferPlacementAtClient(
+    lease.destinationSystemId,
+    lease.rootObjectId,
+    lease.placementCandidate,
+    clientX,
+    clientY,
+  ) ?? null
+}
+
 function frameSystemTransferDestination(systemId: string): boolean {
   if (!isSystemTransferDestination(systemId)) return false
   const svg = canvasRoot.value?.querySelector<SVGSVGElement>('svg.continuous-warden-map-svg')
@@ -894,29 +912,53 @@ function beginSystemTransferPointerPlacement(event: PointerEvent): boolean {
     cancelSystemTransferPlacement(lease)
     return true
   }
-  if (activeSystemTransferPointer) cancelSystemTransferPlacement(activeSystemTransferPointer.lease)
   systemTransferKeyboardPoint = null
   activeSystemTransferPointer = { lease, pointerId: event.pointerId }
-  emitSystemTransferPointerPreview(lease, systemTransferPointAtClient(lease.destinationSystemId, event.clientX, event.clientY))
+  emitSystemTransferPointerPreview(lease, systemTransferPlacementAtClient(lease, event.clientX, event.clientY))
   try { canvasRoot.value?.setPointerCapture(event.pointerId) } catch { /* Synthetic input may not permit capture. */ }
   return true
 }
 
 function emitSystemTransferPointerPreview(
   lease: SystemObjectTransferMapPlacementLease,
-  point: Point | null,
+  placement: SystemObjectTransferPlacement | null,
 ): void {
-  const preview: SystemObjectTransferMapPointerPreview = { lease, point }
+  const preview: SystemObjectTransferMapPointerPreview = { lease, placement }
   emit('system-transfer-placement-preview', preview)
 }
 
-function completeSystemTransferPlacement(lease: SystemObjectTransferMapPlacementLease, point: Point): void {
+function completeSystemTransferPlacement(
+  lease: SystemObjectTransferMapPlacementLease,
+  placement: SystemObjectTransferPlacement,
+): void {
   activeSystemTransferPointer = null
   systemTransferKeyboardPoint = null
   holdClickSuppression()
-  emitSystemTransferPointerPreview(lease, point)
-  const anchor: SystemObjectTransferMapAnchor = { lease, point }
+  emitSystemTransferPointerPreview(lease, placement)
+  const anchor: SystemObjectTransferMapAnchor = { lease, placement }
   emit('system-transfer-placement-complete', anchor)
+}
+
+function suppressSystemTransferRelease(pointerId: number | null): void {
+  if (pointerId !== null) {
+    systemTransferSuppressedReleaseIds.add(pointerId)
+    const sequence = livePointerSequences.get(pointerId)
+    if (sequence) sequence.cancelledRelease = true
+  }
+  const touchContact = transferTouchContact
+  if (touchContact) {
+    const touchPointerId = touchReleaseGuard?.pointerIdForTouch(touchContact.touchId) ?? null
+    if (pointerId === null || touchPointerId === pointerId) {
+      touchReleaseGuard?.arm({
+        touchId: touchContact.touchId,
+        pointerId: touchPointerId,
+        x: touchContact.x,
+        y: touchContact.y,
+      })
+    }
+    transferTouchContact = null
+  }
+  if (pointerId !== null || touchContact) holdClickSuppression()
 }
 
 function cancelSystemTransferPlacement(
@@ -926,10 +968,12 @@ function cancelSystemTransferPlacement(
   if (activeSystemTransferPointer?.lease === lease) {
     const pointerId = activeSystemTransferPointer.pointerId
     activeSystemTransferPointer = null
+    suppressSystemTransferRelease(pointerId)
     try {
       if (canvasRoot.value?.hasPointerCapture(pointerId)) canvasRoot.value.releasePointerCapture(pointerId)
     } catch { /* Pointer capture may already be released. */ }
-    holdClickSuppression()
+  } else {
+    suppressSystemTransferRelease(null)
   }
   systemTransferKeyboardPoint = null
   emitSystemTransferPointerPreview(lease, null)
@@ -939,6 +983,8 @@ function cancelSystemTransferPlacement(
 function moveKeyboardTransferPreview(event: KeyboardEvent): boolean {
   const lease = props.systemObjectTransferMapLease
   if (!lease || !isSystemTransferMapOwnerCurrent(lease.destinationSystemId, lease.mapOwner)) return false
+  if (event.defaultPrevented || event.isComposing || event.keyCode === 229
+    || props.keyboardOwnedOverlayOpen || eventOwnedByKeyboardPopup(event)) return false
   if (event.key === 'Escape') {
     event.preventDefault()
     event.stopPropagation()
@@ -964,7 +1010,7 @@ function moveKeyboardTransferPreview(event: KeyboardEvent): boolean {
     }
     emitSystemTransferPointerPreview(
       lease,
-      systemTransferPointAtClient(lease.destinationSystemId, systemTransferKeyboardPoint.x, systemTransferKeyboardPoint.y),
+      systemTransferPlacementAtClient(lease, systemTransferKeyboardPoint.x, systemTransferKeyboardPoint.y),
     )
     return true
   }
@@ -976,8 +1022,8 @@ function moveKeyboardTransferPreview(event: KeyboardEvent): boolean {
     if (!svg) return true
     const bounds = svg.getBoundingClientRect()
     const clientPoint = systemTransferKeyboardPoint ?? { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
-    const point = systemTransferPointAtClient(lease.destinationSystemId, clientPoint.x, clientPoint.y)
-    if (point) completeSystemTransferPlacement(lease, point)
+    const placement = systemTransferPlacementAtClient(lease, clientPoint.x, clientPoint.y)
+    if (placement) completeSystemTransferPlacement(lease, placement)
     else emitSystemTransferPointerPreview(lease, null)
     return true
   }
@@ -1181,7 +1227,7 @@ function onWindowPointerMove(event: PointerEvent): void {
     }
     emitSystemTransferPointerPreview(
       transferPointer.lease,
-      systemTransferPointAtClient(transferPointer.lease.destinationSystemId, event.clientX, event.clientY),
+      systemTransferPlacementAtClient(transferPointer.lease, event.clientX, event.clientY),
     )
     return
   }
@@ -1226,6 +1272,8 @@ function onWindowPointerUp(event: PointerEvent): void {
     event.stopImmediatePropagation()
     if (event.type === 'pointercancel') {
       cancelSystemTransferPlacement(transferPointer.lease)
+      systemTransferSuppressedReleaseIds.delete(event.pointerId)
+      livePointerSequences.delete(event.pointerId)
       return
     }
     if (event.buttons !== 0) return
@@ -1238,12 +1286,20 @@ function onWindowPointerUp(event: PointerEvent): void {
       cancelSystemTransferPlacement(transferPointer.lease)
       return
     }
-    const point = systemTransferPointAtClient(transferPointer.lease.destinationSystemId, event.clientX, event.clientY)
-    if (!point) {
+    const placement = systemTransferPlacementAtClient(transferPointer.lease, event.clientX, event.clientY)
+    if (!placement) {
       cancelSystemTransferPlacement(transferPointer.lease)
       return
     }
-    completeSystemTransferPlacement(transferPointer.lease, point)
+    completeSystemTransferPlacement(transferPointer.lease, placement)
+    return
+  }
+  if (systemTransferSuppressedReleaseIds.has(event.pointerId)) {
+    systemTransferSuppressedReleaseIds.delete(event.pointerId)
+    livePointerSequences.delete(event.pointerId)
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    holdClickSuppression()
     return
   }
   if (orbitInput.onPointerUp(event)) return
@@ -1436,6 +1492,8 @@ function onClickCapture(event: MouseEvent): void {
 function onTouchStartCapture(event: TouchEvent): void {
   if (props.systemObjectTransferMapLease && event.target instanceof Element
     && event.target.closest('svg.continuous-warden-map-svg')) {
+    const touch = event.changedTouches[0] ?? event.touches[0]
+    if (touch) transferTouchContact = { touchId: touch.identifier, x: touch.clientX, y: touch.clientY }
     event.preventDefault()
     event.stopImmediatePropagation()
     return
@@ -1542,6 +1600,10 @@ function onTouchMoveCapture(event: TouchEvent): void {
 }
 
 function onTouchEndCapture(event: TouchEvent): void {
+  if (transferTouchContact
+    && Array.from(event.changedTouches).some(touch => touch.identifier === transferTouchContact?.touchId)) {
+    transferTouchContact = null
+  }
   if (orbitInput.onTouchEndCapture(event)) return
   if (consumedAddTouchId !== null
     && Array.from(event.changedTouches).some(touch => touch.identifier === consumedAddTouchId)) {
@@ -1785,7 +1847,7 @@ function prepareSystemTransferKeyboardPlacement(lease: SystemObjectTransferMapPl
   systemTransferKeyboardPoint = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
   emitSystemTransferPointerPreview(
     lease,
-    systemTransferPointAtClient(lease.destinationSystemId, systemTransferKeyboardPoint.x, systemTransferKeyboardPoint.y),
+    systemTransferPlacementAtClient(lease, systemTransferKeyboardPoint.x, systemTransferKeyboardPoint.y),
   )
   continuousWardenMapRef.value?.focusMap()
 }
@@ -1852,6 +1914,8 @@ onBeforeUnmount(() => {
   settleMapReadiness(false)
   cancelCanvasGesture()
   livePointerSequences.clear()
+  systemTransferSuppressedReleaseIds.clear()
+  transferTouchContact = null
   if (suppressClickTimer) clearTimeout(suppressClickTimer)
   if (suppressContextMenuTimer) clearTimeout(suppressContextMenuTimer)
   window.removeEventListener('pointermove', onWindowPointerMove, true)
@@ -1966,6 +2030,7 @@ defineExpose({
   captureSystemTransferMapOwner,
   isSystemTransferMapOwnerCurrent,
   systemTransferPointAtClient,
+  systemTransferPlacementAtClient,
   frameSystemTransferDestination,
   setSystemObjectTransferPreview,
   centerInspectedTarget,

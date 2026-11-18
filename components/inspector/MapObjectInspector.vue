@@ -127,6 +127,7 @@
             <h3 id="object-placement-heading">Placement and relationships</h3>
           </div>
           <UButton
+            v-if="props.systemTransferEnabled"
             class="workspace-control"
             color="neutral"
             variant="outline"
@@ -397,6 +398,7 @@ const props = defineProps<{
   exportError: string
   publicationBusy?: boolean
   transferBusy?: boolean
+  systemTransferEnabled?: boolean
 }>()
 
 const emit = defineEmits<{

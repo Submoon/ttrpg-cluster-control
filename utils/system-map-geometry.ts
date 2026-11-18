@@ -8,6 +8,7 @@ import {
   type Orbit,
   type OrbitRadii,
   type Point,
+  type PublicationMode,
   type StarSystem,
 } from '../domain/workspace'
 import { fromNormalizedMapPoint, toNormalizedMapPoint } from '../domain/workspace-map-coordinates'
@@ -23,6 +24,7 @@ import { catalogueObjectLabel } from './catalogue-labels'
 export interface SystemMapProjectionSource {
   readonly id: string
   readonly name: string
+  readonly publication?: PublicationMode
   readonly objects: readonly {
     readonly id: string
     readonly name: string

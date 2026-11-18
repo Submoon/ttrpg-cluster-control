@@ -63,6 +63,7 @@
           :workspace="props.workspace"
           :publication-busy="props.publicationBusy"
           :transfer-busy="props.systemTransferSession !== null && props.systemTransferSession !== undefined"
+          :system-transfer-enabled="props.systemTransferEnabled"
           :selected-system="props.selectedSystem"
           :selected-object="props.selectedObject"
           :focus-request="props.objectFocusRequest"
@@ -169,6 +170,7 @@ import SystemObjectTransferReviewDialog from './inspector/SystemObjectTransferRe
 const props = defineProps<{
   mode: 'cluster' | 'system'
   workspace: LocalWorkspace
+  systemTransferEnabled?: boolean
   selectedSystem?: StarSystem
   inspectedClusterSystem?: StarSystem
   selectedObject?: SystemObject

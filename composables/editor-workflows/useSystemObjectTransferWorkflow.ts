@@ -1,7 +1,7 @@
 /** Coordinates guarded review, map ownership, and one reversible transfer publication. */
 import { computed, readonly, ref, shallowRef } from 'vue'
 import type { Ref } from 'vue'
-import type { LocalWorkspace, Point, SystemObjectTransferPlacement } from '../../domain/workspace'
+import type { LocalWorkspace, SystemObjectTransferPlacement } from '../../domain/workspace'
 import { applySystemObjectTransfer, prepareSystemObjectTransfer, resolveSystemObjectBranch } from '../../domain/workspace'
 import { useSystemObjectTransferDraft } from '../useSystemObjectTransferDraft'
 import type { SystemObjectTransferAcceptance } from '../useSystemObjectTransferDraft'
@@ -203,6 +203,14 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     const revision = options.appliedRevision.value
     const inputGeneration = current.draft.inputGeneration.value
     const placementGeneration = current.draft.placementGeneration.value
+    const selectedPlacement = current.draft.placement.value
+    const placementCandidate: SystemObjectTransferPlacement = selectedPlacement?.kind === 'orbit'
+      ? { kind: 'orbit', orbitId: selectedPlacement.orbitId, angle: selectedPlacement.angle }
+      : {
+          kind: 'system',
+          x: selectedPlacement?.x ?? 0.5,
+          y: selectedPlacement?.y ?? 0.5,
+        }
     const isCurrent = (): boolean => activeSession.value === current
       && options.workspace.value === workspace
       && options.appliedRevision.value === revision
@@ -245,6 +253,8 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       inputGeneration: current.draft.inputGeneration.value,
       placementGeneration: current.draft.placementGeneration.value,
       destinationSystemId,
+      rootObjectId: current.rootObjectId,
+      placementCandidate: Object.freeze(placementCandidate),
       workspaceReference: workspace,
       appliedRevision: options.appliedRevision.value,
       mapOwner,
@@ -301,10 +311,13 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     return true
   }
 
-  function previewMapPlacement(lease: SystemObjectTransferMapPlacementLease, point: Point | null): boolean {
+  function previewMapPlacement(
+    lease: SystemObjectTransferMapPlacementLease,
+    placement: SystemObjectTransferPlacement | null,
+  ): boolean {
     const current = ownsSession(lease.sessionId)
     if (!current || !ownsMapPlacement(lease)) return false
-    if (!point) {
+    if (!placement) {
       mapPointerPreview.value = null
       return true
     }
@@ -313,7 +326,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
         sourceSystemId: current.sourceSystemId,
         rootObjectId: current.rootObjectId,
         destinationSystemId: lease.destinationSystemId,
-        placement: { kind: 'system', x: point.x, y: point.y },
+        placement,
       })
       mapPointerPreview.value = {
         lease,
@@ -504,7 +517,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
 
   return {
     session,
-    pendingMapPlacement: readonly(pendingMapPlacement),
+    pendingMapPlacement: computed(() => pendingMapPlacement.value),
     mapPreview,
     lastError: readonly(lastError),
     handleIntent,

@@ -7,7 +7,6 @@ import {
   createWorkspaceHistoryCoordinator,
   type WorkspaceHistoryCoordinator,
 } from '../composables/editor-workflows/workspace-mutations'
-import type { SystemObjectTransferMapPlacementLease } from '../composables/editor-workflows/system-object-transfer-types'
 
 function transferWorkspace(): { workspace: LocalWorkspace; sourceSystemId: string; destinationSystemId: string; rootObjectId: string } {
   const base = createLocalWorkspace('Kestrel Reach', 'Source')
@@ -30,11 +29,10 @@ function transferWorkspace(): { workspace: LocalWorkspace; sourceSystemId: strin
 }
 
 function transferHarness(options: {
-  workspace?: LocalWorkspace
   maxBytes?: number
 } = {}) {
   const { workspace: fixture, sourceSystemId, destinationSystemId, rootObjectId } = transferWorkspace()
-  const workspace = shallowRef(options.workspace ?? fixture)
+  const workspace = shallowRef(fixture)
   const revision = ref(0)
   const destinationOwner = { renderer: 'destination' }
   let currentDestinationOwner: object | null = destinationOwner
@@ -142,7 +140,7 @@ test('map placement lease is bound to exact destination owner and retains the re
   const harness = transferHarness()
   const sessionId = await openTransfer(harness)
   await harness.workflow.handleIntent({ kind: 'place-on-map', sessionId })
-  const lease = harness.workflow.pendingMapPlacement.value as SystemObjectTransferMapPlacementLease | null
+  const lease = harness.workflow.pendingMapPlacement.value
   expect(lease).not.toBeNull()
   expect(harness.workflow.session.value).toMatchObject({ sessionId, open: false, placingOnMap: true })
   expect(harness.workflow.ownsMapPlacement(lease!)).toBe(true)
@@ -158,7 +156,7 @@ test('map placement lease is bound to exact destination owner and retains the re
     placement: { kind: 'system', x: 0.6, y: 0.4 },
   })
   await harness.workflow.handleIntent({ kind: 'place-on-map', sessionId })
-  const resumedLease = harness.workflow.pendingMapPlacement.value as SystemObjectTransferMapPlacementLease | null
+  const resumedLease = harness.workflow.pendingMapPlacement.value
   expect(resumedLease).not.toBe(lease)
   expect(harness.workflow.ownsMapPlacement(resumedLease!)).toBe(true)
   await harness.workflow.handleIntent({ kind: 'cancel-map-placement', sessionId, lease: lease! })
@@ -169,6 +167,40 @@ test('map placement lease is bound to exact destination owner and retains the re
   expect(harness.workflow.completeMapPlacement(resumedLease!, { kind: 'system', x: 0.51, y: 0.25 })).toBe(false)
   expect(harness.workflow.session.value).toMatchObject({ sessionId, open: true, placingOnMap: false })
   expect(harness.workflow.session.value?.placement).toEqual({ kind: 'system', x: 0.6, y: 0.4 })
+  harness.dispose()
+})
+
+test('map placement preview and completion retain the explicitly selected destination Orbit @pure', async () => {
+  const harness = transferHarness()
+  const workspace = harness.workspace.value
+  const source = workspace.cluster.systems[0]!
+  const destination = {
+    ...workspace.cluster.systems[1]!,
+    orbits: [{ id: 'destination-orbit', order: 1, hostId: null, center: { x: 0.45, y: 0.55 } }],
+  }
+  harness.workspace.value = { ...workspace, cluster: { ...workspace.cluster, systems: [source, destination] } }
+  const sessionId = await openTransfer(harness)
+  await harness.workflow.handleIntent({
+    kind: 'choose-orbit-placement',
+    sessionId,
+    orbitId: destination.orbits[0]!.id,
+    angle: 0.2,
+  })
+  await harness.workflow.handleIntent({ kind: 'place-on-map', sessionId })
+  const lease = harness.workflow.pendingMapPlacement.value
+  expect(lease?.placementCandidate).toEqual({ kind: 'orbit', orbitId: 'destination-orbit', angle: 0.2 })
+
+  const pointerPlacement = { kind: 'orbit' as const, orbitId: 'destination-orbit', angle: 2.3 }
+  expect(harness.workflow.previewMapPlacement(lease!, pointerPlacement)).toBe(true)
+  const preview = harness.workflow.mapPreview.value?.previewWorkspace
+  const previewDestination = preview?.cluster.systems
+    .find(system => system.id === harness.destinationSystemId)
+  expect(previewDestination?.objects.find(object => object.id === harness.rootObjectId)?.placement)
+    .toEqual({ kind: 'orbit', orbitId: pointerPlacement.orbitId })
+  expect(preview?.layout.objectAngles[harness.rootObjectId]).toBeCloseTo(pointerPlacement.angle)
+
+  expect(harness.workflow.completeMapPlacement(lease!, pointerPlacement)).toBe(true)
+  expect(harness.workflow.session.value?.placement).toEqual(pointerPlacement)
   harness.dispose()
 })
 

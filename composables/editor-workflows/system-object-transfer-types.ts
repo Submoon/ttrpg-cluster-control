@@ -49,6 +49,9 @@ export interface SystemObjectTransferMapPlacementLease {
   readonly inputGeneration: number
   readonly placementGeneration: number
   readonly destinationSystemId: string
+  readonly rootObjectId: string
+  /** The explicit Free or Orbit choice captured when map input begins. Pointer position supplies only its coordinates/angle. */
+  readonly placementCandidate: DeepReadonly<SystemObjectTransferPlacement>
   readonly workspaceReference: LocalWorkspace
   readonly appliedRevision: number
   readonly mapOwner: object
@@ -57,13 +60,13 @@ export interface SystemObjectTransferMapPlacementLease {
 /** One accepted primary-pointer release expressed in destination-local normalized coordinates. */
 export interface SystemObjectTransferMapAnchor {
   readonly lease: SystemObjectTransferMapPlacementLease
-  readonly point: Point
+  readonly placement: SystemObjectTransferPlacement
 }
 
 /** Pointer movement may leave the map while the placement gesture remains captured. */
 export interface SystemObjectTransferMapPointerPreview {
   readonly lease: SystemObjectTransferMapPlacementLease
-  readonly point: Point | null
+  readonly placement: SystemObjectTransferPlacement | null
 }
 
 export interface SystemObjectTransferWorkflowState {

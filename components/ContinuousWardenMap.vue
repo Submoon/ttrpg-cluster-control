@@ -348,7 +348,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from 'vue'
 import type { DeepReadonly } from 'vue'
 import { pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
-import { jumpPointsInCluster, minimumOrbitRadius, type CatalogueSubtype, type JumpCluster, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem } from '../domain/workspace'
+import { jumpPointsInCluster, minimumOrbitRadius, type CatalogueSubtype, type JumpCluster, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem, type SystemObjectTransferPlacement } from '../domain/workspace'
 import { normalizeOrbitRotation } from '../domain/workspace-orbits'
 import { getDetachedOrbitCenter, objectPositions, objectsMovedWithOrbit, orbitCenter, orbitPointAtAngle, orbitRadii as readOrbitRadii, orbitRotation, orbitRotationHandlePoint, rotatePoint, requiredPosition } from '../utils/system-map-geometry'
 import { orbitGeometrySource } from '../utils/orbit-geometry-source'
@@ -404,6 +404,7 @@ import { createMapTouchNavigation } from './maps/map-touch-navigation'
 import type { MapImageExportOptions, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import { mapImageContextKey, type MapImageScope } from '../utils/map-image-scope'
 import { exportContinuousWardenMapImage } from '../utils/continuous-warden-image-export'
+import { resolveSystemObjectTransferMapPlacement } from '../utils/system-object-transfer-map-placement'
 import { CONTINUOUS_SYSTEM_NAME_FONT_PIXELS as SYSTEM_NAME_FONT_PIXELS, continuousMapNameLabels } from '../utils/continuous-map-name-labels'
 import type { ContinuousMapNameLabel } from '../utils/continuous-map-name-labels'
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
@@ -1110,6 +1111,25 @@ function systemTransferPointAtClient(systemId: string, clientX: number, clientY:
   })
   if (![localScenePoint.x, localScenePoint.y].every(Number.isFinite)) return null
   return toNormalizedMapPoint(localScenePoint)
+}
+
+function systemTransferPlacementAtClient(
+  systemId: string,
+  rootObjectId: string,
+  selectedPlacement: Readonly<SystemObjectTransferPlacement>,
+  clientX: number,
+  clientY: number,
+): SystemObjectTransferPlacement | null {
+  const normalizedPoint = systemTransferPointAtClient(systemId, clientX, clientY)
+  const system = props.cluster.systems.find(candidate => candidate.id === systemId)
+  if (!normalizedPoint || !system) return null
+  return resolveSystemObjectTransferMapPlacement(
+    system,
+    systemMapGeometry(props.workspace),
+    rootObjectId,
+    selectedPlacement,
+    normalizedPoint,
+  )
 }
 
 function frameSystemTransferDestination(systemId: string, usableRect?: SvgViewportRect): boolean {
@@ -2871,6 +2891,7 @@ defineExpose({
   setOrbitPlacementPreview,
   isSystemTransferDestination,
   systemTransferPointAtClient,
+  systemTransferPlacementAtClient,
   frameSystemTransferDestination,
   setSystemObjectTransferPreview,
   toSystemScenePoint,

@@ -234,7 +234,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
         if (!isCurrent() || store.activeView !== 'system' || store.selectedSystemId !== systemId) return false
       }
       if (!isCurrent()) return false
-      viewport.requestPanel('map')
+      if (viewport.isCompactViewport.value) store.setCompactPanel(null)
       await nextTick()
       const map = mapControls.placementMapRef.value
       if (!map || !map.whenReady || !await map.whenReady() || !isCurrent()

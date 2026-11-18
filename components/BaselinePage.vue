@@ -431,8 +431,8 @@
                     :cluster-chooser-open="creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen"
                     :is-entity-command-blocked="isEntityCommandBlocked"
                     :orbit-adjustment-preview="orbitAdjustmentPreview"
-                    :system-object-transfer-preview="transfer.mapPreview"
-                    :system-object-transfer-map-lease="transfer.pendingMapPlacement"
+                    :system-object-transfer-preview="transferMapPreview"
+                    :system-object-transfer-map-lease="transferMapPlacementLease"
                     :feedback-element="workspaceFeedbackRef"
                     @navigate-system="selectSystem"
                     @select-cluster-system="selectClusterSystem"
@@ -466,8 +466,8 @@
                     @rotate-orbit="rotateMapOrbit"
                     @place-object-in-orbit="placeMapObjectInOrbit"
                     @viewport-change="recordViewport($event.key, $event.viewport)"
-                    @system-transfer-placement-preview="transfer.previewMapPlacement($event.lease, $event.point)"
-                    @system-transfer-placement-complete="transfer.completeMapPlacement($event.lease, { kind: 'system', x: $event.point.x, y: $event.point.y })"
+                    @system-transfer-placement-preview="transfer.previewMapPlacement($event.lease, $event.placement)"
+                    @system-transfer-placement-complete="transfer.completeMapPlacement($event.lease, $event.placement)"
                     @system-transfer-placement-cancel="transfer.handleIntent({ kind: 'cancel-map-placement', sessionId: $event.sessionId, lease: $event })"
                   />
                   <WorkspaceMapCanvas
@@ -581,6 +581,7 @@
             <MapInspector
               :mode="inspectorMode"
               :workspace="workspace"
+              :system-transfer-enabled="continuousMapEnabled"
               :publication-busy="publicationBusy"
               :selected-system="inspectorSelectedSystem"
               :inspected-cluster-system="inspectorClusterSystem"
@@ -604,7 +605,7 @@
               :save-message="saveMessage"
               :save-error="saveError"
               :export-error="exportError"
-              :system-transfer-session="inspector.systemTransferSession"
+              :system-transfer-session="systemTransferSession"
               @open-system="selectSystem"
               @delete-system="deleteSystem"
               @hide="closePanel('inspector')"
@@ -1026,6 +1027,9 @@ const workflows = useEditorWorkflows({
   }),
 })
 const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search, filterCriteria, transfer } = workflows
+const transferMapPreview = transfer.mapPreview
+const transferMapPlacementLease = transfer.pendingMapPlacement
+const systemTransferSession = inspector.systemTransferSession
 watch(
   [() => workspace.value?.id, () => workspace.value?.cluster.id, hydrationState, continuousMapEnabled],
   ([workspaceId, clusterId, , enabled]) => {
