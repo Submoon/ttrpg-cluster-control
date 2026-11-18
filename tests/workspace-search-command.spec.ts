@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRenderer, nextTick, ref } from 'vue'
-import { createLocalWorkspace, createOrbit, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
+import { applySystemObjectTransfer, createLocalWorkspace, createOrbit, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
 import type { MapNavigationHandle, SaveState, SearchPresentationSettlement, SystemMapHandle } from '../composables/editor-workflows/types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
@@ -642,6 +642,108 @@ test('continuous history restores an inspected object as the complete single-mem
     expect(harness.store.selectedObjectId).toBe(object.id)
     expect(harness.store.selectedObjectIds).toEqual([object.id])
     expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: system.id, objectId: object.id })
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('transfer Undo and Redo reveal the stable root in its actual owner @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const original = harness.workspace.value
+    const source = original.cluster.systems[0]
+    const root = source?.objects[0]
+    if (!source || !root) throw new Error('The local workspace did not create a transferable object.')
+    const destination = { ...source, id: 'history-transfer-destination', name: 'Destination', objects: [], orbits: [] }
+    harness.workspace.value = {
+      ...original,
+      cluster: { ...original.cluster, systems: [source, destination] },
+      layout: {
+        ...original.layout,
+        systemPositions: { ...original.layout.systemPositions, [destination.id]: { x: 0.7, y: 0.55 } },
+      },
+    }
+    const before = harness.workspace.value
+    const action = {
+      workspaceId: before.id,
+      clusterId: before.cluster.id,
+      contextLabel: source.name,
+      kind: 'transfer' as const,
+      label: `Change system for ${root.name}`,
+      target: { kind: 'object' as const, id: root.id, systemId: source.id },
+      parent: { kind: 'system' as const, id: destination.id },
+    }
+
+    await harness.workflows.navigation.revealHistoryContext({ direction: 'undo', action })
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: source.id, objectId: root.id })
+    expect(harness.store.selectedObjectIds).toEqual([root.id])
+
+    harness.workspace.value = applySystemObjectTransfer(before, {
+      sourceSystemId: source.id,
+      rootObjectId: root.id,
+      destinationSystemId: destination.id,
+      placement: { kind: 'system', x: 0.74, y: 0.56 },
+    })
+    await harness.workflows.navigation.revealHistoryContext({ direction: 'redo', action })
+
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.store.selectedSystemId).toBe(destination.id)
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: destination.id, objectId: root.id })
+    expect(harness.store.selectedObjectIds).toEqual([root.id])
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('editing the destination Orbit resumes transfer review and preserves the draft and previous placement @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), 'Harrow', undefined, false, true)
+  try {
+    const before = harness.workspace.value
+    const [source, destination] = before.cluster.systems
+    const root = source?.objects[0]
+    if (!source || !destination || !root) throw new Error('The transfer fixture is incomplete.')
+    const orbit = createOrbit(destination, null)
+    destination.orbits.push(orbit)
+    const mapOwner = {}
+    harness.store.setSelection({ activeView: 'cluster' })
+    harness.workflows.mapControls.clusterMapRef.value = {
+      ...createMapHandle({ whenReady: async () => true, frameSearchTarget: () => true, focusMap: () => undefined }),
+      isSystemTransferDestination: systemId => systemId === destination.id,
+      captureSystemTransferMapOwner: () => mapOwner,
+      isSystemTransferMapOwnerCurrent: (systemId, owner) => systemId === destination.id && owner === mapOwner,
+      frameSystemTransferDestination: () => true,
+    }
+    const { inspector, navigation, transfer } = harness.workflows
+    await transfer.handleIntent({ kind: 'open', sourceSystemId: source.id, rootObjectId: root.id })
+    const sessionId = inspector.systemTransferSession.value?.sessionId
+    if (sessionId === undefined) throw new Error('The transfer review did not open.')
+    await transfer.handleIntent({ kind: 'select-destination', sessionId, systemId: destination.id })
+    await transfer.handleIntent({ kind: 'choose-orbit-placement', sessionId, orbitId: orbit.id, angle: 0.5 })
+    const previousPlacement = { kind: 'orbit', orbitId: orbit.id, angle: 0.5 }
+    expect(inspector.systemTransferSession.value).toMatchObject({ canAccept: true, placement: previousPlacement })
+    await transfer.handleIntent({ kind: 'place-on-map', sessionId })
+    const lease = transfer.pendingMapPlacement.value
+    if (!lease) throw new Error(inspector.systemTransferSession.value?.error ?? 'The transfer did not acquire map placement.')
+
+    expect(await navigation.inspectContinuousTarget({ kind: 'orbit', systemId: destination.id, orbitId: orbit.id })).toBe(true)
+    expect(transfer.pendingMapPlacement.value).toBe(lease)
+    await inspector.beginOrbitEdit()
+    const draft = inspector.entitySession.value
+    if (draft?.kind !== 'orbit') throw new Error('The destination Orbit draft did not open.')
+    draft.draft.horizontalRadius = '244'
+
+    expect(transfer.pendingMapPlacement.value).toBeNull()
+    expect(transfer.completeMapPlacement(lease, { kind: 'orbit', orbitId: orbit.id, angle: 1.5 })).toBe(false)
+    expect(inspector.systemTransferSession.value).toMatchObject({
+      sessionId, open: true, placingOnMap: false, placement: previousPlacement,
+      error: 'Finish editing the destination system before continuing the transfer.',
+    })
+    await transfer.handleIntent({ kind: 'place-on-map', sessionId })
+    expect(transfer.pendingMapPlacement.value).toBeNull()
+    expect(await transfer.handleIntent({ kind: 'apply', sessionId })).toMatchObject({ status: 'rejected', reason: 'unavailable' })
+    expect(inspector.entitySession.value).toBe(draft)
+    expect(draft.draft.horizontalRadius).toBe('244')
+    expect(harness.workspace.value).toBe(before)
   } finally {
     harness.dispose()
   }

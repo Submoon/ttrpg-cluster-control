@@ -8,15 +8,37 @@ import {
   type Orbit,
   type OrbitRadii,
   type Point,
+  type PublicationMode,
   type StarSystem,
-  type SystemObject,
 } from '../domain/workspace'
+import { fromNormalizedMapPoint, toNormalizedMapPoint } from '../domain/workspace-map-coordinates'
+export { fromNormalizedMapPoint, toNormalizedMapPoint } from '../domain/workspace-map-coordinates'
 import { defaultObjectOrbitAngle } from '../domain/workspace-placement'
 import type {
   SystemCreationCandidate,
   SystemCreationType,
 } from '../composables/editor-workflows/types'
 import { catalogueObjectLabel } from './catalogue-labels'
+
+/** Read-only system geometry accepted by projection code, including detached immutable previews. */
+export interface SystemMapProjectionSource {
+  readonly id: string
+  readonly name: string
+  readonly publication?: PublicationMode
+  readonly objects: readonly {
+    readonly id: string
+    readonly name: string
+    readonly locationKey: string
+    readonly subtype: string
+    readonly placement:
+      | { readonly kind: 'system'; readonly x: number; readonly y: number }
+      | { readonly kind: 'orbit'; readonly orbitId: string }
+  }[]
+  readonly orbits: readonly (
+    | { readonly id: string; readonly order: number; readonly hostId: string; readonly center?: never }
+    | { readonly id: string; readonly order: number; readonly hostId: null; readonly center: Readonly<Point> }
+  )[]
+}
 
 export interface SystemMapGeometry {
   /** Saved object orbital parameter angles, in radians. */
@@ -60,7 +82,7 @@ export const ORBIT_PLACEMENT_HIT_TOLERANCE = 16
  * @throws If a hosted Orbit's object position is unavailable.
  */
 export function orbitCenter(
-  orbit: Orbit,
+  orbit: SystemMapProjectionSource['orbits'][number],
   positions: ReadonlyMap<string, Point>,
   overrides?: ReadonlyMap<string, Point>,
 ): Point {
@@ -73,30 +95,6 @@ export function orbitCenter(
 }
 
 /**
- * Converts an SVG scene point to normalized coordinates relative to the initial map body, without clamping.
- * @param point Position in SVG scene coordinates.
- * @returns Normalized system-map placement or Orbit-center coordinates.
- */
-export function toNormalizedMapPoint(point: Point): Point {
-  return {
-    x: (point.x - 64) / 832,
-    y: (point.y - 72) / 416,
-  }
-}
-
-/**
- * Converts a normalized system-map point to SVG scene coordinates.
- * @param point Normalized system-map placement or Orbit-center coordinates.
- * @returns The corresponding point in SVG scene coordinates.
- */
-export function fromNormalizedMapPoint(point: Point): Point {
-  return {
-    x: 64 + point.x * 832,
-    y: 72 + point.y * 416,
-  }
-}
-
-/**
  * Resolves drag overrides, saved radii, or the domain's circular default in that order.
  * @param system System used to derive the host-specific default.
  * @param orbit Orbit being measured.
@@ -105,8 +103,8 @@ export function fromNormalizedMapPoint(point: Point): Point {
  * @returns Horizontal and vertical radii in SVG scene units.
  */
 export function orbitRadii(
-  system: StarSystem,
-  orbit: Orbit,
+  system: SystemMapProjectionSource,
+  orbit: SystemMapProjectionSource['orbits'][number],
   geometry: SystemMapGeometry,
   overrides?: ReadonlyMap<string, OrbitRadii>,
 ): OrbitRadii {
@@ -124,7 +122,7 @@ export function orbitRadii(
  * @returns Rotation in degrees.
  */
 export function orbitRotation(
-  orbit: Orbit,
+  orbit: SystemMapProjectionSource['orbits'][number],
   geometry: SystemMapGeometry,
   overrides?: ReadonlyMap<string, number>,
 ): number {
@@ -289,12 +287,12 @@ export function orbitAngleAtPoint(
  * @throws If a placement/host is missing or nested placement contains a recursive cycle.
  */
 export function objectPositions(
-  system: StarSystem,
+  system: SystemMapProjectionSource,
   geometry: SystemMapGeometry,
   overrides?: MapGeometryOverrides,
 ): Map<string, Point> {
   const objectsById = new Map(system.objects.map(object => [object.id, object]))
-  const childrenByOrbit = new Map<string, SystemObject[]>()
+  const childrenByOrbit = new Map<string, SystemMapProjectionSource['objects'][number][]>()
   const positions = new Map<string, Point>()
   const visiting = new Set<string>()
 
@@ -305,7 +303,7 @@ export function objectPositions(
     childrenByOrbit.set(object.placement.orbitId, children)
   }
 
-  function locate(object: SystemObject): Point {
+  function locate(object: SystemMapProjectionSource['objects'][number]): Point {
     const cached = positions.get(object.id)
     if (cached) return cached
     const override = overrides?.positions.get(object.id)
@@ -340,8 +338,9 @@ export function objectPositions(
       }
       const siblings = childrenByOrbit.get(orbit.id) ?? []
       const index = siblings.findIndex(candidate => candidate.id === object.id)
-      const angle = geometry.objectAngles[object.id]
-        ?? defaultObjectOrbitAngle(index, siblings.length)
+      const angle = Object.hasOwn(geometry.objectAngles, object.id)
+        ? geometry.objectAngles[object.id]!
+        : defaultObjectOrbitAngle(index, siblings.length)
       point = orbitPointAtAngle(
         center,
         orbitRadii(system, orbit, geometry, overrides?.orbitRadii),

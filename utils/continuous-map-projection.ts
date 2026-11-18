@@ -1,5 +1,5 @@
 /** Pure conversion from legacy Cluster anchors and local system geometry into one Warden scene. */
-import type { OrbitRadii, Point, StarSystem } from '../domain/workspace'
+import type { OrbitRadii, Point } from '../domain/workspace'
 import { clusterSystemPosition } from './cluster-map-geometry'
 import {
   objectPositions,
@@ -8,6 +8,7 @@ import {
   orbitRotation,
   toNormalizedMapPoint,
   type SystemMapGeometry,
+  type SystemMapProjectionSource,
 } from './system-map-geometry'
 import type { SvgViewportRect } from './map-zoom'
 
@@ -143,7 +144,7 @@ function safeBounds(bounds: Bounds): Bounds {
  * Object and Orbit geometry stays in one local scene and receives the same uniform conversion.
  */
 export function projectWardenSystem(
-  system: StarSystem,
+  system: SystemMapProjectionSource,
   legacyAnchor: Point,
   geometry: SystemMapGeometry,
   scale = CONTINUOUS_MAP_SYSTEM_SCALE,

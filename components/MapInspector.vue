@@ -1,5 +1,9 @@
 <template>
   <div class="map-inspector-layout">
+    <SystemObjectTransferReviewDialog
+      :session="props.systemTransferSession ?? null"
+      @intent="emit('system-transfer-intent', $event)"
+    />
     <slot v-if="props.chartEditing" name="chart-editor" />
     <template v-else>
     <div v-if="hasResumableEntitySession" class="map-inspector-resume-draft" role="status">
@@ -58,6 +62,8 @@
           :key="props.selectedObject?.id ?? 'current'"
           :workspace="props.workspace"
           :publication-busy="props.publicationBusy"
+          :transfer-busy="props.systemTransferSession !== null && props.systemTransferSession !== undefined"
+          :system-transfer-enabled="props.systemTransferEnabled"
           :selected-system="props.selectedSystem"
           :selected-object="props.selectedObject"
           :draft-object="props.draftSystem?.objects.find(object => object.id === props.selectedObject?.id)"
@@ -85,6 +91,7 @@
           @resume-chart-draft="emit('resume-chart-draft')"
           @retry-save="emit('retry-save')"
           @export-current-json="emit('export-current-json')"
+          @system-transfer-intent="emit('system-transfer-intent', $event)"
         />
       </div>
       <div v-else-if="props.selectedOrbit" class="map-inspector-entity-content">
@@ -147,6 +154,10 @@ import type { EntityInspectorSession, ObjectInspectorFocusRequest } from '../com
 import type { SaveState } from '../composables/editor-workflows/types'
 import type { RouteDraftField, RouteInspectorSession } from '../composables/editor-workflows/useRouteInspectorSession'
 import type {
+  SystemObjectTransferIntent,
+  SystemObjectTransferReviewState,
+} from '../composables/editor-workflows/system-object-transfer-types'
+import type {
   JumpRoute,
   LocalWorkspace,
   Orbit,
@@ -157,10 +168,12 @@ import ChartDetailsPanel from './inspector/ChartDetailsPanel.vue'
 import JumpRouteInspector from './inspector/JumpRouteInspector.vue'
 import MapObjectInspector from './inspector/MapObjectInspector.vue'
 import OrbitInspector from './inspector/OrbitInspector.vue'
+import SystemObjectTransferReviewDialog from './inspector/SystemObjectTransferReviewDialog.vue'
 
 const props = defineProps<{
   mode: 'cluster' | 'system'
   workspace: LocalWorkspace
+  systemTransferEnabled?: boolean
   selectedSystem?: StarSystem
   draftSystem?: StarSystem
   inspectedClusterSystem?: StarSystem
@@ -185,6 +198,7 @@ const props = defineProps<{
   saveError: string | null
   exportError: string
   publicationBusy?: boolean
+  systemTransferSession?: SystemObjectTransferReviewState | null
 }>()
 
 const emit = defineEmits<{
@@ -216,6 +230,7 @@ const emit = defineEmits<{
   'resume-chart-draft': []
   'retry-save': []
   'export-current-json': []
+  'system-transfer-intent': [intent: SystemObjectTransferIntent]
 }>()
 
 const objectSession = computed(() => props.entitySession?.kind === 'object' ? props.entitySession : null)

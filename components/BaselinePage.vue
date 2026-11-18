@@ -462,6 +462,8 @@
                     :cluster-chooser-open="creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen"
                     :is-entity-command-blocked="isEntityCommandBlocked"
                     :orbit-adjustment-preview="orbitAdjustmentPreview"
+                    :system-object-transfer-preview="transferMapPreview"
+                    :system-object-transfer-map-lease="transferMapPlacementLease"
                     :feedback-element="workspaceFeedbackRef"
                     @navigate-system="selectSystem"
                     @select-cluster-system="selectClusterSystem"
@@ -495,6 +497,9 @@
                     @rotate-orbit="rotateMapOrbit"
                     @place-object-in-orbit="placeMapObjectInOrbit"
                     @viewport-change="recordViewport($event.key, $event.viewport)"
+                    @system-transfer-placement-preview="transfer.previewMapPlacement($event.lease, $event.placement)"
+                    @system-transfer-placement-complete="transfer.completeMapPlacement($event.lease, $event.placement)"
+                    @system-transfer-placement-cancel="transfer.handleIntent({ kind: 'cancel-map-placement', sessionId: $event.sessionId, lease: $event })"
                   />
                   <WorkspaceMapCanvas
                     v-else-if="selectedSystem"
@@ -608,6 +613,7 @@
             <MapInspector
               :mode="inspectorMode"
               :workspace="workspace"
+              :system-transfer-enabled="continuousMapEnabled"
               :publication-busy="publicationBusy"
               :selected-system="inspectorSelectedSystem"
               :draft-system="wardenSystem"
@@ -632,6 +638,7 @@
               :save-message="saveMessage"
               :save-error="saveError"
               :export-error="exportError"
+              :system-transfer-session="systemTransferSession"
               @open-system="selectSystem"
               @delete-system="deleteSystem"
               @hide="closePanel('inspector')"
@@ -660,6 +667,7 @@
               @retry-save="retryLatestSave"
               @export-current-json="downloadClusterJson"
               @open-field-definitions="openFieldDefinitions"
+              @system-transfer-intent="inspector.handleSystemTransferIntent"
             >
               <template #chart-editor>
                 <ChartDetailsEditor
@@ -1069,7 +1077,10 @@ const workflows = useEditorWorkflows({
     icon: 'i-lucide-info',
   }),
 })
-const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search, filterCriteria } = workflows
+const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search, filterCriteria, transfer } = workflows
+const transferMapPreview = transfer.mapPreview
+const transferMapPlacementLease = transfer.pendingMapPlacement
+const systemTransferSession = inspector.systemTransferSession
 watch(
   [() => workspace.value?.id, () => workspace.value?.cluster.id, hydrationState, continuousMapEnabled],
   ([workspaceId, clusterId, , enabled]) => {

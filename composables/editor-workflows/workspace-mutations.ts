@@ -21,6 +21,7 @@ export type WorkspaceMutationKind =
   | 'delete'
   | 'rename'
   | 'import'
+  | 'transfer'
 
 export type WorkspaceMutationTarget =
   | { kind: 'cluster' | 'system' | 'route' | 'field'; id: string }
@@ -58,7 +59,7 @@ export interface WorkspaceMutationExecutorOptions {
 }
 
 const mutationKinds: readonly WorkspaceMutationKind[] = [
-  'create', 'update', 'move', 'resize', 'rotate', 'place', 'detach', 'delete', 'rename', 'import',
+  'create', 'update', 'move', 'resize', 'rotate', 'place', 'detach', 'delete', 'rename', 'import', 'transfer',
 ]
 
 function errorText(error: unknown): string {
@@ -624,6 +625,12 @@ export function createWorkspaceHistoryCoordinator(
         return Promise.resolve(rejected('stale', 'The workspace changed outside the shared history. Start a fresh editing session before applying this action.'))
       }
       if (plan.status === 'fits') return Promise.resolve(publishAction(preparation, plan.timeline))
+      if (preparation.action.kind === 'transfer') {
+        return Promise.resolve(rejected(
+          'unavailable',
+          'This transfer is too large to retain as one undoable action. No changes were applied.',
+        ))
+      }
 
       const oversizedBaseline: WorkspaceHistoryTimeline = {
         ...createEmptyWorkspaceHistory('This action cannot be undone. It cleared the retained history.'),

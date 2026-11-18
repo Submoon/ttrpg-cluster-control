@@ -16,12 +16,14 @@ import type {
   Point,
   PublicationMode,
   SystemObject,
+  SystemObjectTransferPlacement,
 } from '../../domain/workspace'
 import type { MapImageExporter } from '../../utils/map-image-export'
 import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
 import type { SearchTarget } from '../../utils/workspace-search'
 import type { InspectedMapTarget } from '../../stores/editor-ui'
 import type { WorkspaceHistoryCoordinator } from './workspace-mutations'
+import type { SystemObjectTransferMapPreview } from './system-object-transfer-types'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type MapHistoryTarget =
@@ -353,6 +355,26 @@ export interface MapNavigationHandle extends MapImageExporter {
   setOrbitPlacementPreview?(orbitId: string, preview: OrbitPlacementPreview | null, systemId?: string): void
   /** Shows or clears a precise unoccupied Orbit-center preview in its owning system. */
   setOrbitCenterMovePreview?(orbitId: string, scenePoint: Point | null, systemId?: string): void
+  /** Confirms this mounted renderer owns the requested destination system. */
+  isSystemTransferDestination?(systemId: string): boolean
+  /** Captures the exact child renderer that will receive transfer placement input. */
+  captureSystemTransferMapOwner?(systemId: string): object | null
+  /** Rechecks the exact child renderer captured by a placement lease. */
+  isSystemTransferMapOwnerCurrent?(systemId: string, owner: object): boolean
+  /** Converts a client point to the requested owner's normalized local map coordinates. */
+  systemTransferPointAtClient?(systemId: string, clientX: number, clientY: number): Point | null
+  /** Resolves map input against the transfer's captured Free or Orbit destination choice. */
+  systemTransferPlacementAtClient?(
+    systemId: string,
+    rootObjectId: string,
+    selectedPlacement: Readonly<SystemObjectTransferPlacement>,
+    clientX: number,
+    clientY: number,
+  ): SystemObjectTransferPlacement | null
+  /** Frames the requested destination so its placement surface and Orbits are accessible. */
+  frameSystemTransferDestination?(systemId: string): boolean
+  /** Paints a pointer-transparent transfer ghost that is excluded from map exports. */
+  setSystemObjectTransferPreview?(preview: SystemObjectTransferMapPreview | null): void
   /** Resolves a cluster-scene target into the owner's legacy system-map scene. */
   toSystemScenePoint?(systemId: string, clusterPoint: Point): Point | null
   /** Finds a clear normalized local center for detaching an Orbit from its host. */
