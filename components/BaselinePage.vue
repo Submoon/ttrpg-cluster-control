@@ -1160,7 +1160,7 @@ const {
   objectInspectorFocusRequest, acknowledgeObjectInspectorFocusRequest,
   entitySession, hasModifiedEntitySession, orbitPlacementPreview, applyEntitySession, discardEntitySession,
   updateObjectPlacement, updateOrbitHost, previewOrbitPlacement, isEntityCommandBlocked, resumeEntitySession,
-  cancelOrbitPlacementPreview, beginObjectEdit, beginOrbitEdit,
+  beginObjectEdit, beginOrbitEdit,
   routeSession, hasModifiedRouteSession, offerRouteSystems, chooseRouteSystem, chooseRoutePoint, updateRouteInput,
   applyRouteSession, discardRouteSession, cancelRouteCreation,
 } = inspector
