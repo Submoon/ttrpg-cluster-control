@@ -34,6 +34,7 @@
           :viewport-rect="svgViewport"
           :svg-pixel-scale="svgPixelScale"
           :label-obstacles="routeLabelObstacles"
+          :move-enabled="mode === 'move' && !moveTargeting && !clusterMoveTargeting && !creationType && clusterAddType === null"
         />
         <g class="cluster-map-items">
           <g
@@ -173,6 +174,16 @@
                     r="18"
                     aria-hidden="true"
                   />
+                  <g
+                    v-if="isSelectedObject(projection.id, object.id)"
+                    class="system-object-selection-indicator"
+                    :data-selection-object-id="object.id"
+                    aria-hidden="true"
+                    pointer-events="none"
+                  >
+                    <circle class="system-object-selection-outline" r="15.5" />
+                    <circle class="system-object-selection-dashes" r="19.5" pathLength="100" stroke-dasharray="6 4" />
+                  </g>
                   <circle v-if="searchLocatorId === object.id" class="continuous-warden-search-locator" r="25" aria-hidden="true" />
                   <circle v-if="objectSubtype(projection.id, object.id) === 'star'" class="continuous-warden-star-halo" r="18" />
                   <text
@@ -193,6 +204,17 @@
               </g>
             </g>
 
+            <g v-if="orbitAddPreview?.systemId === projection.id" :transform="systemTransform(projection)">
+              <ellipse
+                class="orbit-creation-preview-ring"
+                :cx="orbitAddPreview.center.x"
+                :cy="orbitAddPreview.center.y"
+                :rx="orbitAddPreview.radii.horizontal"
+                :ry="orbitAddPreview.radii.vertical"
+                :transform="`rotate(${orbitAddPreview.rotation} ${orbitAddPreview.center.x} ${orbitAddPreview.center.y})`"
+                aria-hidden="true"
+              />
+            </g>
             <g
               class="cluster-system-node continuous-warden-system-anchor"
               :class="{ 'is-selected': selectedSystemId === projection.id, 'is-move-preview': previewPositions.has(projection.id) }"
@@ -360,12 +382,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from 'vue'
 import type { DeepReadonly } from 'vue'
 import { pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
-import { jumpPointsInCluster, minimumOrbitRadius, type CatalogueSubtype, type JumpCluster, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem, type SystemObjectTransferPlacement } from '../domain/workspace'
+import { jumpPointsInCluster, minimumOrbitRadius, type CatalogueSubtype, type JumpCluster, type JumpRoute, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem, type SystemObjectTransferPlacement } from '../domain/workspace'
 import { normalizeOrbitRotation } from '../domain/workspace-orbits'
 import { getDetachedOrbitCenter, objectPositions, objectsMovedWithOrbit, orbitCenter, orbitPointAtAngle, orbitRadii as readOrbitRadii, orbitRotation, orbitRotationHandlePoint, rotatePoint, requiredPosition } from '../utils/system-map-geometry'
 import { orbitGeometrySource } from '../utils/orbit-geometry-source'
 import { continuousOrbitKeyboardChange } from '../utils/continuous-orbit-interaction'
-import type { EntityCommand, MapHistoryTarget, MapInteractionMode, OrbitCenterMoveCandidate, SystemCreationType, SystemObjectMoveTarget } from '../composables/editor-workflows/types'
+import type { EntityCommand, MapHistoryTarget, MapInteractionMode, OrbitCenterMoveCandidate, SystemCreationCandidate, SystemCreationPreview, SystemCreationType, SystemObjectMoveTarget } from '../composables/editor-workflows/types'
 import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
 import type { InspectedMapTarget } from '../stores/editor-ui'
@@ -395,14 +417,14 @@ import {
 import { applySelectedObjectTranslation, planSelectedObjectTranslation } from '../utils/selected-object-placement'
 import { continuousObjectDragTarget, hasMapDragThreshold } from '../utils/continuous-object-drag'
 import { updateWorkspaceObject } from '../domain/workspace-placement'
-import { creationCandidatesAtPoint, toNormalizedMapPoint, type SystemMapGeometry } from '../utils/system-map-geometry'
+import { creationCandidatesAtPoint, fromNormalizedMapPoint, toNormalizedMapPoint, type SystemMapGeometry } from '../utils/system-map-geometry'
 import {
   continuousOrbitAddKeyboardPoint,
   resolveContinuousObjectOwnerResolution,
   type ContinuousObjectAddOwner,
   type ContinuousObjectAddTarget,
 } from '../utils/continuous-map-editing'
-import { clusterRouteLabel, clusterSystemPosition } from '../utils/cluster-map-geometry'
+import { clusterRouteLabel, clusterSystemPosition, hasSafeClusterSceneBounds, isSafeClusterScenePoint } from '../utils/cluster-map-geometry'
 import { buildContinuousWardenRouteGeometries } from '../utils/continuous-warden-routes'
 import { centerContinuousMapRouteViewport, revealContinuousMapRouteViewport } from '../utils/continuous-map-route-viewport'
 import {
@@ -450,6 +472,8 @@ const props = defineProps<{
   inspectedTarget: InspectedMapTarget | null
   mode: MapInteractionMode
   creationType: SystemCreationType | null
+  orbitAddOwnerId?: string
+  orbitAddPreview?: SystemCreationPreview | null
   creationOtherType: string | null
   objectAddPinnedOwnerId: string | null
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
@@ -475,6 +499,7 @@ const emit = defineEmits<{
   'select-route': [routeId: string]
   'cluster-target': [point: Point, systemIds: string[]]
   'continuous-object-add-target': [request: ContinuousObjectAddTarget]
+  'continuous-orbit-add-target': [owners: readonly OrbitAddOwner[], requiresOwnerChoice: boolean, workspace: LocalWorkspace]
   'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace]
   'orbit-adjustment': [input: OrbitAdjustmentInput]
   'entity-command-blocked': [command: EntityCommand]
@@ -483,6 +508,7 @@ const emit = defineEmits<{
   'resize-orbit': [orbitId: string, radii: OrbitRadii, systemId: string, sourceGeometry: string]
   'rotate-orbit': [orbitId: string, rotation: number, systemId: string, sourceGeometry: string]
   'move-system': [id: string, position: Point]
+  'move-unresolved-exit': [routeId: string, position: Point]
   'move-target': [point: Point]
   'standalone-import-placement-anchor': [anchor: Point]
   'editing-gesture-change': [active: boolean]
@@ -548,6 +574,7 @@ type PendingMapClickTarget =
   | { kind: 'object'; systemId: string; objectId: string }
   | { kind: 'orbit'; systemId: string; orbitId: string }
   | { kind: 'system'; systemId: string }
+  | { kind: 'route'; routeId: string }
 let pendingMapClickTarget: PendingMapClickTarget | null = null
 let pendingMapClickTimer: ReturnType<typeof setTimeout> | undefined
 let activeAnchorDrag: {
@@ -559,6 +586,18 @@ let activeAnchorDrag: {
   preview: Point
   moved: boolean
 } | null = null
+interface ActiveExitDrag {
+  routeId: string
+  pointerId: number
+  startClient: Point
+  startScene: Point
+  origin: Point
+  camera: MapViewport
+  workspaceSnapshot: LocalWorkspace
+  position: Point | null
+}
+
+let activeExitDrag: ActiveExitDrag | null = null
 type OrbitGestureBase = {
   systemId: string
   orbitId: string
@@ -593,6 +632,7 @@ type OrbitEditTarget = NonNullable<ReturnType<typeof orbitEditTargetAtTarget>>
 type WardenMovePointerTarget =
   | { kind: 'object'; systemId: string; objectId: string }
   | { kind: 'anchor'; systemId: string }
+  | { kind: 'exit'; routeId: string }
   | { kind: 'orbit'; target: OrbitEditTarget }
 type WardenMoveHit = { target: WardenMovePointerTarget | null; blockedCommand: EntityCommand | null }
 let suppressNextMapClick = false
@@ -605,6 +645,11 @@ const systemGeometry = computed(() => ({
   orbitRadii: props.orbitRadii,
   orbitRotations: props.orbitRotations,
 }))
+interface OrbitAddOwner {
+  systemId: string
+  candidates: SystemCreationCandidate[]
+}
+
 const dimmedObjectIds = computed(() => new Set(props.dimmedObjectIds ?? []))
 
 const projections = computed(() => props.cluster.systems.map((system, index) => projectWardenSystem(
@@ -1466,7 +1511,7 @@ function moveViewPan(event: MouseEvent): void {
 
 function endViewPan(): void { viewPan = null }
 
-function cameraPoint(event: MouseEvent | PointerEvent): Point | null {
+function cameraPoint(event: { clientX: number; clientY: number }): Point | null {
   const element = svgElement.value
   if (!element) return null
   const [x, y] = pointer(event, element)
@@ -1474,7 +1519,7 @@ function cameraPoint(event: MouseEvent | PointerEvent): Point | null {
   return { x: (x - transform.x) / transform.k, y: (y - transform.y) / transform.k }
 }
 
-function cameraPointAt(event: PointerEvent, camera: MapViewport): Point | null {
+function cameraPointAt(event: { clientX: number; clientY: number }, camera: MapViewport): Point | null {
   const element = svgElement.value
   if (!element || camera.k <= 0) return null
   const [x, y] = pointer(event, element)
@@ -1534,6 +1579,14 @@ function moveTargetAtPoint(event: PointerEvent, element: SVGSVGElement | null): 
   const hits = element.ownerDocument.elementsFromPoint(event.clientX, event.clientY)
     .filter(hit => hit === element || element.contains(hit))
   const orderedHits = hits.length ? hits : [event.target]
+  if (event.target instanceof Element && event.target.closest('.cluster-exit-hit-target, .cluster-exit-mark')) {
+    const routeId = routeIdAtTarget(event.target)
+    const isUnresolved = (routes: readonly JumpRoute[]) =>
+      routes.some(route => route.id === routeId && route.toSystemId === null)
+    if (routeId && isUnresolved(props.cluster.routes) && isUnresolved(sceneCluster.value.routes)) {
+      return { target: { kind: 'exit', routeId }, blockedCommand: null }
+    }
+  }
   let blockedCommand: EntityCommand | null = null
   for (const hit of orderedHits) {
     const systemId = systemIdAtTarget(hit)
@@ -1568,6 +1621,74 @@ function systemMapGeometry(workspace: LocalWorkspace | DeepReadonly<LocalWorkspa
     orbitRotations: workspace.layout.orbitRotations,
   }
 }
+
+function orbitAddAtPoint(point: Point, target: EventTarget | null): { owners: OrbitAddOwner[]; requiresOwnerChoice: boolean } {
+  const object = objectTargetAtTarget(target)
+  const orbit = orbitTargetAtTarget(target)
+  const definiteOwnerId = object?.systemId ?? orbit?.systemId ?? systemIdAtTarget(target)
+  const systems = projections.value.map(projection => ({ id: projection.id, envelope: projection.envelope }))
+  const resolution = resolveContinuousObjectOwnerResolution(point, systems, definiteOwnerId)
+  const geometry = systemMapGeometry(props.workspace)
+  const owners = resolution.systemIds.flatMap((systemId) => {
+    const projection = projections.value.find(candidate => candidate.id === systemId)
+    const system = props.cluster.systems.find(candidate => candidate.id === systemId)
+    if (!projection || !system) return []
+    const localPoint = projection.unprojectLocalPoint(point)
+    const candidates = object?.systemId === systemId
+      ? [{ key: `host:${object.objectId}`, label: 'Orbit around selected object', target: { kind: 'host' as const, objectId: object.objectId }, error: null }]
+      : creationCandidatesAtPoint(system, localPoint, { kind: 'orbit' }, geometry)
+        .filter(candidate => candidate.target.kind !== 'host' || detailSystemIds.value.has(systemId))
+    return [{ systemId, candidates }]
+  })
+  return { owners, requiresOwnerChoice: resolution.requiresOwnerChoice }
+}
+
+function offerOrbitAdd(point: Point, target: EventTarget | null): void {
+  const { owners, requiresOwnerChoice } = orbitAddAtPoint(point, target)
+  emit('continuous-orbit-add-target', owners, requiresOwnerChoice, props.workspace)
+}
+
+function getOrbitDragStart(event: PointerEvent): { point: Point; candidates: SystemCreationCandidate[] } | null {
+  const point = cameraPoint(event)
+  if (!point) return null
+  const { owners, requiresOwnerChoice } = orbitAddAtPoint(point, event.target)
+  const owner = owners[0]
+  if (requiresOwnerChoice || !owner || owner.systemId !== props.orbitAddOwnerId) return null
+  const localPoint = orbitDragPointFromClient(event.clientX, event.clientY)
+  return localPoint ? { point: localPoint, candidates: owner.candidates } : null
+}
+
+function orbitDragPointFromClient(clientX: number, clientY: number): Point | null {
+  const point = cameraPoint({ clientX, clientY })
+  const owner = projections.value.find(candidate => candidate.id === props.orbitAddOwnerId)
+  return point && owner ? owner.unprojectLocalPoint(point) : null
+}
+
+function getOrbitDragSceneClearance(): number | null {
+  const owner = projections.value.find(candidate => candidate.id === props.orbitAddOwnerId)
+  if (!owner) return null
+  const scale = getViewport().k * svgPixelScale.value * owner.scale
+  return Number.isFinite(scale) && scale > 0 ? 4 / scale + (2.4 + 2.5) / 2 : null
+}
+
+function isOrbitDragPointOnMap(clientX: number, clientY: number): boolean {
+  const element = svgElement.value
+  const hit = element?.ownerDocument.elementFromPoint(clientX, clientY)
+  return !!hit && !!element?.contains(hit)
+}
+
+const orbitAddPreview = computed(() => {
+  const preview = props.orbitAddPreview
+  const projection = projections.value.find(candidate => candidate.id === props.orbitAddOwnerId)
+  if (!preview?.radii || !projection) return null
+  const target = preview.target
+  const center = target.kind === 'free'
+    ? fromNormalizedMapPoint(target.point)
+    : target.kind === 'host'
+      ? projection.objects.find(object => object.id === target.objectId)?.position
+      : undefined
+  return center ? { systemId: projection.id, center, radii: preview.radii, rotation: preview.rotation ?? 0 } : null
+})
 
 function addOwnersAtPoint(
   point: Point,
@@ -2101,11 +2222,64 @@ function finishObjectDrag(cancelled: boolean): void {
   clearObjectMovePreview()
 }
 
+function startExitDrag(event: PointerEvent, element: SVGSVGElement, routeId: string): void {
+  const origin = routeLayer.value?.getRenderedRouteEnd(routeId)
+  const camera = getViewport()
+  const startScene = cameraPointAt(event, camera)
+  if (!origin || !startScene) return
+  activeExitDrag = {
+    routeId,
+    pointerId: event.pointerId,
+    startClient: { x: event.clientX, y: event.clientY },
+    startScene,
+    origin,
+    camera,
+    workspaceSnapshot: props.workspace,
+    position: null,
+  }
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  try { element.setPointerCapture(event.pointerId) } catch { /* Pointer capture is best effort for synthetic input. */ }
+  emit('editing-gesture-change', true)
+}
+
+function updateExitDrag(drag: ActiveExitDrag, event: PointerEvent): void {
+  if (drag.position === null && !hasMapDragThreshold(drag.startClient, { x: event.clientX, y: event.clientY })) return
+  const scene = cameraPointAt(event, drag.camera)
+  if (!scene) return
+  const position = {
+    x: drag.origin.x + scene.x - drag.startScene.x,
+    y: drag.origin.y + scene.y - drag.startScene.y,
+  }
+  drag.position = position
+  const safe = isSafeClusterScenePoint(position) && hasSafeClusterSceneBounds(props.cluster, props.systemPositions, {
+    ...props.unresolvedExitPositions,
+    [drag.routeId]: position,
+  })
+  setUnresolvedExitPositionPreview(drag.routeId, safe ? position : null)
+  event.preventDefault()
+}
+
+function finishExitDrag(cancelled: boolean): void {
+  const drag = activeExitDrag
+  if (!drag) return
+  activeExitDrag = null
+  const element = svgElement.value
+  if (element?.hasPointerCapture(drag.pointerId)) {
+    try { element.releasePointerCapture(drag.pointerId) } catch { /* Capture may already have been released. */ }
+  }
+  setUnresolvedExitPositionPreview(drag.routeId, null)
+  emit('editing-gesture-change', false)
+  if (cancelled || drag.position !== null) suppressClickAfterOwnedGesture()
+  if (!cancelled && drag.position !== null) emit('move-unresolved-exit', drag.routeId, drag.position)
+}
+
 function onPointerDownCapture(event: PointerEvent): void {
   const ownedPointerId = activeOrbitGesture?.pointerId
     ?? activeSelectedObjectDrag?.pointerId
     ?? activeObjectDrag?.pointerId
     ?? activeAnchorDrag?.pointerId
+    ?? activeExitDrag?.pointerId
   if (ownedPointerId !== undefined && ownedPointerId !== event.pointerId) {
     cancelActiveGesture()
     return
@@ -2122,6 +2296,10 @@ function onPointerDownCapture(event: PointerEvent): void {
     event.stopPropagation()
     event.stopImmediatePropagation()
     emit('entity-command-blocked', moveHit.blockedCommand)
+    return
+  }
+  if (moveTarget?.kind === 'exit' && element) {
+    startExitDrag(event, element, moveTarget.routeId)
     return
   }
   if (moveTarget?.kind === 'orbit') {
@@ -2206,6 +2384,10 @@ function onPointerDownCapture(event: PointerEvent): void {
 }
 
 function onPointerMoveCapture(event: PointerEvent): void {
+  if (activeExitDrag?.pointerId === event.pointerId) {
+    updateExitDrag(activeExitDrag, event)
+    return
+  }
   const orbitGesture = activeOrbitGesture
   if (orbitGesture?.pointerId === event.pointerId) {
     if (!hasMapDragThreshold(orbitGesture.startClient, { x: event.clientX, y: event.clientY }) && !orbitGesture.moved) return
@@ -2266,6 +2448,20 @@ function finishAnchorDrag(cancelled: boolean): void {
 }
 
 function onPointerEndCapture(event: PointerEvent): void {
+  const exitDrag = activeExitDrag
+  if (exitDrag?.pointerId === event.pointerId) {
+    const cancelled = event.type === 'pointercancel'
+    if (!cancelled) {
+      updateExitDrag(exitDrag, event)
+      if (exitDrag.position === null) deferMapClickTarget({ kind: 'route', routeId: exitDrag.routeId })
+    }
+    finishExitDrag(cancelled)
+    if (cancelled || exitDrag.position !== null) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+    return
+  }
   if (activeOrbitGesture?.pointerId === event.pointerId) {
     const gesture = activeOrbitGesture
     const cancelled = event.type === 'pointercancel'
@@ -2352,6 +2548,7 @@ function onPointerEndCapture(event: PointerEvent): void {
 }
 
 function onLostPointerCapture(event: PointerEvent): void {
+  if (activeExitDrag?.pointerId === event.pointerId) finishExitDrag(true)
   if (activeOrbitGesture?.pointerId === event.pointerId) finishOrbitGesture(true)
   if (activeSelectedObjectDrag?.pointerId === event.pointerId) finishSelectedObjectDrag(true)
   if (activeObjectDrag?.pointerId === event.pointerId) finishObjectDrag(true)
@@ -2408,13 +2605,14 @@ function onClickCapture(event: MouseEvent): void {
     emit('cluster-target', normalized, systemIds)
     return
   }
-  if (props.creationType?.kind === 'object' && !props.clusterChooserOpen) {
+  if (props.creationType && !props.clusterChooserOpen) {
     const point = cameraPoint(event)
     if (!point) return
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
-    offerObjectAdd(point, event.target)
+    if (props.creationType.kind === 'orbit') offerOrbitAdd(point, event.target)
+    else offerObjectAdd(point, event.target)
     return
   }
   const pendingTarget = takePendingMapClickTarget()
@@ -2427,7 +2625,7 @@ function onClickCapture(event: MouseEvent): void {
     emit('select-object', objectTarget.systemId, objectTarget.objectId)
     return
   }
-  const routeId = routeIdAtTarget(event.target)
+  const routeId = routeIdAtTarget(event.target) ?? (pendingTarget?.kind === 'route' ? pendingTarget.routeId : null)
   if (routeId) {
     event.preventDefault()
     event.stopPropagation()
@@ -2476,18 +2674,19 @@ function onKeydownCapture(event: KeyboardEvent): void {
     return
   }
   if (onOrbitAdjustmentKeydown(event)) return
-  if (props.creationType?.kind === 'object' && isActivation
+  if (props.creationType && isActivation
     && !props.clusterChooserOpen && !props.moveTargeting && !props.clusterMoveTargeting) {
     if (event.repeat) {
       event.preventDefault()
       event.stopImmediatePropagation()
       return
     }
-    const point = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget, true)
+    const point = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget, props.creationType.kind === 'object')
     if (point) {
       event.preventDefault()
       event.stopPropagation()
-      offerObjectAdd(point, event.target)
+      if (props.creationType.kind === 'orbit') offerOrbitAdd(point, event.target)
+      else offerObjectAdd(point, event.target)
       return
     }
   }
@@ -2798,6 +2997,7 @@ function cancelActiveGesture(): void {
   if (activeSelectedObjectDrag) finishSelectedObjectDrag(true)
   if (activeObjectDrag) finishObjectDrag(true)
   if (activeAnchorDrag) finishAnchorDrag(true)
+  if (activeExitDrag) finishExitDrag(true)
   touchCameraNavigation.cancel()
 }
 
@@ -2819,6 +3019,10 @@ function clearViewportFeedbackTimer(): void {
 }
 
 function startTouchNavigation(event: TouchEvent): void {
+  if (activeExitDrag) {
+    if (event.touches.length <= 1) return
+    finishExitDrag(true)
+  }
   if (activeOrbitGesture) {
     if (event.touches.length <= 1) return
     finishOrbitGesture(true)
@@ -2836,12 +3040,12 @@ function startTouchNavigation(event: TouchEvent): void {
 }
 
 function moveTouchNavigation(event: TouchEvent): void {
-  if (activeOrbitGesture || activeAnchorDrag || activeObjectDrag || activeSelectedObjectDrag) return
+  if (activeOrbitGesture || activeAnchorDrag || activeExitDrag || activeObjectDrag || activeSelectedObjectDrag) return
   touchCameraNavigation.move(event)
 }
 
 function endTouchNavigation(event: TouchEvent): void {
-  if (activeOrbitGesture || activeAnchorDrag || activeObjectDrag || activeSelectedObjectDrag) return
+  if (activeOrbitGesture || activeAnchorDrag || activeExitDrag || activeObjectDrag || activeSelectedObjectDrag) return
   touchCameraNavigation.end(event)
 }
 
@@ -2916,6 +3120,7 @@ onBeforeUnmount(() => {
 watch(() => props.mode, () => cancelActiveGesture(), { flush: 'sync' })
 watch(() => props.workspace, workspace => {
   transferPreviewOverride.value = undefined
+  if (activeExitDrag && toRaw(activeExitDrag.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
   if (activeSelectedObjectDrag && toRaw(activeSelectedObjectDrag.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
   if (activeObjectDrag && toRaw(activeObjectDrag.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
   if (activeOrbitGesture && toRaw(activeOrbitGesture.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
@@ -2973,6 +3178,13 @@ defineExpose({
   moveViewPan,
   endViewPan,
   startTouchNavigation,
+  clientPointToScene: orbitDragPointFromClient,
+  getOrbitDragStart,
+  getOrbitDragSceneClearance,
+  isOrbitDragPointOnMap,
+  startOrbitTouchPinch: touchCameraNavigation.startPinch,
+  moveOrbitTouchPinch: touchCameraNavigation.movePinch,
+  endOrbitTouchPinch: touchCameraNavigation.endPinch,
   moveTouchNavigation,
   endTouchNavigation,
   setClusterSystemPositionPreview,
@@ -3141,6 +3353,65 @@ defineExpose({
   fill: var(--map-text);
   cursor: pointer;
   pointer-events: all;
+}
+
+.system-object-selection-indicator {
+  display: inline;
+  pointer-events: none;
+}
+
+.system-object-selection-outline,
+.system-object-selection-dashes {
+  fill: none;
+  stroke: var(--map-selected);
+  stroke-width: 1.35;
+}
+
+.system-object-selection-outline {
+  opacity: 0.92;
+}
+
+.system-object-selection-dashes {
+  opacity: 0.68;
+  transform-box: fill-box;
+  transform-origin: center;
+  stroke-linecap: round;
+  animation:
+    system-object-selection-breathe 2.8s ease-in-out infinite,
+    system-object-selection-rotate 5.5s linear infinite;
+}
+
+@keyframes system-object-selection-breathe {
+  0%,
+  100% {
+    transform: scale(0.99);
+    opacity: 0.68;
+  }
+
+  50% {
+    transform: scale(1.035);
+    opacity: 0.95;
+  }
+}
+
+@keyframes system-object-selection-rotate {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .system-object-selection-dashes {
+    animation: none;
+  }
+}
+
+.orbit-creation-preview-ring {
+  fill: none;
+  stroke: var(--map-selected);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 4;
+  pointer-events: none;
 }
 
 .continuous-warden-object.is-dimmed .continuous-warden-star-halo,

@@ -49,7 +49,7 @@
       </p>
     </section>
 
-    <template v-if="chartEditSystemId || (props.allowOpenSystem && props.mode === 'system' && props.selectedSystem) || props.hasChartNameDraft" #footer>
+    <template v-if="chartEditSystemId || props.hasChartNameDraft" #footer>
       <div class="chart-details-actions grid gap-2">
         <UButton
           v-if="chartEditSystemId"
@@ -61,15 +61,6 @@
           @click="commands.charts.beginNamesEdit(chartEditSystemId)"
         >
           Edit
-        </UButton>
-        <UButton
-          v-if="props.allowOpenSystem && props.mode === 'system' && props.selectedSystem"
-          block
-          class="w-full min-w-0 justify-center"
-          color="primary"
-          @click="emit('open-system', props.selectedSystem.id)"
-        >
-          Open system
         </UButton>
       </div>
       <span v-if="props.hasChartNameDraft" class="chart-details-draft-status save-feedback text-sm" role="status">
@@ -143,12 +134,10 @@ const props = defineProps<{
   hasChartNameDraft: boolean
   editorError?: string
   saving: boolean
-  allowOpenSystem?: boolean
   publicationBusy?: boolean
 }>()
 
 const emit = defineEmits<{
-  'open-system': [systemId: string]
   'delete-system': [systemId: string]
 }>()
 const commands = useEditorCommands()
