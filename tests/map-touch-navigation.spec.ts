@@ -51,12 +51,15 @@ function cameraProbe(
 
 function touchInput(
   touches: readonly MapTouchPoint[],
-  options: { ctrlKey?: boolean } = {},
+  options: { ctrlKey?: boolean; type?: string; timeStamp?: number; changedTouches?: readonly MapTouchPoint[] } = {},
 ): { event: MapTouchEvent; consumed: { prevented: boolean; stopped: boolean; immediateStopped: boolean } } {
   const consumed = { prevented: false, stopped: false, immediateStopped: false }
   return {
     event: {
       touches,
+      type: options.type,
+      timeStamp: options.timeStamp,
+      changedTouches: options.changedTouches,
       target: null,
       ctrlKey: options.ctrlKey ?? false,
       preventDefault: () => { consumed.prevented = true },
@@ -74,6 +77,7 @@ function navigation(
     isEnabled?: () => boolean
     moveEnabled?: () => boolean
     onPinchTakeover?: () => void
+    canDoubleTap?: () => boolean
   } = {},
 ) {
   return createMapTouchNavigation({
@@ -82,6 +86,7 @@ function navigation(
     moveEnabled: options.moveEnabled ?? (() => true),
     getCamera,
     onPinchTakeover: options.onPinchTakeover ?? (() => {}),
+    canDoubleTap: options.canDoubleTap,
   })
 }
 
@@ -103,6 +108,54 @@ test('single-touch pan waits for more than the CSS threshold and applies SVG-spa
   expect(probe.viewport().x).toBeCloseTo(28.02)
   expect(probe.viewport().y).toBe(20)
   expect(probe.viewport().k).toBe(2)
+})
+
+test('two nearby short background touches zoom around the second tap @pure', () => {
+  const probe = cameraProbe({ x: 10, y: 20, k: 2 }, 2)
+  const touch = navigation('cluster', () => probe.camera, { canDoubleTap: () => true })
+  const first = { identifier: 12, clientX: 30, clientY: 40 }
+  const second = { identifier: 13, clientX: 31, clientY: 40 }
+  touch.start(touchInput([first], { type: 'touchstart', timeStamp: 10 }).event)
+  const firstEnd = touchInput([], { type: 'touchend', timeStamp: 45, changedTouches: [first] })
+  touch.end(firstEnd.event)
+  expect(firstEnd.consumed.prevented).toBe(false)
+  expect(probe.viewport()).toEqual({ x: 10, y: 20, k: 2 })
+
+  touch.start(touchInput([second], { type: 'touchstart', timeStamp: 130 }).event)
+  const secondEnd = touchInput([], { type: 'touchend', timeStamp: 166, changedTouches: [second] })
+  touch.end(secondEnd.event)
+  expect(secondEnd.consumed).toEqual({ prevented: true, stopped: false, immediateStopped: true })
+  expect(probe.viewport()).toEqual({ x: -42, y: -40, k: 4 })
+})
+
+test('a held, moved, multi-contact, cancelled, or ineligible touch breaks a double-tap pair @pure', () => {
+  for (const interruption of ['hold', 'move', 'multi-contact', 'cancel', 'different-release', 'ineligible'] as const) {
+    const probe = cameraProbe()
+    let eligible = true
+    const touch = navigation('cluster', () => probe.camera, { canDoubleTap: () => eligible })
+    const point = { identifier: 5, clientX: 50, clientY: 50 }
+    const start = (timeStamp: number) => touch.start(touchInput([point], { type: 'touchstart', timeStamp }).event)
+    const end = (timeStamp: number, release = point) => {
+      touch.end(touchInput([], { type: 'touchend', timeStamp, changedTouches: [release] }).event)
+    }
+
+    start(0)
+    end(10)
+    eligible = interruption !== 'ineligible'
+    start(30)
+    if (interruption === 'move') touch.move(touchInput([{ ...point, clientX: 80 }]).event)
+    if (interruption === 'multi-contact') touch.start(touchInput([point, { ...point, identifier: 6 }]).event)
+    if (interruption === 'cancel') touch.cancel()
+    const release = interruption === 'different-release' ? { ...point, identifier: 6 } : point
+    end(interruption === 'hold' ? 300 : 40, release)
+    eligible = true
+    const beforeFreshTap = probe.viewport()
+    const nextTap = interruption === 'hold' ? 310 : 100
+    start(nextTap)
+    end(nextTap + 10)
+    expect(probe.viewport(), interruption).toEqual(beforeFreshTap)
+    expect(probe.viewport().k, interruption).toBe(1)
+  }
 })
 
 test('pinch keeps its map anchor while clamping against the live zoom range @pure', () => {

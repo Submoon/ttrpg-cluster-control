@@ -561,29 +561,18 @@ function screenMarkTransform(anchor: { x: number; y: number }): string {
   return `translate(${anchor.x} ${anchor.y}) scale(${inverseScale})`
 }
 
-function systemBounds(systemId: string): SvgViewportRect | undefined {
-  const system = projection.value.systems.find(candidate => candidate.id === systemId)
-  if (!system) return undefined
-  const envelope = system.geometry?.envelope
-  return envelope
-    ? { ...envelope }
-    : {
-        x: system.anchor.x - PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS - 12,
-        y: system.anchor.y - PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS - 12,
-        width: (PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS + 12) * 2,
-        height: (PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS + 12) * 2,
-      }
-}
-
-function targetBounds(systemId: string, target: PlayerInspectionTarget): SvgViewportRect | undefined {
-  const system = projection.value.systems.find(candidate => candidate.id === systemId)
-  if (!system?.geometry) return undefined
-  return playerContinuousTargetBounds(system.geometry, target)
-}
-
 function centerSystem(systemId: string): boolean {
-  const bounds = systemBounds(systemId)
-  return bounds ? frameBounds(bounds, camera.value.k) : false
+  const system = projection.value.systems.find(candidate => candidate.id === systemId)
+  if (!system) return false
+  const markerMargin = PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS + 12
+  const bounds = system.geometry?.envelope ?? {
+    x: system.anchor.x - markerMargin,
+    y: system.anchor.y - markerMargin,
+    width: markerMargin * 2,
+    height: markerMargin * 2,
+  }
+  const minimumScale = playerContinuousTargetMinimumScale(system, svgPixelScale.value, detailSystemIds.value.has(systemId))
+  return frameBounds(bounds, camera.value.k, minimumScale)
 }
 
 function centerSelection(): boolean {
@@ -626,7 +615,7 @@ function centerRoute(routeId: string): boolean {
 function centerTarget(target: PlayerInspectionTarget, systemId: string): boolean {
   const system = projection.value.systems.find(candidate => candidate.id === systemId)
   if (!system?.geometry) return false
-  const bounds = targetBounds(systemId, target)
+  const bounds = playerContinuousTargetBounds(system.geometry, target)
   if (!bounds) return false
   const minimumScale = playerContinuousTargetMinimumScale(
     system,

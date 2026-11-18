@@ -1830,6 +1830,7 @@ function onOrbitAdjustmentKeydown(event: KeyboardEvent): boolean {
 }
 
 function onWheelCapture(event: WheelEvent): void {
+  touchCameraNavigation.clearDoubleTap()
   if (props.standaloneImportPlacementEnabled || !event.ctrlKey || event.deltaY === 0 || props.mode !== 'move'
     || props.creationType != null || props.clusterAddType != null || props.clusterChooserOpen
     || props.moveTargeting || props.clusterMoveTargeting) return
@@ -2303,6 +2304,7 @@ function finishExitDrag(cancelled: boolean): void {
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
+  if (event.pointerType !== 'touch') touchCameraNavigation.clearDoubleTap()
   const ownedPointerId = activeOrbitGesture?.pointerId
     ?? activeSelectedObjectDrag?.pointerId
     ?? activeObjectDrag?.pointerId
@@ -3047,23 +3049,18 @@ function clearViewportFeedbackTimer(): void {
 }
 
 function startTouchNavigation(event: TouchEvent): void {
-  if (activeExitDrag) {
-    if (event.touches.length <= 1) return
-    finishExitDrag(true)
+  if (event.touches.length <= 1 && (activeExitDrag || activeOrbitGesture || activeObjectDrag || activeSelectedObjectDrag)) {
+    touchCameraNavigation.clearDoubleTap()
+    return
   }
-  if (activeOrbitGesture) {
-    if (event.touches.length <= 1) return
-    finishOrbitGesture(true)
+  if (activeExitDrag) finishExitDrag(true)
+  if (activeOrbitGesture) finishOrbitGesture(true)
+  if (activeObjectDrag) finishObjectDrag(true)
+  if (activeSelectedObjectDrag) finishSelectedObjectDrag(true)
+  if (activeAnchorDrag) {
+    touchCameraNavigation.clearDoubleTap()
+    return
   }
-  if (activeObjectDrag) {
-    if (event.touches.length <= 1) return
-    finishObjectDrag(true)
-  }
-  if (activeSelectedObjectDrag) {
-    if (event.touches.length <= 1) return
-    finishSelectedObjectDrag(true)
-  }
-  if (activeAnchorDrag) return
   touchCameraNavigation.start(event)
 }
 
@@ -3077,10 +3074,17 @@ function endTouchNavigation(event: TouchEvent): void {
   touchCameraNavigation.end(event)
 }
 
+const backgroundDoubleTapAvailable = computed(() => props.mode === 'move'
+  && !props.creationType && !props.clusterAddType && !props.clusterChooserOpen
+  && !props.moveTargeting && !props.clusterMoveTargeting && !props.standaloneImportPlacementEnabled
+  && !props.systemObjectTransferPreview && !props.keyboardOwnedOverlayOpen)
+
 const touchCameraNavigation = createMapTouchNavigation({
   surface: 'cluster',
   isEnabled: () => props.touchNavigation ?? true,
   moveEnabled: () => props.mode === 'move',
+  canDoubleTap: target => backgroundDoubleTapAvailable.value && !suppressNextMapClick
+    && target instanceof SVGElement && !target.closest('[role="button"], [role="slider"]'),
   getCamera: () => {
     const element = svgElement.value
     if (!element) return null
@@ -3096,14 +3100,9 @@ const touchCameraNavigation = createMapTouchNavigation({
   onPinchTakeover: () => cancelActiveGesture(),
 })
 
-function isBackgroundDoubleClick(event: MouseEvent): boolean {
-  const target = event.target
-  return event.button === 0 && !event.ctrlKey && !event.defaultPrevented
-    && !props.creationType && !props.clusterAddType && !props.clusterChooserOpen
-    && !props.moveTargeting && !props.clusterMoveTargeting && !props.standaloneImportPlacementEnabled
-    && !props.systemObjectTransferPreview && !props.keyboardOwnedOverlayOpen && !suppressNextMapClick
-    && target instanceof SVGElement && !target.closest('[role="button"], [role="slider"]')
-}
+watch(backgroundDoubleTapAvailable, (available) => {
+  if (!available) touchCameraNavigation.clearDoubleTap()
+}, { flush: 'sync' })
 
 onMounted(async () => {
   await nextTick()
@@ -3115,7 +3114,7 @@ onMounted(async () => {
   zoomBehavior = zoom<SVGSVGElement, unknown>()
     .extent(() => svgViewportExtent(getSvgViewportRect(element)))
     .scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
-    .filter(event => event.type === 'wheel' || (event.type === 'dblclick' && isBackgroundDoubleClick(event)))
+    .filter(event => event.type === 'wheel')
     .on('zoom', onZoom)
   zoomBehavior.touchable(() => false)
   select(element).call(zoomBehavior)
