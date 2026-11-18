@@ -2,7 +2,7 @@
   <section class="object-palette" role="region" aria-label="Object palette">
     <div class="object-palette-heading flex items-center justify-between gap-2">
       <span class="section-kicker">ADD OBJECT</span>
-      <span class="object-palette-hint">Choose a category, then add or drag an object.</span>
+      <span class="object-palette-hint">Choose a category, then add an object to the map.</span>
     </div>
     <div class="object-palette-categories" role="group" aria-label="Object categories">
       <UButton
@@ -33,11 +33,8 @@
           size="sm"
           color="neutral"
           variant="outline"
-          draggable="true"
           :disabled="props.saving"
           :aria-label="`Add ${type.label}`"
-          :title="`Drag ${type.label} onto the map, or activate to add it`"
-          @dragstart="startObjectDrag($event, type.value)"
           @click="emit('add-object', type.value)"
         >
           <span class="object-mark" aria-hidden="true">{{ catalogueMarks[type.value] }}</span>
@@ -52,35 +49,28 @@
         color="primary"
         variant="outline"
         aria-label="Add orbit"
-        draggable="true"
         :disabled="props.saving"
-        title="Drag Orbit onto an object to host it, or onto the map for an unoccupied center"
-        @dragstart="startOrbitDrag"
+        title="Choose a host or clear map position for the Orbit"
         @click="emit('add-orbit')"
       >
         <span aria-hidden="true">+</span> Add Orbit
       </UButton>
     </div>
-    <span v-if="props.selectedOrbit" class="placement-hint">
-      New objects go in Orbit {{ props.selectedOrbit.order }}
-    </span>
   </section>
 </template>
 
 <script setup lang="ts">
-// Emits catalogue add/drag intents; the editor resolves placement, while native buttons preserve click and keyboard paths.
+// Emits catalogue Add intents for the map's placement workflow.
 import { computed, ref } from 'vue'
 import {
   catalogueTypes,
   type CatalogueSubtype,
   type ObjectFamily,
-  type Orbit,
 } from '../domain/workspace'
 import { catalogueMarks } from '../utils/catalogue-marks'
 
 const props = defineProps<{
   activeFamily?: ObjectFamily
-  selectedOrbit?: Orbit | null
   saving: boolean
 }>()
 
@@ -112,43 +102,6 @@ const activeFamily = computed({
   },
 })
 const activeGroup = computed(() => groups.find(group => group.family === activeFamily.value)!)
-
-/**
- * Publishes a catalogue key in the native drag payload and keeps the pointer beside the visible mark.
- * @param event Native dragstart event from the source palette button.
- * @param subtype Catalogue key resolved by the system-map renderer on drop.
- * @throws If the source is not a button with a rendered object mark.
- */
-function startObjectDrag(event: DragEvent, subtype: CatalogueSubtype): void {
-  const dataTransfer = event.dataTransfer
-  if (!dataTransfer) return
-
-  dataTransfer.effectAllowed = 'copy'
-  // SystemMap consumes this catalogue subtype token when resolving a dropped object.
-  dataTransfer.setData('application/x-ttrpg-cluster-control-map-object', subtype)
-  dataTransfer.setData('text/plain', subtype)
-  const source = event.currentTarget
-  if (!(source instanceof HTMLElement)) throw new Error('Object drag must start from a palette button.')
-  const mark = source.querySelector<HTMLElement>('.object-mark')
-  if (!mark) throw new Error('Object palette button is missing its map mark.')
-
-  const bounds = mark.getBoundingClientRect()
-  // Keep the pointer beside the mark so the drag preview does not hide the drop target.
-  dataTransfer.setDragImage(mark, bounds.width + 8, bounds.height / 2)
-}
-
-/**
- * Marks a native drag as an Orbit intent; the renderer later resolves its map point and optional host.
- * @param event Native dragstart event from the Add Orbit button.
- */
-function startOrbitDrag(event: DragEvent): void {
-  const dataTransfer = event.dataTransfer
-  if (!dataTransfer) return
-
-  dataTransfer.effectAllowed = 'copy'
-  dataTransfer.setData('application/x-ttrpg-cluster-control-map-orbit', 'true')
-  dataTransfer.setData('text/plain', 'Orbit')
-}
 </script>
 
 <style>
@@ -168,7 +121,7 @@ function startOrbitDrag(event: DragEvent): void {
   align-items: center;
   gap: 0.25rem;
   min-height: 1.8rem;
-  cursor: grab;
+  cursor: pointer;
 }
 
 .object-palette-category-button {
@@ -184,24 +137,15 @@ function startOrbitDrag(event: DragEvent): void {
   outline-offset: 1px;
 }
 
-.object-palette-button:active {
-  cursor: grabbing;
-}
-
 .object-palette-button:disabled {
   cursor: not-allowed;
   opacity: 0.58;
 }
 
-.object-palette-hint,
-.placement-hint {
+.object-palette-hint {
   color: var(--ui-text-toned);
   font-size: 0.75rem;
   line-height: 1.35;
-}
-
-.placement-hint {
-  font-size: 0.75rem;
 }
 
 .map-workspace-shell .system-map-tools .object-palette {
@@ -280,8 +224,4 @@ function startOrbitDrag(event: DragEvent): void {
   white-space: nowrap;
 }
 
-.map-workspace-shell .map-tools .placement-hint {
-  justify-self: end;
-  padding: 0.15rem 0.3rem;
-}
 </style>

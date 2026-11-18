@@ -4,7 +4,9 @@ import {
   captureMapExportBlobs,
   clickNormalizedClusterPoint,
   downloadJson,
-  returnToClusterMap,
+  fitWorkspaceMap,
+  wardenMap,
+  wardenSystemMark,
   workspaceNavigation,
   type WorldPoint,
 } from './helpers'
@@ -15,7 +17,7 @@ async function createWorkspace(page: import('@playwright/test').Page): Promise<v
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
 }
 
 function expectPosition(actual: WorldPoint | undefined, expected: WorldPoint): void {
@@ -33,7 +35,7 @@ test('Move System previews map and keyboard destinations, cancels without changi
   if (await inspector.isVisible()) await inspectToggle.click()
   await expect(inspector).toBeHidden()
 
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
+  const clusterMap = wardenMap(page)
   const mapContext = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
   await expect(clusterMap).toBeVisible()
   const beforeMove = await downloadJson(page, 'Export Jump Cluster JSON')
@@ -43,7 +45,7 @@ test('Move System previews map and keyboard destinations, cancels without changi
   if (!source) throw new Error('The cluster export does not contain Vesper.')
   const originalPosition = beforeMove.layout.systemPositions?.[source.id]
   expect(originalPosition).toBeDefined()
-  const sourceNode = clusterMap.getByRole('button', { name: 'Select Vesper system', exact: true })
+  const sourceNode = wardenSystemMark(page, source.id)
 
   const moveMode = workspaceNavigation(page)
     .getByRole('group', { name: 'Map interaction mode', exact: true })
@@ -84,7 +86,7 @@ test('Move System previews map and keyboard destinations, cancels without changi
   await waitForWorkspaceSaved(page)
 
   await page.reload()
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
   if (await inspector.isVisible()) await inspectToggle.click()
   await expect(inspector).toBeHidden()
   const afterReload = await downloadJson(page, 'Export Jump Cluster JSON')

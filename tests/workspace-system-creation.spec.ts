@@ -3,13 +3,18 @@ import { waitForWorkspaceSaved } from './helpers'
 import {
   activeWorkspaceFeedback,
   captureMapExportBlobs,
-  clickNormalizedSystemPoint,
+  centerWorkspaceSelection,
+  clickWardenSystemPoint,
+  createSingleSystemWorkspace,
   dockAction,
   downloadJson,
-  openWorkspaceHierarchy,
+  exposedContinuousObjectHitPoint,
+  hideWorkspaceInspector,
   readInspectorSelection,
   selectCatalogueObjectButton,
   selectInspectorOption,
+  wardenMap,
+  wardenObjectMark,
   workspaceZoomControls,
   workspaceZoomOutput,
   type WorldPoint,
@@ -47,14 +52,6 @@ async function restoreCurrentWorkspaceWrite(page: import('@playwright/test').Pag
     delete gate.__ticket23OriginalPut
     delete gate.__ticket23FailNextCurrentWrite
   })
-}
-
-async function createWorkspace(page: import('@playwright/test').Page): Promise<void> {
-  await page.setViewportSize({ width: 1440, height: 960 })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
 }
 
 async function ensurePlacementOpen(controls: import('@playwright/test').Locator): Promise<void> {
@@ -102,15 +99,23 @@ function expectSystemPlacement(
 
 test('system Add immediately places on repeated clicks and preserves each placement', async ({ page }) => {
   await captureMapExportBlobs(page)
-  await createWorkspace(page)
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+    viewport: { width: 1440, height: 960 },
+  })
 
   const inspector = page.locator('#workspace-inspector-panel')
-  await expect(inspector).toBeVisible()
-  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
   await expect(inspector).toBeHidden()
-
-  const map = page.getByRole('group', { name: 'Vesper star system map' })
+  const map = wardenMap(page)
+  const host = wardenObjectMark(page, systemId, primaryObjectId)
+  const hostPoint = async () => {
+    const point = await exposedContinuousObjectHitPoint(host)
+    if (!point) throw new Error('The primary Star must have a reachable Orbit Add target.')
+    return point
+  }
+  const ownerRings = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"]`)
+  const orbitRings = ownerRings.and(map.getByRole('button', { name: /^Orbit \d+ around Primary Star$/ }))
   const beforeChoosingPlanet = await downloadJson(page, 'Export star system JSON')
+  expect(beforeChoosingPlanet.system?.id).toBe(systemId)
   expect(beforeChoosingPlanet.system?.objects).toHaveLength(1)
 
   const addToggle = page.getByRole('button', { name: 'Add to map', exact: true })
@@ -123,20 +128,20 @@ test('system Add immediately places on repeated clicks and preserves each placem
   await expect(inspector).toBeHidden()
 
   const firstPoint = { x: 0.25, y: 0.25 }
-  const firstDeliveredPoint = await clickNormalizedSystemPoint(page, map, firstPoint)
+  const firstDeliveredPoint = await clickWardenSystemPoint(page, systemId, firstPoint)
   const confirmPlacement = page.getByRole('button', { name: 'Confirm placement', exact: true })
   await expect(confirmPlacement).toHaveCount(0)
   const afterFirstClick = await downloadJson(page, 'Export star system JSON')
   const firstPlanets = afterFirstClick.system?.objects.filter(object => object.subtype === 'planet') ?? []
   expect(firstPlanets).toHaveLength(1)
   expectSystemPlacement(firstPlanets[0]?.placement, firstDeliveredPoint)
-  await expect(inspector).toBeVisible()
+  await expect(inspector).toBeHidden()
 
   const secondPoint = { x: 0.75, y: 0.75 }
-  const secondDeliveredPoint = await clickNormalizedSystemPoint(page, map, secondPoint)
+  const secondDeliveredPoint = await clickWardenSystemPoint(page, systemId, secondPoint)
   await expect(confirmPlacement).toHaveCount(0)
   await expect(addToggle).toHaveAttribute('aria-expanded', 'false')
-  await expect(inspector).toBeVisible()
+  await expect(inspector).toBeHidden()
 
   const afterSecondClick = await downloadJson(page, 'Export star system JSON')
   const placedPlanets = afterSecondClick.system?.objects.filter(object => object.subtype === 'planet') ?? []
@@ -144,8 +149,11 @@ test('system Add immediately places on repeated clicks and preserves each placem
   expectSystemPlacement(placedPlanets[0]?.placement, firstDeliveredPoint)
   expectSystemPlacement(placedPlanets[1]?.placement, secondDeliveredPoint)
 
+  await waitForWorkspaceSaved(page)
   await page.reload()
-  await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
+  await map.locator('.continuous-warden-name-target').click()
+  await hideWorkspaceInspector(page)
+  await centerWorkspaceSelection(page)
   const afterReload = await downloadJson(page, 'Export star system JSON')
   const reloadedPlanets = afterReload.system?.objects.filter(object => object.subtype === 'planet') ?? []
   expect(reloadedPlanets).toHaveLength(2)
@@ -153,9 +161,7 @@ test('system Add immediately places on repeated clicks and preserves each placem
   expectSystemPlacement(reloadedPlanets[1]?.placement, secondDeliveredPoint)
 
   await test.step('Three clicks on the same host in one Add Orbit session create distinct rings', async () => {
-    const host = map.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true })
-      .locator('.object-hit-target')
-    const rings = map.getByRole('group', { name: /^Orbit \d+ around Primary Star$/ }).locator('.orbit-ring')
+    const rings = orbitRings
     await expect(rings).toHaveCount(0)
     await (await dockAction(page, 'Add orbit')).click()
 
@@ -167,7 +173,8 @@ test('system Add immediately places on repeated clicks and preserves each placem
     let previous = await readRings()
     for (const count of [1, 2, 3]) {
       await expect(quitAdd).toBeVisible()
-      await host.click()
+      const point = await hostPoint()
+      await page.mouse.click(point.x, point.y)
       await expect(rings).toHaveCount(count)
       const current = await readRings()
       expect(current).toEqual(expect.arrayContaining(previous))
@@ -182,38 +189,35 @@ test('system Add immediately places on repeated clicks and preserves each placem
   await test.step('A drag that leaves the map before showing a ring still blocks Undo', async () => {
     await waitForWorkspaceSaved(page)
     const undo = page.getByRole('group', { name: 'Edit history' }).getByRole('button', { name: /^Undo(?:$|:)/ })
-    const host = map.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true })
-      .locator('.object-hit-target')
     const quitAdd = page.getByRole('button', { name: 'Quit Add and return to Select' })
-    const start = await hitCenter(host)
+    const start = await hostPoint()
     await expect(undo).toBeEnabled()
     await page.mouse.move(start.x, start.y)
     await page.mouse.down()
     try {
       const outside = await hitCenter(quitAdd)
       await page.mouse.move(outside.x, outside.y)
-      await expect(map.locator('.system-creation-preview-orbit')).toHaveCount(0)
+      await expect(map.locator('.orbit-creation-preview-ring')).toHaveCount(0)
       await expect(undo).toBeDisabled()
       await page.keyboard.press('Control+z')
-      await expect(map.locator('.orbit-ring')).toHaveCount(3)
+      await expect(ownerRings).toHaveCount(3)
     } finally {
       await page.mouse.up()
     }
     await expect(quitAdd).toBeVisible()
     await expect(undo).toBeEnabled()
-    await expect(map.locator('.orbit-ring')).toHaveCount(3)
+    await expect(ownerRings).toHaveCount(3)
   })
 
   await test.step('An Orbit drag released over Quit Add creates the displayed circle once', async () => {
-    await page.getByRole('button', { name: 'Fit map', exact: true }).click()
     const quitAdd = page.getByRole('button', { name: 'Quit Add and return to Select' })
-    const firstRing = map.getByRole('group', { name: 'Orbit 1 around Primary Star', exact: true }).locator('.orbit-ring')
-    const { start } = await orbitDragPoints(firstRing)
-    const preview = map.locator('.system-creation-preview-orbit')
+    const firstRing = orbitRings.and(map.getByRole('button', { name: 'Orbit 1 around Primary Star', exact: true }))
+    const start = await hostPoint()
+    const preview = map.locator('.orbit-creation-preview-ring')
     const readPaintedGap = () => preview.evaluate((element) => {
       if (!(element instanceof SVGEllipseElement)) throw new Error('Expected a circular preview.')
       const matrix = element.getScreenCTM()
-      const existing = element.closest('svg')?.querySelectorAll<SVGEllipseElement>('.orbit-ring')
+      const existing = element.closest('svg')?.querySelectorAll<SVGEllipseElement>('.continuous-warden-orbit-target')
       if (!matrix || !existing?.length) throw new Error('Expected concentric rendered rings.')
       const previewStroke = parseFloat(getComputedStyle(element).strokeWidth)
       const scale = Math.hypot(matrix.a, matrix.b)
@@ -266,16 +270,17 @@ test('system Add immediately places on repeated clicks and preserves each placem
 
     await expect(preview).toHaveCount(0)
     await expect(quitAdd).toBeVisible()
-    const rings = map.getByRole('group', { name: /^Orbit \d+ around Primary Star$/ }).locator('.orbit-ring')
+    const rings = orbitRings
     await expect(rings).toHaveCount(4)
-    const created = map.getByRole('group', { name: 'Orbit 4 around Primary Star', exact: true }).locator('.orbit-ring')
+    const created = orbitRings.and(map.getByRole('button', { name: 'Orbit 4 around Primary Star', exact: true }))
     await expect(created).toHaveAttribute('rx', radius)
     await expect(created).toHaveAttribute('ry', radius)
     expect(await created.getAttribute('cx')).toBe(await firstRing.getAttribute('cx'))
     expect(await created.getAttribute('cy')).toBe(await firstRing.getAttribute('cy'))
 
     await test.step('Escape cancels an active pen drag and its late release', async () => {
-      const { start, requested } = await orbitDragPoints(firstRing)
+      const start = await hostPoint()
+      const { requested } = await orbitDragPoints(firstRing)
       const cdp = await page.context().newCDPSession(page)
       try {
         await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...start, pointerType: 'pen' })
@@ -316,11 +321,12 @@ test('system Add immediately places on repeated clicks and preserves each placem
 
 test('Orbit form Add retains its host, corrects each axis, and retries one applied write', async ({ page }) => {
   await captureMapExportBlobs(page)
-  await createWorkspace(page)
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+    viewport: { width: 1440, height: 960 },
+  })
   await waitForWorkspaceSaved(page)
   const inspector = page.locator('#workspace-inspector-panel')
-  const starHierarchy = await openWorkspaceHierarchy(page)
-  await starHierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
+  await wardenObjectMark(page, systemId, primaryObjectId).press('Enter')
   await expect(inspector).toBeVisible()
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   await inspector.getByLabel('Name', { exact: true }).fill('Unapplied Primary Star')
@@ -368,10 +374,12 @@ test('Orbit form Add retains its host, corrects each axis, and retries one appli
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Retry save', exact: true }).click()
   await waitForWorkspaceSaved(page)
   await page.reload()
-  const afterReload = await downloadJson(page, 'Export star system JSON')
-  expect(afterReload.system?.orbits).toHaveLength(1)
-  expect(afterReload.system?.orbits[0]?.hostId).toBe(afterReload.system?.objects[0]?.id)
-  expect(afterReload.layout.orbitRadii[afterReload.system!.orbits[0]!.id])
-    .toEqual({ horizontal: 39, vertical: 80 })
-  expect(afterReload.layout.orbitRotations?.[afterReload.system!.orbits[0]!.id]).toBe(37)
+  const afterReload = await downloadJson(page, 'Export Jump Cluster JSON')
+  const ownerAfterReload = afterReload.cluster?.systems.find(system => system.id === systemId)
+  const orbitAfterReload = ownerAfterReload?.orbits[0]
+  expect(ownerAfterReload?.orbits).toHaveLength(1)
+  expect(orbitAfterReload?.hostId).toBe(primaryObjectId)
+  if (!orbitAfterReload) throw new Error('The retried Orbit is missing from the recovered owner.')
+  expect(afterReload.layout.orbitRadii[orbitAfterReload.id]).toEqual({ horizontal: 39, vertical: 80 })
+  expect(afterReload.layout.orbitRotations?.[orbitAfterReload.id]).toBe(37)
 })

@@ -125,8 +125,9 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   const review = firstPlacement.review
   await expect(review).toBeVisible()
   await expect(review).toContainText('Star systems: 1')
+  await expect(review).toContainText('Map objects: 2')
+  await expect(review).toContainText('Orbits: 1')
   await expect(review).toContainText('Jump Routes: 0')
-  await expect(review).toContainText('Primary Star')
   await expect(page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })).toHaveCount(0)
   await resolveImportReview(review, 'cancel')
   await expect(review).toBeHidden()

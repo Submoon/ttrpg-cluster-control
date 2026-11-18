@@ -1,5 +1,20 @@
 import { expect, test, type Page } from './fixtures'
-import { addCatalogueObject, captureMapExportBlobs, downloadJson, openWorkspaceZoomNavigation, parseMapCameraTransform, workspaceZoomOutput } from './helpers'
+import {
+  captureMapExportBlobs,
+  centerWorkspaceSelection,
+  clickWardenSystemPoint,
+  downloadJson,
+  exposedContinuousObjectHitPoint,
+  hideWorkspaceInspector,
+  openWorkspaceZoomNavigation,
+  parseMapCameraTransform,
+  quitSystemAdd,
+  selectCatalogueObjectButton,
+  waitForWorkspaceSaved,
+  wardenMap,
+  wardenObjectMark,
+  workspaceZoomOutput,
+} from './helpers'
 
 type WorkspacePreparationOptions = {
   measurePhases?: boolean
@@ -14,7 +29,8 @@ async function measuredStep<T>(
   return enabled ? test.step(title, action) : action()
 }
 
-async function createWorkspace(page: Page, options: WorkspacePreparationOptions = {}): Promise<void> {
+async function createWorkspace(page: Page, options: WorkspacePreparationOptions = {}) {
+  await page.setViewportSize({ width: 1440, height: 960 })
   const { measurePhases = false } = options
   await measuredStep(measurePhases, 'Navigate to the local workspace form', () => options.startupTimeout === undefined
     ? page.goto('/')
@@ -35,18 +51,35 @@ async function createWorkspace(page: Page, options: WorkspacePreparationOptions 
     await page.getByRole('button', { name: 'Create local workspace' }).click()
     await expect(page.getByRole('toolbar', { name: 'Workspace navigation' })).toBeVisible()
   })
+
+  const map = wardenMap(page)
+  const anchor = map.locator('.continuous-warden-system-anchor')
+  await expect(anchor).toHaveCount(1)
+  const systemId = await anchor.getAttribute('data-system-id')
+  if (!systemId) throw new Error('The created system must expose its owner identity.')
+  await map.locator('.continuous-warden-name-target').click()
+  await hideWorkspaceInspector(page)
+  await centerWorkspaceSelection(page)
+  const star = map.locator(`.continuous-warden-object[data-system-id="${systemId}"]`)
+  await expect(star).toHaveCount(1)
+  const objectId = await star.getAttribute('data-object-id')
+  if (!objectId) throw new Error('The primary Star must expose its domain identity.')
+  return { map, systemId, object: wardenObjectMark(page, systemId, objectId), objectId }
 }
 
 async function dragMapBackground(page: Page): Promise<void> {
-  const map = page.getByRole('group', { name: 'Vesper star system map' })
+  const map = wardenMap(page)
   const bounds = await map.boundingBox()
-  expect(bounds).not.toBeNull()
-  const startX = bounds!.x + 24
-  const startY = bounds!.y + 24
+  if (!bounds) throw new Error('The visible map is needed for the right-button pan.')
+  const startX = bounds.x + 24
+  const startY = bounds.y + 24
+  const scene = map.locator('.cluster-map-content')
+  const cameraBefore = await scene.getAttribute('transform')
   await page.mouse.move(startX, startY)
-  await page.mouse.down()
+  await page.mouse.down({ button: 'right' })
   await page.mouse.move(startX + 48, startY + 28, { steps: 4 })
-  await page.mouse.up()
+  await page.mouse.up({ button: 'right' })
+  await expect(scene).not.toHaveAttribute('transform', cameraBefore ?? '')
 }
 
 // The cold trace measured first root SSR at 127s; allow bounded client/preparation headroom.
@@ -56,28 +89,27 @@ const MOVE_DRAFT_PREPARATION_TIMEOUT = 180_000
 async function prepareMoveDraft(page: Page) {
   return await test.step('Prepare the workspace and unresolved metadata draft', async () => {
     await captureMapExportBlobs(page)
-    await createWorkspace(page, {
+    const { map, systemId, object, objectId } = await createWorkspace(page, {
       measurePhases: true,
       startupTimeout: MOVE_DRAFT_PREPARATION_TIMEOUT,
     })
-    const map = page.getByRole('group', { name: 'Vesper star system map' })
     const inspectorToggle = page.getByRole('button', { name: 'Inspect', exact: true })
-    const object = map.locator('.system-object').filter({ hasText: 'Primary Star' })
-
-    await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
-    await addCatalogueObject(page, 'planet', { noSelection: true })
-    await expect(map.locator('.system-object')).toHaveCount(2)
-    await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
-    await object.click()
-    const objectId = await object.getAttribute('data-object-id')
-    const committedBefore = await downloadJson(page, 'Export star system JSON')
-    const committedObject = committedBefore.system!.objects.find(candidate => candidate.id === objectId)!
+    await (await selectCatalogueObjectButton(page, 'planet')).click()
+    await clickWardenSystemPoint(page, systemId, { x: 0.33, y: 0.67 })
+    await quitSystemAdd(page)
+    await waitForWorkspaceSaved(page)
+    await object.press('Enter')
+    const before = await downloadJson(page, 'Export Jump Cluster JSON')
+    const owner = before.cluster?.systems.find(system => system.id === systemId)
+    const committedObject = owner?.objects.find(candidate => candidate.id === objectId)
+    const planet = owner?.objects.find(candidate => candidate.subtype === 'planet')
+    if (!committedObject || !planet) throw new Error('The saved owner needs its primary Star and independent Planet.')
     await page.getByRole('button', { name: 'Edit map object' }).click()
     await page.getByLabel('GM notes').fill('Unresolved map-object draft')
     await inspectorToggle.click()
     await expect(inspectorToggle).toHaveAttribute('aria-expanded', 'false')
 
-    return { map, inspectorToggle, object, objectId, committedObject }
+    return { map, inspectorToggle, object, objectId, committedObject, systemId, planetId: planet.id }
   })
 }
 
@@ -95,16 +127,15 @@ const moveDraftTest = test.extend<MoveDraftFixtures>({
 })
 
 moveDraftTest('Move commits a free position independently of an unresolved metadata draft', async ({ page, preparedMoveDraft }) => {
-  const { map, inspectorToggle, object, objectId, committedObject } = preparedMoveDraft
+  const { map, inspectorToggle, object, objectId, committedObject, systemId, planetId } = preparedMoveDraft
 
   await test.step('Move the object while metadata remains unresolved', async () => {
     await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Move' }).click()
 
     const originalObjectTransform = await object.getAttribute('transform')
-    const bounds = await object.boundingBox()
-    expect(bounds).not.toBeNull()
-    const startX = bounds!.x + bounds!.width / 2
-    const startY = bounds!.y + bounds!.height / 2
+    const start = await exposedContinuousObjectHitPoint(object)
+    if (!start) throw new Error('The primary Star must have a reachable native Move target.')
+    const { x: startX, y: startY } = start
     await page.mouse.move(startX, startY)
     await page.mouse.down()
     await page.mouse.move(startX + 52, startY + 34, { steps: 5 })
@@ -113,8 +144,10 @@ moveDraftTest('Move commits a free position independently of an unresolved metad
 
     await expect(object).not.toHaveAttribute('transform', originalObjectTransform!)
     await expect(inspectorToggle).toHaveAttribute('aria-expanded', 'false')
-    const committedAfterMove = await downloadJson(page, 'Export star system JSON')
-    const movedObject = committedAfterMove.system!.objects.find(candidate => candidate.id === objectId)!
+    const committedAfterMove = await downloadJson(page, 'Export Jump Cluster JSON')
+    const movedObject = committedAfterMove.cluster?.systems.find(system => system.id === systemId)
+      ?.objects.find(candidate => candidate.id === objectId)
+    if (!movedObject) throw new Error('Move must preserve the Star in the same owning system.')
     expect(movedObject.placement).not.toEqual(committedObject.placement)
     expect({ ...movedObject, placement: committedObject.placement }).toEqual(committedObject)
     await inspectorToggle.click()
@@ -122,33 +155,32 @@ moveDraftTest('Move commits a free position independently of an unresolved metad
     await expect(inspector.getByLabel('GM notes')).toHaveValue('Unresolved map-object draft')
     await expect(inspector.getByRole('button', { name: /^Apply changes/ })).toBeVisible()
     await inspector.getByRole('button', { name: 'Cancel map object edits' }).click()
-    const committedAfterDiscard = await downloadJson(page, 'Export star system JSON')
-    expect(committedAfterDiscard.system!.objects.find(candidate => candidate.id === objectId)).toEqual(movedObject)
+    const committedAfterDiscard = await downloadJson(page, 'Export Jump Cluster JSON')
+    expect(committedAfterDiscard.cluster?.systems.find(system => system.id === systemId)
+      ?.objects.find(candidate => candidate.id === objectId)).toEqual(movedObject)
   })
 
   await test.step('Check independent map targets and navigation controls', async () => {
     await inspectorToggle.click()
     await expect(inspectorToggle).toHaveAttribute('aria-expanded', 'false')
-    const shortTapBounds = await object.boundingBox()
-    expect(shortTapBounds).not.toBeNull()
-    await page.mouse.click(shortTapBounds!.x + shortTapBounds!.width / 2, shortTapBounds!.y + shortTapBounds!.height / 2)
+    const shortTap = await exposedContinuousObjectHitPoint(object)
+    if (!shortTap) throw new Error('The moved Star must remain hittable after its commit.')
+    await page.mouse.click(shortTap.x, shortTap.y)
     await expect(inspectorToggle).toHaveAttribute('aria-expanded', 'false')
 
-    await page.getByRole('button', { name: 'Fit map' }).click()
-    const independentObject = map.locator('.system-object').filter({ hasText: 'New planet 1' })
+    const independentObject = wardenObjectMark(page, systemId, planetId)
     const independentTransform = await independentObject.getAttribute('transform')
-    const independentHitTarget = independentObject.locator('.object-hit-target')
-    const independentBounds = await independentHitTarget.boundingBox()
-    expect(independentBounds).not.toBeNull()
-    await page.mouse.move(independentBounds!.x + independentBounds!.width / 2, independentBounds!.y + independentBounds!.height / 2)
+    const start = await exposedContinuousObjectHitPoint(independentObject)
+    if (!start || !independentTransform) throw new Error('The independent Planet is not ready for native Move.')
+    await page.mouse.move(start.x, start.y)
     await page.mouse.down()
-    await page.mouse.move(independentBounds!.x + independentBounds!.width / 2 + 44, independentBounds!.y + independentBounds!.height / 2 + 26, { steps: 4 })
-    await expect(independentObject).not.toHaveAttribute('transform', independentTransform!)
+    await page.mouse.move(start.x + 44, start.y + 26, { steps: 4 })
+    await expect(independentObject).not.toHaveAttribute('transform', independentTransform)
     await page.mouse.up()
-    await expect(independentObject).not.toHaveAttribute('transform', independentTransform!)
+    await expect(independentObject).not.toHaveAttribute('transform', independentTransform)
 
     const zoomNavigation = await openWorkspaceZoomNavigation(page)
-    const scene = page.locator('.system-map-content')
+    const scene = map.locator('.cluster-map-content')
     const cameraBeforePan = parseMapCameraTransform(await scene.getAttribute('transform'))
     await zoomNavigation.getByRole('button', { name: 'Pan map right' }).click()
     await expect.poll(async () => parseMapCameraTransform(await scene.getAttribute('transform'))).toEqual({
@@ -165,9 +197,7 @@ moveDraftTest('Move commits a free position independently of an unresolved metad
 })
 
 test('keyboard Enter and Space still activate a map object immediately after pointer pan', async ({ page }) => {
-  await createWorkspace(page)
-  const map = page.getByRole('group', { name: 'Vesper star system map' })
-  const object = map.getByRole('button', { name: 'Select A, Primary Star (Star)' })
+  const { object } = await createWorkspace(page)
   const inspectorToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
   if (await inspectorToggle.getAttribute('aria-expanded') === 'true') await inspectorToggle.click()
