@@ -8,7 +8,7 @@
   >
     <template #left>
       <div class="workspace-header-brand" aria-label="TTRPG Cluster Control">
-        <span class="workspace-header-mark" aria-hidden="true">✦</span>
+        <img class="workspace-header-mark" :src="logo" alt="" width="28" height="28" />
         <span class="workspace-header-wordmark">TTRPG Cluster Control</span>
       </div>
     </template>
@@ -51,6 +51,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import logo from '~/assets/cluster-control-logo-256.png'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 
 const props = withDefaults(defineProps<{
@@ -116,8 +117,7 @@ const colorMode = useColorMode()
 }
 
 .workspace-header-mark {
-  color: var(--accent);
-  font-size: 1.25rem;
+  flex: none;
 }
 
 .workspace-header-wordmark {
