@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Map interaction measurements</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100dvh; font: 14px system-ui; color-scheme: light dark; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem .75rem; padding: .65rem; }
+  label { display: inline-flex; align-items: center; gap: .3rem; }
+  button, input, select { min-height: 32px; font: inherit; }
+  input { width: 10rem; }
+  iframe { width: 100%; height: 100%; border: 0; }
+  #status { flex-basis: 100%; }
+  header.recording label, header.recording a, header.recording #load, header.recording #start, header.recording #download { display: none; }
+</style>
+<header id="measure">
+  <label>Map
+    <select id="surface" aria-label="Map">
+      <option value="warden">Warden</option>
+      <option value="preview">Player preview</option>
+      <option value="reader">Player reader</option>
+    </select>
+  </label>
+  <label>Scene
+    <select id="scene" aria-label="Scene"><option value="reference">5 systems / 50 objects</option><option value="demanding">10 systems / 200 objects</option></select>
+  </label>
+  <label>Device <input id="device" placeholder="Model and browser"></label>
+  <label>Input
+    <select id="input" aria-label="Input"><option>Mouse and wheel</option><option>Trackpad</option><option>Touch</option></select>
+  </label>
+  <label>Gesture
+    <select id="gesture" aria-label="Gesture">
+      <option>Pan</option><option>First reveal</option><option>Repeated detail crossings</option>
+      <option>Neighboring systems</option><option>Selection</option>
+    </select>
+  </label>
+  <a id="scene-file" download>Download scene JSON</a>
+  <button id="load" type="button">Open map</button>
+  <button id="start" type="button">Start sample</button>
+  <button id="finish" type="button" hidden>Finish sample</button>
+  <button id="download" type="button" disabled>Download measurements</button>
+  <span id="status" role="status">Open the map and load its scene JSON.</span>
+</header>
+<iframe id="map" title="Test map"></iframe>
+<script type="module">
+  const read = id => document.getElementById(id)
+  const controls = read('measure')
+  const map = read('map')
+  const samples = []
+  const revision = await fetch('./revision.json').then(response => response.json())
+  let finishSample
+  let captured
+
+  function updateFixtureLink() {
+    const suffix = read('surface').value === 'reader' ? '.player' : ''
+    read('scene-file').href = `./scenes/meridian-${read('scene').value}${suffix}.json`
+  }
+  function openMap() {
+    const surface = read('surface').value
+    const route = surface === 'reader' ? '/player' : '/'
+    map.src = `${route}${revision.continuousFlag ? '?map=continuous' : ''}`
+    read('status').textContent = surface === 'preview'
+      ? 'Open your test scene in Warden, then open Preview player view from Map files.'
+      : 'Open the scene JSON in the map.'
+  }
+  async function installCollector() {
+    const child = map.contentWindow
+    if (child.measureContinuousMap) return child.measureContinuousMap
+    const script = child.document.createElement('script')
+    script.src = '/__map-qualification/measure-continuous-map.js'
+    await new Promise((resolve, reject) => {
+      script.onload = resolve
+      script.onerror = reject
+      child.document.head.append(script)
+    })
+    return child.measureContinuousMap
+  }
+  function nextPaint() {
+    return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  }
+  async function start() {
+    const surface = read('surface').value
+    const selector = surface === 'warden'
+      ? 'svg.continuous-warden-map-svg'
+      : 'svg.player-continuous-map-scene'
+    const scene = map.contentDocument?.querySelector(selector)
+    if (!scene?.getClientRects().length) throw new Error('Open the selected map and test scene first.')
+    const collector = await installCollector()
+    captured = {
+      surface, scene: read('scene').value, gesture: read('gesture').value,
+      device: read('device').value.trim(), input: read('input').value,
+    }
+    controls.classList.add('recording')
+    read('finish').hidden = false
+    read('status').textContent = `Ready for ${captured.gesture}. Start the gesture after the map settles, then finish the sample.`
+    await nextPaint()
+    finishSample = collector(scene, captured.gesture)
+  }
+  function finish() {
+    if (!finishSample) return
+    const sample = finishSample()
+    finishSample = undefined
+    read('finish').hidden = true
+    controls.classList.remove('recording')
+    if (sample.inputs.length) {
+      samples.push({ ...captured, ...sample })
+      read('download').disabled = false
+    }
+    read('status').textContent = sample.inputs.length
+      ? `Saved ${samples.length} samples.`
+      : 'Repeat the gesture inside the map to record its input.'
+  }
+  function exportSamples() {
+    const file = new Blob([JSON.stringify({ ...revision, samples }, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(file)
+    const action = document.createElement('a')
+    action.href = url
+    action.download = 'map-interaction-measurements.json'
+    action.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+  read('surface').addEventListener('change', updateFixtureLink)
+  read('scene').addEventListener('change', updateFixtureLink)
+  read('load').addEventListener('click', openMap)
+  read('start').addEventListener('click', () => {
+    read('start').disabled = true
+    start().catch(error => { read('status').textContent = error.message }).finally(() => { read('start').disabled = false })
+  })
+  read('finish').addEventListener('click', finish)
+  read('download').addEventListener('click', exportSamples)
+  updateFixtureLink()
+</script>
+</html>

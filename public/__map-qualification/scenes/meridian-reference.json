@@ -1,0 +1,1097 @@
+{
+  "format": "ttrpg-cluster-control-map",
+  "version": 4,
+  "type": "cluster",
+  "cluster": {
+    "id": "prototype-cluster:semantic-zoom",
+    "name": "The Meridian Span (reference)",
+    "playerTitle": "The Meridian Span (reference)",
+    "systems": [
+      {
+        "id": "system:helion",
+        "name": "Helion Reach",
+        "publication": "revealed",
+        "objects": [
+          {
+            "id": "object:helion:primary-star",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "star",
+            "locationKey": "STAR-01",
+            "name": "Helion",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.62,
+              "y": 0.42
+            }
+          },
+          {
+            "id": "object:helion:luminous-reach",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-01",
+            "name": "Luminous Reach",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:helion:primary"
+            }
+          },
+          {
+            "id": "object:helion:outer-garden",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-02",
+            "name": "Outer Garden",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:helion:primary"
+            }
+          },
+          {
+            "id": "object:helion:pale-harbor",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "moon",
+            "locationKey": "MO-01",
+            "name": "Pale Harbor",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:helion:luminous"
+            }
+          },
+          {
+            "id": "object:helion:quiet-meridian",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "moon",
+            "locationKey": "MO-02",
+            "name": "Quiet Meridian",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:helion:pale"
+            }
+          },
+          {
+            "id": "object:helion:survey-moon",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "moon",
+            "locationKey": "MO-03",
+            "name": "Survey Moon",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:helion:quiet"
+            }
+          },
+          {
+            "id": "object:helion:icebound-observatory",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-06",
+            "name": "Icebound Observatory",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:helion:survey"
+            }
+          },
+          {
+            "id": "object:helion:far-lantern",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-07",
+            "name": "Far Lantern",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:helion:survey"
+            }
+          },
+          {
+            "id": "object:helion:archive-station",
+            "publication": "revealed",
+            "family": "Installation",
+            "subtype": "station",
+            "locationKey": "ST-01",
+            "name": "Archive Station",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:helion:station"
+            }
+          },
+          {
+            "id": "object:helion:veiled-gate",
+            "publication": "hidden",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-01",
+            "name": "Veiled Gate",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:helion:archive-gate"
+            },
+            "jumpStationId": "object:helion:archive-station"
+          },
+          {
+            "id": "object:helion:calyx-station",
+            "publication": "revealed",
+            "family": "Installation",
+            "subtype": "station",
+            "locationKey": "ST-02",
+            "name": "Calyx Station",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.27,
+              "y": 0.69
+            }
+          },
+          {
+            "id": "object:helion:north-gate",
+            "publication": "revealed",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-02",
+            "name": "North Gate",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.18,
+              "y": 0.82
+            },
+            "jumpStationId": "object:helion:calyx-station"
+          },
+          {
+            "id": "object:helion:south-gate",
+            "publication": "revealed",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-03",
+            "name": "South Gate",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.34,
+              "y": 0.82
+            },
+            "jumpStationId": "object:helion:calyx-station"
+          },
+          {
+            "id": "object:helion:distant-gate",
+            "publication": "hidden",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-04",
+            "name": "Distant Gate",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 1.45,
+              "y": 1.25
+            }
+          },
+          {
+            "id": "object:helion:glass-belt",
+            "publication": "revealed",
+            "family": "SmallBody/Field",
+            "subtype": "belt",
+            "locationKey": "BELT-01",
+            "name": "Glass Belt",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.78,
+              "y": 0.82
+            }
+          },
+          {
+            "id": "object:helion:iron-asteroid",
+            "publication": "revealed",
+            "family": "SmallBody/Field",
+            "subtype": "asteroid",
+            "locationKey": "AST-01",
+            "name": "Iron Asteroid",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.76,
+              "y": 0.73
+            }
+          },
+          {
+            "id": "object:helion:survey-vessel",
+            "publication": "revealed",
+            "family": "Vessel",
+            "subtype": "vessel",
+            "locationKey": "VES-01",
+            "name": "Survey Vessel",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.49,
+              "y": 0.72
+            }
+          },
+          {
+            "id": "object:helion:derelict",
+            "publication": "revealed",
+            "family": "Vessel",
+            "subtype": "derelict",
+            "locationKey": "DER-01",
+            "name": "Quiet Derelict",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.11,
+              "y": 0.72
+            }
+          },
+          {
+            "id": "object:helion:colony",
+            "publication": "revealed",
+            "family": "Installation",
+            "subtype": "colony",
+            "locationKey": "COL-01",
+            "name": "Lowlight Colony",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.46,
+              "y": 0.18
+            }
+          },
+          {
+            "id": "object:helion:anomaly",
+            "publication": "revealed",
+            "family": "Phenomenon",
+            "subtype": "anomaly",
+            "locationKey": "AN-01",
+            "name": "Blue Anomaly",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.88,
+              "y": 0.16
+            }
+          }
+        ],
+        "orbits": [
+          {
+            "id": "orbit:helion:primary",
+            "hostId": "object:helion:primary-star",
+            "order": 1
+          },
+          {
+            "id": "orbit:helion:luminous",
+            "hostId": "object:helion:luminous-reach",
+            "order": 1
+          },
+          {
+            "id": "orbit:helion:pale",
+            "hostId": "object:helion:pale-harbor",
+            "order": 1
+          },
+          {
+            "id": "orbit:helion:quiet",
+            "hostId": "object:helion:quiet-meridian",
+            "order": 1
+          },
+          {
+            "id": "orbit:helion:survey",
+            "hostId": "object:helion:survey-moon",
+            "order": 1
+          },
+          {
+            "id": "orbit:helion:pale-empty",
+            "hostId": "object:helion:pale-harbor",
+            "order": 2
+          },
+          {
+            "id": "orbit:helion:station",
+            "hostId": "object:helion:luminous-reach",
+            "order": 2
+          },
+          {
+            "id": "orbit:helion:archive-gate",
+            "hostId": "object:helion:archive-station",
+            "order": 1
+          },
+          {
+            "id": "orbit:helion:free-center",
+            "hostId": null,
+            "order": 1,
+            "center": {
+              "x": 0.86,
+              "y": 0.78
+            }
+          }
+        ]
+      },
+      {
+        "id": "system:verdant",
+        "name": "Verdant Reach",
+        "publication": "revealed",
+        "objects": [
+          {
+            "id": "object:verdant:primary-star",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "star",
+            "locationKey": "STAR-01",
+            "name": "Verdant",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.5,
+              "y": 0.5
+            }
+          },
+          {
+            "id": "object:verdant:seed",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-01",
+            "name": "Verdant Seed",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:verdant:primary"
+            }
+          },
+          {
+            "id": "object:verdant:cradle-moon",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "moon",
+            "locationKey": "MO-01",
+            "name": "Cradle Moon",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:verdant:seed"
+            }
+          },
+          {
+            "id": "object:verdant:station",
+            "publication": "revealed",
+            "family": "Installation",
+            "subtype": "station",
+            "locationKey": "ST-01",
+            "name": "Verdant Station",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.18,
+              "y": 0.76
+            }
+          },
+          {
+            "id": "object:verdant:gate",
+            "publication": "revealed",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-01",
+            "name": "Verdant Gate",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.78,
+              "y": 0.75
+            },
+            "jumpStationId": "object:verdant:station"
+          },
+          {
+            "id": "object:verdant:far-gate",
+            "publication": "revealed",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-02",
+            "name": "Far Gate",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.24,
+              "y": 0.23
+            }
+          },
+          {
+            "id": "object:verdant:outer-garden",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-02",
+            "name": "Greenward",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:verdant:primary"
+            }
+          },
+          {
+            "id": "object:verdant:asteroid",
+            "publication": "revealed",
+            "family": "SmallBody/Field",
+            "subtype": "asteroid",
+            "locationKey": "AST-01",
+            "name": "Seedling Rock",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.32,
+              "y": 0.22
+            }
+          },
+          {
+            "id": "object:verdant:belt",
+            "publication": "revealed",
+            "family": "SmallBody/Field",
+            "subtype": "belt",
+            "locationKey": "BELT-01",
+            "name": "Verdant Belt",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.68,
+              "y": 0.26
+            }
+          },
+          {
+            "id": "object:verdant:vessel",
+            "publication": "revealed",
+            "family": "Vessel",
+            "subtype": "vessel",
+            "locationKey": "VES-01",
+            "name": "Garden Surveyor",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.83,
+              "y": 0.32
+            }
+          },
+          {
+            "id": "object:verdant:colony",
+            "publication": "revealed",
+            "family": "Installation",
+            "subtype": "colony",
+            "locationKey": "COL-01",
+            "name": "First Orchard",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.18,
+              "y": 0.36
+            }
+          },
+          {
+            "id": "object:verdant:anomaly",
+            "publication": "revealed",
+            "family": "Phenomenon",
+            "subtype": "anomaly",
+            "locationKey": "AN-01",
+            "name": "Amber Bloom",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.84,
+              "y": 0.55
+            }
+          },
+          {
+            "id": "object:verdant:nebula",
+            "publication": "revealed",
+            "family": "Phenomenon",
+            "subtype": "nebula",
+            "locationKey": "NEB-01",
+            "name": "Green Veil",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.14,
+              "y": 0.58
+            }
+          },
+          {
+            "id": "object:verdant:derelict",
+            "publication": "revealed",
+            "family": "Vessel",
+            "subtype": "derelict",
+            "locationKey": "DER-01",
+            "name": "Lost Tender",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.57,
+              "y": 0.91
+            }
+          }
+        ],
+        "orbits": [
+          {
+            "id": "orbit:verdant:primary",
+            "hostId": "object:verdant:primary-star",
+            "order": 1
+          },
+          {
+            "id": "orbit:verdant:seed",
+            "hostId": "object:verdant:seed",
+            "order": 1
+          }
+        ]
+      },
+      {
+        "id": "system:kestrel",
+        "name": "Kestrel Gate",
+        "publication": "revealed",
+        "objects": [
+          {
+            "id": "object:kestrel:primary-star",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "star",
+            "locationKey": "STAR-01",
+            "name": "Kestrel",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.53,
+              "y": 0.5
+            }
+          },
+          {
+            "id": "object:kestrel:planet",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-01",
+            "name": "Kestrel Home",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:kestrel:primary"
+            }
+          },
+          {
+            "id": "object:kestrel:moon",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "moon",
+            "locationKey": "MO-01",
+            "name": "Peregrine Moon",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:kestrel:planet"
+            }
+          },
+          {
+            "id": "object:kestrel:station",
+            "publication": "revealed",
+            "family": "Installation",
+            "subtype": "station",
+            "locationKey": "ST-01",
+            "name": "Kestrel Station",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.78,
+              "y": 0.76
+            }
+          },
+          {
+            "id": "object:kestrel:gate",
+            "publication": "revealed",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-01",
+            "name": "Kestrel Gate",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.2,
+              "y": 0.82
+            },
+            "jumpStationId": "object:kestrel:station"
+          },
+          {
+            "id": "object:kestrel:asteroid",
+            "publication": "revealed",
+            "family": "SmallBody/Field",
+            "subtype": "asteroid",
+            "locationKey": "AST-01",
+            "name": "Three Sisters",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.26,
+              "y": 0.23
+            }
+          },
+          {
+            "id": "object:kestrel:vessel",
+            "publication": "revealed",
+            "family": "Vessel",
+            "subtype": "vessel",
+            "locationKey": "VES-01",
+            "name": "Runner",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.78,
+              "y": 0.22
+            }
+          },
+          {
+            "id": "object:kestrel:derelict",
+            "publication": "revealed",
+            "family": "Vessel",
+            "subtype": "derelict",
+            "locationKey": "DER-01",
+            "name": "Old Beacon",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.91,
+              "y": 0.49
+            }
+          },
+          {
+            "id": "object:kestrel:anomaly",
+            "publication": "revealed",
+            "family": "Phenomenon",
+            "subtype": "anomaly",
+            "locationKey": "AN-01",
+            "name": "Amber Signal",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.16,
+              "y": 0.48
+            }
+          }
+        ],
+        "orbits": [
+          {
+            "id": "orbit:kestrel:primary",
+            "hostId": "object:kestrel:primary-star",
+            "order": 1
+          },
+          {
+            "id": "orbit:kestrel:planet",
+            "hostId": "object:kestrel:planet",
+            "order": 1
+          }
+        ]
+      },
+      {
+        "id": "system:morrow",
+        "name": "Morrow's Lantern",
+        "publication": "unknown",
+        "objects": [
+          {
+            "id": "object:morrow:primary-star",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "star",
+            "locationKey": "STAR-01",
+            "name": "Morrow",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.5,
+              "y": 0.5
+            }
+          },
+          {
+            "id": "object:morrow:planet",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "planet",
+            "locationKey": "PL-01",
+            "name": "Morrow's Lantern",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:morrow:primary"
+            }
+          },
+          {
+            "id": "object:morrow:moon",
+            "publication": "revealed",
+            "family": "CelestialBody",
+            "subtype": "moon",
+            "locationKey": "MO-01",
+            "name": "Tallow Moon",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "orbit",
+              "orbitId": "orbit:morrow:planet"
+            }
+          },
+          {
+            "id": "object:morrow:station",
+            "publication": "revealed",
+            "family": "Installation",
+            "subtype": "station",
+            "locationKey": "ST-01",
+            "name": "Lantern Station",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.76,
+              "y": 0.72
+            }
+          },
+          {
+            "id": "object:morrow:gate",
+            "publication": "revealed",
+            "family": "JumpPoint",
+            "subtype": "jump-point",
+            "locationKey": "JP-01",
+            "name": "Morrow Gate",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.2,
+              "y": 0.8
+            },
+            "jumpStationId": "object:morrow:station"
+          },
+          {
+            "id": "object:morrow:vessel",
+            "publication": "revealed",
+            "family": "Vessel",
+            "subtype": "vessel",
+            "locationKey": "VES-01",
+            "name": "Night Ferry",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.85,
+              "y": 0.22
+            }
+          },
+          {
+            "id": "object:morrow:hazard",
+            "publication": "revealed",
+            "family": "Phenomenon",
+            "subtype": "hazard",
+            "locationKey": "HZ-01",
+            "name": "Red Drift",
+            "description": "",
+            "playerText": "",
+            "playerFieldMasks": [],
+            "placement": {
+              "kind": "system",
+              "x": 0.15,
+              "y": 0.25
+            }
+          }
+        ],
+        "orbits": [
+          {
+            "id": "orbit:morrow:primary",
+            "hostId": "object:morrow:primary-star",
+            "order": 1
+          },
+          {
+            "id": "orbit:morrow:planet",
+            "hostId": "object:morrow:planet",
+            "order": 1
+          },
+          {
+            "id": "orbit:morrow:free-center",
+            "hostId": null,
+            "order": 1,
+            "center": {
+              "x": 0.27,
+              "y": 0.78
+            }
+          }
+        ]
+      },
+      {
+        "id": "system:quiet-frame",
+        "name": "Quiet Frame",
+        "publication": "revealed",
+        "objects": [],
+        "orbits": []
+      }
+    ],
+    "routes": [
+      {
+        "id": "route:helion-verdant",
+        "name": "Orchard Run",
+        "fromPointId": "object:helion:veiled-gate",
+        "toPointId": "object:verdant:gate",
+        "jumpLevel": 2,
+        "playerShared": true
+      },
+      {
+        "id": "route:helion-kestrel",
+        "name": "Three Sisters Line",
+        "fromPointId": "object:helion:north-gate",
+        "toPointId": "object:kestrel:gate",
+        "jumpLevel": 3,
+        "playerShared": true
+      },
+      {
+        "id": "route:helion-morrow",
+        "name": "Night Ferry Track",
+        "fromPointId": "object:helion:south-gate",
+        "toPointId": "object:morrow:gate",
+        "jumpLevel": 4,
+        "playerShared": true
+      }
+    ]
+  },
+  "objectFieldSettings": {
+    "atmosphereOptions": [
+      "Breathable",
+      "Unbreathable",
+      "Vacuum"
+    ],
+    "portClassOptions": [
+      "Class I",
+      "Class II",
+      "Class III"
+    ],
+    "nativePlayerSharing": {
+      "atmosphere": false,
+      "portClass": false
+    },
+    "customFields": []
+  },
+  "layout": {
+    "version": 1,
+    "systemPositions": {
+      "system:helion": {
+        "x": 0.38,
+        "y": 0.43
+      },
+      "system:verdant": {
+        "x": 0.52,
+        "y": 0.49
+      },
+      "system:kestrel": {
+        "x": 0.74,
+        "y": 0.63
+      },
+      "system:morrow": {
+        "x": 0.17,
+        "y": 0.62
+      },
+      "system:quiet-frame": {
+        "x": 0.86,
+        "y": 0.22
+      }
+    },
+    "unresolvedExitPositions": {},
+    "orbitRadii": {
+      "orbit:helion:primary": {
+        "horizontal": 168,
+        "vertical": 92
+      },
+      "orbit:helion:luminous": {
+        "horizontal": 58,
+        "vertical": 42
+      },
+      "orbit:helion:pale": {
+        "horizontal": 36,
+        "vertical": 32
+      },
+      "orbit:helion:quiet": {
+        "horizontal": 32,
+        "vertical": 30
+      },
+      "orbit:helion:survey": {
+        "horizontal": 31,
+        "vertical": 30
+      },
+      "orbit:helion:pale-empty": {
+        "horizontal": 80,
+        "vertical": 46
+      },
+      "orbit:helion:station": {
+        "horizontal": 94,
+        "vertical": 40
+      },
+      "orbit:helion:archive-gate": {
+        "horizontal": 30,
+        "vertical": 30
+      },
+      "orbit:helion:free-center": {
+        "horizontal": 86,
+        "vertical": 38
+      },
+      "orbit:verdant:primary": {
+        "horizontal": 150,
+        "vertical": 92
+      },
+      "orbit:verdant:seed": {
+        "horizontal": 44,
+        "vertical": 34
+      },
+      "orbit:kestrel:primary": {
+        "horizontal": 152,
+        "vertical": 102
+      },
+      "orbit:kestrel:planet": {
+        "horizontal": 42,
+        "vertical": 34
+      },
+      "orbit:morrow:primary": {
+        "horizontal": 146,
+        "vertical": 88
+      },
+      "orbit:morrow:planet": {
+        "horizontal": 40,
+        "vertical": 30
+      },
+      "orbit:morrow:free-center": {
+        "horizontal": 72,
+        "vertical": 52
+      }
+    },
+    "orbitRotations": {
+      "orbit:helion:primary": 32,
+      "orbit:helion:luminous": 342,
+      "orbit:helion:pale-empty": 14,
+      "orbit:helion:station": 334,
+      "orbit:helion:free-center": 38,
+      "orbit:verdant:primary": 343,
+      "orbit:kestrel:primary": 21,
+      "orbit:morrow:primary": 328,
+      "orbit:morrow:free-center": 27
+    },
+    "objectAngles": {
+      "object:helion:luminous-reach": 0.8,
+      "object:helion:outer-garden": 4.3,
+      "object:helion:pale-harbor": 1.1,
+      "object:helion:quiet-meridian": 2.2,
+      "object:helion:survey-moon": 3.8,
+      "object:helion:icebound-observatory": 4.9,
+      "object:helion:far-lantern": 0.6,
+      "object:helion:archive-station": 2.5,
+      "object:helion:veiled-gate": -0.2,
+      "object:verdant:seed": 1.4,
+      "object:verdant:outer-garden": 4.2,
+      "object:verdant:cradle-moon": 2.4,
+      "object:kestrel:planet": 2.5,
+      "object:kestrel:moon": -0.6,
+      "object:morrow:planet": 3.8,
+      "object:morrow:moon": 1.7
+    }
+  }
+}
