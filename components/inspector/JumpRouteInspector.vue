@@ -98,11 +98,9 @@
     :publication-busy="props.publicationBusy"
     :selected-system="props.inspectedSystem"
     :chart-edit-system-id="props.inspectedSystem?.id"
-    :allow-open-system="true"
     :has-chart-name-draft="props.hasChartNameDraft"
     :editor-error="props.editorError"
     :saving="props.saving"
-    @open-system="emit('open-system', $event)"
     @delete-system="emit('delete-system', $event)"
   />
 
@@ -306,7 +304,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'open-system': [systemId: string]
   'delete-system': [systemId: string]
   'request-route-edit': [routeId: string]
   'set-route-sharing': [routeId: string, playerShared: boolean]

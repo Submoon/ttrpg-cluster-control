@@ -3,7 +3,7 @@
     <div class="workspace-dock-tools">
       <div class="workspace-dock-mode" role="group" aria-label="Map interaction mode">
         <UTooltip
-          v-for="mode in availableModes"
+          v-for="mode in modes"
           :key="mode.value"
           :text="`${mode.label} map mode. Focus the map or a map item to use tool shortcuts.`"
           :kbds="[mode.shortcut.toLowerCase()]"
@@ -129,8 +129,7 @@
         @cancel="emit('cancel-orbit-center-move')"
       />
       <p id="workspace-map-tool-shortcut-help" class="sr-only" role="note">
-        <template v-if="props.continuousMap">Focus the map or a map item to use these shortcuts: S Select, M Move, and A open Add. Text entry, map controls, and dialogs keep their own keys.</template>
-        <template v-else>Focus the map or a map item to use these shortcuts: N Navigate, S Select, M Move, and A open Add. Text entry, map controls, and dialogs keep their own keys.</template>
+        Focus the map or a map item to use these shortcuts: S Select, M Move, and A open Add. Text entry, map controls, and dialogs keep their own keys.
       </p>
       <slot name="placement" />
     </div>
@@ -142,7 +141,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Compon
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import type {
-  MapInteractionMode,
   SystemObjectMoveCandidate,
   SystemCreationSession,
   SystemObjectMoveDestinationOption,
@@ -158,7 +156,6 @@ import OrbitCenterPlacementControls from './OrbitCenterPlacementControls.vue'
 import type { UnresolvedExitMovePreview } from '../composables/editor-workflows/useUnresolvedExitPlacement'
 
 const props = withDefaults(defineProps<{
-  continuousMap?: boolean
   creationSession?: SystemCreationSession | null
   creationTypeLabel?: string
   clusterAddLabel?: string | null
@@ -179,7 +176,6 @@ const props = withDefaults(defineProps<{
   orbitCenterMovePreview?: OrbitCenterMovePreview | null
   orbitCenterMoveError?: string
 }>(), {
-  continuousMap: false,
   creationSession: null,
   creationTypeLabel: 'object',
   systemObjectMoveAvailable: false,
@@ -220,14 +216,10 @@ const emit = defineEmits<{
 const store = useEditorUiStore()
 const commands = useEditorCommands()
 
-const modes: Array<{ value: MapInteractionMode; label: string; shortcut: string; icon: string }> = [
+const modes: Array<{ value: 'select' | 'move'; label: string; shortcut: string; icon: string }> = [
   { value: 'select', label: 'Select', shortcut: 'S', icon: 'i-lucide-mouse-pointer-2' },
-  { value: 'navigate', label: 'Navigate', shortcut: 'N', icon: 'i-lucide-hand' },
   { value: 'move', label: 'Move', shortcut: 'M', icon: 'i-lucide-move' },
 ]
-const availableModes = computed(() => props.continuousMap
-  ? modes.filter(mode => mode.value !== 'navigate')
-  : modes)
 const shortcutTooltipUi = {
   content: 'workspace-map-shortcut-tooltip-content',
   text: 'workspace-map-shortcut-tooltip-text',

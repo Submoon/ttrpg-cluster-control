@@ -27,7 +27,6 @@
       <template #map>
         <section class="player-workspace-map-region" aria-label="Player map">
           <PlayerContinuousMap
-            v-if="continuousMap"
             ref="systemMapHandle"
             :document="props.document"
             :selected-system-id="selectedSystemId"
@@ -45,50 +44,22 @@
             @inspect-route="inspectContinuousRoute"
             @map-interaction="handlePlayerMapInteraction"
           />
-          <template v-else>
-            <PlayerClusterMap
-              v-show="!selectedSystem"
-              :document="props.document"
-              :active="isActive && !selectedSystem"
-              :get-usable-client-rect="usableRectReader"
-              @open-system="selectPublicSystem"
-            />
-            <PlayerSystemMap
-              v-if="cachedSystem"
-              ref="systemMapHandle"
-              v-show="selectedSystem !== null"
-              :document="cachedSystem.map"
-              :label="cachedSystem.label"
-              :selected-object-id="selectedObjectId"
-              :selected-orbit-id="selectedOrbitId"
-              :dimmed-object-ids="dimmedObjectIds"
-              :search-locator-object-id="searchLocatorObjectId"
-              :get-usable-client-rect="usableRectReader"
-              :active="isActive && selectedSystem !== null"
-              workspace-presentation
-              @inspect-object="inspectObject"
-              @inspect-orbit="inspectOrbit"
-              @map-interaction="handlePlayerMapInteraction"
-            />
-          </template>
         </section>
       </template>
       <template #map-chrome>
         <UDashboardToolbar class="player-workspace-toolbar" role="toolbar" aria-label="Player map navigation" data-player-map-obstruction>
           <div class="player-workspace-map-context">
             <UButton
-              v-if="selectedSystemMarker"
-              class="player-workspace-back"
+              v-if="selectedSystemMarker || selectedRoute"
+              class="player-workspace-clear-selection"
               color="neutral"
               variant="outline"
               size="sm"
-              aria-label="Back to Jump Cluster"
-              title="Back to Jump Cluster"
-              data-player-back-to-cluster
-              @click="backToCluster"
+              aria-label="Clear inspection"
+              title="Clear inspection"
+              @click="clearInspectionFromToolbar"
             >
-              <UIcon name="i-lucide-arrow-left" aria-hidden="true" />
-              <span>Back</span>
+              <UIcon name="i-lucide-x" aria-hidden="true" />
             </UButton>
             <div class="player-workspace-map-caption">
               <span class="section-kicker">{{ selectedSystemMarker ? 'SYSTEM INSPECTION' : 'PLAYER MAP' }}</span>
@@ -108,8 +79,8 @@
               :reveal-search-target="revealSearchTarget"
               :can-open-search-shortcut="canOpenSearchShortcut"
               :get-shortcut-owning-dialog="getShortcutOwningDialog"
-              :file-scope="mapFileScope"
-              :scoped-images="continuousMap"
+              file-scope="player map"
+              scoped-images
               :can-export-system-image="selectedSystemMarker !== null"
               :export-error="playerExportError"
               :show-type-filters="selectedSystem !== null"
@@ -219,18 +190,16 @@
       <UDashboardToolbar as="nav" class="player-embedded-toolbar" role="toolbar" aria-label="Player map navigation" data-player-map-obstruction>
         <div class="player-workspace-map-context">
           <UButton
-            v-if="selectedSystemMarker"
-            class="player-workspace-back"
+            v-if="selectedSystemMarker || selectedRoute"
+            class="player-workspace-clear-selection"
             color="neutral"
             variant="outline"
             size="sm"
-            aria-label="Back to Jump Cluster"
-            title="Back to Jump Cluster"
-            data-player-back-to-cluster
-            @click="backToCluster"
+            aria-label="Clear inspection"
+            title="Clear inspection"
+            @click="clearInspectionFromToolbar"
           >
-            <UIcon name="i-lucide-arrow-left" aria-hidden="true" />
-            <span>Back</span>
+            <UIcon name="i-lucide-x" aria-hidden="true" />
           </UButton>
           <div class="player-workspace-map-caption">
             <span class="section-kicker">{{ selectedSystemMarker ? 'SYSTEM INSPECTION' : 'PLAYER MAP' }}</span>
@@ -250,8 +219,8 @@
             :reveal-search-target="revealSearchTarget"
             :can-open-search-shortcut="canOpenSearchShortcut"
             :get-shortcut-owning-dialog="getShortcutOwningDialog"
-            :file-scope="mapFileScope"
-            :scoped-images="continuousMap"
+            file-scope="player map"
+            scoped-images
             :can-export-system-image="selectedSystemMarker !== null"
             :export-error="playerExportError"
             :show-type-filters="selectedSystem !== null"
@@ -282,7 +251,6 @@
       <div class="player-inline-map-layout">
         <div class="player-inline-map-board">
           <PlayerContinuousMap
-            v-if="continuousMap"
             ref="systemMapHandle"
             :document="props.document"
             :selected-system-id="selectedSystemId"
@@ -299,31 +267,6 @@
             @inspect-route="inspectContinuousRoute"
             @map-interaction="handlePlayerMapInteraction"
           />
-          <template v-else>
-            <PlayerClusterMap
-              v-show="!selectedSystem"
-              :document="props.document"
-              :active="isActive && !selectedSystem"
-              :get-usable-client-rect="usableRectReader"
-              @open-system="selectPublicSystem"
-            />
-            <PlayerSystemMap
-              v-if="cachedSystem"
-              ref="systemMapHandle"
-              v-show="selectedSystem !== null"
-              :document="cachedSystem.map"
-              :label="cachedSystem.label"
-              :selected-object-id="selectedObjectId"
-              :selected-orbit-id="selectedOrbitId"
-              :dimmed-object-ids="dimmedObjectIds"
-              :search-locator-object-id="searchLocatorObjectId"
-              :get-usable-client-rect="usableRectReader"
-              :active="isActive && selectedSystem !== null"
-              @inspect-object="inspectObject"
-              @inspect-orbit="inspectOrbit"
-              @map-interaction="handlePlayerMapInteraction"
-            />
-          </template>
         </div>
         <aside class="player-inline-panels" aria-label="Player consultation panels">
           <section v-show="hierarchyVisible" class="player-inline-panel" aria-label="Player hierarchy">
@@ -394,7 +337,6 @@
 /** Shared read-only player navigation over an allowlisted Cluster document. */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { usePlayerFileExports } from '../composables/usePlayerFileExports'
-import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { PlayerClusterDocument, PlayerObjectMarker, PlayerOrbit, PlayerSystemDocument, PlayerSystemMarker } from '../domain/workspace'
 import type { ClientRectBounds } from '../utils/map-usable-area'
 import { largestUnobstructedClientRect } from '../utils/map-usable-area'
@@ -403,9 +345,7 @@ import type { FieldCondition } from '../utils/field-filter-matching'
 import { searchPlayerDocument, type PlayerSearchTarget } from '../utils/player-search'
 import { playerObjectMatchesTypeFilters, playerTypeFilterOptions } from '../utils/player-type-filters'
 import { playerFieldFilterOptions, playerObjectMatchesFieldFilters } from '../utils/player-field-filters'
-import PlayerClusterMap from './PlayerClusterMap.vue'
 import PlayerContinuousMap from './PlayerContinuousMap.vue'
-import PlayerSystemMap from './PlayerSystemMap.vue'
 import PlayerClusterHierarchy from './PlayerClusterHierarchy.vue'
 import PlayerSystemHierarchy from './PlayerSystemHierarchy.vue'
 import PlayerObjectInspector from './PlayerObjectInspector.vue'
@@ -432,22 +372,21 @@ const props = withDefaults(defineProps<{
   headingLevel: 'h1',
   workspacePresentation: false,
 })
-const route = useRoute()
 
 type RevealedSystem = Extract<PlayerSystemMarker, { disclosure: 'revealed' }>
 type FocusTarget = HTMLElement | SVGElement
-interface PlayerSystemMapHandle {
+interface PlayerMapHandle {
   revealTarget(target: PlayerInspectionTarget, expectedDocument: PlayerSystemDocument): boolean
-  captureImageViewport?(expectedDocument: PlayerClusterDocument): PlayerImageViewportSnapshot | null
-  fitPlayerMap?(): boolean
-  centerSystem?(systemId: string, expectedClusterDocument: PlayerClusterDocument): boolean
-  centerRoute?(routeId: string, expectedClusterDocument: PlayerClusterDocument): boolean
+  captureImageViewport(expectedDocument: PlayerClusterDocument): PlayerImageViewportSnapshot | null
+  fitPlayerMap(): boolean
+  centerSystem(systemId: string, expectedClusterDocument: PlayerClusterDocument): boolean
+  centerRoute(routeId: string, expectedClusterDocument: PlayerClusterDocument): boolean
 }
 interface PendingReveal {
   clusterDocument: PlayerClusterDocument
   system: RevealedSystem
   systemDocument: PlayerSystemDocument
-  map: PlayerSystemMapHandle | null
+  map: PlayerMapHandle | null
   target: PlayerInspectionTarget
   request: number
   fromSearch: boolean
@@ -456,7 +395,7 @@ interface SearchLocator {
   clusterDocument: PlayerClusterDocument
   system: RevealedSystem
   systemDocument: PlayerSystemDocument
-  map: PlayerSystemMapHandle
+  map: PlayerMapHandle
   objectId: string
   request: number
 }
@@ -473,10 +412,7 @@ const selectedSystemId = ref<string | null>(null)
 const selectedTarget = shallowRef<PlayerInspectionTarget | null>(null)
 const selectedRouteId = ref<string | null>(null)
 const selectedRouteDocument = shallowRef<PlayerClusterDocument | null>(null)
-const clusterMarkerOpener = ref<FocusTarget | null>(null)
-const clusterMarkerSystemId = ref<string | null>(null)
-const cachedSystem = shallowRef<RevealedSystem | null>(null)
-const systemMapHandle = ref<PlayerSystemMapHandle | null>(null)
+const systemMapHandle = ref<PlayerMapHandle | null>(null)
 const isCompactViewport = ref(false)
 const compactPanel = ref<'hierarchy' | 'inspector' | null>(null)
 const desktopHierarchyVisible = ref(true)
@@ -497,7 +433,6 @@ const selectedRoute = computed<PlayerContinuousRouteDescriptor | null>(() => {
   return projectPlayerContinuousRouteEndpoints(props.document, projection.systems, new Set())
     .find(route => route.id === routeId) ?? null
 })
-const continuousMap = computed(() => route.query.map === 'continuous')
 const searchResults = computed(() => searchPlayerDocument(props.document, searchQuery.value))
 const typeFilterOptions = computed(() => playerTypeFilterOptions(props.document))
 const fieldFilterOptions = computed(() => playerFieldFilterOptions(props.document))
@@ -508,13 +443,8 @@ const dimmedObjectIds = computed<ReadonlySet<string>>(() => {
       || !playerObjectMatchesFieldFilters(object, selectedFieldConditions.value))
     .map(object => object.id))
 })
-const mapFileScope = computed(() => continuousMap.value
-  ? 'player map'
-  : selectedSystem.value
-    ? `star system ${selectedSystem.value.label}`
-    : `Jump Cluster ${props.document.title}`)
 const { playerExportError, downloadPlayerImage } = usePlayerFileExports({
-  prepare: preparePlayerImage,
+  prepare: async () => null,
   prepareImage: prepareScopedPlayerImage,
 })
 const selectedObjectId = computed(() => selectedTarget.value?.kind === 'object' ? selectedTarget.value.id : null)
@@ -591,9 +521,6 @@ watch(() => props.document, () => {
   mapReaderEpoch.value += 1
   resetDocumentView()
 }, { flush: 'sync' })
-watch(continuousMap, enabled => {
-  if (!enabled) clearSelectedRoute()
-}, { flush: 'sync' })
 watch([() => props.document, () => props.active, selectedSystemId], () => {
   mapVisit += 1
   filesOpen.value = false
@@ -641,7 +568,13 @@ function observePublicLayout(): void {
   if (!root || typeof ResizeObserver === 'undefined' || typeof MutationObserver === 'undefined') return
   layoutResizeObserver = new ResizeObserver(publicLayoutChanged)
   layoutResizeObserver.observe(root)
-  layoutMutationObserver = new MutationObserver(publicLayoutChanged)
+  layoutMutationObserver = new MutationObserver((records) => {
+    // The map owns its SVG paint. Panel and wrapper changes still invalidate the usable area.
+    const map = root.querySelector('svg.player-continuous-map-scene')
+    if (!map || records.some(record => !map.contains(record.target)
+      || record.attributeName === 'data-map-obstruction'
+      || record.attributeName === 'data-player-map-obstruction')) publicLayoutChanged()
+  })
   layoutMutationObserver.observe(root, {
     attributes: true,
     attributeFilter: ['class', 'style', 'hidden', 'inert', 'data-map-obstruction', 'data-player-map-obstruction'],
@@ -679,12 +612,6 @@ function toClientRectBounds(element: HTMLElement): ClientRectBounds {
   return { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom }
 }
 
-function focusBackButton(request: number, sourceDocument: PlayerClusterDocument, system: RevealedSystem): void {
-  if (!isCurrentNavigation(request, sourceDocument, system)) return
-  const button = rootElement.value?.querySelector<HTMLButtonElement>('[data-player-back-to-cluster]')
-  if (button && isVisible(button)) button.focus()
-}
-
 function resetDocumentView(): void {
   searchOpen.value = false
   searchQuery.value = ''
@@ -696,9 +623,6 @@ function resetDocumentView(): void {
   selectedSystemId.value = null
   selectedTarget.value = null
   clearSelectedRoute()
-  clusterMarkerOpener.value = null
-  clusterMarkerSystemId.value = null
-  cachedSystem.value = null
 }
 
 function getShortcutOwningDialog(): HTMLElement | null {
@@ -734,84 +658,44 @@ async function revealSearchTarget(target: PlayerSearchTarget): Promise<
   await tools.whenSearchClosingFocusSettled()
   if (!ownsSearch() || searchOpen.value) return stale
 
-  if (continuousMap.value) {
-    if (target.kind === 'cluster') {
-      const navigation = backToCluster()
-      navigationRequest = requestNonce
-      await navigation
-      if (!ownsSearch() || searchOpen.value || selectedSystemMarker.value) return stale
-      systemMapHandle.value?.fitPlayerMap?.()
-      focusCurrentMap('.player-continuous-map-scene')
-    } else {
-      if (selectedSystemId.value !== target.systemId) {
-        selectPublicSystem(target.systemId)
-        navigationRequest = requestNonce
-        await nextTick()
-        if (!ownsSearch() || searchOpen.value || selectedSystem.value !== destination) return stale
-      }
-      if (target.kind === 'object') {
-        const inspectionRequest = await inspectObjectFromSearch(target.objectId)
-        if (inspectionRequest === null) return stale
-        navigationRequest = inspectionRequest
-        if (!ownsSearch() || searchOpen.value || selectedSystem.value !== destination) return stale
-      } else {
-        systemMapHandle.value?.centerSystem?.(target.systemId, source)
-      }
-      focusCurrentMap('.player-continuous-map-scene')
-    }
-  } else if (target.kind === 'cluster') {
-    const navigation = backToCluster()
+  if (target.kind === 'cluster') {
+    clearInspection()
     navigationRequest = requestNonce
-    await navigation
-    if (!ownsSearch() || searchOpen.value || selectedSystem.value) return stale
-    focusCurrentMap('.player-cluster-map-scene')
+    await nextTick()
+    if (!ownsSearch() || searchOpen.value) return stale
+    systemMapHandle.value?.fitPlayerMap()
   } else {
-    if (selectedSystem.value !== destination) {
-      const navigation = openSystem(target.systemId, 'search')
+    if (selectedSystemId.value !== target.systemId) {
+      selectPublicSystem(target.systemId)
       navigationRequest = requestNonce
-      await navigation
+      await nextTick()
       if (!ownsSearch() || searchOpen.value || selectedSystem.value !== destination) return stale
     }
     if (target.kind === 'object') {
-      focusCurrentMap('.player-system-map-scene')
       const inspectionRequest = await inspectObjectFromSearch(target.objectId)
       if (inspectionRequest === null) return stale
       navigationRequest = inspectionRequest
       if (!ownsSearch() || searchOpen.value || selectedSystem.value !== destination) return stale
-    } else if (selectedSystem.value) {
-      focusBackButton(navigationRequest, source, selectedSystem.value)
+    } else {
+      systemMapHandle.value?.centerSystem(target.systemId, source)
     }
   }
+  focusCurrentMap()
   return { status: 'revealed' }
 }
 
-function focusCurrentMap(selector: string): void {
+function focusCurrentMap(): void {
   const root = rootElement.value
-  const map = root?.querySelector<SVGElement>(selector)
+  const map = root?.querySelector<SVGElement>('.player-continuous-map-scene')
   const target = map && isVisible(map) ? map : root?.querySelector<HTMLElement>('.workspace-map-search')
   if (target && isVisible(target)) target.focus({ preventScroll: true })
 }
 
-async function preparePlayerImage() {
-  if (isDisposed || !isActive.value) return null
-  const source = props.document
-  const visit = mapVisit
-  const system = selectedSystem.value
-  const scene: CurrentPlayerMapScene = system
-    ? { kind: 'star-system', document: system.map, label: system.label }
-    : { kind: 'jump-cluster', document: source }
-  return {
-    document: source,
-    scene,
-    isCurrent: () => !isDisposed && isActive.value && props.document === source && mapVisit === visit,
-  }
-}
-
 function prepareScopedPlayerImage(scope: MapImageScope) {
   const map = systemMapHandle.value
-  if (isDisposed || !isActive.value || !continuousMap.value || !map?.captureImageViewport) return null
+  if (isDisposed || !isActive.value || !map) return null
   const document = props.document
-  const ownsMap = () => !isDisposed && isActive.value && continuousMap.value
+  const ownsMap = () => !isDisposed && isActive.value
     && props.document === document && systemMapHandle.value === map
   let image: ContinuousPlayerImageScope = { scope: 'cluster' }
   let isCurrent = ownsMap
@@ -826,46 +710,18 @@ function prepareScopedPlayerImage(scope: MapImageScope) {
     if (!snapshot) return null
     const key = JSON.stringify(snapshot)
     image = { scope, snapshot }
-    isCurrent = () => ownsMap() && JSON.stringify(map.captureImageViewport?.(document)) === key
+    isCurrent = () => ownsMap() && JSON.stringify(map.captureImageViewport(document)) === key
   }
   return { document, image, isCurrent }
 }
 
-async function openSystem(publicSystemId: string, origin: 'map' | 'search' = 'map'): Promise<void> {
-  const sourceDocument = props.document
-  const system = sourceDocument.systems.find(candidate => candidate.id === publicSystemId)
-  if (!system || system.disclosure !== 'revealed') return
-  const request = ++requestNonce
-  pendingReveal.value = null
-  searchLocator.value = null
-  clearSelectedRoute()
-  clusterMarkerOpener.value = origin === 'map' ? focusableElement(document.activeElement) : null
-  clusterMarkerSystemId.value = system.id
-  cachedSystem.value = system
-  selectedSystemId.value = system.id
-  selectedTarget.value = null
-  if (props.workspacePresentation && isCompactViewport.value) compactPanel.value = null
-  await nextTick()
-  await nextTick()
-  if (!isCurrentNavigation(request, sourceDocument, system)) return
-  focusBackButton(request, sourceDocument, system)
-}
-
 function selectPublicSystem(publicSystemId: string): void {
-  if (!continuousMap.value) {
-    void openSystem(publicSystemId)
-    return
-  }
-
   const system = props.document.systems.find(candidate => candidate.id === publicSystemId)
   if (!system) return
   requestNonce += 1
   pendingReveal.value = null
   searchLocator.value = null
   clearSelectedRoute()
-  clusterMarkerOpener.value = focusableElement(document.activeElement)
-  clusterMarkerSystemId.value = system.id
-  cachedSystem.value = system.disclosure === 'revealed' ? system : null
   selectedSystemId.value = system.id
   selectedTarget.value = null
   if (props.workspacePresentation && isCompactViewport.value) compactPanel.value = null
@@ -882,18 +738,15 @@ function inspectContinuousOrbit(publicSystemId: string, publicOrbitId: string): 
 }
 
 function inspectContinuousRoute(publicRouteId: string): void {
-  if (!continuousMap.value || !isActive.value || !props.document.routes.some(route => route.id === publicRouteId)) return
+  if (!isActive.value || !props.document.routes.some(route => route.id === publicRouteId)) return
   requestNonce += 1
   pendingReveal.value = null
   lastRevealAttempt = ''
   searchLocator.value = null
   selectedSystemId.value = null
   selectedTarget.value = null
-  cachedSystem.value = null
   selectedRouteDocument.value = props.document
   selectedRouteId.value = publicRouteId
-  clusterMarkerOpener.value = null
-  clusterMarkerSystemId.value = null
   if (props.workspacePresentation && isCompactViewport.value) compactPanel.value = 'inspector'
   else desktopInspectorVisible.value = true
 }
@@ -903,7 +756,7 @@ async function centerSelectedRoute(): Promise<void> {
   const routeId = selectedRouteId.value
   const map = systemMapHandle.value
   const request = requestNonce
-  const isCurrent = () => !isDisposed && isActive.value && continuousMap.value
+  const isCurrent = () => !isDisposed && isActive.value
     && props.document === source && selectedRouteDocument.value === source
     && selectedRouteId.value === routeId && requestNonce === request
     && systemMapHandle.value === map && !!selectedRoute.value
@@ -917,7 +770,7 @@ async function centerSelectedRoute(): Promise<void> {
   }
 
   if (!isCurrent()) return
-  if (map.centerRoute?.(routeId, source)) focusCurrentMap('.player-continuous-map-scene')
+  if (map.centerRoute(routeId, source)) focusCurrentMap()
 }
 
 function clearSelectedRoute(): void {
@@ -925,45 +778,21 @@ function clearSelectedRoute(): void {
   selectedRouteDocument.value = null
 }
 
-async function backToCluster(): Promise<void> {
-  const sourceDocument = props.document
-  const system = selectedSystemMarker.value
-  if (!system) return
-  const request = ++requestNonce
-  pendingReveal.value = null
+function clearInspection(): void {
+  invalidatePendingReveal()
   searchLocator.value = null
   clearSelectedRoute()
   selectedSystemId.value = null
   selectedTarget.value = null
   if (props.workspacePresentation && isCompactViewport.value) compactPanel.value = null
-  await nextTick()
-  await nextTick()
-  if (isDisposed || request !== requestNonce || props.document !== sourceDocument || selectedSystemMarker.value !== null) return
-  const target = clusterMarkerOpener.value
-  clusterMarkerOpener.value = null
-  const publicSystemId = clusterMarkerSystemId.value
-  clusterMarkerSystemId.value = null
-  if (target && isVisible(target)) target.focus()
-  else if (publicSystemId) focusPublicClusterMarker(publicSystemId)
 }
 
-function focusPublicClusterMarker(publicSystemId: string): void {
-  const candidates = rootElement.value?.querySelectorAll<SVGElement>(
-    `[data-player-system-id="${CSS.escape(publicSystemId)}"]`,
-  )
-  const marker = Array.from(candidates ?? []).find(candidate =>
-    candidate.matches('[role="button"][tabindex]') && isVisible(candidate),
-  )
-  marker?.focus()
-}
-
-function focusableElement(active: Element | null): FocusTarget | null {
-  if (active instanceof HTMLElement) return active
-  if (active instanceof SVGElement) {
-    if (active.matches('[tabindex], [role="button"]')) return active
-    return active.closest<SVGElement>('g[role="button"][tabindex]')
-  }
-  return null
+async function clearInspectionFromToolbar(): Promise<void> {
+  const document = props.document
+  clearInspection()
+  const request = requestNonce
+  await nextTick()
+  if (!isDisposed && isActive.value && props.document === document && request === requestNonce) focusCurrentMap()
 }
 
 function inspectObject(publicObjectId: string): void {
@@ -1006,7 +835,7 @@ async function inspectTarget(target: PlayerInspectionTarget, fromSearch = false)
   } else {
     desktopInspectorVisible.value = true
   }
-  if (continuousMap.value && !fromSearch) {
+  if (!fromSearch) {
     pendingReveal.value = null
     lastRevealAttempt = ''
     return request
@@ -1147,79 +976,6 @@ function closeActivePanel(): void {
   height: 100%;
   min-width: 0;
   min-height: 0;
-}
-
-.player-workspace-map-region > :deep(.player-cluster-map) {
-  position: absolute;
-  inset: 0;
-  display: block;
-  min-width: 0;
-  min-height: 0;
-  border: 0;
-}
-
-.player-workspace-map-region > :deep(.player-cluster-map .player-cluster-map-scene) {
-  width: 100%;
-  height: 100%;
-  max-height: none;
-  min-height: 0;
-  border: 0;
-}
-
-.player-workspace-map-region > :deep(.player-system-map--workspace) {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-}
-
-.player-workspace-map-region > :deep(.player-system-map--workspace .player-system-map-content--workspace) {
-  display: grid;
-  height: 100%;
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.player-workspace-map-region > :deep(.player-system-map--workspace .player-system-map-content--workspace > div) {
-  display: grid;
-  height: 100%;
-  min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.player-workspace-map-region :deep(.player-cluster-map-scene),
-.player-workspace-map-region :deep(.player-system-map-scene) {
-  position: absolute;
-  inset: 0;
-  box-sizing: border-box;
-  width: 100%;
-  height: 100%;
-  max-height: none;
-  min-height: 0;
-  border: 0;
-}
-
-.player-workspace-map-region :deep(.player-cluster-map-navigation),
-.player-workspace-map-region :deep(.player-system-map-navigation) {
-  position: absolute;
-  z-index: 2;
-  bottom: 1rem;
-  left: 50%;
-  display: flex;
-  width: max-content;
-  max-width: min(242px, calc(100% - 2rem));
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: .25rem;
-  overflow-x: auto;
-  transform: translateX(-50%);
-  border: 1px solid var(--line-soft);
-  border-radius: .35rem;
-  padding: .3rem;
-  background: color-mix(in srgb, var(--panel-bg) 96%, transparent);
-  box-shadow: 0 .35rem 1.2rem color-mix(in srgb, var(--map-bg) 45%, transparent);
-  backdrop-filter: blur(12px);
 }
 
 .player-workspace-toolbar,

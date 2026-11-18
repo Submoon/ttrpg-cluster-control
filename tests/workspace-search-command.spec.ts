@@ -249,10 +249,9 @@ test('continuous toggles keep an explicitly empty selection separate from Inspec
 })
 
 test('continuous map removes Navigate from map tool shortcuts @pure', () => {
-  expect(mapModeForShortcut('n', false)).toBe('navigate')
-  expect(mapModeForShortcut('n', true)).toBeNull()
-  expect(mapModeForShortcut('s', true)).toBe('select')
-  expect(mapModeForShortcut('m', true)).toBe('move')
+  expect(mapModeForShortcut('n')).toBeNull()
+  expect(mapModeForShortcut('s')).toBe('select')
+  expect(mapModeForShortcut('m')).toBe('move')
 })
 
 test('only the newer continuous Orbit handoff can select its owner and offer host choices @pure', async () => {

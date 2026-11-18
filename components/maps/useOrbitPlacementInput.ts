@@ -18,7 +18,7 @@ export interface OrbitPlacementInputOptions {
   isSystemView(): boolean
   mapKey(): string
   hasAddOrbitIntent(): boolean
-  begin(scenePoint: Point): boolean
+  begin(scenePoint: Point, event: PointerEvent): boolean
   update(scenePoint: Point, sceneClearance: number): void
   complete(): Promise<boolean>
   cancel(): void
@@ -285,7 +285,7 @@ export function useOrbitPlacementInput(options: OrbitPlacementInputOptions) {
       || !options.isSystemView()
       || !options.map()?.isOrbitDragPointOnMap(event.clientX, event.clientY)) return false
     const scenePoint = options.map()?.clientPointToScene(event.clientX, event.clientY)
-    if (!scenePoint || !options.begin(scenePoint)) return false
+    if (!scenePoint || !options.begin(scenePoint, event)) return false
 
     orbitTouch = createOrbitTouchGesture(touchContact(event))
     orbitTouchMapKey = options.mapKey()
@@ -315,7 +315,7 @@ export function useOrbitPlacementInput(options: OrbitPlacementInputOptions) {
       && options.hasAddOrbitIntent() && options.isSystemView()
       && options.map()?.isOrbitDragPointOnMap(event.clientX, event.clientY)) {
       const scenePoint = options.map()?.clientPointToScene(event.clientX, event.clientY)
-      if (scenePoint && options.begin(scenePoint)) {
+      if (scenePoint && options.begin(scenePoint, event)) {
         orbitPointer = {
           pointerId: event.pointerId,
           pointerType: event.pointerType,

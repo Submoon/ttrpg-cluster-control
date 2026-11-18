@@ -35,7 +35,6 @@
         :saving="props.saving"
         :editor-error="props.editorError"
         :session="props.routeSession"
-        @open-system="emit('open-system', $event)"
         @delete-system="emit('delete-system', $event)"
         @request-route-edit="emit('request-route-edit', $event)"
         @set-route-sharing="(routeId, playerShared) => emit('set-route-sharing', routeId, playerShared)"
@@ -202,7 +201,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'open-system': [systemId: string]
   'delete-system': [systemId: string]
   hide: []
   'request-object-edit': []

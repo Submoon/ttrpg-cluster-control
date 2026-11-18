@@ -252,7 +252,7 @@ const items = computed<MenuItem[][]>(() => {
   const children: Record<GroupValue, MenuItem[]> = {
     download: [
       { type: 'label', label: props.scope },
-      ...(props.activeView === 'system' ? [systemJson, clusterJson] : [clusterJson]),
+      ...(props.selectedImageSystemId || props.activeView === 'system' ? [systemJson, clusterJson] : [clusterJson]),
       ...props.cloudBackupItems.map(item => ({ ...item } as MenuItem)),
     ],
     restore: [

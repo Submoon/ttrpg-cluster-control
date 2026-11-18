@@ -179,6 +179,7 @@ export function useSystemCreationWorkflows({
   let explicitObjectOrbitPreference: { sessionId: number; orbitId: string } | null = null
   let orbitRadiusInputOwnership: OrbitRadiusInputOwnership | null = null
   let orbitDragReservation: OrbitDragReservation | null = null
+  let clusterOrbitSessionId: number | null = null
 
   watch(
     [() => store.activeView, () => store.selectedSystemId, () => workspace.value?.cluster.id],
@@ -234,23 +235,30 @@ export function useSystemCreationWorkflows({
 
   function sessionMatchesCurrentContext(session: SystemCreationSession): boolean {
     const currentWorkspace = workspace.value
-    const system = selectedSystem.value
     return !!currentWorkspace
       && currentWorkspace.cluster.id === session.clusterId
-      && store.activeView === 'system'
-      && !!system
-      && system.id === session.systemId
+      && (clusterOrbitSessionId === session.id
+        ? store.activeView === 'cluster'
+        : store.activeView === 'system' && selectedSystem.value?.id === session.systemId)
       && currentWorkspace.cluster.systems.some(candidate => candidate.id === session.systemId)
   }
 
-  async function chooseCreationType(type: SystemCreationType): Promise<boolean> {
-    if (confirmingPreviewId !== null || !await beforeWorkspaceOperation()) return false
+  async function chooseCreationType(
+    type: SystemCreationType,
+    orbitOwnerId?: string,
+    isCurrent: () => boolean = () => true,
+  ): Promise<boolean> {
+    if (confirmingPreviewId !== null || !isCurrent() || !await beforeWorkspaceOperation() || !isCurrent()) return false
     const currentWorkspace = workspace.value
-    const system = selectedSystem.value
+    if (orbitOwnerId && (type.kind !== 'orbit' || store.activeView !== 'cluster')) return false
+    const system = orbitOwnerId
+      ? currentWorkspace?.cluster.systems.find(candidate => candidate.id === orbitOwnerId)
+      : selectedSystem.value
     if (!currentWorkspace || !system
       || !currentWorkspace.cluster.systems.some(candidate => candidate.id === system.id)) return false
 
     if (creationSession.value && sameCreationType(creationSession.value.type, type)
+      && creationSession.value.systemId === system.id
       && sessionMatchesCurrentContext(creationSession.value)) {
       invalidatePreview(creationSession.value)
       creationSession.value.errors = {}
@@ -271,6 +279,7 @@ export function useSystemCreationWorkflows({
       errors: {},
       notice: '',
     }
+    clusterOrbitSessionId = orbitOwnerId ? session.id : null
     creationSession.value = session
     orbitRadiusInputOwnership = type.kind === 'orbit'
       ? { sessionId: session.id, horizontal: false, vertical: false }
@@ -601,7 +610,7 @@ export function useSystemCreationWorkflows({
     return null
   }
 
-  function beginOrbitDrag(scenePoint: Point): boolean {
+  function beginOrbitDrag(scenePoint: Point, mapCandidates?: SystemCreationCandidate[]): boolean {
     if (confirmingPreviewId !== null || orbitDragReservation) return false
     const session = creationSession.value
     const currentWorkspace = workspace.value
@@ -612,7 +621,7 @@ export function useSystemCreationWorkflows({
 
     let candidates: SystemCreationCandidate[]
     try {
-      candidates = systemMapRef.value?.getCreationCandidates(scenePoint, session.type)
+      candidates = mapCandidates ?? systemMapRef.value?.getCreationCandidates(scenePoint, session.type)
         ?? creationCandidatesAtPoint(system, scenePoint, session.type, geometryForWorkspace(currentWorkspace))
     } catch {
       return false
@@ -952,8 +961,11 @@ export function useSystemCreationWorkflows({
     return completeCreation(target)
   }
 
-  async function offerCreationCandidates(candidates: SystemCreationCandidate[]): Promise<boolean> {
-    if (confirmingPreviewId !== null || !await beforeWorkspaceOperation()) return false
+  async function offerCreationCandidates(
+    candidates: SystemCreationCandidate[],
+    isCurrent: () => boolean = () => true,
+  ): Promise<boolean> {
+    if (confirmingPreviewId !== null || !isCurrent() || !await beforeWorkspaceOperation() || !isCurrent()) return false
     const session = creationSession.value
     if (!session) return false
     invalidatePreview(session)

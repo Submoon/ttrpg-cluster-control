@@ -539,6 +539,36 @@ test('Add Orbit drag reserves the nearest frontmost host and commits its exact c
   }
 })
 
+test('adding an Orbit on the Cluster map uses the chosen system without changing the inspected system @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = addStarSystem(createLocalWorkspace('Kestrel Reach', 'Vesper')).workspace
+  const [inspected, owner] = initial.cluster.systems
+  const host = owner!.objects[0]!
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+  const store = useEditorUiStore()
+  store.setSelection({ activeView: 'cluster', selectedSystemId: inspected!.id })
+
+  try {
+    expect(await controller.creation.chooseCreationType({ kind: 'orbit' }, owner!.id)).toBe(true)
+    expect(await controller.creation.offerCreationCandidates([{
+      key: host.id,
+      label: host.name,
+      target: { kind: 'host', objectId: host.id },
+      error: null,
+    }])).toBe(true)
+    expect(store.activeView).toBe('cluster')
+    expect(store.selectedSystemId).toBe(inspected!.id)
+    expect(harness.workspace.value?.cluster.systems[0]?.orbits).toHaveLength(0)
+    expect(harness.workspace.value?.cluster.systems[1]?.orbits).toMatchObject([{ hostId: host.id }])
+    expect(await harness.history.undo()).toMatchObject({ status: 'applied' })
+    expect(harness.workspace.value?.cluster.systems[1]?.orbits).toHaveLength(0)
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
+})
+
 test('Orbit drag cancellation and workspace changes discard the captured preview @pure', async () => {
   setActivePinia(createPinia())
   const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')

@@ -11,18 +11,6 @@
     <template #left>
       <div class="workspace-map-context-line">
         <div class="workspace-map-title">
-          <UTooltip v-if="activeView === 'system'" text="Back to Jump Cluster">
-            <UButton
-              class="workspace-control workspace-map-back workspace-map-icon-control"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              aria-label="Back to Jump Cluster"
-              @click="emit('show-cluster')"
-            >
-              <UIcon name="i-lucide-arrow-left" aria-hidden="true" />
-            </UButton>
-          </UTooltip>
           <div class="workspace-map-heading">
             <span data-testid="workspace-map-context-kind">{{ activeView === 'cluster' ? 'Jump Cluster' : 'Star System' }}</span>
             <h2 :aria-labelledby="mapNameLabelId">
@@ -312,7 +300,6 @@ const emit = defineEmits<{
   'copy-player-link': []
   'import-file': [event: Event]
   'restore-file': [event: Event, returnFocusTarget: HTMLElement | null]
-  'show-cluster': []
   'toggle-hierarchy': []
   'toggle-inspector': []
   'files-open-change': [open: boolean]
