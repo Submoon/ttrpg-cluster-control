@@ -122,6 +122,8 @@
             :class="ui.link({ selected })"
             :aria-label="item.kind === 'object' ? item.ariaLabel : item.label"
             :aria-description="item.kind === 'orbit' ? item.ownerSystemName : item.ariaDescription"
+            @contextmenu="openHierarchyMenu($event, item)"
+            @keydown.capture="openHierarchyMenuFromKeyboard($event, item)"
           >
             <span class="tree-leading" aria-hidden="true">
               <span v-if="item.kind === 'system'" class="system-seal grid size-[1.5rem] place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
@@ -129,7 +131,17 @@
               <span v-else class="orbit-mark">R</span>
             </span>
             <span :class="ui.linkLabel({ class: 'tree-copy min-w-0 flex-1 [overflow-wrap:anywhere]' })">
-              <span class="tree-object-name flex min-w-0 items-center gap-1">{{ item.label }}</span>
+              <span class="tree-object-name flex min-w-0 items-center gap-1">
+                <span class="min-w-0 [overflow-wrap:anywhere]">{{ item.label }}</span>
+                <template v-if="item.kind === 'object'">
+                  <UTooltip :text="hierarchyObjectPublicationStatus(item).description">
+                    <UIcon :name="publicationPresentation(item.row.object.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
+                  </UTooltip>
+                  <UTooltip v-if="hierarchyObjectPublicationStatus(item).parentBlocked" text="System map unavailable to players until this system is Revealed.">
+                    <UIcon name="i-lucide-lock-keyhole" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
+                  </UTooltip>
+                </template>
+              </span>
               <small v-if="item.kind === 'system'" class="mt-[0.18rem] block">
                 {{ item.system.objects.length }} map objects
               </small>
@@ -142,6 +154,19 @@
               </small>
               <small v-if="item.kind !== 'system'" class="mt-[0.12rem] block">{{ item.ownerSystemName }}</small>
             </span>
+            <UButton
+              v-if="item.kind === 'object'"
+              class="tree-publication-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :tabindex="-1"
+              :aria-label="`Change visibility for ${item.row.object.name}`"
+              :title="`Change visibility for ${item.row.object.name}`"
+              @click.stop="openObjectMenuFromButton($event, item.row.object.id, item.ownerSystemId)"
+            >
+              <UIcon name="i-lucide-eye" aria-hidden="true" />
+            </UButton>
             <UButton
               v-if="item.children?.length"
               class="tree-expand-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
@@ -496,6 +521,11 @@ function ownerSystemForObject(objectId: string): StarSystem | undefined {
   return props.workspace.cluster.systems.find(system => system.objects.some(object => object.id === objectId))
 }
 
+function hierarchyObjectPublicationStatus(item: Extract<HierarchyTreeItem, { kind: 'object' }>) {
+  const parentPublication = props.workspace.cluster.systems.find(system => system.id === item.ownerSystemId)?.publication
+  return publicationStatus(item.row.object.publication, parentPublication)
+}
+
 function buildHierarchyTreeItems(
   rows: MapHierarchyRow[],
   ownerSystem = selectedSystem.value,
@@ -721,14 +751,14 @@ function openHierarchyMenuFromKeyboard(event: KeyboardEvent, item: HierarchyTree
   openObjectMenu(event, item.row.object.id, opener, { x: bounds.left, y: bounds.bottom }, true, item.ownerSystemId)
 }
 
-function openObjectMenuFromButton(event: MouseEvent, objectId: string): void {
+function openObjectMenuFromButton(event: MouseEvent, objectId: string, ownerSystemId?: string): void {
   const opener = event.currentTarget
   if (!(opener instanceof HTMLElement)) return
   const bounds = opener.getBoundingClientRect()
   const point = event.detail === 0
     ? { x: bounds.left, y: bounds.bottom }
     : { x: event.clientX, y: event.clientY }
-  openObjectMenu(event, objectId, opener, point)
+  openObjectMenu(event, objectId, opener, point, false, ownerSystemId)
 }
 
 function toggleHierarchyItem(event: TreeItemToggleEvent<HierarchyTreeItem>): void {
