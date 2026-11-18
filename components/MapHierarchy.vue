@@ -133,6 +133,9 @@
               <small v-if="item.kind === 'system'" class="mt-[0.18rem] block">
                 {{ item.system.objects.length }} map objects
               </small>
+              <small v-if="item.kind === 'object'" class="tree-type-label mt-[0.18rem] block [overflow-wrap:anywhere]">
+                {{ catalogueFamilyLabel(item.row.object.family) }} / {{ catalogueSubtypeLabel(item.row.object) }}
+              </small>
               <small v-if="item.kind === 'object'" class="mt-[0.18rem] block">
                 <span class="key-tag">{{ item.row.object.locationKey }}</span>
                 <span class="block">{{ item.parentContext }}</span>

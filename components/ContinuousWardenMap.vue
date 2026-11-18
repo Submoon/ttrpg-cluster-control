@@ -55,6 +55,20 @@
             />
 
             <g
+              class="cluster-system-node continuous-warden-system-anchor"
+              :class="{ 'is-selected': selectedSystemId === projection.id, 'is-move-preview': previewPositions.has(projection.id) }"
+              :data-system-id="projection.id"
+              :transform="anchorTransform(projection)"
+              role="button"
+              tabindex="0"
+              :aria-label="`Select ${projection.name}`"
+            >
+              <circle class="continuous-warden-anchor-hit-target" r="16" />
+              <circle class="continuous-warden-anchor-mark" r="7" />
+              <circle class="continuous-warden-anchor-core" r="2" />
+            </g>
+
+            <g
               v-if="detailSystemIds.has(projection.id)"
               class="continuous-warden-system-detail"
               :transform="systemTransform(projection)"
@@ -97,6 +111,7 @@
                     role="slider"
                     tabindex="0"
                     :aria-label="`Resize horizontal radius of ${orbitLabel(projection.id, orbit.id)}`"
+                    v-bind="orbitRadiusSliderValues(projection.id, orbit, 'horizontal')"
                     :cx="orbitAxisHandlePoint(orbit, 'horizontal').x"
                     :cy="orbitAxisHandlePoint(orbit, 'horizontal').y"
                     :r="orbitEditHandleRadius(projection)"
@@ -111,6 +126,8 @@
                     role="slider"
                     tabindex="0"
                     :aria-label="`Resize vertical radius of ${orbitLabel(projection.id, orbit.id)}`"
+                    v-bind="orbitRadiusSliderValues(projection.id, orbit, 'vertical')"
+                    aria-orientation="vertical"
                     :cx="orbitAxisHandlePoint(orbit, 'vertical').x"
                     :cy="orbitAxisHandlePoint(orbit, 'vertical').y"
                     :r="orbitEditHandleRadius(projection)"
@@ -124,6 +141,10 @@
                     role="slider"
                     tabindex="0"
                     :aria-label="`Rotate ${orbitLabel(projection.id, orbit.id)}`"
+                    :aria-valuemin="0"
+                    :aria-valuemax="360"
+                    :aria-valuenow="orbit.rotation"
+                    :aria-valuetext="`${Math.round(orbit.rotation)} degrees`"
                     :cx="orbitRotationHandlePoint(orbit.center, orbit.radii, orbit.rotation).x"
                     :cy="orbitRotationHandlePoint(orbit.center, orbit.radii, orbit.rotation).y"
                     :r="orbitEditHandleRadius(projection)"
@@ -214,19 +235,6 @@
                 :transform="`rotate(${orbitAddPreview.rotation} ${orbitAddPreview.center.x} ${orbitAddPreview.center.y})`"
                 aria-hidden="true"
               />
-            </g>
-            <g
-              class="cluster-system-node continuous-warden-system-anchor"
-              :class="{ 'is-selected': selectedSystemId === projection.id, 'is-move-preview': previewPositions.has(projection.id) }"
-              :data-system-id="projection.id"
-              :transform="anchorTransform(projection)"
-              role="button"
-              tabindex="0"
-              :aria-label="`Select ${projection.name}`"
-            >
-              <circle class="continuous-warden-anchor-hit-target" r="16" />
-              <circle class="continuous-warden-anchor-mark" r="7" />
-              <circle class="continuous-warden-anchor-core" r="2" />
             </g>
           </g>
           <g
@@ -982,6 +990,24 @@ function orbitAxisHandlePoint(
   axis: 'horizontal' | 'vertical',
 ): Point {
   return orbitPointAtAngle(orbit.center, orbit.radii, axis === 'horizontal' ? 0 : -Math.PI / 2, orbit.rotation)
+}
+
+function orbitRadiusSliderValues(
+  systemId: string,
+  orbit: ContinuousWardenSystemProjection['orbits'][number],
+  axis: 'horizontal' | 'vertical',
+) {
+  const system = props.cluster.systems.find(candidate => candidate.id === systemId)
+  const source = system?.orbits.find(candidate => candidate.id === orbit.id)
+  const radius = orbit.radii[axis]
+  const minimum = system && source ? minimumOrbitRadius(system, source) : 0
+  return {
+    'aria-valuemin': Math.min(minimum, radius),
+    // End advances the current radius by 400 map units.
+    'aria-valuemax': radius + 400,
+    'aria-valuenow': radius,
+    'aria-valuetext': `${Math.round(radius)} map units`,
+  }
 }
 
 function orbitEditHandleRadius(projection: ContinuousWardenSystemProjection): number {
