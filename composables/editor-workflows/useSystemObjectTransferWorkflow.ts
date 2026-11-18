@@ -1,5 +1,5 @@
 /** Coordinates guarded review, map ownership, and one reversible transfer publication. */
-import { computed, readonly, ref, shallowRef } from 'vue'
+import { computed, readonly, ref, shallowRef, watch } from 'vue'
 import type { Ref } from 'vue'
 import type { LocalWorkspace, SystemObjectTransferPlacement } from '../../domain/workspace'
 import { applySystemObjectTransfer, prepareSystemObjectTransfer, resolveSystemObjectBranch } from '../../domain/workspace'
@@ -46,6 +46,8 @@ export interface SystemObjectTransferWorkflowOptions {
   beforeWorkspaceOperation(): Promise<boolean>
   /** Moves and frames the chosen destination map before this transfer acquires map input. */
   prepareDestinationMap?(systemId: string, isCurrent: () => boolean): Promise<boolean>
+  /** Reads reactive editor state for drafts that can change the destination's displayed geometry. */
+  hasDestinationGeometryDraft?(systemId: string): boolean
   /** Returns the exact currently mounted destination renderer, if it owns the requested destination. */
   captureDestinationMapOwner(systemId: string): object | null
   /** Confirms both renderer identity and its destination ownership on map-placement completion/apply. */
@@ -64,6 +66,8 @@ function rejected(
 function currentSystem(workspace: LocalWorkspace, systemId: string) {
   return workspace.cluster.systems.find(system => system.id === systemId)
 }
+
+const destinationDraftMessage = 'Finish editing the destination system before continuing the transfer.'
 
 /**
  * Owns the editor-side transfer lifetime while sharing the normal history and writer path.
@@ -200,6 +204,10 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       current.error.value = 'The applied workspace changed after this review. Start a fresh review before placing the object.'
       return
     }
+    if (options.hasDestinationGeometryDraft?.(destinationSystemId)) {
+      current.error.value = destinationDraftMessage
+      return
+    }
     const revision = options.appliedRevision.value
     const inputGeneration = current.draft.inputGeneration.value
     const placementGeneration = current.draft.placementGeneration.value
@@ -243,11 +251,19 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       }
       return
     }
+    if (options.hasDestinationGeometryDraft?.(destinationSystemId)) {
+      current.error.value = destinationDraftMessage
+      return
+    }
     const mapOwner = options.captureDestinationMapOwner(destinationSystemId)
     if (!mapOwner || !options.isDestinationMapOwnerCurrent(destinationSystemId, mapOwner)) {
       current.error.value = 'Open the selected destination map before placing the transferred object.'
       return
     }
+    current.error.value = null
+    current.open.value = false
+    current.placingOnMap.value = true
+    mapPointerPreview.value = null
     pendingMapPlacement.value = Object.freeze({
       sessionId: current.id,
       inputGeneration: current.draft.inputGeneration.value,
@@ -259,10 +275,6 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       appliedRevision: options.appliedRevision.value,
       mapOwner,
     })
-    current.error.value = null
-    current.open.value = false
-    current.placingOnMap.value = true
-    mapPointerPreview.value = null
   }
 
   function failMapPlacement(current: ActiveTransferSession, message: string): false {
@@ -283,8 +295,17 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       && current.draft.inputGeneration.value === lease.inputGeneration
       && current.draft.placementGeneration.value === lease.placementGeneration
       && current.draft.destinationSystemId.value === lease.destinationSystemId
+      && !options.hasDestinationGeometryDraft?.(lease.destinationSystemId)
       && options.isDestinationMapOwnerCurrent(lease.destinationSystemId, lease.mapOwner)
   }
+
+  watch(() => {
+    const lease = pendingMapPlacement.value
+    return lease && options.hasDestinationGeometryDraft?.(lease.destinationSystemId) ? lease : null
+  }, lease => {
+    const current = lease && ownsSession(lease.sessionId)
+    if (current) failMapPlacement(current, destinationDraftMessage)
+  }, { flush: 'sync' })
 
   function completeMapPlacement(
     lease: SystemObjectTransferMapPlacementLease,
@@ -360,6 +381,11 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       setSessionError(current, message)
       return rejected(current.draft.isStale.value ? 'stale' : 'invalid', message)
     }
+    const destinationSystemId = acceptance.request.destinationSystemId
+    if (options.hasDestinationGeometryDraft?.(destinationSystemId)) {
+      setSessionError(current, destinationDraftMessage)
+      return rejected('unavailable', destinationDraftMessage)
+    }
     const workspace = options.workspace.value
     const revision = options.appliedRevision.value
     if (!workspace || workspace !== acceptance.workspaceReference
@@ -385,6 +411,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       && current.draft.isAcceptanceCurrent(acceptance)
       && options.workspace.value === acceptance.workspaceReference
       && options.appliedRevision.value === revision
+      && !options.hasDestinationGeometryDraft?.(destinationSystemId)
       && (!mapOwnerAtApply
         || options.isDestinationMapOwnerCurrent(mapOwnerAtApply.destinationSystemId, mapOwnerAtApply.mapOwner))
     const root = currentSystem(workspace, current.sourceSystemId)?.objects

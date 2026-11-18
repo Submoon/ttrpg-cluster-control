@@ -695,6 +695,60 @@ test('transfer Undo and Redo reveal the stable root in its actual owner @pure', 
   }
 })
 
+test('editing the destination Orbit resumes transfer review and preserves the draft and previous placement @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), 'Harrow', undefined, false, true)
+  try {
+    const before = harness.workspace.value
+    const [source, destination] = before.cluster.systems
+    const root = source?.objects[0]
+    if (!source || !destination || !root) throw new Error('The transfer fixture is incomplete.')
+    const orbit = createOrbit(destination, null)
+    destination.orbits.push(orbit)
+    const mapOwner = {}
+    harness.store.setSelection({ activeView: 'cluster' })
+    harness.workflows.mapControls.clusterMapRef.value = {
+      ...createMapHandle({ whenReady: async () => true, frameSearchTarget: () => true, focusMap: () => undefined }),
+      isSystemTransferDestination: systemId => systemId === destination.id,
+      captureSystemTransferMapOwner: () => mapOwner,
+      isSystemTransferMapOwnerCurrent: (systemId, owner) => systemId === destination.id && owner === mapOwner,
+      frameSystemTransferDestination: () => true,
+    }
+    const { inspector, navigation, transfer } = harness.workflows
+    await transfer.handleIntent({ kind: 'open', sourceSystemId: source.id, rootObjectId: root.id })
+    const sessionId = inspector.systemTransferSession.value?.sessionId
+    if (sessionId === undefined) throw new Error('The transfer review did not open.')
+    await transfer.handleIntent({ kind: 'select-destination', sessionId, systemId: destination.id })
+    await transfer.handleIntent({ kind: 'choose-orbit-placement', sessionId, orbitId: orbit.id, angle: 0.5 })
+    const previousPlacement = { kind: 'orbit', orbitId: orbit.id, angle: 0.5 }
+    expect(inspector.systemTransferSession.value).toMatchObject({ canAccept: true, placement: previousPlacement })
+    await transfer.handleIntent({ kind: 'place-on-map', sessionId })
+    const lease = transfer.pendingMapPlacement.value
+    if (!lease) throw new Error(inspector.systemTransferSession.value?.error ?? 'The transfer did not acquire map placement.')
+
+    expect(await navigation.inspectContinuousTarget({ kind: 'orbit', systemId: destination.id, orbitId: orbit.id })).toBe(true)
+    expect(transfer.pendingMapPlacement.value).toBe(lease)
+    await inspector.beginOrbitEdit()
+    const draft = inspector.entitySession.value
+    if (draft?.kind !== 'orbit') throw new Error('The destination Orbit draft did not open.')
+    draft.draft.horizontalRadius = '244'
+
+    expect(transfer.pendingMapPlacement.value).toBeNull()
+    expect(transfer.completeMapPlacement(lease, { kind: 'orbit', orbitId: orbit.id, angle: 1.5 })).toBe(false)
+    expect(inspector.systemTransferSession.value).toMatchObject({
+      sessionId, open: true, placingOnMap: false, placement: previousPlacement,
+      error: 'Finish editing the destination system before continuing the transfer.',
+    })
+    await transfer.handleIntent({ kind: 'place-on-map', sessionId })
+    expect(transfer.pendingMapPlacement.value).toBeNull()
+    expect(await transfer.handleIntent({ kind: 'apply', sessionId })).toMatchObject({ status: 'rejected', reason: 'unavailable' })
+    expect(inspector.entitySession.value).toBe(draft)
+    expect(draft.draft.horizontalRadius).toBe('244')
+    expect(harness.workspace.value).toBe(before)
+  } finally {
+    harness.dispose()
+  }
+})
+
 test('continuous Route and Orbit cleanup preserves independent object-group membership @pure', async () => {
   async function assertCleanupPreservesGroup(focus: 'route' | 'orbit'): Promise<void> {
     const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), 'Altair', undefined, false, true)

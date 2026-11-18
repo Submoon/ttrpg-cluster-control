@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { EditorWorkflowOptions, EntityCommand, ObjectInspectorFocusRequest } from './editor-workflows/types'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useClusterSystemPlacement } from './editor-workflows/useClusterSystemPlacement'
@@ -267,6 +267,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
         || !map.isSystemTransferDestination?.(systemId)) return false
       return map.frameSystemTransferDestination?.(systemId) ?? false
     },
+    hasDestinationGeometryDraft: systemId => entity.entitySession.value?.systemId === systemId
+      || orbitAdjustments.preview.value?.identity.systemId === systemId,
     captureDestinationMapOwner: systemId => {
       const map = mapControls.placementMapRef.value
       return map?.isSystemTransferDestination?.(systemId)

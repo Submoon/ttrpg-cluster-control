@@ -619,6 +619,8 @@ function clearPointerLongPress(): void {
 function onWindowClickCapture(event: MouseEvent): void { orbitInput.onClickCapture(event) }
 
 function onWindowPointerDownCapture(event: PointerEvent): void {
+  // A reused pointer ID starts a different sequence.
+  systemTransferSuppressedReleaseIds.delete(event.pointerId)
   if (activeSystemTransferPointer) {
     cancelSystemTransferPlacement(activeSystemTransferPointer.lease)
     event.preventDefault()
@@ -1305,36 +1307,28 @@ function onWindowPointerUp(event: PointerEvent): void {
   if (transferPointer?.pointerId === event.pointerId) {
     event.preventDefault()
     event.stopImmediatePropagation()
-    if (event.type === 'pointercancel') {
-      cancelSystemTransferPlacement(transferPointer.lease)
-      systemTransferSuppressedReleaseIds.delete(event.pointerId)
-      livePointerSequences.delete(event.pointerId)
-      return
-    }
-    if (event.buttons !== 0) return
-    if (event.button !== 0) {
-      cancelSystemTransferPlacement(transferPointer.lease)
-      return
-    }
-    if (!isSystemTransferMapOwnerCurrent(transferPointer.lease.destinationSystemId, transferPointer.lease.mapOwner)
-      || props.workspace !== transferPointer.lease.workspaceReference) {
-      cancelSystemTransferPlacement(transferPointer.lease)
-      return
-    }
-    const placement = systemTransferPlacementAtClient(transferPointer.lease, event.clientX, event.clientY)
-    if (!placement) {
-      cancelSystemTransferPlacement(transferPointer.lease)
-      return
-    }
-    completeSystemTransferPlacement(transferPointer.lease, placement)
+    if (event.type !== 'pointercancel' && event.buttons !== 0) return
+    const { lease } = transferPointer
+    const placement = event.type === 'pointerup' && event.button === 0
+      && props.workspace === lease.workspaceReference
+      && isSystemTransferMapOwnerCurrent(lease.destinationSystemId, lease.mapOwner)
+      ? systemTransferPlacementAtClient(lease, event.clientX, event.clientY)
+      : null
+    if (placement) completeSystemTransferPlacement(lease, placement)
+    else cancelSystemTransferPlacement(lease)
+    // Cancellation guards the terminal click. This release has already been consumed.
+    systemTransferSuppressedReleaseIds.delete(event.pointerId)
+    livePointerSequences.delete(event.pointerId)
     return
   }
   if (systemTransferSuppressedReleaseIds.has(event.pointerId)) {
-    systemTransferSuppressedReleaseIds.delete(event.pointerId)
-    livePointerSequences.delete(event.pointerId)
     event.preventDefault()
     event.stopImmediatePropagation()
     holdClickSuppression()
+    if (event.type === 'pointercancel' || event.buttons === 0) {
+      systemTransferSuppressedReleaseIds.delete(event.pointerId)
+      livePointerSequences.delete(event.pointerId)
+    }
     return
   }
   if (orbitInput.onPointerUp(event)) return
