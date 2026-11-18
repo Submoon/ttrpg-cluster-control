@@ -91,10 +91,12 @@ async function pinchDuringExitDrag(
   const scene = map.locator('.cluster-map-content')
   const initialCamera = await scene.getAttribute('transform')
   const cdp = await page.context().newCDPSession(page)
+  let touchContactsActive = false
 
   try {
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 })
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [first] })
+    touchContactsActive = true
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [dragged] })
     await expect.poll(() => targetPosition(target)).not.toEqual(initialPosition)
 
@@ -106,11 +108,15 @@ async function pinchDuringExitDrag(
     })
     await expect.poll(() => scene.getAttribute('transform')).not.toBe(initialCamera)
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    touchContactsActive = false
     await expect.poll(() => targetPosition(target)).toEqual(initialPosition)
   } finally {
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })
-    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false })
-    await cdp.detach()
+    try {
+      if (touchContactsActive) await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })
+      await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false })
+    } finally {
+      await cdp.detach()
+    }
   }
 }
 
