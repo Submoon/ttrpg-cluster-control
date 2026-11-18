@@ -2,17 +2,20 @@ import { readFile } from 'node:fs/promises'
 import { parsePlayerJson } from '../domain/workspace'
 import { expect, test } from './fixtures'
 import {
-  addCatalogueObject,
   createSingleSystemWorkspace,
   editMapObject,
   openChartDetailsEditor,
   openMapFilesSection,
   openPlayerPreview,
   openWorkspaceHierarchy,
+  quitSystemAdd,
   saveMapObject,
+  selectCatalogueObjectButton,
   selectDraftPublication,
   setHeaderMapActionsOpen,
   waitForWorkspaceSaved,
+  wardenMap,
+  wardenObjectMark,
 } from './helpers'
 
 test('a Warden shares applied player text and marker color while keeping drafts and GM notes private', async ({ page, context }) => {
@@ -22,8 +25,26 @@ test('a Warden shares applied player text and marker color while keeping drafts 
   const unappliedText = 'UNAPPLIED: secret tunnel'
   const markerColor = '#a151bf'
   const markerFill = 'rgb(161, 81, 191)'
-  const { systemName } = await createSingleSystemWorkspace(page)
-  await addCatalogueObject(page, 'planet')
+  const { systemId, systemName, primaryObjectId } = await createSingleSystemWorkspace(page, {
+    viewport: { width: 1440, height: 900 },
+  })
+  const warden = wardenMap(page)
+  await (await selectCatalogueObjectButton(page, 'planet')).click()
+  const envelope = warden.locator(`.continuous-warden-system[data-system-id="${systemId}"] .continuous-warden-system-envelope`)
+  const placement = await envelope.evaluate((element) => {
+    if (!(element instanceof SVGRectElement)) throw new Error('The owner must have a painted envelope.')
+    const rect = element.getBBox()
+    const screen = element.getScreenCTM()
+    if (!screen) throw new Error('The owner envelope is outside the live map.')
+    const point = new DOMPoint(rect.x + rect.width * .25, rect.y + rect.height * .75).matrixTransform(screen)
+    return { x: point.x, y: point.y }
+  })
+  await page.mouse.click(placement.x, placement.y)
+  await quitSystemAdd(page)
+  const planetMark = warden.locator(`.continuous-warden-object[data-system-id="${systemId}"]`)
+    .and(warden.getByRole('button', { name: /Select PL-01/ }))
+  await expect(planetMark).toBeVisible()
+  await planetMark.press('Enter')
 
   const inspector = page.getByRole('complementary', { name: 'Object inspector' })
   await editMapObject(page)
@@ -45,6 +66,12 @@ test('a Warden shares applied player text and marker color while keeping drafts 
   await selectDraftPublication(chartEditor, 'Revealed')
   await chartEditor.getByRole('button', { name: 'Apply details', exact: true }).click()
   await expect(chartEditor).toBeHidden()
+
+  const privateMark = wardenObjectMark(page, systemId, primaryObjectId)
+  await privateMark.press('Enter')
+  await editMapObject(page)
+  await selectDraftPublication(inspector, 'Hidden')
+  await saveMapObject(page)
 
   const hierarchy = await openWorkspaceHierarchy(page)
   const planet = hierarchy.getByRole('treeitem', { name: /Select .*Pilgrim World/ })
@@ -78,29 +105,44 @@ test('a Warden shares applied player text and marker color while keeping drafts 
   await hexColor.fill('#22664c')
   await page.keyboard.press('Escape')
   await expect(colorButton).toHaveAccessibleName('Marker color: #22664c')
-  const wardenMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
-  const wardenMarker = wardenMap.getByRole('button', { name: /Select .*Pilgrim World/ })
-  await expect(wardenMarker.locator('.system-object-glyph')).toHaveCSS('fill', 'rgb(34, 102, 76)')
+  await expect(planetMark.locator('.continuous-warden-object-glyph')).toHaveCSS('fill', 'rgb(34, 102, 76)')
+  await expect(privateMark).toBeVisible()
   const preview = await openPlayerPreview(page)
-  await preview.getByRole('button', { name: `Open ${systemName} system preview`, exact: true }).click()
+  const previewMap = preview.getByRole('region', { name: 'Player-visible continuous map', exact: true })
+  await expect(previewMap.locator('svg.player-continuous-map-scene')).toHaveCount(1)
+  await previewMap.locator('.player-continuous-name-target')
+    .and(previewMap.getByRole('button', { name: `Inspect ${systemName}`, exact: true })).click()
+  await previewMap.getByRole('button', { name: 'Center selection', exact: true }).click()
   const previewMarker = preview.getByRole('button', { name: 'Inspect Pilgrim World', exact: true })
-  const previewGlyph = previewMarker.locator('.player-system-object-glyph')
+  const previewGlyph = previewMarker.locator('.player-continuous-object-glyph')
   await expect(previewGlyph).toHaveCSS('fill', markerFill)
+  await expect(previewMap.locator('.player-continuous-object')).toHaveCount(1)
   await preview.getByRole('button', { name: 'Filters', exact: true }).click()
   const previewFilters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
   await previewFilters.getByRole('checkbox', { name: 'Planet', exact: true }).check()
   await expect(preview.getByRole('button', { name: 'Filters (1 active criterion)', exact: true })).toBeVisible()
-  await expect(previewMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(previewMarker).not.toHaveClass(/player-continuous-object--dimmed/)
   await previewFilters.getByRole('button', { name: 'Close filters', exact: true }).click()
-  await previewMarker.locator('.player-system-object-hit-target').click()
+  await previewMarker.locator('.player-continuous-object-hit-target').click()
   await expect(previewGlyph).toHaveCSS('fill', markerFill)
   await expect(preview.getByRole('region', { name: 'Player object details' })).toContainText(publicText)
   await expect(preview).not.toContainText(privateNotes)
   await expect(preview).not.toContainText(unappliedText)
+
+  await preview.getByRole('button', { name: 'Map files', exact: true }).click()
+  await preview.getByRole('radio', { name: 'Selected system', exact: true }).click()
+  const previewDownload = page.waitForEvent('download')
+  await preview.getByRole('button', { name: 'Export Selected system SVG', exact: true }).click()
+  const previewSvg = await readFile(await (await previewDownload).path(), 'utf8')
+  expect(previewSvg).toContain('Pilgrim World')
+  expect(previewSvg).toContain('fill="#A151BF"')
+  expect(previewSvg).not.toContain('Primary Star')
+  expect(previewSvg.toLowerCase()).not.toContain('#22664c')
   await preview.getByRole('button', { name: 'Close player preview', exact: true }).click()
 
   const reopenedPreview = await openPlayerPreview(page)
-  await reopenedPreview.getByRole('button', { name: `Open ${systemName} system preview`, exact: true }).click()
+  await reopenedPreview.locator('.player-continuous-name-target')
+    .and(reopenedPreview.getByRole('button', { name: `Inspect ${systemName}`, exact: true })).click()
   await expect(reopenedPreview.getByRole('button', { name: 'Filters', exact: true })).toBeVisible()
   await reopenedPreview.getByRole('button', { name: 'Close player preview', exact: true }).click()
 

@@ -42,7 +42,7 @@ export type MapCameraTransform = { x: number; y: number; k: number }
 export function parseMapCameraTransform(transform: string | null): MapCameraTransform {
   const number = String.raw`[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?`
   const match = transform
-    ? new RegExp(`^translate\\(\\s*(${number})\\s*,\\s*(${number})\\s*\\)\\s*scale\\(\\s*(${number})\\s*\\)$`, 'i').exec(transform)
+    ? new RegExp(`^translate\\(\\s*(${number})(?:\\s*,\\s*|\\s+)(${number})\\s*\\)\\s*scale\\(\\s*(${number})\\s*\\)$`, 'i').exec(transform)
     : null
   if (!match) throw new Error(`Could not read the map camera from "${transform}".`)
   return { x: Number(match[1]), y: Number(match[2]), k: Number(match[3]) }
@@ -883,13 +883,40 @@ export function workspaceZoomOutput(page: import('@playwright/test').Page): impo
   return workspaceZoomControls(page).locator('output').first()
 }
 
+export function wardenMap(page: import('@playwright/test').Page): Locator {
+  return page.locator('svg.continuous-warden-map-svg')
+}
+
+export function wardenSystemMark(page: import('@playwright/test').Page, systemId: string): Locator {
+  return wardenMap(page).locator(`.continuous-warden-system-anchor${domainIdentitySelector('data-system-id', systemId)}`)
+}
+
+export function wardenObjectMark(page: import('@playwright/test').Page, systemId: string, objectId: string): Locator {
+  return wardenMap(page).locator(
+    `.continuous-warden-object${domainIdentitySelector('data-system-id', systemId)}${domainIdentitySelector('data-object-id', objectId)}`,
+  )
+}
+
+/** Frames the selected entity through the same map controls on desktop and compact viewports. */
+export async function centerWorkspaceSelection(page: import('@playwright/test').Page): Promise<void> {
+  const compactClose = page.getByRole('button', { name: 'Close inspector panel', exact: true })
+  if (await compactClose.isVisible()) await compactClose.click()
+  await workspaceZoomControls(page).getByRole('button', { name: 'Center selected target', exact: true }).click()
+}
+
+/** Frames the Cluster without changing the inspected target or its draft. */
+export async function fitWorkspaceMap(page: import('@playwright/test').Page): Promise<void> {
+  await dismissAddChooser(page)
+  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+}
+
 export type SingleSystemWorkspaceOptions = {
   clusterName?: string
   systemName?: string
   viewport?: { width: number; height: number }
 }
 
-/** Creates a fresh one-system workspace and leaves its system map ready for interaction. */
+/** Creates a fresh one-system workspace and frames its detail on the Cluster canvas. */
 export async function createSingleSystemWorkspace(
   page: import('@playwright/test').Page,
   options: SingleSystemWorkspaceOptions = {},
@@ -904,18 +931,16 @@ export async function createSingleSystemWorkspace(
   await page.getByLabel('Jump Cluster', { exact: true }).fill(clusterName)
   await page.getByLabel('First star system', { exact: true }).fill(systemName)
   await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
-  await expect(page.getByRole('group', { name: `${systemName} star system map`, exact: true })).toBeVisible()
-
-  await returnToClusterMap(page)
-  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  const systems = hierarchy.getByRole('navigation', { name: 'Star systems', exact: true })
-  const systemEntry = systems.getByRole('button', { name: /^Open .* system map$/ })
-  await expect(systemEntry).toHaveCount(1)
-  await expect(systemEntry).toHaveAccessibleName(`Open ${systemName} system map`)
-  await systemEntry.click()
-  const compactHierarchyClose = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
-  if (await compactHierarchyClose.isVisible().catch(() => false)) await compactHierarchyClose.click()
-  await expect(page.getByRole('group', { name: `${systemName} star system map`, exact: true })).toBeVisible()
+  const map = wardenMap(page)
+  await expect(map).toHaveAccessibleName(`${clusterName} continuous map`)
+  await fitWorkspaceMap(page)
+  const system = map.locator('.continuous-warden-system-anchor[data-system-id]')
+  await expect(system).toHaveCount(1)
+  const systemId = await system.getAttribute('data-system-id')
+  if (!systemId) throw new Error('The created system anchor is missing its domain identity.')
+  await map.locator('.continuous-warden-name-target')
+    .and(map.getByRole('button', { name: `Select ${systemName}`, exact: true })).click()
+  await centerWorkspaceSelection(page)
 
   for (const panel of ['hierarchy', 'inspector'] as const) {
     const compactClose = page.getByRole('button', { name: `Close ${panel} panel`, exact: true })
@@ -933,12 +958,10 @@ export async function createSingleSystemWorkspace(
 
   await expect(page.getByRole('group', { name: 'Map interaction mode' })
     .getByRole('button', { name: 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true')
-  const systemMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
-  const systemId = await systemMap.getAttribute('data-system-id')
-  const primaryObjects = systemMap.locator('.system-object[data-object-id]')
+  const primaryObjects = map.locator(`.continuous-warden-object${domainIdentitySelector('data-system-id', systemId)}`)
   await expect(primaryObjects).toHaveCount(1)
   const primaryObjectId = await primaryObjects.first().getAttribute('data-object-id')
-  if (!systemId || !primaryObjectId) throw new Error('The created system map is missing its domain identities.')
+  if (!primaryObjectId) throw new Error('The primary Star is missing its domain identity.')
   return { clusterName, systemName, systemId, primaryObjectId }
 }
 
@@ -972,7 +995,7 @@ export async function openWorkspaceZoomNavigation(
  */
 export async function openWorkspaceHierarchy(
   page: import('@playwright/test').Page,
-  name: 'System hierarchy' | 'Jump Cluster contents' = 'System hierarchy',
+  name: 'System hierarchy' | 'Jump Cluster contents' = 'Jump Cluster contents',
 ): Promise<import('@playwright/test').Locator> {
   const toggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   await expect(toggle).toBeVisible()
@@ -1095,8 +1118,8 @@ export async function addClusterSystem(
   page: import('@playwright/test').Page,
   options: { open?: boolean; position?: WorldPoint } = {},
 ): Promise<string | undefined> {
-  const clusterMap = page.getByRole('group', { name: /Jump Cluster map$/ })
-  const systemMarks = clusterMap.locator('.cluster-system-node[data-system-id]')
+  const clusterMap = wardenMap(page)
+  const systemMarks = clusterMap.locator('.continuous-warden-system-anchor[data-system-id]')
   await expect(clusterMap).toBeVisible()
   await expect(systemMarks.first()).toBeAttached()
   const existingSystemIds = new Set(await domainIdentityValues(systemMarks, 'data-system-id'))
@@ -1112,17 +1135,12 @@ export async function addClusterSystem(
 
   if (!options.open) return systemId
 
-  await setWorkspaceMapMode(page, 'Navigate')
-  await expect(clusterMap).toBeVisible()
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  const createdAction = systemMarks.and(clusterMap.locator(domainIdentitySelector('data-system-id', systemId)))
+  await fitWorkspaceMap(page)
+  const createdAction = clusterMap.locator(`.continuous-warden-name-target${domainIdentitySelector('data-system-id', systemId)}`)
   await expect(createdAction).toBeVisible()
-  await expect(createdAction).toHaveAttribute('role', 'button')
-  await expect(createdAction).toHaveAccessibleName(/^Open .+ system map$/)
   await createdAction.click()
-  const openedSystemMap = page.getByRole('group', { name: /star system map$/ })
-  await expect(openedSystemMap).toBeVisible()
-  await expect(openedSystemMap).toHaveAttribute('data-system-id', systemId)
+  await expect(createdAction).toHaveClass(/is-selected/)
+  await centerWorkspaceSelection(page)
   return systemId
 }
 
@@ -1179,13 +1197,15 @@ export async function reviewJumpClusterBackup(
   return jumpClusterRestoreReviewDialog(page)
 }
 
-/** Opens a standalone system file for the existing reviewed append workflow. */
+/** Opens a standalone system file and reviews the proposed anchor. */
 export async function reviewStarSystemImport(
   page: import('@playwright/test').Page,
   name: string,
   content: string,
 ): Promise<import('@playwright/test').Locator> {
   await setJsonFile(await openStarSystemImportPicker(page), name, content)
+  const placement = page.getByRole('group', { name: 'Standalone star system placement controls', exact: true })
+  await placement.getByRole('button', { name: 'Review placement', exact: true }).click()
   return importReviewDialog(page)
 }
 

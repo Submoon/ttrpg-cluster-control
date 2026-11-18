@@ -21,7 +21,6 @@ test('the player preview inspects the same public route through its shared docum
   }
   fixture.cluster.routes[0]!.playerShared = true
   await importCampaignWorkspace(page, fixture, { width: 1440, height: 960 })
-  await page.goto('/?map=continuous')
 
   const preview = await openPlayerPreview(page)
   const map = preview.getByRole('region', { name: 'Player-visible continuous map', exact: true })
@@ -125,7 +124,6 @@ test('continuous routes support clipped selection, guarded inspection and author
     jumpLevel: 3,
   })
   await importCampaignWorkspace(page, fixture, { width: 1440, height: 960 })
-  await page.goto('/?map=continuous')
   await setWorkspaceMapMode(page, 'Select')
 
   const map = page.getByRole('group', { name: /continuous map$/ })
@@ -210,7 +208,6 @@ test('the nearest continuous route wins even when later routes cover its distant
   positions[destination.id] = { x: 4.15, y: 0.5 }
   positions[remoteId] = { x: 12, y: 0.5 }
   await importCampaignWorkspace(page, fixture, { width: 1440, height: 960 })
-  await page.goto('/?map=continuous')
   await setWorkspaceMapMode(page, 'Select')
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
 

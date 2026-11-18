@@ -17,7 +17,7 @@ import {
   importReviewDialog,
   openStarSystemImportPicker,
   openChartDetailsEditor,
-  returnToClusterMap,
+  fitWorkspaceMap,
   resolveImportReview,
   reviewStarSystemImport,
   setJsonFile,
@@ -71,12 +71,12 @@ function incomingSystem(): {
 
 test('standalone system review preserves an unrelated chart draft and adds an independent system only on confirm', async ({ page }) => {
   await captureMapExportBlobs(page)
-  await page.goto('/?map=continuous')
+  await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
 
   const context = page.getByRole('navigation', { name: 'Map context and commands' })
   await expect(context.getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
@@ -124,6 +124,9 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   const firstPlacement = await openPlacementReview()
   const review = firstPlacement.review
   await expect(review).toBeVisible()
+  await expect(review).toContainText('Star systems: 1')
+  await expect(review).toContainText('Jump Routes: 0')
+  await expect(review).toContainText('Primary Star')
   await expect(page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })).toHaveCount(0)
   await resolveImportReview(review, 'cancel')
   await expect(review).toBeHidden()
@@ -196,7 +199,7 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   await page.getByRole('button', { name: 'Select', exact: true }).click()
 
   await page.reload()
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
   const persisted = await downloadJson(page, 'Export Jump Cluster JSON')
   const persistedSystem = persisted.cluster?.systems.find(system => system.name === 'Incoming Vesper')
   expect(persistedSystem).toBeDefined()
@@ -207,12 +210,12 @@ test('standalone system review preserves an unrelated chart draft and adds an in
 })
 
 test('canceling a held import placement click leaves Add ready for the next click', async ({ page }) => {
-  await page.goto('/?map=continuous')
+  await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
 
   await (await dockAction(page, 'Add star system')).click()
   await setJsonFile(await openStarSystemImportPicker(page), 'incoming-reach-copy.json', incomingSystem().content)
@@ -263,7 +266,7 @@ test('an applied import closes review before save failure and Retry persists the
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
 
   const chartEditor = await openChartDetailsEditor(page)
   await chartEditor.getByLabel('Jump Cluster', { exact: true }).fill('Unapplied Reach')
@@ -297,7 +300,7 @@ test('an applied import closes review before save failure and Retry persists the
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Retry save', exact: true }).click()
   await waitForWorkspaceSaved(page)
   await page.reload()
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
 
   const afterReload = await downloadJson(page, 'Export Jump Cluster JSON')
   const persistedImport = afterReload.cluster?.systems.find(system => system.name === 'Incoming Vesper')
