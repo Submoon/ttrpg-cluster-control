@@ -948,8 +948,25 @@ function closePanel(panel: 'hierarchy' | 'inspector'): void {
   }
 }
 
-function closeActivePanel(): void {
+async function closeActivePanel(): Promise<void> {
+  const document = props.document
+  const map = systemMapHandle.value
+  const request = requestNonce
+  const shouldFocusMap = props.workspacePresentation && isCompactViewport.value
+    && compactPanel.value !== null && isActive.value
   compactPanel.value = null
+
+  if (!shouldFocusMap || !map) return
+
+  await nextTick()
+  await nextTick()
+  await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()))
+
+  if (isDisposed || !isActive.value || props.document !== document || requestNonce !== request
+    || systemMapHandle.value !== map || !props.workspacePresentation || !isCompactViewport.value
+    || compactPanel.value !== null || searchOpen.value || filesOpen.value || typeFilterOpen.value) return
+
+  focusCurrentMap()
 }
 </script>
 
