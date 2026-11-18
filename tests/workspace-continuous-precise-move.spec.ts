@@ -7,6 +7,7 @@ import {
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
   workspaceZoomControls,
+  workspaceZoomOutput,
 } from './helpers'
 
 type LocalPoint = { x: number; y: number }
@@ -73,8 +74,16 @@ function objectLocalPosition(transform: string | null): LocalPoint {
 test('continuous precise Free placement stays exact beside an Orbit and commits to its inspected owner', async ({ page }) => {
   const { map, orbitId, primaryObjectId, systemName } = await prepareContinuousOrbitMap(page)
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  const systemBranch = hierarchy.getByRole('treeitem', { name: systemName, exact: true })
+  const primaryObject = hierarchy.getByRole('treeitem', { name: /^Select [^,]+, Primary Star\b/ })
+  await expect(systemBranch).toHaveAttribute('aria-expanded', 'false')
+  await expect(primaryObject).toBeHidden()
+  await systemBranch.getByRole('button', { name: `Expand ${systemName}`, exact: true }).click()
+  await expect(primaryObject).toBeVisible()
+  await expect(systemBranch).toBeFocused()
+  await systemBranch.press('ArrowLeft')
+  await expect(primaryObject).toBeHidden()
   await hierarchy.getByRole('button', { name: `Inspect ${systemName}`, exact: true }).click()
-  const primaryObject = hierarchy.getByRole('treeitem', { name: /^Primary Star\b/ })
   await expect(primaryObject).toBeVisible()
   await primaryObject.click()
   const object = map.locator(`.continuous-warden-object[data-object-id="${primaryObjectId}"]`)
@@ -165,6 +174,11 @@ test('continuous Orbit resize rolls back on Escape and accepts the next pointer 
   await page.mouse.move(mapBounds.x + mapBounds.width / 2, mapBounds.y + mapBounds.height / 2)
   await page.mouse.wheel(0, 1800)
   await expect(resize).toHaveCount(0)
+  const appliedPercentage = await map.locator('.cluster-map-content').evaluate(element => {
+    if (!(element instanceof SVGGElement)) throw new Error('The camera group has no SVG transform.')
+    return element.transform.baseVal.getItem(1).matrix.a * 100
+  })
+  await expect(workspaceZoomOutput(page)).toHaveText(`${Math.round(appliedPercentage)}%`)
   await expect.poll(() => map.evaluate(element => {
     const focused = document.activeElement
     return focused === element || (element.contains(focused) && focused?.classList.contains('continuous-warden-name-target'))

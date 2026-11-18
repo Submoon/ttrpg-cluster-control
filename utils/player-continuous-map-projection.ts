@@ -24,25 +24,30 @@ export interface PlayerContinuousMapProjection {
 export const PLAYER_DETAIL_REVEAL_PIXELS = 250
 export const PLAYER_DETAIL_HIDE_PIXELS = 210
 
-/** Applies each Revealed system's own public envelope threshold with a stable collapse band. */
+/** Applies each Revealed system's threshold and reuses unchanged membership for route transitions. */
 export function playerContinuousDetailSystemIds(
   systems: readonly PlayerContinuousSystemProjection[],
   cameraScale: number,
   svgPixelScale: number,
   currentlyDetailed: ReadonlySet<string>,
-): Set<string> {
+): ReadonlySet<string> {
   const next = new Set<string>()
   if (!(Number.isFinite(cameraScale) && cameraScale > 0 && Number.isFinite(svgPixelScale) && svgPixelScale > 0)) {
-    return next
+    return currentlyDetailed.size === 0 ? currentlyDetailed : next
   }
 
+  let addedDetail = false
   for (const system of systems) {
     const envelope = system.geometry?.envelope
     if (!envelope) continue
-    const threshold = currentlyDetailed.has(system.id) ? PLAYER_DETAIL_HIDE_PIXELS : PLAYER_DETAIL_REVEAL_PIXELS
-    if (cameraScale >= continuousMapDetailScale(envelope, svgPixelScale, threshold)) next.add(system.id)
+    const wasDetailed = currentlyDetailed.has(system.id)
+    const threshold = wasDetailed ? PLAYER_DETAIL_HIDE_PIXELS : PLAYER_DETAIL_REVEAL_PIXELS
+    if (cameraScale >= continuousMapDetailScale(envelope, svgPixelScale, threshold)) {
+      next.add(system.id)
+      if (!wasDetailed) addedDetail = true
+    }
   }
-  return next
+  return addedDetail || next.size !== currentlyDetailed.size ? next : currentlyDetailed
 }
 
 /**

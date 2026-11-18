@@ -628,6 +628,21 @@ freshTest('continuous Warden group movement previews and commits across owning s
   await expect(otherMark).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByText('2 objects selected', { exact: true })).toBeVisible()
 
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  const sourceRow = hierarchy.getByRole('treeitem', {
+    name: `Select ${sourceObject.locationKey}, ${sourceObject.name} in ${sourceOwner.name}`, exact: true, selected: true,
+  })
+  const otherRow = hierarchy.getByRole('treeitem', {
+    name: `Select ${otherOwnerObject.locationKey}, ${otherOwnerObject.name} in ${otherOwner.name}`, exact: true, selected: true,
+  })
+  await expect(sourceRow).toBeVisible()
+  await expect(otherRow).toBeVisible()
+  const otherBranch = hierarchy.getByRole('treeitem', { name: otherOwner.name, exact: true })
+  await otherBranch.getByRole('button', { name: `Collapse ${otherOwner.name}`, exact: true }).click()
+  await expect(otherRow).toBeHidden()
+  await expect(otherMark).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
+
   await setWorkspaceMapMode(page, 'Move')
   const originalTransform = await sourceMark.getAttribute('transform')
   const start = await exposedContinuousObjectHitPoint(sourceMark)

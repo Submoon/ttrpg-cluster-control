@@ -281,6 +281,20 @@ test('player system detail uses independent public envelope thresholds with coll
   expect(revealedDetail).not.toContain('system-2')
 })
 
+test('player route detail membership stays stable between threshold crossings @pure', () => {
+  const { systems } = projectPlayerContinuousMap(publicDocument())
+  const overview = new Set<string>()
+  expect(playerContinuousDetailSystemIds(systems, 1, 1, overview)).toBe(overview)
+
+  const revealed = playerContinuousDetailSystemIds(systems, 2.5, 1, overview)
+  expect(revealed).toEqual(new Set(['system-3', 'system-4']))
+  expect(playerContinuousDetailSystemIds(systems, 2, 1, revealed)).toBe(revealed)
+
+  const collapsed = playerContinuousDetailSystemIds(systems, 1, 1, revealed)
+  expect(collapsed).toEqual(overview)
+  expect(collapsed).not.toBe(revealed)
+})
+
 test('player Center and detail agree at a fractional CSS scale @pure', () => {
   const source = projectPlayerContinuousMap(publicDocument()).systems[2]
   if (!source?.geometry) throw new Error('The public fixture system has no interior.')

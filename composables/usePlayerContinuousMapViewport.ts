@@ -10,6 +10,7 @@ import {
   getSvgViewportRect,
   MAP_ZOOM_MAX_SCALE,
   MAP_ZOOM_MIN_SCALE,
+  svgViewportExtent,
   type MapViewport,
   type SvgViewportRect as CameraBounds,
 } from '../utils/map-zoom'
@@ -66,6 +67,7 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
     if (!element) return
     if (active) {
       attachZoom()
+      measureSvg()
       if (!cameraInitialized.value) fitPlayerMap()
     } else {
       select(element).on('.zoom', null)
@@ -80,10 +82,6 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
         .filter(event => options.active.value
           && (!event.ctrlKey || event.type === 'wheel')
           && !event.button)
-        .extent(() => {
-          const rect = getSvgViewportRect(element)
-          return [[rect.x, rect.y], [rect.x + rect.width, rect.y + rect.height]]
-        })
         .scaleExtent([minimumScale.value, MAP_ZOOM_MAX_SCALE])
         .touchable(() => true)
         .on('zoom.player', event => {
@@ -98,7 +96,11 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
   }
 
   function measureSvg(): void {
-    const matrix = options.element.value?.getScreenCTM()
+    const element = options.element.value
+    if (!element) return
+    // D3 uses the drawable SVG for input; explicit framing measures the unobstructed area below.
+    zoomBehavior?.extent(svgViewportExtent(getSvgViewportRect(element)))
+    const matrix = element.getScreenCTM()
     if (!matrix) return
     const horizontal = Math.hypot(matrix.a, matrix.b)
     const vertical = Math.hypot(matrix.c, matrix.d)
