@@ -38,6 +38,7 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: 'TTRPG Cluster Control',
+      link: [{ rel: 'icon', type: 'image/png', sizes: '64x64', href: '/favicon.png' }],
     },
   },
   nitro: {
