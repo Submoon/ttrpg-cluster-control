@@ -3,7 +3,9 @@ import {
   captureMapExportBlobs,
   dockAction,
   downloadJson,
-  returnToClusterMap,
+  fitWorkspaceMap,
+  wardenMap,
+  wardenSystemMark,
   workspaceNavigation,
 } from './helpers'
 
@@ -34,7 +36,7 @@ async function createWorkspace(page: Page): Promise<void> {
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
   const inspector = page.locator('#workspace-inspector-panel')
   const inspect = page.getByRole('button', { name: 'Inspect', exact: true })
   if (await inspector.isVisible()) await inspect.click()
@@ -73,19 +75,21 @@ async function beginTwoContactViewGesture(
 
 
 
-test('cluster two-contact takeover cancels an active Move drag and never activates Navigate, Select, or Add System', async ({ page }) => {
+test('cluster two-contact takeover cancels an active anchor drag without selecting or adding a system', async ({ page }) => {
   await captureMapExportBlobs(page)
   const cdp = await enableTouch(page)
   await createWorkspace(page)
 
-  const map = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
+  const map = wardenMap(page)
   const inspector = page.locator('#workspace-inspector-panel')
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
 
   try {
     const modeButtons = workspaceNavigation(page).getByRole('group', { name: 'Map interaction mode', exact: true })
     await modeButtons.getByRole('button', { name: 'Move', exact: true }).click()
-    const sourceNode = map.getByRole('button', { name: 'Select Vesper system', exact: true })
+    const sourceId = before.cluster?.systems[0]?.id
+    if (!sourceId) throw new Error('The saved Cluster is missing its source anchor.')
+    const sourceNode = wardenSystemMark(page, sourceId)
     const originalTransform = await sourceNode.getAttribute('transform')
     await sourceNode.click()
     await expect(inspector).toBeHidden()
@@ -125,23 +129,20 @@ test('cluster two-contact takeover cancels an active Move drag and never activat
     await dispatchTouch(cdp, 'touchEnd', [])
     await page.waitForTimeout(80)
     await expect(map).toBeVisible()
-    await expect(page.getByRole('group', { name: 'Vesper star system map' })).toHaveCount(0)
     await expect(inspector).toBeHidden()
 
-    for (const mode of ['Navigate', 'Select'] as const) {
-      await modeButtons.getByRole('button', { name: mode, exact: true }).click()
-      await beginTwoContactViewGesture(page, cdp, map)
-      await expect(map).toBeVisible()
-      await expect(page.getByRole('group', { name: 'Vesper star system map' })).toHaveCount(0)
-      await expect(inspector).toBeHidden()
-    }
+    const select = modeButtons.getByRole('button', { name: 'Select', exact: true })
+    await select.click()
+    await beginTwoContactViewGesture(page, cdp, map)
+    await expect(map).toHaveCount(1)
+    await expect(inspector).toBeHidden()
 
     await (await dockAction(page, 'Add star system')).click()
     await expect(workspaceNavigation(page).getByRole('button', { name: 'Add to map', exact: true })).toContainText(/system/i)
     await beginTwoContactViewGesture(page, cdp, map)
-    await expect(map).toBeVisible()
-    await expect(page.getByRole('group', { name: 'Vesper star system map' })).toHaveCount(0)
+    await expect(map).toHaveCount(1)
     await expect(inspector).toBeHidden()
+    await expect(map.locator('.continuous-warden-system-anchor')).toHaveCount(1)
     await expect(workspaceNavigation(page).getByRole('button', { name: 'Add to map', exact: true })).toContainText(/system/i)
   } finally {
     await cdp.detach()

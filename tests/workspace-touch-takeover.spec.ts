@@ -1,12 +1,16 @@
 import { expect, test, type Locator, type Page } from './fixtures'
 import {
   captureMapExportBlobs,
+  centerWorkspaceSelection,
+  createSingleSystemWorkspace,
   dockAction,
   downloadJson,
+  exposedContinuousObjectHitPoint,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
+  wardenMap,
+  wardenObjectMark,
   workspaceZoomOutput,
-  zoomOutMapToMinimum,
   type DownloadWindow,
   type ExportedMap,
 } from './helpers'
@@ -20,18 +24,6 @@ type OrbitPreviewScreenGeometry = {
   ry: string | null
   center: { x: number; y: number }
   radius: number
-}
-
-async function createWorkspace(
-  page: Page,
-  viewport = { width: 1440, height: 960 },
-): Promise<void> {
-  await page.setViewportSize(viewport)
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await waitForWorkspaceSaved(page)
 }
 
 async function enableTouch(page: Page) {
@@ -136,7 +128,10 @@ async function readWorkspaceRecords(page: Page): Promise<StoredWorkspaceRecords>
 test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and pans only the view', async ({ page }) => {
   await captureMapExportBlobs(page)
   const cdp = await enableTouch(page)
-  await createWorkspace(page, { width: 390, height: 844 })
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+    viewport: { width: 390, height: 844 },
+  })
+  await waitForWorkspaceSaved(page)
 
   // Keep the real leave animation mounted until the first map gesture has started.
   const exitStyle = await page.addStyleTag({ content: `
@@ -168,13 +163,17 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
   await expect(page.getByRole('toolbar', { name: 'Workspace navigation' })).toBeVisible()
   await setWorkspaceMapMode(page, 'Move')
 
-  const map = page.getByRole('group', { name: 'Vesper star system map' })
-  const star = map.locator('.system-object').first()
-  const hitTarget = star.locator('.object-hit-target')
-  const origin = await pointAtCenter(hitTarget)
+  const map = wardenMap(page)
+  const star = wardenObjectMark(page, systemId, primaryObjectId)
+  const starPoint = async (id: number) => {
+    const point = await exposedContinuousObjectHitPoint(star)
+    if (!point) throw new Error('The primary Star must expose a touch target on the live Warden map.')
+    return { id, ...point }
+  }
+  const origin = await starPoint(1)
   const bounds = await map.boundingBox()
   if (!bounds) throw new Error('The system map has no visible bounds for touch input.')
-  const scene = map.locator('.system-map-content')
+  const scene = map.locator('.cluster-map-content')
   const objectTransformBefore = await star.getAttribute('transform')
   const viewportBefore = await scene.getAttribute('transform')
   const zoomOutput = workspaceZoomOutput(page)
@@ -183,7 +182,7 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
   try {
     const firstMove = { ...origin, x: origin.x + 24, y: origin.y + 18 }
     await expect.poll(() => page.evaluate(({ x, y }) =>
-      Boolean(document.elementFromPoint(x, y)?.closest('.object-hit-target')), origin)).toBe(true)
+      Boolean(document.elementFromPoint(x, y)?.closest('.continuous-warden-object-hit-target')), origin)).toBe(true)
     await dispatchTouch(cdp, 'touchStart', [origin])
     await dispatchTouch(cdp, 'touchMove', [firstMove])
     await expect.poll(() => star.getAttribute('transform')).not.toBe(objectTransformBefore)
@@ -265,22 +264,17 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
   const orbitCdp = await enableTouch(page)
   try {
     await test.step('Add Orbit resumes around the same host after pinch only after fresh movement', async () => {
-      await page.getByRole('button', { name: 'Fit map', exact: true }).click()
-      await zoomOutMapToMinimum(page)
+      await centerWorkspaceSelection(page)
       const quitAdd = page.getByRole('button', { name: 'Quit Add and return to Select' })
-      const map = page.getByRole('group', { name: 'Vesper star system map' })
-      const host = map.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true })
-        .locator('.object-hit-target')
-      const rings = map.locator('.orbit-ring')
-      const preview = map.locator('.system-creation-preview-orbit')
-      const scene = map.locator('.system-map-content')
+      const rings = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"]`)
+      const preview = map.locator('.orbit-creation-preview-ring')
       const zoomOutput = workspaceZoomOutput(page)
       await expect(rings).toHaveCount(0)
       await (await dockAction(page, 'Add orbit')).click()
       await expect(quitAdd).toBeVisible()
 
       const pinchAndResume = async (firstId: number, secondId: number) => {
-        const origin = { ...(await pointAtCenter(host)), id: firstId }
+        const origin = await starPoint(firstId)
         const bounds = await map.boundingBox()
         if (!bounds) throw new Error('The system map has no visible bounds for Add Orbit touch input.')
         const mapCenterX = bounds.x + bounds.width / 2
@@ -369,7 +363,7 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
       await expect(preview).toHaveCount(0)
       await expect(quitAdd).toBeVisible()
       await expect(rings).toHaveCount(1)
-      const created = map.getByRole('group', { name: 'Orbit 1 around Primary Star', exact: true }).locator('.orbit-ring')
+      const created = rings.and(map.getByRole('button', { name: 'Orbit 1 around Primary Star', exact: true }))
       await expect(created).toHaveAttribute('cx', finalPreview.cx)
       await expect(created).toHaveAttribute('cy', finalPreview.cy)
       await expect(created).toHaveAttribute('rx', finalPreview.rx)
@@ -377,7 +371,7 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
       expect(canceledGesture.resumed.cx).toBe(finalPreview.cx)
       expect(canceledGesture.resumed.cy).toBe(finalPreview.cy)
 
-      const freshTap = { ...(await pointAtCenter(host)), id: 5 }
+      const freshTap = await starPoint(5)
       await dispatchTouch(orbitCdp, 'touchStart', [freshTap])
       await dispatchTouch(orbitCdp, 'touchEnd', [])
       await expect(rings).toHaveCount(2)

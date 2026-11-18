@@ -1,5 +1,6 @@
 import { expect, type Locator } from '@playwright/test'
 import type { JumpRoute, PublicationMode } from '../domain/workspace'
+import { CONTINUOUS_MAP_LOCAL_ORIGIN, CONTINUOUS_MAP_SYSTEM_SCALE } from '../utils/continuous-map-projection'
 
 export type PublicationModeLabel = 'Hidden' | 'Unknown presence' | 'Known type' | 'Revealed'
 
@@ -895,6 +896,46 @@ export function wardenObjectMark(page: import('@playwright/test').Page, systemId
   return wardenMap(page).locator(
     `.continuous-warden-object${domainIdentitySelector('data-system-id', systemId)}${domainIdentitySelector('data-object-id', objectId)}`,
   )
+}
+
+/** Converts an owner's legacy local SVG units through its rendered anchor and the common camera. */
+export async function wardenLocalCoordinates(page: import('@playwright/test').Page, systemId: string): Promise<{
+  toClient(point: WorldPoint): ScreenPoint
+  fromClient(point: ScreenPoint): WorldPoint
+}> {
+  const mapCoordinates = await snapshotSvgCoordinates(wardenMap(page).locator('.cluster-map-content'))
+  const markCoordinates = await snapshotSvgCoordinates(wardenSystemMark(page, systemId))
+  const anchor = mapCoordinates.fromClient(markCoordinates.toClient({ x: 0, y: 0 }))
+  return {
+    toClient: point => mapCoordinates.toClient({
+      x: anchor.x + (point.x - CONTINUOUS_MAP_LOCAL_ORIGIN.x) * CONTINUOUS_MAP_SYSTEM_SCALE,
+      y: anchor.y + (point.y - CONTINUOUS_MAP_LOCAL_ORIGIN.y) * CONTINUOUS_MAP_SYSTEM_SCALE,
+    }),
+    fromClient: (point) => {
+      const scenePoint = mapCoordinates.fromClient(point)
+      return {
+        x: CONTINUOUS_MAP_LOCAL_ORIGIN.x + (scenePoint.x - anchor.x) / CONTINUOUS_MAP_SYSTEM_SCALE,
+        y: CONTINUOUS_MAP_LOCAL_ORIGIN.y + (scenePoint.y - anchor.y) / CONTINUOUS_MAP_SYSTEM_SCALE,
+      }
+    },
+  }
+}
+
+/** Delivers a native click to a normalized point in an explicit system's local layout. */
+export async function clickWardenSystemPoint(
+  page: import('@playwright/test').Page,
+  systemId: string,
+  point: WorldPoint,
+): Promise<WorldPoint> {
+  const coordinates = await wardenLocalCoordinates(page, systemId)
+  const client = coordinates.toClient({ x: 64 + 832 * point.x, y: 72 + 416 * point.y })
+  const deliveredClient = { x: Math.round(client.x), y: Math.round(client.y) }
+  const hitsMap = await wardenMap(page).evaluate((map, input) =>
+    map.contains(document.elementFromPoint(input.x, input.y)), deliveredClient)
+  if (!hitsMap) throw new Error(`System point (${point.x}, ${point.y}) does not hit the visible Warden map.`)
+  await page.mouse.click(deliveredClient.x, deliveredClient.y)
+  const delivered = coordinates.fromClient(deliveredClient)
+  return { x: (delivered.x - 64) / 832, y: (delivered.y - 72) / 416 }
 }
 
 /** Frames the selected entity through the same map controls on desktop and compact viewports. */
