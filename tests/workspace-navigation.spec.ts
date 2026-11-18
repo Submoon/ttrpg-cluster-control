@@ -95,7 +95,10 @@ test('one Warden camera keeps the inspected draft and keyboard focus through sem
   await expect(starRow).toHaveAttribute('aria-selected', 'true')
 
   await star.focus()
-  for (let step = 0; step < 32 && await star.count() > 0; step += 1) await star.press('-')
+  const bounds = await map.boundingBox()
+  if (!bounds) throw new Error('The Warden canvas must be visible for wheel zoom.')
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+  await page.mouse.wheel(0, 1800)
   await expect(star).toHaveCount(0)
   await expect(systemNameMark.or(map).and(page.locator(':focus'))).toHaveCount(1)
   await expect(draftName).toHaveValue('Unapplied Primary')

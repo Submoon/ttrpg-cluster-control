@@ -210,11 +210,12 @@ test('continuous Add keeps a definite owner, uses local geometry, and asks befor
 })
 
 test('continuous Add protects a modified route draft after a different Cluster Add tool was armed', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 960 })
-  const { systemName } = await createSingleSystemWorkspace(page)
+  const { systemName } = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
 
   await (await dockAction(page, 'Add Jump Route')).click()
-  const inspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
+  const resumeRoute = page.getByRole('button', { name: 'Resume Jump Route', exact: true })
+  await resumeRoute.click()
+  const inspector = page.locator('#workspace-inspector-panel')
   const origin = inspector.getByLabel('From system', { exact: true })
   await selectInspectorOption(origin, systemName)
   await expect(origin).toContainText(systemName)
@@ -226,5 +227,6 @@ test('continuous Add protects a modified route draft after a different Cluster A
   await stay.click()
 
   await expect(page.getByRole('dialog', { name: 'Name this object type', exact: true })).toBeHidden()
+  if (!await origin.isVisible()) await resumeRoute.click()
   await expect(origin).toContainText(systemName)
 })

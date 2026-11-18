@@ -205,7 +205,8 @@ test('the default player reader opens shared links and files with one camera and
   const publicSystemName = system.locator('.player-continuous-name-target')
     .and(system.getByRole('button', { name: 'Inspect Public System', exact: true }))
   const knownSystemMark = system.locator('.player-continuous-system-anchor[data-player-system-id="system-2"]')
-  await knownSystemMark.click()
+  // At the compact Fit scale the frontmost revealed anchor can cover this marker.
+  await knownSystemMark.press('Enter')
   await expect(knownSystemMark).toHaveAttribute('aria-pressed', 'true')
   await expect(system.locator('.player-continuous-object[data-player-system-id="system-2"]')).toHaveCount(0)
 
@@ -477,7 +478,7 @@ test('the default player reader opens shared links and files with one camera and
   await expect.poll(() => playerRouteFitsViewport(publicRouteMark.locator('.cluster-route-line'))).toBe(true)
 
   const knownMarker = continuousMap.locator('.player-continuous-system-anchor[data-player-system-id="system-2"]')
-  await knownMarker.click()
+  await knownMarker.press('Enter')
   const zoomInForRoute = continuousMap.getByRole('button', { name: 'Zoom in', exact: true })
   let clippedRoutePoint = await playerRouteStrokePoint(publicRouteStroke, true)
   for (let step = 0; !clippedRoutePoint && step < 14; step++) {

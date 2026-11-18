@@ -127,13 +127,13 @@ test('continuous routes support clipped selection, guarded inspection and author
   await setWorkspaceMapMode(page, 'Select')
 
   const map = page.getByRole('group', { name: /continuous map$/ })
-  const first = map.getByRole('button', { name: /Select Jump Level 1 route/ })
-  const second = map.getByRole('button', { name: /Select Jump Level 3 route/ })
+  const first = map.locator(`.cluster-route[data-route-id="${namedRoute.id}"]`)
+  const second = map.locator('.cluster-route[data-route-id="campaign-baseline-second-route"]')
   const zoom = workspaceZoomControls(page)
   const camera = map.locator('.cluster-map-content')
   const inspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
-  await expect(first).toBeVisible()
-  await expect(second).toBeVisible()
+  await expect(first).toHaveAccessibleName(/Select Jump Level 1 route/)
+  await expect(second).toHaveAccessibleName(/Select Jump Level 3 route/)
   expect(await first.locator('.cluster-route-line').getAttribute('d'))
     .not.toBe(await second.locator('.cluster-route-line').getAttribute('d'))
 
@@ -166,7 +166,9 @@ test('continuous routes support clipped selection, guarded inspection and author
   await page.getByRole('button', { name: 'Stay here', exact: true }).click()
   await expect(first).toHaveAttribute('aria-pressed', 'true')
   await expect(jumpLevel).toHaveValue('9')
+  await expect(first).toHaveAccessibleName(/Select Jump Level 9 route/)
   await inspector.getByRole('button', { name: 'Discard changes', exact: true }).click()
+  await expect(first).toHaveAccessibleName(/Select Jump Level 1 route/)
 
   await clickDockAction(page, 'Add Jump Route')
   await selectInspectorOption(inspector.getByLabel('From system'), 'Vesper Prime')

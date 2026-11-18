@@ -46,7 +46,7 @@ test('a Warden shares applied player text and marker color while keeping drafts 
   await expect(planetMark).toBeVisible()
   await planetMark.press('Enter')
 
-  const inspector = page.getByRole('complementary', { name: 'Object inspector' })
+  const inspector = page.getByRole('region', { name: 'Object inspector', exact: true })
   await editMapObject(page)
   await inspector.getByLabel('Name', { exact: true }).fill('Pilgrim World')
   const playerText = inspector.getByLabel('Player text', { exact: true })
