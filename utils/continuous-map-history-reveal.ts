@@ -10,6 +10,11 @@ interface MinimumHistoryRevealViewportOptions {
   maximumScale?: number
 }
 
+interface CenterMapTargetViewportOptions extends MinimumHistoryRevealViewportOptions {
+  /** Allow an oversized target when its semantic detail requires a higher zoom. */
+  prioritizeMinimumScale?: boolean
+}
+
 /** Keeps the current camera unless a target needs minimum pan or detail-reveal zoom. */
 export function minimumHistoryRevealViewport(options: MinimumHistoryRevealViewportOptions): MapViewport | null {
   const { current, targetBounds, usableRect } = options
@@ -31,7 +36,7 @@ export function minimumHistoryRevealViewport(options: MinimumHistoryRevealViewpo
 }
 
 /** Centers a target at its largest feasible scale while preserving the current scale when it fits. */
-export function centerMapTargetViewport(options: MinimumHistoryRevealViewportOptions): MapViewport | null {
+export function centerMapTargetViewport(options: CenterMapTargetViewportOptions): MapViewport | null {
   const { current, targetBounds, usableRect } = options
   if (![current.x, current.y, current.k, targetBounds.x, targetBounds.y, targetBounds.width, targetBounds.height,
     usableRect.x, usableRect.y, usableRect.width, usableRect.height].every(Number.isFinite)
@@ -46,7 +51,8 @@ export function centerMapTargetViewport(options: MinimumHistoryRevealViewportOpt
   const verticalFitScale = targetBounds.height > 0 ? usableRect.height / targetBounds.height : Number.POSITIVE_INFINITY
   const fitCeiling = Math.min(maximumScale, horizontalFitScale, verticalFitScale)
   if (!Number.isFinite(fitCeiling) || fitCeiling <= 0) return null
-  const k = Math.max(Math.min(current.k, fitCeiling), Math.min(minimumScale, fitCeiling))
+  const minimumScaleCeiling = options.prioritizeMinimumScale ? maximumScale : fitCeiling
+  const k = Math.max(Math.min(current.k, fitCeiling), Math.min(minimumScale, minimumScaleCeiling))
   const targetCenterX = targetBounds.x + targetBounds.width / 2
   const targetCenterY = targetBounds.y + targetBounds.height / 2
   return {

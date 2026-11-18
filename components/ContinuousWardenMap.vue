@@ -171,7 +171,7 @@
                   class="continuous-warden-object"
                   :class="{
                     'is-selected': isSelectedObject(projection.id, object.id),
-                    'is-search-result': searchLocatorId === object.id,
+                    'is-search-result': isSearchLocatorFor(projection.id, object.id),
                     'is-dimmed': dimmedObjectIds.has(object.id),
                     'has-custom-marker-color': localObject(projection.id, object.id)?.markerColor !== undefined,
                     'is-move-preview': isObjectMovePreview(projection.id, object.id)
@@ -205,7 +205,13 @@
                     <circle class="system-object-selection-outline" r="15.5" />
                     <circle class="system-object-selection-dashes" r="19.5" pathLength="100" stroke-dasharray="6 4" />
                   </g>
-                  <circle v-if="searchLocatorId === object.id" class="continuous-warden-search-locator" :r="searchLocatorRadius(projection)" aria-hidden="true" />
+                  <circle
+                    v-if="isSearchLocatorFor(projection.id, object.id)"
+                    class="continuous-warden-search-locator"
+                    data-map-search-locator
+                    :r="searchLocatorRadius(projection)"
+                    aria-hidden="true"
+                  />
                   <circle v-if="objectSubtype(projection.id, object.id) === 'star'" class="continuous-warden-star-halo" r="18" />
                   <text
                     class="continuous-warden-object-glyph"
@@ -457,7 +463,6 @@ import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
 
 const DETAIL_REVEAL_PIXELS = 250
 const DETAIL_HIDE_PIXELS = 210
-const SEARCH_BRANCH_MAX_LOCAL_SCALE = 2
 const SEARCH_LOCATOR_LOCAL_RADIUS = 25
 const SEARCH_LOCATOR_MIN_SCREEN_RADIUS = 10
 const MINIMUM_FIT_PADDING = 48
@@ -544,7 +549,7 @@ const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
 const svgPixelScale = ref(1)
 const svgViewport = ref<SvgViewportRect>({ x: 0, y: 0, width: 960, height: 560 })
 const ready = ref(false)
-const searchLocatorId = ref<string | null>(null)
+const searchLocatorTarget = shallowRef<{ clusterId: string; systemId: string; objectId: string } | null>(null)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 let resizeObserver: ResizeObserver | undefined
 let viewportFeedbackTimer: ReturnType<typeof setTimeout> | undefined
@@ -1239,6 +1244,7 @@ function frameSystem(systemId: string, usableRect?: SvgViewportRect, centerTarge
     usableRect: rect,
     minimumScale: detailScaleFloor,
     maximumScale: MAP_ZOOM_MAX_SCALE,
+    prioritizeMinimumScale: true,
   })
   if (!next) return false
   if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
@@ -1427,17 +1433,32 @@ function frameSearchObjectBranch(systemId: string, objectId: string, usableRect?
   if (!fitted) return false
 
   const current = getViewport()
-  const next = centerMapTargetViewport({
-    current: { ...current, k: Math.max(current.k, Math.min(fitted.k, SEARCH_BRANCH_MAX_LOCAL_SCALE / projection.scale)) },
+  const minimumScale = Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(
+    projection.envelope,
+    svgPixelScale.value,
+    detailSystemIds.value.has(systemId) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS,
+  ))
+  const branchFrame = centerMapTargetViewport({
+    current,
     targetBounds,
     usableRect: rect,
-    minimumScale: continuousMapDetailScale(
-      projection.envelope,
-      svgPixelScale.value,
-      detailSystemIds.value.has(systemId) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS,
-    ),
-    maximumScale: fitted.k,
+    minimumScale,
+    // Relax Fit padding only when it would prevent semantic detail.
+    maximumScale: Math.max(fitted.k, minimumScale),
   })
+  if (!branchFrame) return false
+  let next: MapViewport | null = branchFrame
+  if (branchFrame.k < minimumScale) {
+    const root = projection.objects.find(object => object.id === objectId)?.scenePosition
+    if (!root) return false
+    next = centerMapTargetViewport({
+      current,
+      targetBounds: { ...root, width: 0, height: 0 },
+      usableRect: rect,
+      minimumScale,
+      maximumScale: minimumScale,
+    })
+  }
   if (!next) return false
   if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
     || next.k !== current.k) setViewport(next)
@@ -1508,19 +1529,28 @@ function prepareSearchLocator(objectId: string): () => void {
       || target?.kind !== 'object'
       || target.objectId !== objectId
       || currentTarget.systemId !== target.systemId
-      || currentTarget.objectId !== objectId) return
-    searchLocatorId.value = objectId
+      || currentTarget.objectId !== objectId
+      || !dimmedObjectIds.value.has(objectId)) return
+    searchLocatorTarget.value = { clusterId, systemId: target.systemId, objectId }
   }
+}
+
+function isSearchLocatorFor(systemId: string, objectId: string): boolean {
+  const locator = searchLocatorTarget.value
+  return locator?.systemId === systemId && locator.objectId === objectId
 }
 
 function dismissSearchLocator(): void {
   searchInteractionGeneration += 1
-  searchLocatorId.value = null
+  searchLocatorTarget.value = null
 }
 
-watch(() => props.inspectedTarget, (target) => {
-  if (searchLocatorId.value !== null
-    && !(target?.kind === 'object' && target.objectId === searchLocatorId.value)) dismissSearchLocator()
+watch([() => props.cluster.id, () => props.inspectedTarget, dimmedObjectIds], ([clusterId, target, dimmed]) => {
+  const locator = searchLocatorTarget.value
+  if (locator && (locator.clusterId !== clusterId
+    || target?.kind !== 'object'
+    || !isSearchLocatorFor(target.systemId, target.objectId)
+    || !dimmed.has(locator.objectId))) dismissSearchLocator()
 }, { flush: 'sync' })
 
 function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportRect): boolean {

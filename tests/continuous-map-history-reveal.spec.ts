@@ -74,6 +74,17 @@ test('Center clamps an infeasible reveal floor to the target fit ceiling @pure',
   })?.k).toBe(0.5)
 })
 
+test('explicit system framing centers the envelope at the reveal floor when compact space cannot fit it @pure', () => {
+  expect(centerMapTargetViewport({
+    current: { x: 0, y: 0, k: 0.8 },
+    targetBounds: { x: 100, y: 100, width: 1000, height: 800 },
+    usableRect: { x: 20, y: 10, width: 500, height: 400 },
+    minimumScale: 0.6,
+    maximumScale: 4,
+    prioritizeMinimumScale: true,
+  })).toEqual({ x: -90, y: -90, k: 0.6 })
+})
+
 test('Cluster fallback keeps the current camera for an intersecting anchor @pure', () => {
   const current = { x: 0, y: 0, k: 1 }
   expect(revealNearestAnchorViewport({
