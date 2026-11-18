@@ -1,6 +1,7 @@
 ---
 title: "Measure and improve semantic zoom performance"
-status: blocked
+status: in-progress
+assignee: Codex
 type: implementation
 label: wayfinder:implementation
 parent: ../spec.md
