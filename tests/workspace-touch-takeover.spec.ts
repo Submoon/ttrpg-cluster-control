@@ -1,11 +1,11 @@
 import { expect, test, type Locator, type Page } from './fixtures'
+import { createLocalWorkspace, exportJumpCluster } from '../domain/workspace'
 import {
-  captureMapExportBlobs,
   centerWorkspaceSelection,
-  createSingleSystemWorkspace,
   dockAction,
   downloadJson,
   exposedContinuousObjectHitPoint,
+  openWorkspaceHierarchy,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
   wardenMap,
@@ -14,6 +14,7 @@ import {
   type DownloadWindow,
   type ExportedMap,
 } from './helpers'
+import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 
 type TouchPoint = { id: number; x: number; y: number }
 type StoredWorkspaceRecords = { current: unknown; lastValid: unknown }
@@ -126,12 +127,19 @@ async function readWorkspaceRecords(page: Page): Promise<StoredWorkspaceRecords>
 }
 
 test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and pans only the view', async ({ page }) => {
-  await captureMapExportBlobs(page)
+  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const owner = workspace.cluster.systems[0]
+  const primary = owner?.objects[0]
+  if (!owner || !primary) throw new Error('The touch fixture needs its primary Star and owning system.')
+  // Leave the primary Star exposed beside the independent system anchor on compact screens.
+  primary.placement = { kind: 'system', x: 0.27, y: 0.68 }
+  await importCampaignWorkspace(page, exportJumpCluster(workspace), { width: 390, height: 844 })
+  const hierarchy = await openWorkspaceHierarchy(page)
+  await hierarchy.getByRole('button', { name: 'Inspect Vesper', exact: true }).click()
+  await centerWorkspaceSelection(page)
+  const systemId = owner.id
+  const primaryObjectId = primary.id
   const cdp = await enableTouch(page)
-  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
-    viewport: { width: 390, height: 844 },
-  })
-  await waitForWorkspaceSaved(page)
 
   // Keep the real leave animation mounted until the first map gesture has started.
   const exitStyle = await page.addStyleTag({ content: `

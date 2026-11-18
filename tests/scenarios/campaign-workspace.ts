@@ -4,14 +4,14 @@ import campaignBaselineFixture from '../fixtures/workspace-data-campaign-baselin
 import {
   waitForWorkspaceSaved,
   captureMapExportBlobs,
+  fitWorkspaceMap,
   jumpClusterRestoreReviewDialog,
   openJumpClusterRestorePicker,
   resolveJumpClusterRestoreReview,
-  returnToClusterMap,
   setJsonFile,
   waitForWorkspaceStartup,
+  wardenMap,
   workspaceMapContextType,
-  workspaceZoomControls,
 } from '../helpers'
 
 export type CampaignFixture = typeof campaignBaselineFixture
@@ -41,7 +41,8 @@ export async function importCampaignWorkspace(
   await resolveJumpClusterRestoreReview(preview, 'confirm')
   await expect(preview).toBeHidden()
   await expect(workspaceMapContextType(page)).toHaveText('Jump Cluster')
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+  await expect(wardenMap(page)).toHaveAccessibleName(`${fixture.cluster.name} continuous map`)
+  await fitWorkspaceMap(page)
   await waitForWorkspaceSaved(page)
 }
 
@@ -54,7 +55,7 @@ export async function openImportedCampaignWorkspace(
   if (viewport) await page.setViewportSize(viewport)
   await page.goto('/')
   await waitForWorkspaceStartup(page)
-  await returnToClusterMap(page)
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+  await expect(wardenMap(page)).toBeVisible()
+  await fitWorkspaceMap(page)
   await waitForWorkspaceSaved(page)
 }

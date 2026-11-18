@@ -69,8 +69,8 @@
       :initial-viewport="props.initialViewport"
       touch-navigation
       @activate-system="handleSystemActivation"
-      @select-object="(systemId, objectId) => emit('select-continuous-object', systemId, objectId)"
-      @select-orbit="(systemId, orbitId) => emit('select-continuous-orbit', systemId, orbitId)"
+      @select-object="(systemId, objectId) => emit('select-continuous-object', systemId, objectId, props.mode !== 'move')"
+      @select-orbit="(systemId, orbitId) => emit('select-continuous-orbit', systemId, orbitId, props.mode !== 'move')"
       @select-route="handleRouteSelection"
       @cluster-target="forwardClusterTarget"
       @continuous-object-add-target="emit('continuous-object-add-target', $event)"
@@ -305,8 +305,8 @@ const systemMapPresentation = computed<WardenSystemMapPresentation | null>(() =>
 
 const emit = defineEmits<{
   'navigate-system': [id: string]
-  'select-continuous-object': [systemId: string, objectId: string]
-  'select-continuous-orbit': [systemId: string, orbitId: string]
+  'select-continuous-object': [systemId: string, objectId: string, openInspector?: boolean]
+  'select-continuous-orbit': [systemId: string, orbitId: string, openInspector?: boolean]
   'select-cluster-system': [id: string]
   'move-select-cluster-system': [id: string]
   'select-route': [id: string]
