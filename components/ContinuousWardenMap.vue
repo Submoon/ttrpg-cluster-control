@@ -429,6 +429,7 @@ const DETAIL_HIDE_PIXELS = 210
 const MINIMUM_FIT_PADDING = 48
 const ROUTE_REVEAL_PADDING_PIXELS = 14
 const ROUTE_FAN_OUT_LIMIT_PIXELS = 96
+const VIEWPORT_FEEDBACK_INTERVAL_MS = 120
 const OVERVIEW_DETAIL_SYSTEM_IDS: ReadonlySet<string> = new Set()
 
 const props = defineProps<{
@@ -509,6 +510,7 @@ const ready = ref(false)
 const searchLocatorId = ref<string | null>(null)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 let resizeObserver: ResizeObserver | undefined
+let viewportFeedbackTimer: ReturnType<typeof setTimeout> | undefined
 let cameraInitialized = false
 let searchInteractionGeneration = 0
 let focusFallbackGeneration = 0
@@ -1074,7 +1076,7 @@ function updateMinimumZoomScale(rect: SvgViewportRect, allowIncrease = false): v
   zoomBehavior?.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
 }
 
-function setViewport(nextViewport: MapViewport): void {
+function setViewport(nextViewport: MapViewport, feedback: 'immediate' | 'coalesced' = 'immediate'): void {
   const element = svgElement.value
   if (!element || !zoomBehavior) return
   if (Number.isFinite(nextViewport.k) && nextViewport.k > 0) {
@@ -1084,6 +1086,7 @@ function setViewport(nextViewport: MapViewport): void {
   const next = clampMapViewport(nextViewport, minimumZoomScale.value)
   if (!next) return
   select(element).call(zoomBehavior.transform, zoomIdentity.translate(next.x, next.y).scale(next.k))
+  if (feedback === 'immediate') publishViewportFeedback()
 }
 
 function fitMap(usableRect?: SvgViewportRect): void {
@@ -1432,6 +1435,7 @@ function zoomBy(factor: number): void {
   const element = svgElement.value
   if (!element || !zoomBehavior || !Number.isFinite(factor) || factor <= 0) return
   select(element).call(zoomBehavior.scaleBy, factor)
+  publishViewportFeedback()
 }
 
 function panBy(dx: number, dy: number): void {
@@ -1457,7 +1461,7 @@ function moveViewPan(event: MouseEvent): void {
     x: viewPan.transform.x + point[0] - viewPan.start[0],
     y: viewPan.transform.y + point[1] - viewPan.start[1],
     k: viewPan.transform.k,
-  })
+  }, 'coalesced')
 }
 
 function endViewPan(): void { viewPan = null }
@@ -2800,7 +2804,18 @@ function cancelActiveGesture(): void {
 function onZoom(event: { transform: { x: number; y: number; k: number } }): void {
   viewport.value = { x: event.transform.x, y: event.transform.y, k: event.transform.k }
   if (cameraInitialized) updateDetailReveal(event.transform.k)
-  emit('viewport-change', viewport.value)
+  // Rendering and framing read the live camera. Bound parent updates during sustained input.
+  viewportFeedbackTimer ??= setTimeout(publishViewportFeedback, VIEWPORT_FEEDBACK_INTERVAL_MS)
+}
+
+function publishViewportFeedback(): void {
+  clearViewportFeedbackTimer()
+  emit('viewport-change', getViewport())
+}
+
+function clearViewportFeedbackTimer(): void {
+  if (viewportFeedbackTimer !== undefined) clearTimeout(viewportFeedbackTimer)
+  viewportFeedbackTimer = undefined
 }
 
 function startTouchNavigation(event: TouchEvent): void {
@@ -2842,7 +2857,7 @@ const touchCameraNavigation = createMapTouchNavigation({
       getViewport,
       pointFromClient: touch => pointer(touch, element) as [number, number],
       minimumZoomScale: () => minimumZoomScale.value,
-      applyViewport: setViewport,
+      applyViewport: next => setViewport(next, 'coalesced'),
       interrupt: () => select(element).interrupt(),
     }
   },
@@ -2887,6 +2902,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('blur', cancelActiveGesture)
+  clearViewportFeedbackTimer()
   if (pendingMapClickTimer) clearTimeout(pendingMapClickTimer)
   pendingMapClickTimer = undefined
   pendingMapClickTarget = null

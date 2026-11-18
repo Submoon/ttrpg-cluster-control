@@ -328,8 +328,9 @@ const {
   svgPixelScale,
   zoomBy,
 } = mapViewport
-const detailSystemIds = ref(new Set<string>())
+const detailSystemIds = shallowRef<ReadonlySet<string>>(new Set())
 const nameViewport = shallowRef<SvgViewportRect>(VIEWPORT)
+const scenePixelScale = computed(() => camera.value.k * svgPixelScale.value)
 const routeDescriptors = computed(() => projectPlayerContinuousRouteEndpoints(
   props.document,
   projection.value.systems,
@@ -350,7 +351,7 @@ const routeFanOutLimitPixels = computed(() => Math.min(
 const routeGeometries = computed(() => buildContinuousMapRouteGeometries(
   routeDescriptors.value,
   {
-    pixelsPerSceneUnit: camera.value.k * svgPixelScale.value,
+    pixelsPerSceneUnit: scenePixelScale.value,
     fanOutLimitPixels: routeFanOutLimitPixels.value,
   },
 ))
@@ -421,7 +422,6 @@ onMounted(() => {
   refreshNameViewport()
   if (!element || typeof ResizeObserver === 'undefined') return
   resizeObserver = new ResizeObserver(() => {
-    measureSvg()
     refreshNameViewport()
     updateDetailReveal(camera.value)
   })
@@ -557,7 +557,7 @@ function inspectOrbit(systemId: string, orbitId: string): void {
 }
 
 function screenMarkTransform(anchor: { x: number; y: number }): string {
-  const inverseScale = 1 / Math.max(camera.value.k * svgPixelScale.value, Number.MIN_VALUE)
+  const inverseScale = 1 / Math.max(scenePixelScale.value, Number.MIN_VALUE)
   return `translate(${anchor.x} ${anchor.y}) scale(${inverseScale})`
 }
 

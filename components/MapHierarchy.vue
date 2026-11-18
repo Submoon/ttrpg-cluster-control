@@ -117,25 +117,43 @@
         @compositionstart="beginHierarchyComposition"
         @compositionend="endHierarchyComposition"
       >
-        <template #item-leading="{ item }">
-          <span class="tree-leading" aria-hidden="true">
-            <span v-if="item.kind === 'system'" class="system-seal grid size-[1.5rem] place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
-            <span v-else-if="item.kind === 'object'" class="tree-object-title"><span class="object-mark">{{ objectMark(item.row.object) }}</span></span>
-            <span v-else class="orbit-mark">R</span>
-          </span>
-        </template>
-        <template #item-label="{ item }">
-          <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
-            <span class="tree-object-name flex min-w-0 items-center gap-1">{{ item.label }}</span>
-            <small v-if="item.kind === 'system'" class="mt-[0.18rem] block">
-              {{ item.system.objects.length }} map objects
-            </small>
-            <small v-if="item.kind === 'object'" class="mt-[0.18rem] block">
-              <span class="key-tag">{{ item.row.object.locationKey }}</span>
-              <span class="block">{{ item.parentContext }}</span>
-            </small>
-            <small v-if="item.kind !== 'system'" class="mt-[0.12rem] block">{{ item.ownerSystemName }}</small>
-          </span>
+        <template #item-wrapper="{ item, expanded, selected, handleToggle, ui }">
+          <div
+            :class="ui.link({ selected })"
+            :aria-label="item.kind === 'object' ? item.ariaLabel : item.label"
+            :aria-description="item.kind === 'orbit' ? item.ownerSystemName : item.ariaDescription"
+          >
+            <span class="tree-leading" aria-hidden="true">
+              <span v-if="item.kind === 'system'" class="system-seal grid size-[1.5rem] place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
+              <span v-else-if="item.kind === 'object'" class="tree-object-title"><span class="object-mark">{{ objectMark(item.row.object) }}</span></span>
+              <span v-else class="orbit-mark">R</span>
+            </span>
+            <span :class="ui.linkLabel({ class: 'tree-copy min-w-0 flex-1 [overflow-wrap:anywhere]' })">
+              <span class="tree-object-name flex min-w-0 items-center gap-1">{{ item.label }}</span>
+              <small v-if="item.kind === 'system'" class="mt-[0.18rem] block">
+                {{ item.system.objects.length }} map objects
+              </small>
+              <small v-if="item.kind === 'object'" class="mt-[0.18rem] block">
+                <span class="key-tag">{{ item.row.object.locationKey }}</span>
+                <span class="block">{{ item.parentContext }}</span>
+              </small>
+              <small v-if="item.kind !== 'system'" class="mt-[0.12rem] block">{{ item.ownerSystemName }}</small>
+            </span>
+            <UButton
+              v-if="item.children?.length"
+              class="tree-expand-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :tabindex="-1"
+              :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
+              :aria-expanded="expanded"
+              :title="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
+              @click.stop="toggleHierarchyItemAndRestoreFocus($event, handleToggle)"
+            >
+              <UIcon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" aria-hidden="true" />
+            </UButton>
+          </div>
         </template>
       </UTree>
     </section>
@@ -408,25 +426,30 @@ const selectedHierarchyItems = computed(() => {
     : selectedHierarchyKey.value ? [selectedHierarchyKey.value] : [])
   return flatHierarchyItems.value.filter(item => selectedKeys.has(item.key))
 })
-const selectedHierarchyPath = computed(() => selectedHierarchyItem.value?.ancestorKeys.join('\u001f') ?? '')
+const selectedHierarchyPath = computed(() => {
+  const item = selectedHierarchyItem.value
+  if (!item) return ''
+  const path = item.kind === 'system' && item.children?.length ? [...item.ancestorKeys, item.key] : item.ancestorKeys
+  return path.join('\u001f')
+})
 const hierarchyIdentity = computed(() => JSON.stringify([
   props.workspace.cluster.id,
   props.continuousMap ? 'all-systems' : selectedSystem.value?.id ?? null,
 ]))
-const hierarchyBranchKeys = computed(() => flatHierarchyItems.value
-  .filter(item => item.children?.length)
-  .map(item => item.key))
+const hierarchyBranches = computed(() => flatHierarchyItems.value.filter(item => item.children?.length))
 const expandedHierarchyKeys = ref<string[]>([])
 const isHierarchyComposing = ref(false)
 
 watch(hierarchyIdentity, () => {
-  expandedHierarchyKeys.value = hierarchyBranchKeys.value
+  expandedHierarchyKeys.value = hierarchyBranches.value.filter(item => item.kind !== 'system').map(item => item.key)
 }, { immediate: true })
 
-watch(hierarchyBranchKeys, (keys, previousKeys) => {
+watch(hierarchyBranches, (branches, previousBranches) => {
   const expanded = new Set(expandedHierarchyKeys.value)
-  const previouslyExpandable = new Set(previousKeys ?? [])
-  expandedHierarchyKeys.value = keys.filter(key => !previouslyExpandable.has(key) || expanded.has(key))
+  const previouslyExpandable = new Set(previousBranches?.map(item => item.key))
+  expandedHierarchyKeys.value = branches
+    .filter(item => expanded.has(item.key) || (item.kind !== 'system' && !previouslyExpandable.has(item.key)))
+    .map(item => item.key)
 }, { immediate: true })
 
 watch(
