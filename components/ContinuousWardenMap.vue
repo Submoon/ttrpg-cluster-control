@@ -1634,10 +1634,10 @@ function orbitAddAtPoint(point: Point, target: EventTarget | null): { owners: Or
     const system = props.cluster.systems.find(candidate => candidate.id === systemId)
     if (!projection || !system) return []
     const localPoint = projection.unprojectLocalPoint(point)
-    const candidates = object?.systemId === systemId
+    const detailTargetsVisible = detailSystemIds.value.has(systemId)
+    const candidates = detailTargetsVisible && object?.systemId === systemId
       ? [{ key: `host:${object.objectId}`, label: 'Orbit around selected object', target: { kind: 'host' as const, objectId: object.objectId }, error: null }]
-      : creationCandidatesAtPoint(system, localPoint, { kind: 'orbit' }, geometry)
-        .filter(candidate => candidate.target.kind !== 'host' || detailSystemIds.value.has(systemId))
+      : creationCandidatesAtPoint(system, localPoint, { kind: 'orbit' }, geometry, detailTargetsVisible)
     return [{ systemId, candidates }]
   })
   return { owners, requiresOwnerChoice: resolution.requiresOwnerChoice }
@@ -2676,12 +2676,12 @@ function onKeydownCapture(event: KeyboardEvent): void {
   if (onOrbitAdjustmentKeydown(event)) return
   if (props.creationType && isActivation
     && !props.clusterChooserOpen && !props.moveTargeting && !props.clusterMoveTargeting) {
-    if (event.repeat) {
+    if (event.repeat || props.keyboardOwnedOverlayOpen) {
       event.preventDefault()
       event.stopImmediatePropagation()
       return
     }
-    const point = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget, props.creationType.kind === 'object')
+    const point = keyboardTargetScenePoint(event.target, systemId, objectTarget, orbitTarget, true)
     if (point) {
       event.preventDefault()
       event.stopPropagation()
@@ -2755,7 +2755,7 @@ function keyboardTargetScenePoint(
   systemId: string | null,
   objectTarget: { systemId: string; objectId: string } | null,
   orbitTarget: { systemId: string; orbitId: string } | null,
-  forObjectAdd = false,
+  forAdd = false,
 ): Point | null {
   if (systemId) {
     const projection = projections.value.find(candidate => candidate.id === systemId)
@@ -2776,7 +2776,7 @@ function keyboardTargetScenePoint(
     const orbit = orbitProjection.orbits.find(candidate => candidate.id === orbitTarget.orbitId)
     const delta = anchorDelta(orbitProjection)
     if (orbit) {
-      if (forObjectAdd) return continuousOrbitAddKeyboardPoint(orbit, delta)
+      if (forAdd) return continuousOrbitAddKeyboardPoint(orbit, delta)
       return { x: orbit.sceneCenter.x + delta.x, y: orbit.sceneCenter.y + delta.y }
     }
   }
@@ -3068,6 +3068,15 @@ const touchCameraNavigation = createMapTouchNavigation({
   onPinchTakeover: () => cancelActiveGesture(),
 })
 
+function isBackgroundDoubleClick(event: MouseEvent): boolean {
+  const target = event.target
+  return event.button === 0 && !event.ctrlKey && !event.defaultPrevented
+    && !props.creationType && !props.clusterAddType && !props.clusterChooserOpen
+    && !props.moveTargeting && !props.clusterMoveTargeting && !props.standaloneImportPlacementEnabled
+    && !props.systemObjectTransferPreview && !props.keyboardOwnedOverlayOpen && !suppressNextMapClick
+    && target instanceof SVGElement && !target.closest('[role="button"], [role="slider"]')
+}
+
 onMounted(async () => {
   await nextTick()
   const element = svgElement.value
@@ -3078,7 +3087,7 @@ onMounted(async () => {
   zoomBehavior = zoom<SVGSVGElement, unknown>()
     .extent(() => svgViewportExtent(getSvgViewportRect(element)))
     .scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
-    .filter(event => event.type === 'wheel')
+    .filter(event => event.type === 'wheel' || (event.type === 'dblclick' && isBackgroundDoubleClick(event)))
     .on('zoom', onZoom)
   zoomBehavior.touchable(() => false)
   select(element).call(zoomBehavior)

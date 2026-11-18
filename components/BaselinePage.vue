@@ -342,15 +342,12 @@
               @keyboard-add-escape="restoreMapFocusAfterKeyboardAdd"
             >
               <template #add="{ close }">
-                <div class="continuous-object-palette" @dragstart.capture.prevent.stop>
-                  <ObjectPalette
-                    v-model:active-family="objectPaletteActiveFamily"
-                    :selected-orbit="selectedOrbit"
-                    :saving="saveState === 'saving'"
-                    @add-object="chooseObjectCreationType"
-                    @add-orbit="chooseOrbitCreationType"
-                  />
-                </div>
+                <ObjectPalette
+                  v-model:active-family="objectPaletteActiveFamily"
+                  :saving="saveState === 'saving'"
+                  @add-object="chooseObjectCreationType"
+                  @add-orbit="chooseOrbitCreationType"
+                />
                 <button class="workspace-control tool-button" type="button" aria-label="Add star system" @click="armSystemAddAndClose(close)">
                   Add star system
                 </button>
@@ -2545,18 +2542,3 @@ async function retryLatestSave(): Promise<void> {
   }
 }
 </script>
-
-<style scoped>
-.continuous-object-palette :deep(.object-palette-orbit) {
-  display: none;
-}
-
-.continuous-object-palette :deep(.object-palette-hint) {
-  font-size: 0;
-}
-
-.continuous-object-palette :deep(.object-palette-hint::after) {
-  content: 'Choose a category, then add an object to the map.';
-  font-size: 0.75rem;
-}
-</style>

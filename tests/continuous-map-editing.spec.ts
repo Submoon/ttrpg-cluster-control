@@ -97,6 +97,27 @@ test('a collapsed system cannot attach Add to a hidden Orbit but keeps occupied 
     .toMatchObject({ target: { kind: 'host', objectId: star.id }, error: expect.any(String) })
 })
 
+test('an overview Orbit Add offers a free center near a hidden host and checks detached Orbit spacing @pure', () => {
+  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = workspace.cluster.systems[0]!
+  const star = system.objects[0]!
+  const anchor = { x: 480, y: 280 }
+  const geometry = { objectAngles: {}, orbitRadii: {}, orbitRotations: {} }
+  const type = { kind: 'orbit' } as const
+
+  expect(creationCandidatesAtPoint(system, anchor, type, geometry)).toMatchObject([
+    { target: { kind: 'host', objectId: star.id }, error: null },
+  ])
+  expect(creationCandidatesAtPoint(system, anchor, type, geometry, false)).toMatchObject([
+    { target: { kind: 'free', point: { x: 0.5, y: 0.5 } }, error: null },
+  ])
+
+  const detached = { ...createOrbit(system, null), hostId: null, center: { x: 0.5, y: 0.5 } }
+  expect(creationCandidatesAtPoint({ ...system, orbits: [detached] }, anchor, type, geometry, false)).toMatchObject([
+    { target: { kind: 'free' }, error: expect.stringContaining('too close') },
+  ])
+})
+
 test('clearing an older Add request cannot cancel a newer Add operation @pure', () => {
   const lease = createContinuousObjectAddRequestLease<string>()
   const older = lease.capture('planet')
