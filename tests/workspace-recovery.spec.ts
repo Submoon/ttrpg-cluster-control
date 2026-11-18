@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
-import { openChartDetailsEditor, waitForWorkspaceSaved, waitForWorkspaceStartup, overwriteWorkspaceRecord } from './helpers'
+import { openChartDetailsEditor, waitForWorkspaceSaved, waitForWorkspaceStartup, overwriteWorkspaceRecord, wardenMap } from './helpers'
 import { createLocalWorkspace } from '../domain/workspace'
 
 const workspaceStorageModulePath = `/_nuxt/@fs/${decodeURIComponent(
@@ -68,6 +68,7 @@ test('the last valid workspace can be restored after the current snapshot fails 
   await page.goto('/')
   await waitForWorkspaceStartup(page)
   await expect(page.getByRole('region', { name: 'Current Jump Cluster' }).getByRole('heading', { name: 'Kestrel Reach' })).toBeVisible()
+  await expect(wardenMap(page)).toHaveAccessibleName('Kestrel Reach continuous map')
   const legacyOpenResult = await page.evaluate(() => new Promise<string>((resolve) => {
     const request = indexedDB.open('ttrpg-cluster-control', 1)
     request.onsuccess = () => {
@@ -145,6 +146,10 @@ test('the last valid workspace can be restored after the current snapshot fails 
   await page.reload()
   await waitForWorkspaceStartup(page)
   await expect(page.getByRole('region', { name: 'Current Jump Cluster' }).getByRole('heading', { name: 'Kestrel Reach Prime' })).toBeVisible()
+  const map = wardenMap(page)
+  await expect(map).toHaveAccessibleName('Kestrel Reach Prime continuous map')
+  await expect(map.locator('.continuous-warden-system-anchor')).toHaveCount(2)
+  await expect(map.locator('.cluster-route[data-route-id="campaign-baseline-route"]')).toBeVisible()
   const restored = await readCurrentWorkspace(page) as {
     cluster: { name: string; systems: Array<{ name: string; objects: Array<{ id: string; customFieldValues?: Record<string, string> }> }>; routes: Array<{ id: string }> }
     objectFieldSettings: { customFields: Array<{ name: string }> }
@@ -235,7 +240,7 @@ test('recovery rejects a damaged backup and preserves both records until a valid
     await expect(page.getByRole('heading', { name: "Opening this browser's workspace..." })).toBeVisible()
     await expect(page.getByLabel('Jump Cluster')).toHaveCount(0)
     await expect(page.getByLabel('First star system')).toHaveCount(0)
-    await expect(page.getByRole('group', { name: /Jump Cluster map|star system map/ })).toHaveCount(0)
+    await expect(wardenMap(page)).toHaveCount(0)
     await expect(page.getByRole('complementary')).toHaveCount(0)
     await page.waitForFunction(() => {
       const hooks = window as typeof window & { __restoreFaultHooks?: { pending: Array<unknown> } }
@@ -274,12 +279,15 @@ test('recovery rejects a damaged backup and preserves both records until a valid
   await expect(readCurrentWorkspace(page)).resolves.toEqual(damagedCurrentRecord)
   await expect(readWorkspaceRecord(page, 'last-valid')).resolves.toEqual(backupBefore)
   await expect(page.getByRole('heading', { name: 'Your workspace could not be opened.' })).toBeVisible()
-  await expect(page.getByRole('group', { name: /Jump Cluster map|star system map/ })).toHaveCount(0)
+  await expect(wardenMap(page)).toHaveCount(0)
   await expect(page.getByRole('complementary')).toHaveCount(0)
   await page.getByRole('button', { name: 'Restore last valid backup' }).click()
-  await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Vesper')
+  await expect(wardenMap(page)).toHaveAccessibleName('Kestrel Reach continuous map')
+  await expect(wardenMap(page).locator('.continuous-warden-system-anchor')).toHaveAccessibleName('Select Vesper')
   await page.reload()
-  await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Vesper')
+  await waitForWorkspaceStartup(page)
+  await expect(wardenMap(page)).toHaveAccessibleName('Kestrel Reach continuous map')
+  await expect(wardenMap(page).locator('.continuous-warden-system-anchor')).toHaveAccessibleName('Select Vesper')
 })
 
 test('a failed IndexedDB save preserves current and backup snapshots @development-storage', async ({ page }) => {
@@ -379,6 +387,7 @@ test('a temporary IndexedDB opening failure can be retried without exposing a pa
   await page.getByLabel('First star system').fill('Aster')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  await expect(page.getByRole('navigation', { name: 'Map context and commands' })).toContainText('Aster')
+  await expect(wardenMap(page)).toHaveAccessibleName('Liminal Reach continuous map')
+  await expect(wardenMap(page).locator('.continuous-warden-system-anchor')).toHaveAccessibleName('Select Aster')
   await waitForWorkspaceSaved(page)
 })

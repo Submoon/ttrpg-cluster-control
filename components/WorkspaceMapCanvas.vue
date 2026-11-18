@@ -1337,6 +1337,7 @@ function onWindowPointerUp(event: PointerEvent): void {
     const placement = event.type === 'pointerup' && event.button === 0
       && props.workspace === lease.workspaceReference
       && isSystemTransferMapOwnerCurrent(lease.destinationSystemId, lease.mapOwner)
+      && continuousWardenMapRef.value?.isClientPointOnMap(event.clientX, event.clientY)
       ? systemTransferPlacementAtClient(lease, event.clientX, event.clientY)
       : null
     if (placement) completeSystemTransferPlacement(lease, placement)

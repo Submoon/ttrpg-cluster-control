@@ -1,23 +1,15 @@
-import { expect, test, type Page } from './fixtures'
-
-async function createWorkspace(page: Page): Promise<void> {
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(page.getByRole('region', { name: 'System map workspace' })).toBeVisible()
-}
-
+import { expect, test } from './fixtures'
+import { createSingleSystemWorkspace, openWorkspaceHierarchy, wardenMap, wardenObjectMark } from './helpers'
 
 test('overlay panels resize by pointer and keyboard without changing their mounted trees or the map camera', async ({ page }) => {
-  await createWorkspace(page)
-
-  await page.getByRole('toolbar', { name: 'Workspace navigation' })
-    .getByRole('button', { name: 'Select', exact: true }).click()
-  const primaryStar = page.locator('.system-map-items .system-object').first()
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+    viewport: { width: 1440, height: 900 },
+  })
+  const camera = wardenMap(page).locator('.cluster-map-content')
+  const hierarchy = await openWorkspaceHierarchy(page)
+  const primaryStar = wardenObjectMark(page, systemId, primaryObjectId)
   await expect(primaryStar).toBeVisible()
-  await primaryStar.click()
+  await primaryStar.press('Enter')
   await page.getByRole('button', { name: 'Edit map object' }).click()
   const objectNameField = page.getByLabel('Name', { exact: true })
   await objectNameField.fill('Draft retained through panel reset')
@@ -26,17 +18,16 @@ test('overlay panels resize by pointer and keyboard without changing their mount
   const retainedObjectEditor = await objectEditorForm.elementHandle()
   if (!retainedObjectEditor) throw new Error('The selected object editor did not mount.')
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   await expect(hierarchy).toBeVisible()
   await expect(page.getByRole('complementary', { name: 'Object inspector' })).toBeVisible()
 
-  const hierarchyHandle = page.getByRole('separator', { name: 'Resize system hierarchy panel' })
+  const hierarchyHandle = page.getByRole('separator', { name: 'Resize jump cluster contents panel' })
   const inspectorHandle = page.getByRole('separator', { name: 'Resize object inspector panel' })
   await expect(hierarchyHandle).toBeVisible()
   await expect(inspectorHandle).toBeVisible()
-  await expect.poll(() => page.locator('.system-map-content').getAttribute('transform')).not.toBeNull()
-  const initialCamera = await page.locator('.system-map-content').getAttribute('transform')
+  await expect.poll(() => camera.getAttribute('transform')).not.toBeNull()
+  const initialCamera = await camera.getAttribute('transform')
 
   const hierarchyBeforeKeyboard = Number(await hierarchyHandle.getAttribute('aria-valuenow'))
   await hierarchyHandle.focus()
@@ -76,16 +67,16 @@ test('overlay panels resize by pointer and keyboard without changing their mount
   await page.mouse.up()
   expect(Number(await inspectorHandle.getAttribute('aria-valuenow'))).toBeGreaterThan(inspectorBeforeKeyboard + 16)
   expect((await inspector.boundingBox())?.width).toBeGreaterThan(inspectorBoundsBefore.width)
-  expect(await page.locator('.system-map-content').getAttribute('transform')).toBe(initialCamera)
+  expect(await camera.getAttribute('transform')).toBe(initialCamera)
 
   await inspectorHandle.dblclick()
   await expect(inspectorHandle).toHaveAttribute('aria-valuenow', '360')
   await expect(objectNameField).toHaveValue('Draft retained through panel reset')
   expect(await retainedObjectEditor.evaluate(element => element.isConnected
     && element === document.querySelector('#workspace-inspector-panel form'))).toBe(true)
-  expect(await page.locator('.system-map-content').getAttribute('transform')).toBe(initialCamera)
+  expect(await camera.getAttribute('transform')).toBe(initialCamera)
 
   await page.setViewportSize({ width: 1320, height: 850 })
-  await expect.poll(() => page.locator('.system-map-content').getAttribute('transform')).toBe(initialCamera)
+  await expect.poll(() => camera.getAttribute('transform')).toBe(initialCamera)
   await expect(objectNameField).toHaveValue('Draft retained through panel reset')
 })

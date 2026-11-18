@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from './fixtures'
-import { returnToClusterMap, waitForWorkspaceSaved, waitForWorkspaceStartup } from './helpers'
+import { waitForWorkspaceSaved, waitForWorkspaceStartup, wardenMap } from './helpers'
 
 const STARTUP_SCRIPT_DELAY_MS = 6_000
 
@@ -7,6 +7,20 @@ function applicationURL(testInfo: import('@playwright/test').TestInfo): string {
   const baseURL = testInfo.project.use.baseURL
   if (typeof baseURL !== 'string') throw new Error('Startup coverage requires a configured Playwright baseURL.')
   return new URL('/', baseURL).toString()
+}
+
+async function expectOpenedWorkspace(
+  page: import('@playwright/test').Page,
+  clusterName: string,
+  systemName: string,
+): Promise<void> {
+  const map = wardenMap(page)
+  await expect(map).toHaveCount(1)
+  await expect(map).toBeVisible()
+  await expect(map).toHaveAccessibleName(`${clusterName} continuous map`)
+  const system = map.locator('.continuous-warden-system-anchor')
+  await expect(system).toHaveAccessibleName(`Select ${systemName}`)
+  await expect(system).toBeVisible()
 }
 
 async function gateStartupScripts(page: import('@playwright/test').Page): Promise<{
@@ -59,8 +73,7 @@ async function createPublicWorkspaceSnapshot(
     await page.getByLabel('Jump Cluster').fill('Startup Test Cluster')
     await page.getByLabel('First star system').fill('Startup Test System')
     await page.getByRole('button', { name: 'Create local workspace' }).click()
-    await expect(page.getByRole('navigation', { name: 'Map context and commands' })
-      .getByRole('heading', { name: 'Startup Test System' })).toBeVisible()
+    await expectOpenedWorkspace(page, 'Startup Test Cluster', 'Startup Test System')
     await waitForWorkspaceSaved(page)
     return await preparer.storageState({ indexedDB: true })
   } finally {
@@ -89,9 +102,7 @@ test('slow startup reopens a saved IndexedDB workspace after loading completes',
     ])
     expect(raceOutcome).toBe('scripts-released')
     await startupWait
-    await returnToClusterMap(page)
-    await expect(page.getByRole('group', { name: 'Startup Test Cluster Jump Cluster map', exact: true })
-      .getByRole('button', { name: 'Select Startup Test System system', exact: true })).toBeVisible()
+    await expectOpenedWorkspace(page, 'Startup Test Cluster', 'Startup Test System')
   } finally {
     await scriptGate.cleanup()
     await startupContext.close()
@@ -134,8 +145,7 @@ test('the product root creates and resumes a saved local workspace', async ({ pa
   await page.getByLabel('First star system').fill('Lark')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
-  await expect(page.getByRole('navigation', { name: 'Map context and commands' })
-    .getByRole('heading', { name: 'Lark' })).toBeVisible()
+  await expectOpenedWorkspace(page, 'Halcyon Spur', 'Lark')
   const privacyLink = page.getByRole('link', { name: 'Privacy policy (opens in a new tab)' })
   await expect(privacyLink).toBeVisible()
   await expect(privacyLink).toHaveAttribute('href', '/privacy')
@@ -145,11 +155,8 @@ test('the product root creates and resumes a saved local workspace', async ({ pa
   await page.reload()
 
   await waitForWorkspaceStartup(page)
-  await expect(page.getByRole('navigation', { name: 'Map context and commands' })
-    .getByRole('heading', { name: 'Lark' })).toBeVisible()
+  await expectOpenedWorkspace(page, 'Halcyon Spur', 'Lark')
   await waitForWorkspaceSaved(page)
-  await returnToClusterMap(page)
-  await expect(page.getByRole('group', { name: 'Halcyon Spur Jump Cluster map' })).toBeVisible()
 })
 
 test('keyboard focus remains visible on launch and recovery actions in a short landscape viewport', async ({ page }) => {
