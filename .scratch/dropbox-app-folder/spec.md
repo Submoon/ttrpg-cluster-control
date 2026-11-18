@@ -8,6 +8,10 @@ triage_labels:
 
 # Back up and restore a Jump Cluster with Dropbox
 
+## Current delivery status
+
+PR [#69](https://github.com/Submoon/ttrpg-cluster-control/pull/69) merged backup-management changes, but the local specification remains open and [restore ticket 02](tickets/02-restore-jump-cluster-from-dropbox.md) remains in progress. Controlled Dropbox responses verify exact restore data; the user's 2026-11-17 report of a successful Dropbox Personal save/restore in Firefox is operator-reported, without a recorded live content comparison. Automatic retention is also still awaiting live-account verification. Use the maintained [Dropbox setup](../../docs/dropbox-setup.md) and [shared cloud verification procedure](../../docs/cloud-backup-verification.md) for current operations.
+
 ## Source issue
 
 [Back up and restore a Jump Cluster with Dropbox](https://github.com/Submoon/ttrpg-cluster-control/issues/55), fetched on 2026-11-17. The issue is open with the `enhancement` label and no comments. The updated criterion uses the application's dedicated Dropbox App Folder and leaves any Dropbox sharing decisions to the account owner. The issue requires an independent dated file for each backup, a receipt after Dropbox confirms the write, and a complete restore on a real account across two isolated browser profiles for each supported account type. Local editing, autosave, and file restore remain available offline. Portable JSON admission and replacement confirmation come from [the original cloud backup delivery](https://github.com/Submoon/ttrpg-cluster-control/issues/51).
@@ -89,7 +93,7 @@ Add a Dropbox backup action alongside the existing actions in **Map files**. Eac
 
 ## Further Notes
 
-The [App Folder test record](qualification.md) confirms creation and metadata access with a console-generated token on a personal account. The user reported a successful manual Firefox save and restore. See the [restore ticket](tickets/02-restore-jump-cluster-from-dropbox.md) for the scope of the result. The [provider research](provider-research.md) records the earlier exploration of API behavior. Use the project's Sensitive development route for authorization and persistence review.
+The [historical App Folder qualification](qualification.md) confirms creation and metadata access with a console-generated token on a personal account. It also preserves the withdrawn false-negative interpretation and the unverified historical sharing cases. The [provider research](provider-research.md) records the earlier share-detection exploration. See the [restore ticket](tickets/02-restore-jump-cluster-from-dropbox.md) for the current pending evidence. Use the project's Sensitive development route for authorization and persistence review.
 
 ## Implementation tickets
 

@@ -30,17 +30,14 @@ The redirect path is case-sensitive and must match exactly. OAuth requests an on
 
 In **Map files**, choose **Back up Jump Cluster to Dropbox**. The backup is a complete Jump Cluster JSON file and can include GM notes. Dropbox opens its authorization window when the page needs a new grant.
 
-The app keeps the ten most recent dated backups per Dropbox account across all Jump Clusters. After Dropbox confirms a new backup, the app removes older dated backups above that limit. Other files in the App Folder stay outside this limit. Download a local JSON copy before backing up if you want to keep a version beyond the limit.
+After Dropbox confirms a new backup, the app removes older dated backups above the ten newest per Dropbox account across all Jump Clusters. Extra backups can remain if cleanup is interrupted or Dropbox reports an error. In **Map files**, use **Retry Dropbox retention cleanup** when offered to complete the removals without creating another backup. Other files in the App Folder stay outside this limit. Download a local JSON copy before backing up if you want to keep a version beyond the limit.
 
-To remove a dated backup yourself, open **Restore Jump Cluster from Dropbox**, choose **Delete** next to the backup, and confirm. You can also manage the files in your Dropbox App Folder. Dropbox applies its account-specific recovery period to deleted files. [Dropbox deleted-file recovery](https://help.dropbox.com/delete-restore/deleted-files)
+Open **Restore Jump Cluster from Dropbox** to see the newest backups first. Use **Restore** to review a backup before opening it, **Download JSON** to save a local copy, or **Delete** to remove a dated backup after confirmation. You can also manage the files in your Dropbox App Folder. Dropbox applies its account-specific recovery period to deleted files. [Dropbox deleted-file recovery](https://help.dropbox.com/delete-restore/deleted-files)
 
 ## Account support verification
 
-The initial save and restore workflow passed a manual Firefox test on Dropbox Personal. Use these steps to qualify each account type.
+The initial save and restore workflow passed a manual Firefox test on Dropbox Personal. Use the [shared live verification procedure](cloud-backup-verification.md) to qualify each account type.
 
-1. Configure the public app key, the exact origin callback, App Folder access, and the three file scopes above.
-2. In one isolated browser profile, back up a synthetic Jump Cluster containing GM notes, Fields, player publication settings, relationships, and saved layout. Confirm the actual filename and App Folder destination shown after Dropbox acknowledges the write.
-3. In a fresh isolated profile, authorize the same Dropbox account, locate the dated backup, restore it, compare the full portable data with the fixture, then reload and verify the restored map remains active.
-4. Record the account type, app access mode, exact origin, saved name and destination, restore comparison, and reload result. Use that evidence to document which account types are supported.
+Configure the test app key and callback with App Folder access and the three file scopes above. Confirm the synthetic filename in the dedicated App Folder after Dropbox acknowledges the write. Record the access mode with the round-trip result.
 
-Tests with controlled provider responses cover OAuth state and PKCE, App Folder create behavior, exact-byte reconciliation, conflicts, retries, cancellation, retention, and deletion. Record the real-account results separately. To verify retention on a real test account, use only synthetic backups, confirm that an eleventh save removes the oldest dated backup, then delete a remaining dated backup through the app and check the App Folder.
+Tests with controlled provider responses cover OAuth state and PKCE, App Folder create behavior, exact-byte reconciliation, conflicts, retries, cancellation, retention, and deletion. To verify retention on a real test account, confirm that an eleventh synthetic save removes the oldest dated backup, then delete a remaining dated backup through the app and check the App Folder.

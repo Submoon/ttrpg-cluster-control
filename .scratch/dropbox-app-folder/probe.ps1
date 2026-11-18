@@ -1,6 +1,11 @@
 #Requires -Version 5.1
 param([string]$RecheckReport)
 
+# Historical probe for the withdrawn shared-destination detection requirement.
+# It is not a current product qualification or part of the Dropbox integration.
+# Current setup and live checks: docs/dropbox-setup.md and docs/cloud-backup-verification.md.
+# Historical cases, measurements, and the withdrawn false-negative interpretation: qualification.md.
+
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Net.Http
 

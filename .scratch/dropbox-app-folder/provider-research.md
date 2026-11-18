@@ -1,5 +1,7 @@
 # Dropbox App Folder privacy
 
+> **Historical provider exploration:** The sharing visibility, membership, and restricted-token analysis below supported the old refusal-of-shared-destinations criterion. That criterion was withdrawn on 2026-11-17; the current product uses Dropbox App Folder and leaves sharing decisions to the account owner. See the [current specification](spec.md), [Dropbox setup](../../docs/dropbox-setup.md), [restore evidence](tickets/02-restore-jump-cluster-from-dropbox.md), and [shared verification procedure](../../docs/cloud-backup-verification.md).
+
 Reviewed on 2026-11-16 for [Back up and restore a Jump Cluster with Dropbox](https://github.com/Submoon/ttrpg-cluster-control/issues/55). This note records public Dropbox documentation and historical answers from Dropbox staff. No live Dropbox account, app registration, token, or API response was used in this research.
 
 ## App Folder and membership

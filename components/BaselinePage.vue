@@ -2174,7 +2174,7 @@ const dropboxBackupActionLabel = computed(() => {
   if (dropboxBackup.state.value === 'retry') return 'Retry Dropbox backup'
   return 'Back up Jump Cluster to Dropbox'
 })
-const dropboxBackupRetentionNotice = `Saves complete JSON, including GM notes, in the Dropbox App Folder. After a successful save, only the ${DROPBOX_BACKUP_LIMIT} newest dated backups are kept per account.`
+const dropboxBackupRetentionNotice = `Saves complete JSON with GM notes in the Dropbox App Folder. Cleanup keeps the ${DROPBOX_BACKUP_LIMIT} newest dated backups per account.`
 const cloudBackupItems = computed<DropdownMenuItem[]>(() => {
   const items: DropdownMenuItem[] = [{
     label: 'Back up Jump Cluster to Google Drive',

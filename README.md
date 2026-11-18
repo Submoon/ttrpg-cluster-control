@@ -32,7 +32,9 @@ The editor supports desktop and mobile layouts, light/dark themes, catalogue obj
 
 Applied changes are saved automatically in IndexedDB, separately for each browser profile and site origin. A last-valid snapshot supports recovery when the current workspace cannot load. Failed saves offer retry and JSON recovery actions. Unapplied drafts and temporary pan/zoom are session state. Clearing browser site data can erase the local workspace.
 
-Export the Jump Cluster JSON to keep a complete backup, or back it up explicitly to the app's private Google Drive space when Drive is configured. Open a complete backup from a file or choose a dated Drive backup in the app to restore or download it. In the editor, the replacement review names both maps and offers a download of the active map before you confirm. Use **Restore a Star System** to append a standalone system to the active Jump Cluster.
+Export the Jump Cluster JSON to keep a complete backup, or explicitly back it up to Google Drive or Dropbox when configured. From the app, open a complete local JSON backup or restore a dated cloud backup. In the editor, the replacement review names both maps and offers a download of the active map before you confirm. Use **Restore a Star System** to append a standalone system to the active Jump Cluster.
+
+See [Google Drive setup](docs/google-drive-backups.md) and [Dropbox setup](docs/dropbox-setup.md) for provider configuration, retention, and live verification.
 
 New complete JSON backups use source format version 4 and retain publication settings, player text, GM notes, Field masks, and all preparation data. Version 1 backups initialize system and object publication as Hidden. Version 2 backups preserve system settings and initialize legacy objects as Hidden. Version 3 backups preserve system and object visibility. Earlier formats initialize player text as empty and Fields and routes as private. Standalone system imports check native and custom Field publication compatibility before adding the system.
 
@@ -45,27 +47,7 @@ npm ci
 npm run dev
 ```
 
-| Command or variable | Purpose |
-| --- | --- |
-| `npm run dev` | Start the development server. Nuxt DevTools is disabled. |
-| `npm run lint` | Check Vue/TypeScript correctness with ESLint; warnings fail the check. |
-| `npm run test:ui` | Run the focused UI smoke selection, including desktop and compact layouts. |
-| `npm test` | Run Playwright against the development app; it starts the app when no external base URL is set. |
-| `PLAYWRIGHT_BASE_URL` | Optional URL of an already-running development app; disables Playwright's automatic web server. |
-| `PLAYWRIGHT_PRODUCTION_URL` | Optional compiled-app URL; enables split execution, with the Vite-only IndexedDB preservation case kept on development. |
-| `PLAYWRIGHT_CHANNEL` | Optional browser channel, such as Chrome. |
-| `PLAYWRIGHT_OUTPUT_DIR` | Optional Playwright artifact output directory. |
-| `PLAYWRIGHT_JSON_OUTPUT_NAME` | Optional JSON reporter output filename. |
-| `npm run typecheck` | Run Nuxt and TypeScript type checking. |
-| `npm run build` | Build the production app. |
-| `npm run preview` | Serve the production build locally; build first. |
-| `npx playwright install chromium` | Install the Chromium browser needed by browser tests. |
-
-For split execution, start both the Vite development app and compiled app, then set `PLAYWRIGHT_BASE_URL` and `PLAYWRIGHT_PRODUCTION_URL`. The default test run uses development only.
-
-GitHub Actions runs lint, type checking, a production build and the Playwright suite on pull requests and pushes to `main`. Playwright reports and attachments are available as workflow artifacts. For test boundaries, current runner behavior and review criteria, see [verification guidance](docs/agents/testing.md).
-
-[Google Drive configuration and live verification](docs/google-drive-backups.md) covers test credentials and the round trip across two browser profiles.
+Run `npm run lint` and `npm run typecheck` for source checks. Install Chromium with `npx playwright install chromium` before running browser tests. See [verification guidance](docs/agents/testing.md) for focused commands, runner variables, and CI artifacts.
 
 Technical references: [editor architecture](docs/architecture/editor.md), [source conventions](docs/agents/conventions.md), and [UI guidance](docs/agents/ui.md). Agent coordination follows [the development workflow](.agents/skills/project-development/SKILL.md).
 
