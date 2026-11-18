@@ -239,6 +239,18 @@ export interface SystemCreationPreview {
   orbitDrag?: true
 }
 
+/** The definite owner and exact applied workspace captured when an Orbit drag begins. */
+export interface OrbitDragOwner {
+  systemId: string
+  workspace: LocalWorkspace
+}
+
+/** An Orbit Add preview drawn in the owning system's local coordinates. */
+export interface OrbitCreationMapPreview {
+  systemId: string
+  preview: SystemCreationPreview
+}
+
 export interface SystemCreationInputs {
   x: string
   y: string

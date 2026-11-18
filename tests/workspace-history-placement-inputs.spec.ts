@@ -615,6 +615,110 @@ test('Orbit drag cancellation and workspace changes discard the captured preview
   }
 })
 
+test('a clicked Orbit owner inherits edited geometry and calculates untouched radii from that system @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = addStarSystem(createLocalWorkspace('Kestrel Reach', 'Vesper')).workspace
+  const [inspected, owner] = initial.cluster.systems
+  const host = owner!.objects[0]!
+  owner!.orbits.push(createOrbit(owner!, host.id))
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+  const store = useEditorUiStore()
+  store.setSelection({ activeView: 'cluster', inspectedTarget: { kind: 'system', systemId: inspected!.id } })
+
+  try {
+    expect(await controller.creation.chooseCreationType({ kind: 'orbit' }, inspected!.id)).toBe(true)
+    controller.creation.updateCreationInput('hostId', inspected!.objects[0]!.id)
+    controller.creation.updateCreationInput('horizontalRadius', '186')
+    controller.creation.updateCreationInput('rotation', '27')
+
+    expect(await controller.creation.chooseCreationType({ kind: 'orbit' }, owner!.id)).toBe(true)
+    expect(controller.creation.creationSession.value?.inputs).toMatchObject({
+      hostId: '', horizontalRadius: '186', rotation: '27',
+    })
+    expect(controller.creation.hasPendingHistoryInput.value).toBe(true)
+    expect(await controller.creation.offerCreationCandidates([{
+      key: host.id,
+      label: host.name,
+      target: { kind: 'host', objectId: host.id },
+      error: null,
+    }])).toBe(true)
+
+    const placed = harness.workspace.value!
+    const orbit = placed.cluster.systems[1]!.orbits[1]!
+    expect(orbit.hostId).toBe(host.id)
+    expect(placed.layout.orbitRadii[orbit.id]).toEqual({ horizontal: 186, vertical: 170 })
+    expect(placed.layout.orbitRotations[orbit.id]).toBe(27)
+    expect(placed.cluster.systems[0]?.orbits).toHaveLength(0)
+    expect(store.inspectedTarget).toEqual({ kind: 'system', systemId: inspected!.id })
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
+})
+
+test('a definite Orbit drag owns its pressed system without changing another owner’s form @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = addStarSystem(createLocalWorkspace('Kestrel Reach', 'Vesper')).workspace
+  const [inspected, owner] = initial.cluster.systems
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+  const store = useEditorUiStore()
+  store.setSelection({ activeView: 'cluster', inspectedTarget: { kind: 'system', systemId: inspected!.id } })
+  const center = { x: 480, y: 280 }
+  const candidates = [{
+    key: 'free-center',
+    label: 'Unoccupied center',
+    target: { kind: 'free' as const, point: { x: 0.5, y: 0.5 } },
+    error: null,
+  }]
+
+  const beginInOwner = () => controller.creation.beginOrbitDrag(center, candidates, {
+    systemId: owner!.id,
+    workspace: harness.workspace.value!,
+  })
+
+  try {
+    expect(await controller.creation.chooseCreationType({ kind: 'orbit' }, inspected!.id)).toBe(true)
+    controller.creation.updateCreationInput('horizontalRadius', '192')
+    const form = controller.creation.creationSession.value
+    const formInputs = { ...form!.inputs }
+
+    expect(beginInOwner()).toBe(true)
+    controller.creation.updateOrbitDrag({ x: center.x + 142, y: center.y }, 4)
+    expect(controller.creation.creationSession.value).toBe(form)
+    expect(form?.preview).toBeNull()
+    expect(form?.inputs).toEqual(formInputs)
+    controller.creation.cancelOrbitDrag()
+    expect(await controller.creation.completeOrbitDrag()).toBe(false)
+    expect(harness.workspace.value?.cluster.systems[1]?.orbits).toHaveLength(0)
+
+    expect(beginInOwner()).toBe(true)
+    controller.creation.updateOrbitDrag({ x: center.x + 142, y: center.y }, 4)
+    expect(await controller.creation.completeOrbitDrag()).toBe(true)
+    const placed = harness.workspace.value!
+    const orbit = placed.cluster.systems[1]!.orbits[0]!
+    expect(orbit).toMatchObject({ hostId: null, center: { x: 0.5, y: 0.5 } })
+    expect(placed.layout.orbitRadii[orbit.id]).toEqual({ horizontal: 142, vertical: 142 })
+    expect(placed.cluster.systems[0]?.orbits).toHaveLength(0)
+    expect(controller.creation.creationSession.value).toBe(form)
+    expect(form?.inputs).toEqual(formInputs)
+    expect(store.inspectedTarget).toEqual({ kind: 'system', systemId: inspected!.id })
+
+    controller.creation.quitAdd()
+    expect(beginInOwner()).toBe(true)
+    controller.creation.updateOrbitDrag({ x: center.x + 180, y: center.y }, 4)
+    harness.workspace.value = { ...placed }
+    expect(await controller.creation.completeOrbitDrag()).toBe(false)
+    expect(controller.creation.beginOrbitDrag(center, candidates, { systemId: owner!.id, workspace: placed })).toBe(false)
+    expect(controller.creation.creationSession.value).toBeNull()
+    expect(harness.workspace.value?.cluster.systems[1]?.orbits).toHaveLength(1)
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
+})
+
 test('clean Add target references follow restored Orbit and system data @pure', async () => {
   setActivePinia(createPinia())
   const initial = addStarSystem(createLocalWorkspace('Kestrel Reach', 'Vesper')).workspace

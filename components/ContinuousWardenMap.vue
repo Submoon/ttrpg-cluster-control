@@ -387,7 +387,7 @@ import { normalizeOrbitRotation } from '../domain/workspace-orbits'
 import { getDetachedOrbitCenter, objectPositions, objectsMovedWithOrbit, orbitCenter, orbitPointAtAngle, orbitRadii as readOrbitRadii, orbitRotation, orbitRotationHandlePoint, rotatePoint, requiredPosition } from '../utils/system-map-geometry'
 import { orbitGeometrySource } from '../utils/orbit-geometry-source'
 import { continuousOrbitKeyboardChange } from '../utils/continuous-orbit-interaction'
-import type { EntityCommand, MapHistoryTarget, MapInteractionMode, OrbitCenterMoveCandidate, SystemCreationCandidate, SystemCreationPreview, SystemCreationType, SystemObjectMoveTarget } from '../composables/editor-workflows/types'
+import type { EntityCommand, MapHistoryTarget, MapInteractionMode, OrbitCenterMoveCandidate, OrbitCreationMapPreview, SystemCreationCandidate, SystemCreationType, SystemObjectMoveTarget } from '../composables/editor-workflows/types'
 import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
 import type { InspectedMapTarget } from '../stores/editor-ui'
@@ -472,8 +472,7 @@ const props = defineProps<{
   inspectedTarget: InspectedMapTarget | null
   mode: MapInteractionMode
   creationType: SystemCreationType | null
-  orbitAddOwnerId?: string
-  orbitAddPreview?: SystemCreationPreview | null
+  orbitCreationPreview?: OrbitCreationMapPreview | null
   creationOtherType: string | null
   objectAddPinnedOwnerId: string | null
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
@@ -1648,24 +1647,24 @@ function offerOrbitAdd(point: Point, target: EventTarget | null): void {
   emit('continuous-orbit-add-target', owners, requiresOwnerChoice, props.workspace)
 }
 
-function getOrbitDragStart(event: PointerEvent): { point: Point; candidates: SystemCreationCandidate[] } | null {
+function getOrbitDragStart(event: PointerEvent): (OrbitAddOwner & { point: Point; workspace: LocalWorkspace }) | null {
   const point = cameraPoint(event)
   if (!point) return null
   const { owners, requiresOwnerChoice } = orbitAddAtPoint(point, event.target)
   const owner = owners[0]
-  if (requiresOwnerChoice || !owner || owner.systemId !== props.orbitAddOwnerId) return null
-  const localPoint = orbitDragPointFromClient(event.clientX, event.clientY)
-  return localPoint ? { point: localPoint, candidates: owner.candidates } : null
+  if (requiresOwnerChoice || !owner) return null
+  const localPoint = orbitDragPointFromClient(owner.systemId, event.clientX, event.clientY)
+  return localPoint ? { ...owner, point: localPoint, workspace: props.workspace } : null
 }
 
-function orbitDragPointFromClient(clientX: number, clientY: number): Point | null {
+function orbitDragPointFromClient(systemId: string, clientX: number, clientY: number): Point | null {
   const point = cameraPoint({ clientX, clientY })
-  const owner = projections.value.find(candidate => candidate.id === props.orbitAddOwnerId)
+  const owner = projections.value.find(candidate => candidate.id === systemId)
   return point && owner ? owner.unprojectLocalPoint(point) : null
 }
 
-function getOrbitDragSceneClearance(): number | null {
-  const owner = projections.value.find(candidate => candidate.id === props.orbitAddOwnerId)
+function getOrbitDragSceneClearance(systemId: string): number | null {
+  const owner = projections.value.find(candidate => candidate.id === systemId)
   if (!owner) return null
   const scale = getViewport().k * svgPixelScale.value * owner.scale
   return Number.isFinite(scale) && scale > 0 ? 4 / scale + (2.4 + 2.5) / 2 : null
@@ -1678,16 +1677,19 @@ function isOrbitDragPointOnMap(clientX: number, clientY: number): boolean {
 }
 
 const orbitAddPreview = computed(() => {
-  const preview = props.orbitAddPreview
-  const projection = projections.value.find(candidate => candidate.id === props.orbitAddOwnerId)
-  if (!preview?.radii || !projection) return null
+  const placement = props.orbitCreationPreview
+  const radii = placement?.preview.radii
+  if (!placement || !radii) return null
+  const projection = projections.value.find(candidate => candidate.id === placement.systemId)
+  if (!projection) return null
+  const preview = placement.preview
   const target = preview.target
   const center = target.kind === 'free'
     ? fromNormalizedMapPoint(target.point)
     : target.kind === 'host'
       ? projection.objects.find(object => object.id === target.objectId)?.position
       : undefined
-  return center ? { systemId: projection.id, center, radii: preview.radii, rotation: preview.rotation ?? 0 } : null
+  return center ? { systemId: projection.id, center, radii, rotation: preview.rotation ?? 0 } : null
 })
 
 function addOwnersAtPoint(
@@ -3187,7 +3189,7 @@ defineExpose({
   moveViewPan,
   endViewPan,
   startTouchNavigation,
-  clientPointToScene: orbitDragPointFromClient,
+  orbitDragPointFromClient,
   getOrbitDragStart,
   getOrbitDragSceneClearance,
   isOrbitDragPointOnMap,
