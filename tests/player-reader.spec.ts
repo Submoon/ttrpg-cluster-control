@@ -217,7 +217,8 @@ test('the default player reader opens shared links and files with one camera and
   await expect(camera).not.toHaveAttribute('transform', cameraBeforePan)
   const cameraBeforeInspect = await camera.getAttribute('transform')
   if (!cameraBeforeInspect) throw new Error('The public camera did not retain its transform.')
-  await publicSystemName.click()
+  // Select the name through its keyboard action after panning may move it behind map controls.
+  await publicSystemName.press('Enter')
   await expect(publicSystemName).toHaveAttribute('aria-pressed', 'true')
   await expect(camera).toHaveAttribute('transform', cameraBeforeInspect)
   await system.getByRole('button', { name: 'Center selection', exact: true }).click()
