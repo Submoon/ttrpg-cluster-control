@@ -1270,6 +1270,11 @@ test('system image exports retain applied geometry during local and parent-owned
   await page.mouse.up()
   await waitForWorkspaceSaved(page)
 
+  const chartDetails = await openChartDetailsEditor(page)
+  const draftClusterName = 'Unapplied export title'
+  await chartDetails.getByLabel('Jump Cluster', { exact: true }).fill(draftClusterName)
+  await expect(continuousMap.locator(':scope > title')).toHaveText(`${draftClusterName} continuous Warden map`)
+
   const downloads: string[] = []
   page.on('download', download => downloads.push(download.suggestedFilename()))
   await page.evaluate(() => {
@@ -1305,6 +1310,11 @@ test('system image exports retain applied geometry during local and parent-owned
   await page.evaluate(() => { (window as DownloadWindow).__mapExportBlobs?.splice(0) })
   const replacementSvg = await downloadImage(page, 'image/svg+xml', 'Entire Cluster')
   expect(replacementSvg.text).toBeTruthy()
+  expect(replacementSvg.text).not.toContain(draftClusterName)
+  expect(await page.evaluate(source => {
+    const svg = new DOMParser().parseFromString(source, 'image/svg+xml').documentElement
+    return svg.querySelector(':scope > title')?.textContent
+  }, replacementSvg.text!)).toBe(`${campaignBaselineFixture.cluster.name} Jump Cluster image`)
   const replacementScene = await inspectContinuousImage(page, replacementSvg.text!)
   expect(replacementScene.systemIds.sort()).toEqual(['campaign-baseline-harrow', 'campaign-baseline-vesper'])
   await page.evaluate(() => (window as Window & { __ticket19ReleaseDecode?: () => void }).__ticket19ReleaseDecode?.())

@@ -30,7 +30,7 @@ Ticket 12 includes pass 1; ticket 14 includes evidence-ownership work. Both must
 
 Implementation started on 2026-11-05 from `5dfc19e64ff5fea701c53314c54fffa20c17ca3c`, the delivered quality branch. Fetched `origin/main` and local `main` both point to `47c0418a835da285e9edb88e8f8dffc19c3a2bba`, twelve commits behind this intentional base. The starting inventory selects 542 cases. The final pass retains only critical and important coverage at the cheapest effective boundary.
 
-The user supplied a per-change browser budget for the permanent guide. Start from existing coverage. When a new important browser contract needs a scenario, use one representative happy path when appropriate and up to two distinct important failure or edge cases. Keep deterministic combinations at a lower boundary. The [browser coverage policy](../../../docs/agents/testing.md#browser-coverage-for-a-feature-or-fix) distinguishes this project decision from the published Playwright guidance.
+For this pruning pass, start from existing coverage, retain representative browser journeys, and keep deterministic combinations at a lower boundary. The [maintained browser coverage guidance](../../../docs/agents/testing.md#browser-coverage-for-a-feature-or-fix) applies to future changes.
 
 The user then set a maximum of 100 cases that actually run in a browser and allowed more unit tests. Include the single development-storage case in that maximum. The 214 browser scenarios found after the first Astra cut are an intermediate candidate. Select at most 99 ordinary browser scenarios from the important native and public workflow owners before full qualification.
 
@@ -52,4 +52,4 @@ The coordinator assigns accepted corrections to an implementation owner, preserv
 
 ## Resolution
 
-Closed on 2026-11-05 after Astra High approved the 330-case suite. The limit applies to the 98 browser-backed cases, including IndexedDB. The initial run passed all 233 pure and storage cases and 96 of 97 compiled Chromium cases. The only changed case passed its focused run after removal of the redundant second wheel cycle. [Qualification record](../implementation-15-results.md) · [Coverage ledger](../coverage-inventory.md#ticket-15-browser-cap).
+Closed on 2026-11-05 after Astra High approved the 330-case suite. That qualification selected 98 browser-backed cases, including IndexedDB. The initial run passed all 233 pure and storage cases and 96 of 97 compiled Chromium cases. The only changed case passed its focused run after removal of the redundant second wheel cycle. [Qualification record](../implementation-15-results.md) · [Coverage ledger](../coverage-inventory.md#ticket-15-browser-cap).

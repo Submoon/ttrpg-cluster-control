@@ -1,5 +1,7 @@
 # Cloud providers for Jump Cluster backups
 
+> **Historical comparison:** This review evaluated user-selected folders, Google Picker, and per-file drive.file access. The approved implementation instead uses Google Drive's private appDataFolder with drive.appdata; the Picker/drive.file proposal and associated permission exploration are not current product requirements. See the [approved specification](spec.md), [Drive implementation tickets](tickets/03-back-up-jump-cluster-to-google-drive.md) and [restore ticket](tickets/04-restore-jump-cluster-from-google-drive.md), [maintained setup](../../docs/google-drive-backups.md), and [live-account verification](../../docs/cloud-backup-verification.md).
+
 Reviewed on 2026-11-13 for [GitHub issue #51](https://github.com/Submoon/ttrpg-cluster-control/issues/51). Repository baseline after fetching origin is `efd9b094634cf60d6c466f612df11cf9573b6b33`, equal to `origin/main`. This is a review of public provider documentation. The browser flows and account policies below still need live verification.
 
 This comparison evaluated the original requirement for a user-selected private folder. The [approved scope](analysis.md#final-scope-review) now uses Google Drive's private `appDataFolder` for the first delivery. [Dropbox #55](https://github.com/Submoon/ttrpg-cluster-control/issues/55) and [OneDrive #56](https://github.com/Submoon/ttrpg-cluster-control/issues/56) track additional providers.

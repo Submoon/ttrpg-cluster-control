@@ -21,6 +21,7 @@ import {
 import { captureEffectiveObjectAngles } from './workspace-placement'
 import { isCustomFieldApplicableToObject } from './workspace-fields'
 import { jumpPointsInCluster } from './workspace-cluster'
+import { isMarkerColor } from './marker-color'
 
 export type PlayerSystemMarker = {
   id: string
@@ -51,12 +52,14 @@ export type PlayerObjectMarker = {
       family: ObjectFamily
       subtype: string
       label: string
+      markerColor?: string
     }
   | {
       disclosure: 'revealed'
       family: ObjectFamily
       subtype: string
       label: string
+      markerColor?: string
       playerText: string
       fields: PlayerFieldValue[]
       stationId?: string
@@ -325,6 +328,7 @@ function projectPlayerSystem(
         family: object.family,
         subtype: object.subtype,
         label: catalogueSubtypeLabel(object),
+        ...(isMarkerColor(object.markerColor) ? { markerColor: object.markerColor } : {}),
       }
     }
 
@@ -343,6 +347,7 @@ function projectPlayerSystem(
       family: object.family,
       subtype: object.subtype,
       label: object.name,
+      ...(isMarkerColor(object.markerColor) ? { markerColor: object.markerColor } : {}),
       playerText: object.playerText,
       fields: projectPlayerFields(workspace, object),
       ...(stationId === undefined ? {} : { stationId }),

@@ -12,6 +12,12 @@
       <p v-if="cloudBackupMessage && !googleDriveBackupDialogOpen" class="feedback m-0 break-words" role="status">
         {{ cloudBackupMessage }}
       </p>
+      <p v-if="dropboxBackupMessage" class="feedback m-0 break-words" role="status">
+        {{ dropboxBackupMessage }}
+      </p>
+      <p v-if="dropboxRestore.message.value && !dropboxRestore.dialogOpen.value" class="feedback m-0 break-words" role="status">
+        {{ dropboxRestore.message.value }}
+      </p>
       <p
         v-if="(activeView === 'system' || activeView === 'cluster' && continuousMapEnabled)
           && mapMode === 'move' && selectedObjectIds.length > 1 && moveSelectionError"
@@ -32,7 +38,7 @@
         :save-error="saveError"
         :form-error="formError"
         :restore-loading="localWorkspaceRestoreLoading"
-        @retry="hydrate"
+        @retry="retryWorkspaceHydration"
         @restore-backup="restoreLastValidWorkspace"
         @restore-file="openLocalWorkspaceRestore"
         @submit="submitNames"
@@ -41,6 +47,17 @@
           <GoogleDriveRestoreButton
             :controller="googleDriveRestore"
             :sign-in="googleDriveSignIn"
+            surface="welcome"
+            :backup-in-progress="dropboxRestore.dialogOpen.value"
+            :review-open="workspaceRestoreReview !== null"
+            :fallback-focus-target="workspaceMain"
+            @restore-review-open="workspaceRestoreReturnTarget = $event"
+            @restore-canceled="workspaceRestoreReturnTarget = null"
+          />
+          <DropboxRestoreDialog
+            :controller="dropboxRestore"
+            :available="dropboxSignIn.ready.value"
+            :blocked="dropboxRestoreBlocked"
             surface="welcome"
             :review-open="workspaceRestoreReview !== null"
             :fallback-focus-target="workspaceMain"
@@ -92,7 +109,7 @@
           </template>
           <template #header>
             <WorkspaceHeader
-              :workspace="workspace"
+              :workspace="wardenDraftWorkspace ?? workspace"
               :active-view="activeView"
               :selected-system="selectedSystem"
               :compact-modal-open="compactPanelPresentationOpen"
@@ -128,6 +145,7 @@
               :continuous-map="continuousMapEnabled && activeView === 'cluster'"
               :selected-image-system-id="continuousInspectorSystemId"
               :selected-system="selectedSystem"
+              :display-name="activeView === 'cluster' ? wardenDraftWorkspace?.cluster.name : wardenSystem?.name"
               :cluster-map="clusterMapRef"
               :system-map="systemMapRef"
               :export-error="exportError"
@@ -268,7 +286,18 @@
               :controller="googleDriveRestore"
               :sign-in="googleDriveSignIn"
               surface="menu"
-              :backup-in-progress="googleDriveBackup.busy.value"
+              :backup-in-progress="cloudBackupInProgress || dropboxRestore.dialogOpen.value"
+              :review-open="workspaceRestoreReview !== null"
+              :fallback-focus-target="workspaceMain"
+              @restore-review-open="workspaceRestoreReturnTarget = $event"
+              @restore-canceled="workspaceRestoreReturnTarget = null"
+            />
+            <DropboxRestoreDialog
+              ref="dropboxRestoreDialog"
+              :controller="dropboxRestore"
+              :available="dropboxSignIn.ready.value"
+              :blocked="dropboxRestoreBlocked"
+              surface="menu"
               :review-open="workspaceRestoreReview !== null"
               :fallback-focus-target="workspaceMain"
               @restore-review-open="workspaceRestoreReturnTarget = $event"
@@ -379,7 +408,7 @@
 
           <template #hierarchy>
             <MapHierarchy
-              :workspace="workspace"
+              :workspace="wardenDraftWorkspace ?? workspace"
               :continuous-map="continuousMapEnabled"
               :inspected-target="inspectedTarget"
               :dimmed-object-ids="dimmedMapObjectIds"
@@ -410,9 +439,11 @@
                     :keyboard-owned-overlay-open="mapKeyboardOverlayOpen"
                     :inspected-target="inspectedTarget"
                     :dimmed-object-ids="dimmedMapObjectIds"
+                    :applied-dimmed-object-ids="dimmedAppliedObjectIds"
                     :map-key="activeMapKey ?? ''"
                     :initial-viewport="initialViewport"
                     :workspace="workspace"
+                    :draft-workspace="wardenDraftWorkspace"
                     :system="selectedSystem"
                     :selected-system-id="clusterSelectedSystemId"
                     :selected-object-id="selectedObjectId"
@@ -479,6 +510,7 @@
                     :map-key="activeMapKey ?? ''"
                     :initial-viewport="initialViewport"
                     :workspace="workspace"
+                    :draft-workspace="wardenDraftWorkspace"
                     :system="selectedSystem"
                     :selected-system-id="clusterSelectedSystemId"
                     :selected-object-id="selectedObjectId"
@@ -584,6 +616,7 @@
               :system-transfer-enabled="continuousMapEnabled"
               :publication-busy="publicationBusy"
               :selected-system="inspectorSelectedSystem"
+              :draft-system="wardenSystem"
               :inspected-cluster-system="inspectorClusterSystem"
               :selected-object="inspectorSelectedObject"
               :selected-object-count="selectedObjectIds.length"
@@ -592,7 +625,7 @@
               :selected-orbit="inspectorSelectedOrbit"
               :selected-route="selectedRoute"
               :route-session="routeSession"
-              :selected-route-summary="selectedRoute ? routeEndpointSummary(selectedRoute) : ''"
+              :selected-route-summary="selectedRoute ? wardenRouteSummary(selectedRoute) : ''"
               :has-chart-name-draft="hasChartNameDraft"
               :chart-editing="chartEditing"
               :has-uncommitted-names="hasUncommittedNames"
@@ -723,9 +756,9 @@
 /**
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch, type Ref } from 'vue'
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type LocalWorkspace, type ObjectFamily, type Point } from '../domain/workspace'
+import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type JumpRoute, type LocalWorkspace, type ObjectFamily, type Point } from '../domain/workspace'
 import { validName } from '../domain/workspace-validation'
 import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { EntityCommand, SearchPresentationSettlement, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
@@ -742,6 +775,9 @@ import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
 import { useWorkspaceRestore } from '../composables/useWorkspaceRestore'
+import { useDropboxBackup } from '../composables/useDropboxBackup'
+import { useDropboxRestore } from '../composables/useDropboxRestore'
+import { useDropboxSignIn } from '../composables/useDropboxSignIn'
 import { useGoogleDriveRestore } from '../composables/useGoogleDriveRestore'
 import { useGoogleDriveSignIn } from '../composables/useGoogleDriveSignIn'
 import { usePlayerFileExports } from '../composables/usePlayerFileExports'
@@ -751,6 +787,7 @@ import { useMapToolShortcuts } from '../composables/useMapToolShortcuts'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useWardenMapFilters } from '../composables/useWardenMapFilters'
 import { createDialogFocusTarget, restoreDialogFocus } from '../utils/dialog-focus'
+import { DROPBOX_BACKUP_LIMIT } from '../utils/dropbox-backup-snapshot'
 import ChartNamesDialog from './ChartNamesDialog.vue'
 import ChartDetailsEditor from './inspector/ChartDetailsEditor.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
@@ -759,6 +796,7 @@ import WorkspaceRestoreReview from './WorkspaceRestoreReview.vue'
 import WorkspaceFeedback from './WorkspaceFeedback.vue'
 import PlayerViewPreviewDialog from './PlayerViewPreviewDialog.vue'
 import WorkspaceMapChrome from './WorkspaceMapChrome.vue'
+import DropboxRestoreDialog from './DropboxRestoreDialog.vue'
 import GoogleDriveBackupButton from './GoogleDriveBackupButton.vue'
 import GoogleDriveRestoreButton from './GoogleDriveRestoreButton.vue'
 import WorkspaceMapHelp from './WorkspaceMapHelp.vue'
@@ -800,6 +838,19 @@ const cloudBackupMessage = computed(() => googleDriveBackup.message.value
 watch(googleDriveBackup.lastSaved, () => {
   toast.add({ title: 'Backed up to Google Drive', color: 'success', icon: 'i-lucide-check' })
   googleDriveBackupDialogOpen.value = false
+})
+const dropboxSignIn = useDropboxSignIn()
+const dropboxBackup = useDropboxBackup(() => workspace.value, dropboxSignIn)
+const dropboxBackupMessage = computed(() => dropboxBackup.message.value
+  || (dropboxBackup.busy.value ? 'Dropbox backup is in progress.' : ''))
+watch(dropboxBackup.lastSaved, receipt => {
+  if (!receipt) return
+  toast.add({
+    title: 'Backed up to Dropbox',
+    description: `${receipt.name} in this app’s Dropbox App Folder`,
+    color: 'success',
+    icon: 'i-lucide-check',
+  })
 })
 const runtimeConfig = useRuntimeConfig()
 const editorUi = useEditorUiStore()
@@ -1150,11 +1201,29 @@ const inspectorClusterSystem = computed(() => continuousMapEnabled.value
 const inspectorMode = computed(() => continuousMapEnabled.value
   ? inspectedTarget.value?.kind === 'object' || inspectedTarget.value?.kind === 'orbit' ? 'system' : 'cluster'
   : activeView.value)
+const { wardenDraftWorkspace } = workflows
+const wardenWorkspace = computed(() => wardenDraftWorkspace.value ?? workspace.value)
+const wardenSystem = computed(() => wardenDraftWorkspace.value?.cluster.systems.find(system => system.id === inspectorSelectedSystem.value?.id))
+const wardenFilterSystem = computed(() => wardenSystem.value ?? selectedSystem.value)
+function wardenRouteSummary(route: JumpRoute): string {
+  const cluster = wardenWorkspace.value?.cluster
+  const displayedRoute = cluster?.routes.find(candidate => candidate.id === route.id) ?? route
+  return routeEndpointSummary(displayedRoute, cluster)
+}
 const mapTypeFiltersOpen = computed({
   get: () => editorUi.mapTypeFiltersOpen,
   set: open => editorUi.setMapTypeFiltersOpen(open),
 })
 const wardenFilters = useWardenMapFilters({
+  workspace: wardenWorkspace,
+  selectedSystem: wardenFilterSystem,
+  activeView,
+  continuousMap: continuousMapEnabled,
+  criteria: filterCriteria.map.criteria,
+  fieldOptions: filterCriteria.fieldOptions,
+})
+const { dimmedObjectIds: dimmedMapObjectIds } = wardenFilters
+const { dimmedObjectIds: dimmedAppliedObjectIds } = useWardenMapFilters({
   workspace,
   selectedSystem,
   activeView,
@@ -1162,7 +1231,6 @@ const wardenFilters = useWardenMapFilters({
   criteria: filterCriteria.map.criteria,
   fieldOptions: filterCriteria.fieldOptions,
 })
-const { dimmedObjectIds: dimmedMapObjectIds } = wardenFilters
 watch(activeView, view => {
   if (view === 'cluster') mapTypeFiltersOpen.value = false
 })
@@ -1329,7 +1397,7 @@ provideEditorCommands({
     selectRoute,
     showClusterMap,
     showChartDetails,
-    routeSummary: routeEndpointSummary,
+    routeSummary: wardenRouteSummary,
   },
   charts: { beginNamesEdit: beginChartNamesEdit },
   cluster: { deleteSystem },
@@ -2092,12 +2160,32 @@ const workspaceRestore = useWorkspaceRestore({
     if (sourceKind === 'google-drive') {
       toast.add({ title: 'Restored from Google Drive', color: 'success', icon: 'i-lucide-check' })
     }
+    if (sourceKind === 'dropbox') {
+      toast.add({ title: 'Restored from Dropbox', color: 'success', icon: 'i-lucide-check' })
+    }
   },
 })
 const googleDriveRestore = useGoogleDriveRestore(workspaceRestore, googleDriveSignIn, undefined, {
   onCanceled: () => toast.add({ title: 'Google Drive restore canceled', color: 'neutral', icon: 'i-lucide-info' }),
 })
 const googleDriveRestoreButton = ref<InstanceType<typeof GoogleDriveRestoreButton> | null>(null)
+const dropboxRestore = useDropboxRestore(workspaceRestore, dropboxSignIn)
+const dropboxRestoreDialog = ref<InstanceType<typeof DropboxRestoreDialog> | null>(null)
+const cloudBackupInProgress = computed(() => googleDriveBackup.busy.value || dropboxBackup.busy.value)
+const googleDriveRestoreInProgress = computed(() => googleDriveRestore.busy.value || googleDriveRestore.dialogOpen.value)
+const cloudRestoreInProgress = computed(() => googleDriveRestoreInProgress.value || dropboxRestore.dialogOpen.value)
+const dropboxRestoreBlocked = computed(() => cloudBackupInProgress.value || googleDriveRestoreInProgress.value
+  || workspaceRestoreReview.value !== null
+  || (workspaceRestoreLoading.value && !dropboxRestore.dialogOpen.value))
+const dropboxBackupCleanupRetryPending = computed(() => dropboxBackup.state.value === 'cleanup-retry')
+const dropboxBackupCanStartNew = computed(() => dropboxBackup.state.value === 'retry'
+  || dropboxBackupCleanupRetryPending.value)
+const dropboxBackupActionLabel = computed(() => {
+  if (dropboxBackupCleanupRetryPending.value) return 'Retry Dropbox retention cleanup'
+  if (dropboxBackup.state.value === 'retry') return 'Retry Dropbox backup'
+  return 'Back up Jump Cluster to Dropbox'
+})
+const dropboxBackupRetentionNotice = `Saves complete JSON with GM notes in the Dropbox App Folder. Cleanup keeps the ${DROPBOX_BACKUP_LIMIT} newest dated backups per account.`
 const cloudBackupItems = computed<DropdownMenuItem[]>(() => {
   const items: DropdownMenuItem[] = [{
     label: 'Back up Jump Cluster to Google Drive',
@@ -2106,15 +2194,30 @@ const cloudBackupItems = computed<DropdownMenuItem[]>(() => {
       || (googleDriveSignIn.status.value === 'warming' ? 'Loading Google Drive…' : undefined),
     icon: 'i-lucide-cloud-upload',
     googleDrive: true,
-    disabled: googleDriveBackup.busy.value
-      || googleDriveRestore.busy.value
-      || googleDriveRestore.dialogOpen.value
-      || !googleDriveSignIn.ready.value,
+    disabled: cloudBackupInProgress.value || cloudRestoreInProgress.value || !googleDriveSignIn.ready.value,
     onSelect: (event) => {
       event.preventDefault()
-      void openGoogleDriveBackupDialog()
+      void openBackupDialog(googleDriveBackupDialogOpen)
     },
+  }, {
+    label: dropboxBackupActionLabel.value,
+    hint: !dropboxSignIn.ready.value
+      ? dropboxSignIn.message.value || dropboxBackupRetentionNotice
+      : dropboxBackupRetentionNotice,
+    icon: 'i-lucide-cloud-upload',
+    disabled: cloudBackupInProgress.value || workspaceRestoreLoading.value || !dropboxSignIn.ready.value,
+    onSelect: () => dropboxBackup.activate(),
   }]
+
+  if (dropboxBackupCanStartNew.value) {
+    items.push({
+      label: 'Start a new Dropbox backup',
+      hint: dropboxBackupRetentionNotice,
+      icon: 'i-lucide-cloud-upload',
+      disabled: cloudBackupInProgress.value || workspaceRestoreLoading.value || !dropboxSignIn.ready.value,
+      onSelect: () => dropboxBackup.startNewBackup(),
+    })
+  }
 
   if (googleDriveBackup.canCancel.value) {
     items.push({
@@ -2122,6 +2225,13 @@ const cloudBackupItems = computed<DropdownMenuItem[]>(() => {
       icon: 'i-lucide-circle-x',
       googleDrive: true,
       onSelect: () => googleDriveBackup.cancelBeforeUpload(),
+    })
+  }
+  if (dropboxBackup.canCancel.value) {
+    items.push({
+      label: 'Cancel Dropbox backup',
+      icon: 'i-lucide-circle-x',
+      onSelect: () => dropboxBackup.cancelBeforeUpload(),
     })
   }
 
@@ -2138,11 +2248,17 @@ const cloudRestoreItems = computed<DropdownMenuItem[]>(() => {
     description: restoreStatus || undefined,
     icon: 'i-lucide-cloud-download',
     googleDrive: true,
-    disabled: googleDriveRestore.dialogOpen.value
-      || googleDriveRestore.busy.value
-      || googleDriveBackup.busy.value
-      || !googleDriveSignIn.ready.value,
+    disabled: cloudBackupInProgress.value || cloudRestoreInProgress.value || !googleDriveSignIn.ready.value,
     onSelect: () => googleDriveRestoreButton.value?.activateFrom(
+      workspaceMapChrome.value?.mapFilesTriggerElement() ?? null,
+    ),
+  }, {
+    label: 'Restore Jump Cluster from Dropbox',
+    description: dropboxRestore.message.value || dropboxSignIn.message.value || undefined,
+    icon: 'i-lucide-cloud-download',
+    disabled: dropboxRestoreBlocked.value || dropboxRestore.busy.value
+      || dropboxRestore.dialogOpen.value || !dropboxSignIn.ready.value,
+    onSelect: () => dropboxRestoreDialog.value?.activateFrom(
       workspaceMapChrome.value?.mapFilesTriggerElement() ?? null,
     ),
   }]
@@ -2176,7 +2292,9 @@ const cloudRestoreItems = computed<DropdownMenuItem[]>(() => {
   return items
 })
 
-async function openGoogleDriveBackupDialog(): Promise<void> {
+async function openBackupDialog(
+  dialog: Ref<boolean>,
+): Promise<void> {
   const chrome = workspaceMapChrome.value
   const startingWorkspace = workspace.value
   const startingView = activeView.value
@@ -2184,14 +2302,16 @@ async function openGoogleDriveBackupDialog(): Promise<void> {
   const trigger = chrome?.mapFilesTriggerElement() ?? null
   if (!chrome || !startingWorkspace || !trigger) return
 
-  if (!await chrome.closeMapFilesForDialog()) return
-  if (workspaceMapChrome.value !== chrome
+  const closed = await chrome.closeMapFilesForDialog()
+  if (!closed || workspaceMapChrome.value !== chrome
     || workspace.value !== startingWorkspace
     || activeView.value !== startingView
     || selectedSystemId.value !== startingSystemId
-    || chrome.mapFilesTriggerElement() !== trigger) return
+    || chrome.mapFilesTriggerElement() !== trigger) {
+    return
+  }
 
-  googleDriveBackupDialogOpen.value = true
+  dialog.value = true
 }
 
 function restoreBackupDialogFocus(event: Event): void {
@@ -2207,23 +2327,34 @@ const workspaceRestoreLoading = workspaceRestore.loading
 const workspaceRestoreError = workspaceRestore.error
 const workspaceMain = ref<HTMLElement | null>(null)
 const workspaceRestoreReturnTarget = ref<HTMLElement | null>(null)
-const localWorkspaceRestoreLoading = computed(() => workspaceRestoreLoading.value && !googleDriveRestore.canCancel.value)
+const localWorkspaceRestoreLoading = computed(() => workspaceRestoreLoading.value
+  && !googleDriveRestore.canCancel.value && !dropboxRestore.dialogOpen.value)
 
 watch(workspaceRestoreError, error => {
   if (error) workspaceRestoreReturnTarget.value = null
 })
 
 function openLocalWorkspaceRestore(event: Event, returnFocusTarget: HTMLElement | null): void {
-  if (googleDriveRestore.canCancel.value) googleDriveRestore.cancel(false)
+  cancelCloudRestore()
   workspaceRestoreReturnTarget.value = returnFocusTarget
   cancelJsonImport()
   void workspaceRestore.openLocalFile(event)
 }
 
 function restoreLastValidWorkspace(): void {
-  if (googleDriveRestore.canCancel.value) googleDriveRestore.cancel(false)
+  cancelCloudRestore()
   workspaceRestoreReturnTarget.value = null
   void restoreBackup()
+}
+
+function retryWorkspaceHydration(): void {
+  cancelCloudRestore()
+  void hydrate()
+}
+
+function cancelCloudRestore(): void {
+  if (googleDriveRestore.canCancel.value) googleDriveRestore.cancel(false)
+  if (dropboxRestore.canCancel.value) dropboxRestore.cancel(false)
 }
 
 const {

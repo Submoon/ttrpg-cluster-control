@@ -51,7 +51,7 @@
     <UModal
       v-model:open="dialogOpen"
       title="Google Drive backups"
-      description="Choose a complete Jump Cluster backup from this app's private Google Drive storage. These files do not appear in regular Drive folders."
+      description="Jump Cluster backups in this app’s private Google Drive storage."
       :close="state !== 'deleting'"
       :dismissible="state !== 'deleting' && !busy"
       :content="{ onCloseAutoFocus: restoreFocus }"
@@ -72,34 +72,16 @@
           <div ref="backupListFocusTarget" tabindex="-1">
             <p v-if="state === 'choosing' && !backups.length && !refreshRequired && !canLoadMore" class="m-0" role="status">No Google Drive backups are available yet.</p>
             <ol v-if="backups.length" class="m-0 grid list-none gap-2 p-0" aria-label="Google Drive Jump Cluster backups">
-              <li
+              <CloudBackupListItem
                 v-for="backup in backups"
                 :key="backup.id"
-                class="grid gap-2 rounded-md border border-[var(--line-soft)] p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                :name="backup.name"
+                :timestamp="backup.createdTime"
+                :disabled="busy"
+                @restore="openBackup(backup.id)"
+                @download="props.controller.downloadBackup(backup.id)"
               >
-                <div class="grid min-w-0 gap-1">
-                  <span class="break-all font-medium">{{ backup.name }}</span>
-                  <time class="text-sm text-muted" :datetime="backup.createdTime">{{ formatCreatedTime(backup.createdTime) }}</time>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                  <UButton
-                    color="neutral"
-                    variant="outline"
-                    size="sm"
-                    :disabled="busy"
-                    @click="props.controller.downloadBackup(backup.id)"
-                  >
-                    Download JSON
-                  </UButton>
-                  <UButton
-                    color="primary"
-                    variant="soft"
-                    size="sm"
-                    :disabled="busy"
-                    @click="openBackup(backup.id)"
-                  >
-                    Restore
-                  </UButton>
+                <template #delete>
                   <UButton
                     v-if="canDeleteBackup(backup)"
                     :ref="element => setDeleteButtonRef(backup.id, element)"
@@ -112,24 +94,26 @@
                   >
                     Delete
                   </UButton>
-                </div>
-                <div
-                  v-if="deleteConfirmationId === backup.id"
-                  class="grid gap-2 rounded-md border border-[var(--line-soft)] bg-[var(--panel-raised)] p-3 sm:col-span-2"
-                  role="group"
-                  :aria-label="`Confirm permanent deletion of ${backup.name}`"
-                >
-                  <p class="m-0 text-sm">Permanently delete <strong class="break-all">{{ backup.name }}</strong>? This cannot be undone.</p>
-                  <div class="flex flex-wrap gap-2">
-                    <UButton color="error" variant="solid" size="sm" :disabled="busy" @click="confirmDelete(backup)">
-                      Delete permanently
-                    </UButton>
-                    <UButton color="neutral" variant="outline" size="sm" :disabled="busy" @click="cancelDeleteConfirmation(backup.id)">
-                      Keep backup
-                    </UButton>
+                </template>
+                <template #confirmation>
+                  <div
+                    v-if="deleteConfirmationId === backup.id"
+                    class="grid gap-2 rounded-md border border-[var(--line-soft)] bg-[var(--panel-raised)] p-3 sm:col-span-2"
+                    role="group"
+                    :aria-label="`Confirm permanent deletion of ${backup.name}`"
+                  >
+                    <p class="m-0 text-sm">Permanently delete <strong class="break-all">{{ backup.name }}</strong>? This cannot be undone.</p>
+                    <div class="grid gap-2 sm:flex sm:flex-wrap">
+                      <UButton color="error" variant="solid" size="sm" :disabled="busy" @click="confirmDelete(backup)">
+                        Delete permanently
+                      </UButton>
+                      <UButton color="neutral" variant="outline" size="sm" :disabled="busy" @click="cancelDeleteConfirmation(backup.id)">
+                        Keep backup
+                      </UButton>
+                    </div>
                   </div>
-                </div>
-              </li>
+                </template>
+              </CloudBackupListItem>
             </ol>
           </div>
 
@@ -249,7 +233,7 @@ const restoreToastKey = computed(() => restoreProgressTitle.value
   ? `progress:${restoreProgressTitle.value}`
   : `completed:${completedToastVersion.value}`)
 const restoreToastUi = computed(() => ({ icon: restoreProgressTitle.value ? 'motion-safe:animate-spin' : undefined }))
-const retentionMessage = `This app keeps the ${GOOGLE_DRIVE_BACKUP_LIMIT} newest Google Drive backups for this account across all Jump Clusters. Older backups are permanently deleted after a new backup is saved. Download JSON to keep a copy.`
+const retentionMessage = `The app keeps the ${GOOGLE_DRIVE_BACKUP_LIMIT} newest dated backups for this account across all Jump Clusters. Older backups are permanently deleted after a new save.`
 const triggerClass = computed(() => props.surface === 'welcome'
   ? 'secondary-button launch-action'
   : 'workspace-control workspace-map-import-button w-full')
@@ -382,11 +366,6 @@ function restoreFocus(event: Event): void {
   })
 }
 
-function formatCreatedTime(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Date unavailable'
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
-}
 </script>
 
 <style scoped>

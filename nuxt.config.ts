@@ -4,6 +4,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       googleDriveClientId: '',
+      dropboxAppKey: '',
     },
   },
   modules: ['@nuxt/ui', '@pinia/nuxt'],

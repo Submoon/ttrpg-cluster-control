@@ -14,7 +14,7 @@ ticket_count: 8
 
 # Player view and secret-free sharing
 
-The user approved this scope and verification plan through the integrated final review on 2026-10-29. On 2026-10-30 the user separately authorized implementation of tickets 01 and 02, then simultaneous implementation of tickets 03 and 04, with subagents and the `implement` workflow. The original seven tickets closed by 2026-11-04. The user added the interface consistency ticket to the same effort before merge. All eight local tickets are closed in [draft PR #39](https://github.com/Submoon/ttrpg-cluster-control/pull/39).
+The user approved this scope and verification plan through the integrated final review on 2026-10-29. On 2026-10-30 the user separately authorized implementation of tickets 01 and 02, then simultaneous implementation of tickets 03 and 04, with subagents and the `implement` workflow. The original seven tickets closed by 2026-11-04. The user added the interface consistency ticket to the same effort before merge. All eight local tickets are closed in [PR #39](https://github.com/Submoon/ttrpg-cluster-control/pull/39), which has since merged. The [ticket 06](ticket-06-implementation.md) and [ticket 08](ticket-08-implementation.md) records preserve implementation verification and the final CI evidence.
 
 ## Source issue
 
@@ -24,7 +24,7 @@ The user approved this scope and verification plan through the integrated final 
 ### Baseline
 
 - Analysis baseline: `8d4b66504ca6723db5405ed7cb93d0a666264c9a`. Successful origin fetches, including the `to-spec` publication check, confirm HEAD, local main and origin/main at that commit, with 0 ahead / 0 behind. No intentionally different base or main fast-forward is needed.
-- Worktree: `C:/Users/fbal-fontaine/.codex/worktrees/5fe9/ttrpg-cluster-control`. The pre-existing untracked `.codex/environments/` is unrelated and preserved.
+- Worktree: detached feature checkout. The pre-existing untracked `.codex/environments/` was unrelated and preserved.
 - [Code evidence and interview log](analysis.md) records the current contracts, references, recommendations that were superseded and user answers. This specification is the consolidated scope; historical pending proposals in that log are not current requirements.
 
 ## Problem Statement
@@ -233,4 +233,4 @@ The [ticket 08 implementation record](ticket-08-implementation.md) records the c
 
 All seven approved slices are implemented and committed locally on `codex/player-view-ticket-01`. The common allowlisted player document serves preview, JSON, immutable compressed URLs and SVG/PNG; the base route retains the saved GM workspace. Ticket 06 completed verification on 2026-11-04 against integrated baseline `62e5e55d293573019979df1e59013855ac9317a0` (origin/main `47c0418a835da285e9edb88e8f8dffc19c3a2bba`).
 
-The single cumulative run passed 654/670; all 16 initial failures passed subsequent affected replays, including the final 9/9 image/responsive matrix. Eight timing failures passed unchanged without an established cause; this is not a clean full-suite pass. Lint, types, build, actual artifact/privacy checks and independent review closure are recorded in the [ticket 06 implementation record](ticket-06-implementation.md). This local closure predates branch publication and PR #39.
+The single cumulative run passed 654/670; all 16 initial failures passed subsequent affected replays, including the final 9/9 image/responsive matrix. Eight timing failures passed unchanged without an established cause; this is not a clean full-suite pass. Lint, types, build, actual artifact/privacy checks and independent review closure are recorded in the [ticket 06 implementation record](ticket-06-implementation.md). This local closure predates publication in PR #39; the [ticket 08 implementation record](ticket-08-implementation.md) records the later 700-case full CI result.

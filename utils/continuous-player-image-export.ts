@@ -245,7 +245,7 @@ function objectSvg(
   const mark = object.disclosure === 'unknown'
     ? svgElement('circle', { r: 4, fill: paint.mapBackground, stroke: paint.textMuted, 'stroke-width': 2, ...fixedStroke })
     : glyph ? svgElement('text', {
-        y: 5, 'text-anchor': 'middle', fill: paint.textSecondary, 'font-family': 'Consolas, monospace', 'font-size': 16,
+        y: 5, 'text-anchor': 'middle', fill: object.markerColor ?? paint.textSecondary, 'font-family': 'Consolas, monospace', 'font-size': 16,
       }, xml(glyph)) : ''
   const text = svgElement('text', {
     x: 9, y: 4, fill: paint.textPrimary, 'font-family': 'Georgia, serif', 'font-size': 12,

@@ -133,10 +133,17 @@
                 <text
                   v-else-if="objectPresentation(system, object.id).glyph"
                   class="player-continuous-object-glyph"
+                  :style="{ fill: objectMarkerColor(system, object.id) }"
                   y="5"
                   text-anchor="middle"
                   aria-hidden="true"
                 >{{ objectPresentation(system, object.id).glyph }}</text>
+                <circle
+                  v-if="objectMarkerColor(system, object.id)"
+                  class="player-continuous-object-marker-outline"
+                  r="7"
+                  aria-hidden="true"
+                />
                 <text class="player-continuous-object-label" x="9" y="4" aria-hidden="true">
                   {{ objectPresentation(system, object.id).label }}
                 </text>
@@ -464,6 +471,11 @@ function objectClass(system: PlayerContinuousSystemProjection, objectId: string)
 
 function objectIsUnknown(system: PlayerContinuousSystemProjection, objectId: string): boolean {
   return objectFromProjection(system, objectId)?.disclosure === 'unknown'
+}
+
+function objectMarkerColor(system: PlayerContinuousSystemProjection, objectId: string): string | undefined {
+  const object = objectFromProjection(system, objectId)
+  return object?.disclosure === 'unknown' ? undefined : object?.markerColor
 }
 
 function orbitFromProjection(system: PlayerContinuousSystemProjection, orbitId: string): PlayerOrbit | undefined {
@@ -820,6 +832,16 @@ defineExpose({ captureImageViewport, centerRoute: centerRouteForDocument, center
 .player-continuous-object--dimmed .player-continuous-object-unknown { opacity: .14; }
 .player-continuous-object--selected .player-continuous-object-glyph,
 .player-continuous-object--selected .player-continuous-object-label { fill: var(--map-selected); }
+
+.player-continuous-object-marker-outline {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+.player-continuous-object--selected .player-continuous-object-marker-outline,
+.player-continuous-object:focus-visible .player-continuous-object-marker-outline { stroke: var(--map-selected); }
 
 .player-continuous-unoccupied-center { fill: var(--text-muted); }
 

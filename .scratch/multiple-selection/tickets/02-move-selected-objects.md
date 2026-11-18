@@ -45,7 +45,7 @@ Implementation started on 2026-11-09 from **02c616b5e623f224b39a2399cbe574540c76
 
 ## Verification
 
-Extend the public selection journey to invoke **Move selection**, preview and apply a mixed free-and-orbital move, and verify a single Undo restores the previous geometry and attachments. Use the existing placement boundary for exact targets on and off a rotated ellipse, an unoccupied center, carried descendants, and unaffected implicit sibling angles. Use the existing guard and mutation boundary for rejected, canceled, stale, and applied proposals and their history effects. Follow the parent specification's browser budget and use an independent geometry oracle for rendered positions.
+Extend the public selection journey to invoke **Move selection**, preview and apply a mixed free-and-orbital move, and verify a single Undo restores the previous geometry and attachments. Use the existing placement boundary for exact targets on and off a rotated ellipse, an unoccupied center, carried descendants, and unaffected implicit sibling angles. Use the existing guard and mutation boundary for rejected, canceled, stale, and applied proposals and their history effects. Use an independent geometry oracle for rendered positions.
 
 ## Delivery boundary
 

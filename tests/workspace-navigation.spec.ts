@@ -123,6 +123,8 @@ test('Navigate opens systems, Select inspects them, and Hierarchy opens inline c
   await expect(editor.getByLabel('Star system', { exact: true })).toHaveValue('New System 2')
   await expect(page.locator('.cluster-map-svg')).toBeVisible()
   await editor.getByLabel('Star system', { exact: true }).fill('Unapplied System 2')
+  await expect(selectMap.getByRole('button', { name: 'Select Unapplied System 2 system', exact: true })).toBeVisible()
+  await expect(hierarchy.getByRole('button', { name: 'Open Unapplied System 2 system map', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Inspect', exact: true }).click()
   await expect(inspector).toBeHidden()
   await expect(editor).toBeHidden()

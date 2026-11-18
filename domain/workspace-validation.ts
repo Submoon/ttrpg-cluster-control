@@ -15,6 +15,7 @@ import {
   type PublicationMode,
   type SystemObject,
 } from './workspace-model'
+import { isMarkerColor } from './marker-color'
 
 export const maxNameLength = 80
 
@@ -221,6 +222,7 @@ export function isSystemObject(value: unknown): value is SystemObject {
     || typeof value.id !== 'string'
     || !value.id
     || !isPublicationMode(value.publication)
+    || (value.markerColor !== undefined && !isMarkerColor(value.markerColor))
     || !isObjectFamily(value.family)
     || typeof value.subtype !== 'string'
     || !value.subtype.trim()

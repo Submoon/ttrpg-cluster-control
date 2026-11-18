@@ -35,7 +35,7 @@ import type {
 } from './types'
 import type { WorkspaceMutationExecutor } from './workspace-mutations'
 import { objectDraftValuesFor } from './entity-draft-values'
-import { parseFiniteInput, validateObjectDraft } from './entity-draft-validation'
+import { parseFiniteInput, projectObjectDraft, validateObjectDraft } from './entity-draft-validation'
 import { objectPositions, objectsMovedWithOrbit } from '../../utils/system-map-geometry'
 import { catalogueObjectLabel } from '../../utils/catalogue-labels'
 
@@ -544,6 +544,32 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
     orbitPlacementPreview.value = null
   }
 
+  /** Projects a current, non-stale Inspector session without changing its errors or applying it. */
+  function projectDraft(currentWorkspace: LocalWorkspace): LocalWorkspace | null {
+    const session = entitySession.value
+    if (!session || getEntitySessionStaleError(session, { includeDraftTargets: false }) !== null) return null
+    const system = currentWorkspace.cluster.systems.find(candidate => candidate.id === session.systemId)
+    if (!system) return null
+
+    if (session.kind === 'object') {
+      const object = system.objects.find(candidate => candidate.id === session.targetId)
+      return object
+        ? projectObjectDraft(currentWorkspace, system, object, session.initial.values, session.draft)
+        : null
+    }
+
+    const hostId = session.draft.hostId
+    const mayAttach = session.centerMoveCandidates === null
+      && session.initial.orbit.hostId === null
+      && hostId !== null
+      && system.objects.some(object => object.id === hostId)
+      && !objectsMovedWithOrbit(system, session.targetId).has(hostId)
+    return applyOrbitDraft(currentWorkspace, system, session, {
+      partial: true,
+      allowHostChange: mayAttach,
+    }).workspace
+  }
+
   watch([workspace, orbitPlacementPreview], () => {
     const preview = orbitPlacementPreview.value
     const session = entitySession.value
@@ -572,7 +598,11 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
     }
   }
 
-  function getEntitySessionStaleError(session: EntityInspectorSession): string | null {
+  function getEntitySessionStaleError(
+    session: EntityInspectorSession,
+    options: { includeDraftTargets?: boolean } = {},
+  ): string | null {
+    const includeDraftTargets = options.includeDraftTargets ?? true
     const currentWorkspace = workspace.value
     if (!currentWorkspace || currentWorkspace.cluster.id !== session.clusterId) {
       return 'The Jump Cluster for this draft no longer exists.'
@@ -591,7 +621,7 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
         return 'The object placement or one of its Orbit hosts changed while this Inspector was open.'
       }
       const orbitId = parseOrbitPlacement(session.draft.placement)
-      if (orbitId) {
+      if (includeDraftTargets && orbitId) {
         const expected = draftDependencies?.sessionId === session.id
           ? draftDependencies.placements.get(orbitId)
           : undefined
@@ -623,7 +653,7 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
         return 'Port class sharing changed while this Inspector was open.'
       }
       const stationId = session.draft.jumpStationId
-      if (stationId) {
+      if (includeDraftTargets && stationId) {
         const expected = session.initial.linkedStations.find(station => station.id === stationId)
           ?? (draftDependencies?.sessionId === session.id ? draftDependencies.stations.get(stationId) : undefined)
         const currentStation = system.objects.find(object => object.id === stationId && isPhysicalStation(object))
@@ -660,7 +690,7 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
     if ((currentWorkspace.layout.orbitRotations[currentOrbit.id] ?? 0) !== session.initial.rotation) {
       return 'Orbit rotation changed while this Inspector was open.'
     }
-    if (session.initial.orbit.hostId === null && session.draft.hostId !== null) {
+    if (includeDraftTargets && session.initial.orbit.hostId === null && session.draft.hostId !== null) {
       if (objectsMovedWithOrbit(system, currentOrbit.id).has(session.draft.hostId)) {
         return 'Choose a host outside this Orbit and its nested contents.'
       }
@@ -1089,9 +1119,22 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
 
     try {
       const sourceCenter = orbit.center
-      const attachedSystem = moveOrbitCenter(system, orbit.id, sourceCenter, host.id)
-      const attachedOrbit = attachedSystem.orbits.find(candidate => candidate.id === orbit.id)
+      let attachedSystem = moveOrbitCenter(system, orbit.id, sourceCenter, host.id)
+      let attachedOrbit = attachedSystem.orbits.find(candidate => candidate.id === orbit.id)
       if (!attachedOrbit) throw new Error('The Orbit could not be attached to the proposed host.')
+      const targetOrder = parseFiniteInput(session.draft.targetOrder, 'Orbit order', errors, 'targetOrder')
+      const targetSiblings = attachedSystem.orbits.filter(candidate => candidate.hostId === host.id)
+      if (targetOrder === null || !Number.isSafeInteger(targetOrder) || targetOrder < 1 || targetOrder > targetSiblings.length) {
+        errors.targetOrder = `Choose an Orbit order from 1 to ${targetSiblings.length}.`
+        session.errors = errors
+        session.error = Object.values(errors).join(' ')
+        return false
+      }
+      while (attachedOrbit.order !== targetOrder) {
+        attachedSystem = moveOrbitOnce(attachedSystem, orbit.id, attachedOrbit.order < targetOrder ? 1 : -1)
+        attachedOrbit = attachedSystem.orbits.find(candidate => candidate.id === orbit.id)
+        if (!attachedOrbit) throw new Error('The Orbit could not be reordered under the proposed host.')
+      }
       const minimum = minimumOrbitRadius(attachedSystem, attachedOrbit)
       const radii = {
         horizontal: Math.max(horizontal, minimum),
@@ -1400,6 +1443,7 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
     hasModifiedEntitySession,
     hasPendingHistoryChoice,
     orbitPlacementPreview,
+    projectDraft,
     beginObjectSession,
     updateObjectPlacement,
     beginOrbitSession,
@@ -1421,22 +1465,16 @@ function applyOrbitDraft(
   currentWorkspace: LocalWorkspace,
   system: StarSystem,
   session: Extract<EntityInspectorSession, { kind: 'orbit' }>,
+  options: { partial?: boolean; allowHostChange?: boolean } = {},
 ): { workspace: LocalWorkspace | null; errors: Record<string, string> } {
   const errors: Record<string, string> = {}
   const draft = session.draft
-  const attaching = session.initial.orbit.hostId === null && draft.hostId !== null
-  const targetOrder = attaching ? null : parseFiniteInput(draft.targetOrder, 'Orbit order', errors, 'targetOrder')
-  const horizontalRadius = parseFiniteInput(draft.horizontalRadius, 'Horizontal radius', errors, 'horizontalRadius')
-  const verticalRadius = parseFiniteInput(draft.verticalRadius, 'Vertical radius', errors, 'verticalRadius')
-  const rotation = parseFiniteInput(draft.rotation, 'Rotation', errors, 'rotation')
+  const partial = options.partial ?? false
+  const requestedAttach = session.initial.orbit.hostId === null && draft.hostId !== null
+  const attaching = requestedAttach && (options.allowHostChange ?? true)
   const orbit = system.orbits.find(candidate => candidate.id === session.targetId)
   if (!orbit) return { workspace: null, errors: { form: 'The Orbit for this draft no longer exists.' } }
 
-  const siblings = system.orbits.filter(candidate => candidate.hostId === orbit.hostId)
-  if (!attaching && targetOrder !== null
-    && (!Number.isSafeInteger(targetOrder) || targetOrder < 1 || targetOrder > siblings.length)) {
-    errors.targetOrder = `Choose an Orbit order from 1 to ${siblings.length}.`
-  }
   let updatedSystem = system
   let minimum = minimumOrbitRadius(system, orbit)
   if (attaching) {
@@ -1456,44 +1494,77 @@ function applyOrbitDraft(
         minimum = minimumOrbitRadius(updatedSystem, attachedOrbit)
       }
     }
-  } else {
-    if (draft.hostId !== orbit.hostId) errors.hostId = 'Hosted Orbits can only be detached with the existing Detach action.'
-    if (horizontalRadius !== null && horizontalRadius < minimum) {
-      errors.horizontalRadius = `Horizontal radius must be at least ${minimum}.`
-    }
-    if (verticalRadius !== null && verticalRadius < minimum) {
-      errors.verticalRadius = `Vertical radius must be at least ${minimum}.`
-    }
+  } else if (!partial && draft.hostId !== orbit.hostId) {
+    errors.hostId = 'Hosted Orbits can only be detached with the existing Detach action.'
   }
 
-  if (Object.keys(errors).length || (!attaching && targetOrder === null) || horizontalRadius === null
-    || verticalRadius === null || rotation === null) return { workspace: null, errors }
+  const hostRelationshipPending = partial && !attaching && draft.hostId !== orbit.hostId
+  const targetOrderInput = hostRelationshipPending
+    ? null
+    : parseFiniteInput(draft.targetOrder, 'Orbit order', errors, 'targetOrder')
+  const horizontalInput = parseFiniteInput(draft.horizontalRadius, 'Horizontal radius', errors, 'horizontalRadius')
+  const verticalInput = parseFiniteInput(draft.verticalRadius, 'Vertical radius', errors, 'verticalRadius')
+  const rotationInput = parseFiniteInput(draft.rotation, 'Rotation', errors, 'rotation')
+  const currentOrbit = updatedSystem.orbits.find(candidate => candidate.id === orbit.id)!
+  const targetSiblings = updatedSystem.orbits.filter(candidate => candidate.hostId === currentOrbit.hostId)
+  let targetOrder = targetOrderInput
+  if (targetOrder !== null && (!Number.isSafeInteger(targetOrder) || targetOrder < 1 || targetOrder > targetSiblings.length)) {
+    errors.targetOrder = `Choose an Orbit order from 1 to ${targetSiblings.length}.`
+    targetOrder = null
+  }
+  if (partial && attaching && targetOrder === null) {
+    return applyOrbitDraft(currentWorkspace, system, session, { partial: true, allowHostChange: false })
+  }
+  let horizontalRadius = horizontalInput
+  let verticalRadius = verticalInput
+  if (horizontalRadius !== null && horizontalRadius < minimum) {
+    errors.horizontalRadius = `Horizontal radius must be at least ${minimum}.`
+    horizontalRadius = null
+  }
+  if (verticalRadius !== null && verticalRadius < minimum) {
+    errors.verticalRadius = `Vertical radius must be at least ${minimum}.`
+    verticalRadius = null
+  }
+  if (!partial && (Object.keys(errors).length || targetOrder === null || horizontalRadius === null
+    || verticalRadius === null || rotationInput === null)) return { workspace: null, errors }
+  if (attaching && errors.hostId) return { workspace: null, errors }
 
-  let finalHorizontal = horizontalRadius
-  let finalVertical = verticalRadius
-  if (attaching) {
-    finalHorizontal = Math.max(horizontalRadius, minimum)
-    finalVertical = Math.max(verticalRadius, minimum)
-  } else if (targetOrder !== null) {
-    let currentOrder = orbit.order
+  const horizontalFallback = attaching
+    ? Math.max(session.initial.effectiveRadii.horizontal, minimum)
+    : session.initial.effectiveRadii.horizontal
+  const verticalFallback = attaching
+    ? Math.max(session.initial.effectiveRadii.vertical, minimum)
+    : session.initial.effectiveRadii.vertical
+  const finalHorizontal = horizontalRadius ?? horizontalFallback
+  const finalVertical = verticalRadius ?? verticalFallback
+  const rotation = rotationInput ?? session.initial.rotation
+  if (targetOrder !== null) {
+    let currentOrder = currentOrbit.order
     while (currentOrder !== targetOrder) {
       const direction = currentOrder < targetOrder ? 1 : -1
       updatedSystem = moveOrbitOnce(updatedSystem, orbit.id, direction)
       currentOrder += direction
     }
   }
+  const changedRadii = horizontalRadius !== null && finalHorizontal !== session.initial.effectiveRadii.horizontal
+    || verticalRadius !== null && finalVertical !== session.initial.effectiveRadii.vertical
+  const normalizedRotation = normalizeOrbitRotation(rotation)
+  if (partial && updatedSystem === system && !changedRadii
+    && (rotationInput === null || normalizedRotation === session.initial.rotation)) {
+    return { workspace: null, errors }
+  }
   const nextWorkspace = replaceWorkspaceSystem(currentWorkspace, updatedSystem)
   const updatedOrbit = updatedSystem.orbits.find(candidate => candidate.id === orbit.id)!
   const updatedLayout = { ...nextWorkspace.layout }
   const orbitRadii = { ...updatedLayout.orbitRadii }
-  for (const sibling of siblings) {
+  const oldAndNewSiblings = system.orbits.filter(candidate => candidate.hostId === orbit.hostId
+    || (attaching && candidate.hostId === draft.hostId))
+  for (const sibling of oldAndNewSiblings) {
     const reorderedSibling = updatedSystem.orbits.find(candidate => candidate.id === sibling.id)
     if (reorderedSibling && reorderedSibling.order !== sibling.order) {
       orbitRadii[sibling.id] = effectiveOrbitRadii(currentWorkspace, system, sibling)
     }
   }
-  const changedRadii = finalHorizontal !== session.initial.effectiveRadii.horizontal
-    || finalVertical !== session.initial.effectiveRadii.vertical
   if (attaching) {
     const updatedDefault = defaultOrbitRadius(updatedSystem, updatedOrbit)
     if (finalHorizontal === updatedDefault && finalVertical === updatedDefault) delete orbitRadii[orbit.id]
@@ -1505,8 +1576,7 @@ function applyOrbitDraft(
   }
 
   const orbitRotations = { ...updatedLayout.orbitRotations }
-  const normalizedRotation = normalizeOrbitRotation(rotation)
-  if (normalizedRotation !== session.initial.rotation) {
+  if (rotationInput !== null && normalizedRotation !== session.initial.rotation) {
     if (normalizedRotation === 0) delete orbitRotations[orbit.id]
     else orbitRotations[orbit.id] = normalizedRotation
   }

@@ -41,7 +41,7 @@ Confirmed closing choices: one common audience configuration; dedicated versione
 
 ## Baseline and authorization
 
-- Worktree: `C:/Users/fbal-fontaine/.codex/worktrees/5fe9/ttrpg-cluster-control`, detached HEAD.
+- Analysis used a detached feature worktree; its workstation-specific path is omitted.
 - After a successful `git -c core.fsmonitor=false fetch origin`, HEAD, local `main`, and `origin/main` all resolve to `8d4b66504ca6723db5405ed7cb93d0a666264c9a`.
 - HEAD versus origin/main: 0 ahead / 0 behind. Local main versus origin/main: 0 ahead / 0 behind. No fast-forward needed and no intentionally different base.
 - Pre-existing untracked `.codex/environments/` is outside this effort and is preserved.

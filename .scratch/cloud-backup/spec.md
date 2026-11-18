@@ -1,6 +1,7 @@
 ---
 title: Back up and restore a Jump Cluster
-status: open
+status: closed
+closed_on: 2026-11-17
 triage_labels:
   - enhancement
   - ready-for-agent
@@ -8,7 +9,7 @@ triage_labels:
 
 # Back up and restore a Jump Cluster
 
-The user confirmed Google Drive for the first delivery after the [cloud provider comparison](provider-research.md). During live testing, the user chose the hidden Drive space reserved for TTRPG Cluster Control. A live Drive round trip is required before delivery.
+The user confirmed Google Drive for the first delivery after the [historical cloud provider comparison](provider-research.md). During live testing, the user chose the hidden Drive space reserved for TTRPG Cluster Control. The original Picker and drive.file exploration was superseded by the app's drive.appdata access to appDataFolder; current setup and verification instructions are maintained in [Google Drive backups](../../docs/google-drive-backups.md) and [cloud backup verification](../../docs/cloud-backup-verification.md).
 
 ## Source issue
 
@@ -95,6 +96,10 @@ After the cancellation and focus corrections and the final main integration, the
 ## Further Notes
 
 Local restore and Drive backup affect persistence and private data. Follow the project's Sensitive development route. A live provider check needs a configured Google Cloud project, authorized browser origins, and an allowlisted test account. Public rollout requires the applicable OAuth production and brand configuration. [OAuth production readiness](https://developers.google.com/identity/protocols/oauth2/production-readiness/overview) · [Brand verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification)
+
+## Resolution
+
+Closed locally on 2026-11-17. The four implementation tickets are closed. Recorded evidence includes real-account dated uploads, listing, an actual Drive JSON download matching the reference data, editor replacement followed by reload, and the tester's confirmation that welcome-screen restore in a separate private profile survived reload. The controlled fresh-context check compared the complete saved data. The exact live-content comparison was made on the downloaded artifact; the separate profile's welcome restore was operator-confirmed rather than independently exported and compared. The current instructions for repeating real-account checks remain in the [maintained Drive setup](../../docs/google-drive-backups.md) and [shared verification procedure](../../docs/cloud-backup-verification.md). GitHub issue #51 was open at the last fetch on 2026-11-13; this local closure does not change its state.
 
 ## Implementation tickets
 

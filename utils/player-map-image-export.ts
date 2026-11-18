@@ -380,7 +380,7 @@ function appendSystemObject(parent: SVGElement, object: PlayerObjectMarker, pain
       class: 'player-system-object-glyph',
       x: 0,
       y: 8,
-      fill: object.disclosure === 'revealed' ? paint.accent : paint.textSecondary,
+      fill: object.markerColor ?? (object.disclosure === 'revealed' ? paint.accent : paint.textSecondary),
       'font-family': 'Consolas, monospace',
       'font-size': 20,
       'text-anchor': 'middle',

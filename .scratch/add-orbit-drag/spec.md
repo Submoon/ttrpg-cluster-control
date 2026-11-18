@@ -47,7 +47,7 @@ In Add Orbit, hold a valid target and drag with a mouse, pen, or one touch conta
 ## Testing Decisions
 
 - **Geometry and controller tests.** Use explicit inputs to verify target ordering, radius and minimum, and the nearest allowed gap at controlled zooms. Exercise the Add command with the real controller to verify cancellation, rejection of stale previews, exact preview-to-commit geometry, and one publication.
-- **Playwright.** Verify a pointer drag and release over a control using rendered preview and committed geometry. Exercise second-contact takeover, one-contact resumption, and release with and without renewed movement. Reuse the existing creation and gesture test coverage where appropriate and keep the browser suite within its 100-case limit. Retain the separate three-click overlap regression and numeric placement coverage.
+- **Playwright.** Verify a pointer drag and release over a control using rendered preview and committed geometry. Use an existing creation or gesture journey for representative native second-contact takeover and one-contact resumption. Cover alternate release outcomes at the gesture controller boundary where possible. Retain the separate three-click overlap regression and numeric placement coverage.
 
 ## Out of Scope
 

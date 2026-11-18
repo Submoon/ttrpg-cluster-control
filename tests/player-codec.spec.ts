@@ -14,6 +14,7 @@ import type {
   PlayerObjectMarker,
   PlayerOrbit,
 } from '../domain/workspace'
+import { MAX_PLAYER_JSON_BYTES } from '../domain/player-codec'
 
 function validPlayerDocument(): PlayerClusterDocument {
   const fields: PlayerFieldValue[] = [
@@ -377,6 +378,42 @@ test('player JSON admits all disclosure modes, permitted values, and public rela
   ])
 })
 
+test('player JSON preserves strict per-object marker colors and drops them from Unknown objects @pure', () => {
+  const document = validPlayerDocument()
+  const revealed = document.systems[2]
+  if (!revealed || revealed.disclosure !== 'revealed') throw new Error('Expected a Revealed system.')
+  const unknownObject = revealed.map.objects[0]!
+  const knownObject = revealed.map.objects[1]!
+  const revealedObject = revealed.map.objects[2]!
+  Object.assign(unknownObject, { markerColor: '#FFFFFF' })
+  Object.assign(knownObject, { markerColor: '#a1B2c3' })
+  Object.assign(revealedObject, { markerColor: '#Ff00aA' })
+
+  const serialized = serializePlayerJson(document)
+  const parsed = parsePlayerJson(serialized)
+  const restoredSystem = parsed.systems[2]
+  if (!restoredSystem || restoredSystem.disclosure !== 'revealed') {
+    throw new Error('Expected a Revealed system after JSON restoration.')
+  }
+
+  expect(restoredSystem.map.objects[0]).not.toHaveProperty('markerColor')
+  expect(restoredSystem.map.objects[1]).toMatchObject({ markerColor: '#a1B2c3' })
+  expect(restoredSystem.map.objects[2]).toMatchObject({ markerColor: '#Ff00aA' })
+  expect(serialized).toContain('"markerColor":"#a1B2c3"')
+  expect(serialized).toContain('"markerColor":"#Ff00aA"')
+})
+
+test('player JSON rejects malformed marker colors on public object records @pure', () => {
+  for (const markerColor of ['#12345', '#1234567', '123456', '#GGGGGG', '#12 456', null, 123]) {
+    const document = validPlayerDocument()
+    const revealed = document.systems[2]
+    if (!revealed || revealed.disclosure !== 'revealed') throw new Error('Expected a Revealed system.')
+    Object.assign(revealed.map.objects[1]!, { markerColor })
+
+    expectPlayerDocumentError(() => restorePlayerDocument(document), 'invalid-document')
+  }
+})
+
 test('player JSON rejects malformed, unsupported, and unsafe data with fixed errors @pure', () => {
   const document = validPlayerDocument()
   const privateMarker = 'PRIVATE-GM-DIAGNOSTIC-MARKER-72'
@@ -638,4 +675,49 @@ test('player document restoration rejects cumulative output beyond the JSON byte
   }
 
   expect(errorCode).toBe('too-large')
+})
+
+test('player JSON byte accounting includes the optional marker color property @pure', () => {
+  const textLimit = 256 * 1024
+  const objects: PlayerObjectMarker[] = Array.from({ length: 16 }, (_, index) => ({
+    id: `object-${index + 1}`,
+    position: { x: index, y: 0 },
+    placement: { kind: 'system' },
+    disclosure: 'revealed',
+    family: 'CelestialBody',
+    subtype: 'planet',
+    label: `Public planet ${index + 1}`,
+    playerText: '',
+    fields: [],
+  }))
+  const legacyDocument: Omit<PlayerClusterDocument, 'version'> & { version: 1 } = {
+    format: 'ttrpg-cluster-control-player',
+    version: 1,
+    title: 'Public Reach',
+    systems: [{
+      id: 'system-1',
+      position: { x: 0, y: 0 },
+      disclosure: 'revealed',
+      type: 'star-system',
+      label: 'Aster',
+      map: { objects, orbits: [] },
+    }],
+    routes: [],
+  }
+  const legacyProjectionBytes = () => new TextEncoder().encode(
+    serializePlayerJson(restorePlayerDocument(legacyDocument)),
+  ).byteLength
+  const emptyTextBytes = legacyProjectionBytes()
+  const lastTextLength = MAX_PLAYER_JSON_BYTES - emptyTextBytes - 15 * textLimit
+  for (const object of objects.slice(0, 15)) {
+    if (object.disclosure !== 'revealed') throw new Error('Expected a Revealed object.')
+    object.playerText = 'x'.repeat(textLimit)
+  }
+  const finalObject = objects[15]
+  if (!finalObject || finalObject.disclosure !== 'revealed') throw new Error('Expected a final Revealed object.')
+  finalObject.playerText = 'x'.repeat(lastTextLength)
+
+  expect(legacyProjectionBytes()).toBe(MAX_PLAYER_JSON_BYTES)
+  Object.assign(objects[0]!, { markerColor: '#123456' })
+  expectPlayerDocumentError(() => restorePlayerDocument(legacyDocument), 'too-large')
 })

@@ -37,6 +37,8 @@
       :system-positions="props.workspace.layout.systemPositions"
       :unresolved-exit-positions="props.workspace.layout.unresolvedExitPositions"
       :dimmed-object-ids="props.dimmedObjectIds ?? []"
+      :applied-dimmed-object-ids="props.appliedDimmedObjectIds ?? []"
+      :presentation="matchingDraftWorkspace"
       :object-angles="props.workspace.layout.objectAngles"
       :orbit-radii="props.workspace.layout.orbitRadii"
       :orbit-rotations="props.workspace.layout.orbitRotations"
@@ -89,6 +91,7 @@
       :cluster="props.workspace.cluster"
       :system-positions="props.workspace.layout.systemPositions"
       :unresolved-exit-positions="props.workspace.layout.unresolvedExitPositions"
+      :presentation="clusterMapPresentation"
       :selected-system-id="props.selectedSystemId"
       :selected-route-id="props.selectedRouteId"
       :move-enabled="props.mode === 'move' && props.clusterAddType == null"
@@ -113,6 +116,7 @@
       v-else-if="props.system"
       ref="systemMapRef"
       :system="props.system"
+      :presentation="systemMapPresentation"
       :orbit-radii="props.workspace.layout.orbitRadii"
       :orbit-rotations="props.workspace.layout.orbitRotations"
       :object-angles="props.workspace.layout.objectAngles"
@@ -197,6 +201,7 @@ import type {
   SystemObjectMoveCandidate,
   SystemObjectMoveTarget,
 } from '../composables/editor-workflows/types'
+import type { WardenClusterMapPresentation, WardenSystemMapPresentation } from './maps/warden-map-presentation'
 import type { EntityCommand } from '../composables/editor-workflows/types'
 import type {
   OrbitAdjustmentInput,
@@ -233,12 +238,15 @@ const props = defineProps<{
   mapKey: string
   initialViewport: MapViewport | null
   workspace: LocalWorkspace
+  /** Validated Warden edit projection used only to paint the visible map scene. */
+  draftWorkspace?: LocalWorkspace | null
   system: StarSystem | undefined
   selectedSystemId: string | null
   selectedObjectId: string | null
   selectedObjectIds: readonly string[]
   selectedOrbitId: string | null
   dimmedObjectIds?: readonly string[]
+  appliedDimmedObjectIds?: readonly string[]
   selectedRouteId: string | null
   mode: MapInteractionMode
   isObjectMoveBlocked?: (objectId: string) => boolean
@@ -262,6 +270,33 @@ const props = defineProps<{
   systemObjectTransferMapLease?: SystemObjectTransferMapPlacementLease | null
 }>()
 const commands = useEditorCommands()
+
+const matchingDraftWorkspace = computed(() => {
+  const draft = props.draftWorkspace
+  return draft && draft.id === props.workspace.id && draft.cluster.id === props.workspace.cluster.id
+    ? draft
+    : null
+})
+const clusterMapPresentation = computed<WardenClusterMapPresentation | null>(() => {
+  const draft = matchingDraftWorkspace.value
+  return draft ? {
+    cluster: draft.cluster,
+    systemPositions: draft.layout.systemPositions,
+    unresolvedExitPositions: draft.layout.unresolvedExitPositions ?? {},
+  } : null
+})
+const systemMapPresentation = computed<WardenSystemMapPresentation | null>(() => {
+  const draft = matchingDraftWorkspace.value
+  const system = props.system && draft?.cluster.systems.find(candidate => candidate.id === props.system?.id)
+  return draft && system ? {
+    system,
+    geometry: {
+      objectAngles: draft.layout.objectAngles,
+      orbitRadii: draft.layout.orbitRadii,
+      orbitRotations: draft.layout.orbitRotations,
+    },
+  } : null
+})
 
 const emit = defineEmits<{
   'navigate-system': [id: string]

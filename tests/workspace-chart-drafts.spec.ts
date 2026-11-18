@@ -278,6 +278,8 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
   const editor = await openChartDetailsEditor(page)
   await editor.getByLabel('Jump Cluster').fill('')
   await editor.getByLabel('Star system').fill('Unapplied Vesper')
+  const previewMap = page.getByRole('group', { name: 'Unapplied Vesper star system map', exact: true })
+  await expect(previewMap).toBeVisible()
   await editor.getByRole('button', { name: 'Apply details' }).click()
   const validation = editor.getByRole('alert')
   await expect(validation).toHaveText('Jump Cluster name is required.')
@@ -303,7 +305,7 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
   await expect(editor.getByLabel('Jump Cluster')).toBeFocused()
   await hideWorkspaceInspector(page)
   await expect(editor).toBeHidden()
-  await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
+  await expect(previewMap).toBeVisible()
 
   const exported = await downloadJson(page, 'Export star system JSON')
   expect(exported.type).toBe('system')

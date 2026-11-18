@@ -159,7 +159,7 @@ test('the last valid workspace can be restored after the current snapshot fails 
   expect(restored.layout.systemPositions['campaign-baseline-vesper']).toEqual({ x: 0.35, y: 0.5 })
 })
 
-test('a failed backup restore stays unavailable and preserves both records until a retry succeeds', async ({ page }) => {
+test('recovery rejects a damaged backup and preserves both records until a valid retry succeeds', async ({ page }) => {
   test.setTimeout(60_000)
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
@@ -168,10 +168,20 @@ test('a failed backup restore stays unavailable and preserves both records until
   await waitForWorkspaceSaved(page)
 
   const backupBefore = await readWorkspaceRecord(page, 'last-valid')
-  await overwriteWorkspaceRecord(page, 'current', { damaged: true })
+  const damagedCurrentRecord = { damaged: true }
+  const damagedBackupRecord = { damaged: 'last-valid record sentinel' }
+  await overwriteWorkspaceRecord(page, 'current', damagedCurrentRecord)
+  await overwriteWorkspaceRecord(page, 'last-valid', damagedBackupRecord)
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Your workspace could not be opened.' })).toBeVisible()
 
+  await page.getByRole('button', { name: 'Restore last valid backup' }).click()
+  await expect(page.getByRole('alert')).toContainText('local backup has an unsupported or damaged format')
+  await expect(page.getByRole('heading', { name: 'Your workspace could not be opened.' })).toBeVisible()
+  await expect(readCurrentWorkspace(page)).resolves.toEqual(damagedCurrentRecord)
+  await expect(readWorkspaceRecord(page, 'last-valid')).resolves.toEqual(damagedBackupRecord)
+
+  await overwriteWorkspaceRecord(page, 'last-valid', backupBefore)
   await page.evaluate(() => {
     const transactionPrototype = IDBTransaction.prototype
     const storePrototype = IDBObjectStore.prototype
@@ -261,7 +271,7 @@ test('a failed backup restore stays unavailable and preserves both records until
     })
   }
 
-  await expect(readCurrentWorkspace(page)).resolves.toEqual({ damaged: true })
+  await expect(readCurrentWorkspace(page)).resolves.toEqual(damagedCurrentRecord)
   await expect(readWorkspaceRecord(page, 'last-valid')).resolves.toEqual(backupBefore)
   await expect(page.getByRole('heading', { name: 'Your workspace could not be opened.' })).toBeVisible()
   await expect(page.getByRole('group', { name: /Jump Cluster map|star system map/ })).toHaveCount(0)
@@ -337,26 +347,6 @@ test('a failed IndexedDB save preserves current and backup snapshots @developmen
   expect(snapshots.failedSave).not.toBe('')
   expect(snapshots.currentName).toBe('Current Reach')
   expect(snapshots.backupName).toBe('Kestrel Reach')
-})
-
-test('a damaged backup is rejected without replacing the current record', async ({ page }) => {
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await waitForWorkspaceSaved(page)
-
-  const damagedCurrentRecord = { damaged: 'current record sentinel' }
-  const damagedBackupRecord = { damaged: 'last-valid record sentinel' }
-  await overwriteWorkspaceRecord(page, 'current', damagedCurrentRecord)
-  await overwriteWorkspaceRecord(page, 'last-valid', damagedBackupRecord)
-  await page.reload()
-  await page.getByRole('button', { name: 'Restore last valid backup' }).click()
-
-  await expect(page.getByRole('alert')).toContainText('local backup has an unsupported or damaged format')
-  await expect(page.getByRole('heading', { name: 'Your workspace could not be opened.' })).toBeVisible()
-  await expect(readCurrentWorkspace(page)).resolves.toEqual(damagedCurrentRecord)
-  await expect(readWorkspaceRecord(page, 'last-valid')).resolves.toEqual(damagedBackupRecord)
 })
 
 test('a temporary IndexedDB opening failure can be retried without exposing a partial workspace', async ({ page }) => {

@@ -6,7 +6,7 @@
       :class="{ 'map-touch-surface': touchNavigation }"
       viewBox="0 0 960 560"
       role="group"
-      :aria-label="`${cluster.name} continuous map`"
+      :aria-label="`${sceneCluster.name} continuous map`"
       aria-describedby="workspace-map-tool-shortcut-help continuous-warden-map-keyboard-help"
       tabindex="0"
       @pointerdown.capture="onPointerDownCapture"
@@ -19,7 +19,7 @@
       @wheel.capture="onWheelCapture"
       @touchstart.capture="startTouchNavigation"
     >
-      <title>{{ cluster.name }} continuous Warden map</title>
+      <title>{{ sceneCluster.name }} continuous Warden map</title>
       <desc id="continuous-warden-map-keyboard-help">
         Zoom continuously to reveal each system interior independently. In Move, drag an object to move it within its owning system, or drag a system anchor or name to update its Cluster position.
       </desc>
@@ -151,6 +151,7 @@
                     'is-selected': isSelectedObject(projection.id, object.id),
                     'is-search-result': searchLocatorId === object.id,
                     'is-dimmed': dimmedObjectIds.has(object.id),
+                    'has-custom-marker-color': localObject(projection.id, object.id)?.markerColor !== undefined,
                     'is-move-preview': isObjectMovePreview(projection.id, object.id)
                       || isGroupObjectMovePreview(projection.id, object.id),
                     'is-group-move-preview': isGroupObjectMovePreview(projection.id, object.id),
@@ -166,9 +167,20 @@
                   :aria-pressed="isSelectedObject(projection.id, object.id)"
                 >
                   <circle class="continuous-warden-object-hit-target" r="18" />
+                  <circle
+                    v-if="localObject(projection.id, object.id)?.markerColor !== undefined"
+                    class="continuous-warden-object-marker-outline"
+                    r="18"
+                    aria-hidden="true"
+                  />
                   <circle v-if="searchLocatorId === object.id" class="continuous-warden-search-locator" r="25" aria-hidden="true" />
                   <circle v-if="objectSubtype(projection.id, object.id) === 'star'" class="continuous-warden-star-halo" r="18" />
-                  <text class="continuous-warden-object-glyph" y="8" text-anchor="middle">
+                  <text
+                    class="continuous-warden-object-glyph"
+                    :style="{ fill: localObject(projection.id, object.id)?.markerColor }"
+                    y="8"
+                    text-anchor="middle"
+                  >
                     {{ objectGlyph(projection.id, object.id) }}
                   </text>
                   <text class="continuous-warden-object-key" y="31" text-anchor="middle">
@@ -425,6 +437,9 @@ const props = defineProps<{
   systemPositions: Readonly<Record<string, Point>>
   unresolvedExitPositions?: Readonly<Record<string, Point>>
   dimmedObjectIds?: readonly string[]
+  appliedDimmedObjectIds?: readonly string[]
+  /** Validated Warden draft paint over the applied, command-owned workspace. */
+  presentation?: Pick<LocalWorkspace, 'cluster' | 'layout'> | null
   objectAngles: Readonly<Record<string, number>>
   orbitRadii: Readonly<Record<string, { horizontal: number; vertical: number }>>
   orbitRotations: Readonly<Record<string, number>>
@@ -621,6 +636,16 @@ const transferBranchPreview = computed(() => {
     return null
   }
 })
+const sceneCluster = computed(() => props.presentation?.cluster ?? props.cluster)
+const presentationProjections = computed(() => {
+  const draft = props.presentation
+  if (!draft) return projections.value
+  return draft.cluster.systems.map((system, index) => projectWardenSystem(
+    system,
+    draft.layout.systemPositions[system.id] ?? initialClusterSystemPosition(index),
+    draft.layout,
+  ))
+})
 const hiddenSelectedObjectCount = computed(() => {
   const owners = new Map(props.cluster.systems.flatMap(system => system.objects.map(object => [object.id, system.id] as const)))
   return props.selectedObjectIds.filter(objectId => {
@@ -628,7 +653,7 @@ const hiddenSelectedObjectCount = computed(() => {
     return ownerId !== undefined && !detailSystemIds.value.has(ownerId)
   }).length
 })
-const renderedProjections = computed(() => projections.value.map(projection => {
+const individualGestureProjections = computed(() => presentationProjections.value.map(projection => {
   const preview = objectMovePreview.value?.systemId === projection.id
     ? objectMovePreview.value
     : preciseObjectPlacementPreview.value?.systemId === projection.id
@@ -636,27 +661,70 @@ const renderedProjections = computed(() => projections.value.map(projection => {
       : preciseOrbitCenterMovePreview.value?.systemId === projection.id
         ? preciseOrbitCenterMovePreview.value
         : null
-  const rendered = preview
-    ? { ...projection, objects: preview.projection.objects, orbits: preview.projection.orbits }
-    : projection
   const directOrbit = directOrbitPreview.value?.systemId === projection.id
     ? directOrbitPreview.value.projection
     : null
-  const withDirectOrbit = directOrbit
-    ? { ...rendered, objects: directOrbit.objects, orbits: directOrbit.orbits }
-    : rendered
   const adjustment = props.orbitAdjustmentPreview
-  const withOrbitAdjustment = adjustment?.identity.systemId === projection.id
-    ? projectionWithOrbitAdjustment(projection, adjustment) ?? withDirectOrbit
-    : withDirectOrbit
-  const groupPreview = selectedObjectDragPreview.value
-  if (!groupPreview) return withOrbitAdjustment
-  const positions = new Map([...groupPreview.positions].filter(([objectId]) => groupPreview.objectSystemIds.get(objectId) === projection.id))
-  if (!positions.size) return withOrbitAdjustment
-  const sourceSystem = props.cluster.systems.find(system => system.id === projection.id)
-  const orbitHostIds = new Map(sourceSystem?.orbits.map(orbit => [orbit.id, orbit.hostId] as const) ?? [])
-  return previewWardenSystemObjects(withOrbitAdjustment, positions, orbitHostIds)
+  if (!preview && !directOrbit && adjustment?.identity.systemId !== projection.id) return projection
+  const applied = projections.value.find(candidate => candidate.id === projection.id)
+  if (!applied) return projection
+  const adjustedOrbit = adjustment?.identity.systemId === projection.id
+    ? projectionWithOrbitAdjustment(applied, adjustment)
+    : null
+  const gestureProjection = adjustedOrbit ?? directOrbit ?? preview?.projection
+  if (!gestureProjection) return projection
+  return projection === applied
+    ? { ...projection, objects: gestureProjection.objects, orbits: gestureProjection.orbits }
+    : overlayHeldGeometry(projection, applied, gestureProjection)
 }))
+const renderedProjections = computed(() => {
+  const groupPreview = selectedObjectDragPreview.value
+  if (!groupPreview) return individualGestureProjections.value
+  return individualGestureProjections.value.map(projection => {
+    const positions = new Map([...groupPreview.positions].filter(([objectId]) => groupPreview.objectSystemIds.get(objectId) === projection.id))
+    if (positions.size === 0) return projection
+    const sourceSystem = props.cluster.systems.find(system => system.id === projection.id)
+    const orbitHostIds = new Map(sourceSystem?.orbits.map(orbit => [orbit.id, orbit.hostId] as const) ?? [])
+    return previewWardenSystemObjects(projection, positions, orbitHostIds)
+  })
+})
+
+/** A held gesture owns changed geometry, while unrelated draft labels, positions and Orbits stay painted. */
+function overlayHeldGeometry(
+  presentation: ContinuousWardenSystemProjection,
+  applied: ContinuousWardenSystemProjection,
+  held: ContinuousWardenSystemProjection,
+): ContinuousWardenSystemProjection {
+  const samePoint = (left: Point, right: Point) => left.x === right.x && left.y === right.y
+  const appliedObjects = new Map(applied.objects.map(object => [object.id, object]))
+  const heldObjects = new Map(held.objects.map(object => [object.id, object]))
+  const appliedOrbits = new Map(applied.orbits.map(orbit => [orbit.id, orbit]))
+  const heldOrbits = new Map(held.orbits.map(orbit => [orbit.id, orbit]))
+  return {
+    ...presentation,
+    objects: presentation.objects.map(object => {
+      const original = appliedObjects.get(object.id)
+      const next = heldObjects.get(object.id)
+      if (!original || !next || samePoint(original.position, next.position)) return object
+      return { ...object, position: next.position, scenePosition: presentation.projectLocalPoint(next.position) }
+    }),
+    orbits: presentation.orbits.map(orbit => {
+      const original = appliedOrbits.get(orbit.id)
+      const next = heldOrbits.get(orbit.id)
+      if (!original || !next) return orbit
+      const centerChanged = !samePoint(original.center, next.center)
+      const radiiChanged = original.radii.horizontal !== next.radii.horizontal || original.radii.vertical !== next.radii.vertical
+      return {
+        ...orbit,
+        center: centerChanged ? next.center : orbit.center,
+        sceneCenter: centerChanged ? presentation.projectLocalPoint(next.center) : orbit.sceneCenter,
+        radii: radiiChanged ? next.radii : orbit.radii,
+        sceneRadii: radiiChanged ? next.sceneRadii : orbit.sceneRadii,
+        rotation: original.rotation !== next.rotation ? next.rotation : orbit.rotation,
+      }
+    }),
+  }
+}
 
 function isObjectMovePreview(systemId: string, objectId: string): boolean {
   return (objectMovePreview.value?.systemId === systemId && objectMovePreview.value.objectId === objectId)
@@ -690,14 +758,16 @@ function objectTransform(
 }
 
 const routeMarks = computed(() => {
-  const jumpPoints = new Map(jumpPointsInCluster(props.cluster).map(reference => [reference.point.id, reference]))
-  return props.cluster.routes.map(route => {
-    const endpointLabel = clusterRouteLabel(route, props.cluster, jumpPoints)
+  const cluster = sceneCluster.value
+  const jumpPoints = new Map(jumpPointsInCluster(cluster).map(reference => [reference.point.id, reference]))
+  return cluster.routes.map(route => {
+    const endpointLabel = clusterRouteLabel(route, cluster, jumpPoints)
     return {
       id: route.id,
       jumpLevel: route.jumpLevel,
       accessibleLabel: route.name ? `${endpointLabel}, ${route.name}` : endpointLabel,
       unresolved: route.toSystemId === null,
+      ...(route.toSystemId === null ? { destinationCaption: route.unresolvedExit } : {}),
     }
   })
 })
@@ -714,11 +784,11 @@ const routeFanOutLimitPixels = computed(() => Math.min(
 
 function routesAtDetail(detail: ReadonlySet<string>, pixelsPerSceneUnit?: number) {
   return buildContinuousWardenRouteGeometries({
-    routes: props.cluster.routes,
+    routes: sceneCluster.value.routes,
     projections: getRenderedSystemProjections(),
     detailSystemIds: detail,
     anchorOverrides: routeAnchorOverrides.value,
-    unresolvedExitPositions: props.unresolvedExitPositions,
+    unresolvedExitPositions: props.presentation?.layout.unresolvedExitPositions ?? props.unresolvedExitPositions,
     exitPositionOverrides: exitPositionOverrides.value,
     display: pixelsPerSceneUnit === undefined
       ? undefined
@@ -812,15 +882,19 @@ function anchorTransform(projection: ContinuousWardenSystemProjection): string {
 }
 
 const nameLabels = computed<ContinuousMapNameLabel[]>(() => continuousMapNameLabels({
-  projections: projections.value,
+  projections: presentationProjections.value,
   viewport: viewport.value,
   viewportRect: svgViewport.value,
   svgPixelScale: svgPixelScale.value,
   getAnchor: anchorFor,
 }))
 
+const sceneObjects = computed(() => new Map(sceneCluster.value.systems.map(system =>
+  [system.id, new Map(system.objects.map(object => [object.id, object]))],
+)))
+
 function localObject(projectionId: string, objectId: string): StarSystem['objects'][number] | undefined {
-  return props.cluster.systems.find(system => system.id === projectionId)?.objects.find(object => object.id === objectId)
+  return sceneObjects.value.get(projectionId)?.get(objectId)
 }
 
 const routeLabelObstacles = computed(() => nameLabels.value.map(label => ({
@@ -887,7 +961,7 @@ function orbitLabel(systemId: string, orbitId: string): string {
 function detailSystemIdsAtScale(cameraScale: number): Set<string> {
   const current = detailSystemIds.value
   const next = new Set<string>()
-  for (const projection of projections.value) {
+  for (const projection of presentationProjections.value) {
     const threshold = current.has(projection.id) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS
     if (cameraScale >= continuousMapDetailScale(projection.envelope, svgPixelScale.value, threshold)) {
       next.add(projection.id)
@@ -1052,8 +1126,9 @@ function frameStandaloneImportPlacement(usableRect?: SvgViewportRect): boolean {
   return true
 }
 
-function frameSystem(systemId: string, usableRect?: SvgViewportRect): boolean {
-  const projection = projections.value.find(candidate => candidate.id === systemId)
+function frameSystem(systemId: string, usableRect?: SvgViewportRect, centerTarget = false): boolean {
+  const systems = centerTarget ? renderedProjections.value : projections.value
+  const projection = systems.find(candidate => candidate.id === systemId)
   const element = svgElement.value
   if (!projection || !element || !zoomBehavior) return false
   const delta = anchorDelta(projection)
@@ -1153,7 +1228,8 @@ function frameEntityTarget(
   usableRect?: SvgViewportRect,
   centerTarget = false,
 ): boolean {
-  const projection = projections.value.find(candidate => candidate.id === systemId)
+  const systems = centerTarget ? renderedProjections.value : projections.value
+  const projection = systems.find(candidate => candidate.id === systemId)
   const element = svgElement.value
   if (!projection || !element || !zoomBehavior) return false
   const targetPoint = kind === 'object'
@@ -1216,7 +1292,7 @@ function centerInspectedTarget(target: InspectedMapTarget, usableRect?: SvgViewp
     fitMap(usableRect)
     return true
   }
-  if (target.kind === 'system') return frameSystem(target.systemId, usableRect)
+  if (target.kind === 'system') return frameSystem(target.systemId, usableRect, true)
   if (target.kind === 'route') return frameRoute(target.routeId, usableRect, true)
   if (target.kind === 'object' || target.kind === 'orbit') {
     return frameEntityTarget(
@@ -2686,7 +2762,7 @@ function exportImage(
     cluster: props.cluster,
     projections: projections.value,
     unresolvedExitPositions: props.unresolvedExitPositions,
-    dimmedObjectIds: props.dimmedObjectIds,
+    dimmedObjectIds: props.appliedDimmedObjectIds ?? props.dimmedObjectIds,
     scope: options.scope ?? 'viewport',
     selectedSystemId: options.selectedSystemId,
     selectedRouteId: props.selectedRouteId,
@@ -2707,7 +2783,7 @@ function getImageContextKey(scope: MapImageScope | null = 'viewport'): string {
     viewportRect: { ...svgViewport.value },
     svgPixelScale: svgPixelScale.value,
     detailSystemIds: [...detailSystemIds.value],
-    dimmedObjectIds: [...dimmedObjectIds.value],
+    dimmedObjectIds: [...(props.appliedDimmedObjectIds ?? dimmedObjectIds.value)],
     selectedRouteId: props.selectedRouteId,
   })
 }
@@ -2837,11 +2913,11 @@ watch(() => props.cluster.systems.map(system => system.id).join('\u0000'), ids =
   if (activeOrbitGesture && !ids.split('\u0000').includes(activeOrbitGesture.systemId)) cancelActiveGesture()
   if (activeAnchorDrag && !ids.split('\u0000').includes(activeAnchorDrag.systemId)) cancelActiveGesture()
 })
+watch(presentationProjections, () => updateDetailReveal(viewport.value.k))
 watch(() => props.selectedObjectIds.join('\u0000'), (ids, previousIds) => {
   if (ids !== previousIds && activeSelectedObjectDrag) cancelActiveGesture()
 })
 watch(projections, () => {
-  updateDetailReveal(viewport.value.k)
   const existingIds = new Set(projections.value.map(projection => projection.id))
   previewPositions.value = new Map([...previewPositions.value].filter(([id]) => existingIds.has(id)))
   if (preciseObjectPlacementPreview.value && !existingIds.has(preciseObjectPlacementPreview.value.systemId)) {
@@ -3063,8 +3139,16 @@ defineExpose({
   pointer-events: all;
 }
 
-.continuous-warden-object.is-selected .continuous-warden-object-hit-target,
-.continuous-warden-object:focus .continuous-warden-object-hit-target {
+.continuous-warden-object-marker-outline {
+  fill: none;
+  stroke: transparent;
+  pointer-events: none;
+}
+
+.continuous-warden-object.is-selected:not(.has-custom-marker-color) .continuous-warden-object-hit-target,
+.continuous-warden-object:focus:not(.has-custom-marker-color) .continuous-warden-object-hit-target,
+.continuous-warden-object.is-selected .continuous-warden-object-marker-outline,
+.continuous-warden-object:focus .continuous-warden-object-marker-outline {
   stroke: var(--map-selected);
   stroke-width: 2;
   vector-effect: non-scaling-stroke;

@@ -1,14 +1,14 @@
 <template>
-  <section v-if="selectedObject" class="entity-inspector" aria-label="Object inspector">
+  <section v-if="selectedObject && presentedObject" class="entity-inspector" aria-label="Object inspector">
     <header class="entity-inspector-header">
       <div class="min-w-0">
-        <p class="section-kicker">{{ catalogueFamilyLabel(selectedObject.family) }}</p>
+        <p class="section-kicker">{{ catalogueFamilyLabel(presentedObject.family) }}</p>
         <h2 class="object-title mt-2 mb-1 [overflow-wrap:anywhere] text-[1.45rem]">
-          <span class="object-mark object-mark-large" aria-hidden="true">{{ objectMark(selectedObject) }}</span>
-          <span>{{ selectedObject.name }}</span>
+          <span class="object-mark object-mark-large" aria-hidden="true">{{ objectMark(presentedObject) }}</span>
+          <span>{{ presentedObject.name }}</span>
         </h2>
         <p class="entity-inspector-subtitle m-0">
-          {{ selectedObject.locationKey }} · {{ catalogueSubtypeLabel(selectedObject) }}
+          {{ presentedObject.locationKey }} · {{ catalogueSubtypeLabel(presentedObject) }}
         </p>
       </div>
       <UButton
@@ -54,7 +54,7 @@
           <div>
             <p class="section-kicker">MAP OBJECT</p>
             <h3 id="object-details-heading">Object details</h3>
-            <span class="entity-inspector-type-chip">{{ catalogueSubtypeLabel(selectedObject) }}</span>
+            <span class="entity-inspector-type-chip">{{ catalogueSubtypeLabel(presentedObject) }}</span>
           </div>
           <UBadge color="neutral" variant="subtle">Built-in</UBadge>
         </div>
@@ -71,6 +71,17 @@
         </p>
         <p class="inspector-intro m-0 text-sm">The parent system must be Revealed before players can open its map.</p>
         <fieldset class="entity-inspector-fields" :disabled="!objectSession || props.saving">
+          <UFormField label="Marker color" :error="fieldError('markerColor')">
+            <MarkerColorField
+              :model-value="objectDraft.markerColor"
+              :default-color="defaultMarkerColor"
+              :trigger-id="controlId('markerColor')"
+              :hex-input-id="controlId('markerColor-hex')"
+              :error="fieldError('markerColor')"
+              :disabled="!objectSession || props.saving"
+              @update:model-value="objectDraft.markerColor = $event"
+            />
+          </UFormField>
           <UFormField v-if="selectedObject.family === 'Other'" label="Type label" :error="fieldError('subtype')">
             <UInput
               :id="controlId('subtype')"
@@ -378,12 +389,14 @@ import { objectDraftValuesFor } from '../../composables/editor-workflows/entity-
 import { catalogueFamilyLabel, catalogueSubtypeLabel } from '../../utils/catalogue-labels'
 import { objectMark } from '../../utils/catalogue-marks'
 import { useEditorCommands } from '../../composables/editor-workflows/editor-command-context'
+import MarkerColorField from './MarkerColorField.vue'
 import WorkspaceFeedback from '../WorkspaceFeedback.vue'
 
 const props = defineProps<{
   workspace: LocalWorkspace
   selectedSystem?: StarSystem
   selectedObject?: SystemObject
+  draftObject?: SystemObject
   focusRequest: ObjectInspectorFocusRequest | null
   focusEnabled: boolean
   session: Extract<EntityInspectorSession, { kind: 'object' }> | null
@@ -417,8 +430,11 @@ const emit = defineEmits<{
   'system-transfer-intent': [intent: Extract<SystemObjectTransferIntent, { kind: 'open' }>]
 }>()
 const commands = useEditorCommands()
+const colorMode = useColorMode()
+const defaultMarkerColor = computed(() => colorMode.value === 'dark' ? '#e8eee7' : '#26302c')
 
 const selectedObject = computed(() => props.selectedObject)
+const presentedObject = computed(() => props.draftObject ?? props.selectedObject)
 const selectedSystem = computed(() => props.selectedSystem)
 function requestSystemTransfer(): void {
   const system = selectedSystem.value

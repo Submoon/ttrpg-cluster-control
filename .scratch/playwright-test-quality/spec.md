@@ -195,7 +195,7 @@ On 2026-11-04, after the original delivery, the user requested that permanent co
 
 The actual planning HEAD is `155be7c96fdef07ff1124cdcbd4d0fd47eb44f1d`. Origin was fetched on 2026-11-04: `origin/main` and local `main` both equal `47c0418a835da285e9edb88e8f8dffc19c3a2bba`; this branch contains all of main and nine additional commits. The intentional implementation base is the delivered quality branch, not main alone. Its latest integrated result is [ticket 09's 583-case qualification](implementation-09-results.md), including 315 browser cases. Refresh/reconcile the baseline and discovery at execution time; its historical timings do not establish the next candidate's performance.
 
-This follow-up implements R1–R4 from the [retrospective](retrospective-test-sessions.md). The original completion criteria and closed tickets remain historical delivered scope. The following requirements govern the new work; the original specification-phase restriction on creating tickets does not prevent this expressly requested follow-up planning.
+This section records the delivered R1–R4 follow-up from the [retrospective](retrospective-test-sessions.md). Use the [maintained verification guide](../../docs/agents/testing.md) for new test work.
 
 ### Required behavior and documentation
 
@@ -221,14 +221,14 @@ The [11/13 delivery record](implementation-11-13-results.md) records the first p
 
 The [12/14 delivery record](implementation-12-14-results.md) closes the second pruning pass and idle requalification. Discovery now selects 542 cases across 93 files. It includes 272 browser cases, 269 pure cases and one development-storage case. The [pass 2 ledger](coverage-inventory.md#ticket-12-pass-2-disposition) identifies the retained owners and retired variants. Ticket 15 can now review the integrated suite, including the new launcher guards.
 
-For future changes, the user specified a small browser budget. Reuse an existing owner where it catches the regression. Cover an important new browser contract with one representative happy path when appropriate and at most two distinct important failure or edge cases. Keep deterministic combinations in domain or controller tests. The [per-change browser policy](../../docs/agents/testing.md#browser-coverage-for-a-feature-or-fix) is the maintained contributor reference.
+The pruning work favored representative browser journeys and moved deterministic combinations to domain or controller tests. Follow the [maintained browser coverage guidance](../../docs/agents/testing.md#browser-coverage-for-a-feature-or-fix) for future changes.
 
-The user also set a maximum of 100 browser-backed cases after reviewing the intermediate ticket 15 reduction. This includes development-storage and leaves pure checks outside the browser budget. The [ticket 15 delivery record](implementation-15-results.md) closes the final pass with 97 browser cases, one development-storage case and 232 pure cases. It records Astra High's closure, the first Chromium failure and the successful focused run after retiring a redundant wheel variant.
+The final ticket 15 pruning pass used 100 browser-backed cases, including development-storage, as its selection target. This figure records the scope of that qualification. The [ticket 15 delivery record](implementation-15-results.md) closes the final pass with 97 browser cases, one development-storage case and 232 pure cases. It records Astra High's closure, the first Chromium failure and the successful focused run after retiring a redundant wheel variant.
 
 ### Follow-up completion criteria
 
 1. The shared guide states the permanent-behavior/temporary-aesthetics policy and deletion criteria; contributor and agent navigation, helper contracts, implemented tests and inventory agree.
-2. All three passes have distinct handoffs. The final inventory accounts for discovered cases and named decisions to keep, narrow, move or delete. Retired unnecessary or aesthetic obligations can be deleted outright. Removed meaningful obligations have a tested retained owner. Apply the user-approved maximum to browser-backed cases.
+2. All three passes have distinct handoffs. The final inventory accounts for discovered cases and named decisions to keep, narrow, move or delete. Retired unnecessary or aesthetic obligations can be deleted outright. Removed meaningful obligations have a tested retained owner.
 3. The retained suite protects meaningful user/verification failures with effective assertions and representative native composition. The Astra/High pass challenges earlier retention decisions and cumulative removals; important uncertain rewritten oracles receive a bounded sensitivity check, rather than blanket mutation testing or another exhaustive audit.
 4. Supported focused/pure/CI paths preserve retained evidence, reject demonstrably invalid or empty analysis selections, and keep authentication/artifact sanitation fail-closed. Changes reuse existing runners and guards and address demonstrated gaps.
 5. Idle requalification is bounded and isolated from completed/active epochs. Verify unchanged repetition, successful idle edit/rerun, edits during active execution or preparation, transient edits, stale callbacks, cancellation, cleanup and configuration changes requiring a fresh session. Report matched focused-loop costs without promising an unmeasured speed gain.

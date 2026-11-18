@@ -155,11 +155,12 @@ export async function exportContinuousWardenMapImage(
   const outputHeight = request.scope === 'viewport'
     ? Math.max(1, Math.ceil(frame.height * scale))
     : Math.ceil(frame.height)
+  const appliedImageName = imageAccessibleName(request, selected)
   const exportFrame: MapImageSceneFrame = {
     ...frame,
     outputWidth,
     outputHeight,
-    ariaLabel: imageAccessibleName(request, selected),
+    ariaLabel: appliedImageName,
   }
   const dimmedObjectIds = new Set(request.scope === 'viewport' ? request.dimmedObjectIds : undefined)
   const incidentRoutes = request.scope === 'system' ? new Set(routeRecords.map(route => route.id)) : new Set<string>()
@@ -173,6 +174,10 @@ export async function exportContinuousWardenMapImage(
     request.palette,
     exportFrame,
     clone => {
+      clone.querySelectorAll(':scope > title').forEach(title => title.remove())
+      const title = clone.ownerDocument.createElementNS(clone.namespaceURI, 'title')
+      title.textContent = appliedImageName
+      clone.prepend(title)
       const content = clone.querySelector<SVGGElement>('.cluster-map-content')
       if (!content) throw new Error('The continuous map is not ready to export.')
       const routeStyleSource = clone.querySelector<SVGPathElement>('.continuous-warden-route-layer .cluster-route-line')
@@ -434,6 +439,7 @@ function appendSystemDetail(
     const glyph = createScopedElement(parent, 'text', 'continuous-warden-object-glyph')
     glyph.setAttribute('y', '8')
     glyph.setAttribute('text-anchor', 'middle')
+    if (sourceObject.markerColor !== undefined) glyph.style.fill = sourceObject.markerColor
     glyph.textContent = objectGlyphs[sourceObject.subtype] ?? '◇'
     const key = createScopedElement(parent, 'text', 'continuous-warden-object-key')
     key.setAttribute('y', '31')
