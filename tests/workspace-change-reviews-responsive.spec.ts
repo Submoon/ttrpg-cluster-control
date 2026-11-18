@@ -2,10 +2,11 @@ import { expect, test, type Locator } from './fixtures'
 import { createLocalWorkspace, exportJumpCluster } from '../domain/workspace'
 import {
   captureMapExportBlobs,
-  createSingleSystemWorkspace,
   downloadJson,
+  openWorkspaceHierarchy,
   reviewJumpClusterBackup,
-  wardenObjectMark,
+  waitForWorkspaceSaved,
+  waitForWorkspaceStartup,
 } from './helpers'
 
 type ReviewViewport = {
@@ -43,16 +44,25 @@ async function expectReviewActionInViewport(
 
 for (const viewport of reviewViewports) {
   test(`deletion and cluster replacement reviews fit and return focus at ${viewport.width}×${viewport.height} ${viewport.theme}`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await page.emulateMedia({ colorScheme: viewport.theme })
     await captureMapExportBlobs(page)
-    const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
-      viewport: { width: viewport.width, height: viewport.height },
-    })
+    await page.goto('/')
+    await waitForWorkspaceStartup(page)
     await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${viewport.theme}\\b`))
+    await page.getByLabel('Jump Cluster', { exact: true }).fill('Kestrel Reach')
+    await page.getByLabel('First star system', { exact: true }).fill('Vesper')
+    await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
+    await waitForWorkspaceSaved(page)
 
-    const primaryStar = wardenObjectMark(page, systemId, primaryObjectId)
+    const hierarchy = await openWorkspaceHierarchy(page)
+    const owner = hierarchy.getByRole('treeitem', { name: 'Vesper', exact: true })
+    if (await owner.getAttribute('aria-expanded') !== 'true') {
+      await owner.getByRole('button', { name: 'Expand Vesper', exact: true }).click()
+    }
+    const primaryStar = hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star in Vesper', exact: true })
     await expect(primaryStar).toBeInViewport()
-    await primaryStar.press('Enter')
+    await primaryStar.click()
     const inspector = page.locator('#workspace-inspector-panel')
     await expect(inspector).toBeVisible()
     const deleteButton = page.getByRole('button', { name: 'Delete Primary Star', exact: true })

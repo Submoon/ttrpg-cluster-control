@@ -112,7 +112,7 @@ test('a Warden shares applied player text and marker color while keeping drafts 
   const previewMap = preview.getByRole('region', { name: 'Player-visible continuous map', exact: true })
   await expect(previewMap.locator('svg.player-continuous-map-scene')).toHaveCount(1)
   await previewMap.locator('.player-continuous-name-target')
-    .and(previewMap.getByRole('button', { name: `Inspect ${systemName}`, exact: true })).click()
+    .and(previewMap.getByRole('button', { name: `Inspect ${systemName}`, exact: true })).press('Enter')
   await previewMap.getByRole('button', { name: 'Center selection', exact: true }).click()
   const previewMarker = preview.getByRole('button', { name: 'Inspect Pilgrim World', exact: true })
   const previewGlyph = previewMarker.locator('.player-continuous-object-glyph')
@@ -143,7 +143,7 @@ test('a Warden shares applied player text and marker color while keeping drafts 
 
   const reopenedPreview = await openPlayerPreview(page)
   await reopenedPreview.locator('.player-continuous-name-target')
-    .and(reopenedPreview.getByRole('button', { name: `Inspect ${systemName}`, exact: true })).click()
+    .and(reopenedPreview.getByRole('button', { name: `Inspect ${systemName}`, exact: true })).press('Enter')
   await expect(reopenedPreview.getByRole('button', { name: 'Filters', exact: true })).toBeVisible()
   await reopenedPreview.getByRole('button', { name: 'Close player preview', exact: true }).click()
 
