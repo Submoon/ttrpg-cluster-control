@@ -399,10 +399,13 @@ const maximumHierarchyLevel = computed(() => props.continuousMap
   : hierarchyRows.value.reduce((maximum, row) => Math.max(maximum, row.depth + 1), 1))
 const hierarchyIndentStep = computed(() => `${Math.min(5, 40 / Math.max(1, maximumHierarchyLevel.value - 1))}px`)
 const selectedHierarchyKey = computed(() => {
-  const target = props.inspectedTarget
-  if (props.continuousMap && target?.kind === 'object') return `object:${target.systemId}:${target.objectId}`
-  if (props.continuousMap && target?.kind === 'orbit') return `orbit:${target.systemId}:${target.orbitId}`
-  if (props.continuousMap && target?.kind === 'system') return `system:${target.systemId}`
+  if (props.continuousMap) {
+    const target = props.inspectedTarget
+    if (target?.kind === 'object') return `object:${target.systemId}:${target.objectId}`
+    if (target?.kind === 'orbit') return `orbit:${target.systemId}:${target.orbitId}`
+    if (target?.kind === 'system') return `system:${target.systemId}`
+    return ''
+  }
   const lastSelectedObjectId = store.selectedObjectIds[store.selectedObjectIds.length - 1]
   if (lastSelectedObjectId) return objectHierarchyKey(lastSelectedObjectId)
   if (store.selectedObjectId) return objectHierarchyKey(store.selectedObjectId)
@@ -455,13 +458,30 @@ watch(hierarchyBranches, (branches, previousBranches) => {
 watch(
   [hierarchyIdentity, selectedHierarchyKey, selectedHierarchyPath],
   ([, selectedKey, selectedPath]) => {
-    if (!selectedKey || !selectedPath) return
-    const expanded = new Set(expandedHierarchyKeys.value)
-    for (const ancestorKey of selectedPath.split('\u001f')) expanded.add(ancestorKey)
-    expandedHierarchyKeys.value = [...expanded]
+    if (selectedKey && selectedPath) expandHierarchyBranches(selectedPath.split('\u001f'))
   },
   { immediate: true },
 )
+
+watch(
+  [hierarchyIdentity, selectedHierarchyItems],
+  ([identity, selectedItems], [previousIdentity, previousItems]) => {
+    if (!props.continuousMap) return
+    const previousKeys = new Set(identity === previousIdentity ? previousItems?.map(item => item.key) : [])
+    // Group selection can change while the Inspector retains its previous target.
+    const newAncestors = selectedItems
+      .filter(item => item.kind === 'object' && !previousKeys.has(item.key))
+      .flatMap(item => item.ancestorKeys)
+    expandHierarchyBranches(newAncestors)
+  },
+  { immediate: true },
+)
+
+function expandHierarchyBranches(keys: readonly string[]): void {
+  if (keys.length === 0) return
+  const expanded = new Set([...expandedHierarchyKeys.value, ...keys])
+  if (expanded.size > expandedHierarchyKeys.value.length) expandedHierarchyKeys.value = [...expanded]
+}
 
 function objectHierarchyKey(objectId: string): string {
   if (!props.continuousMap) return `object:${objectId}`
