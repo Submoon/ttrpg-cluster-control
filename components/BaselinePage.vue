@@ -432,7 +432,7 @@
                     :selected-route-id="selectedRouteId"
                     :mode="mapMode"
                     :creation-type="standaloneImportPlacementEnabled ? null : mapCreationType"
-                    :orbit-add-owner-id="creationSession?.systemId"
+                    :orbit-creation-preview="orbitCreationPreview"
                     :creation-other-type="continuousObjectAddType === 'other' ? continuousObjectAddOtherType : null"
                     :object-add-pinned-owner-id="continuousObjectPinnedOwnerId"
                     :creation-preview="creationSession?.preview ?? null"
@@ -1294,9 +1294,16 @@ const mapMoveTargeting = computed(() => activeView.value === 'cluster'
     || systemObjectMapMoveTargeting.value || orbitCenterMapMoveTargeting.value
   : systemObjectMapMoveTargeting.value || orbitCenterMapMoveTargeting.value)
 const {
-  creationSession, chooseCreationType, chooseCreationCandidate, updateCreationInput,
+  creationSession, orbitDragPreview, chooseCreationType, chooseCreationCandidate, updateCreationInput,
   offerCreationCandidates, addCreationFromInputs,
 } = creation
+const orbitCreationPreview = computed(() => {
+  if (orbitDragPreview.value) return orbitDragPreview.value
+  const session = creationSession.value
+  return session?.type.kind === 'orbit' && session.preview
+    ? { systemId: session.systemId, preview: session.preview }
+    : null
+})
 const {
   beginRoute, beginRouteEdit, deleteSystem, deleteSelectedObject, deleteSelectedOrbit, deleteSelectedRoute,
   deletionReview, cancelDeletionReview, confirmDeletionReview,

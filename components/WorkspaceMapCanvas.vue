@@ -51,8 +51,7 @@
       :selected-route-id="props.selectedRouteId"
       :mode="props.mode"
       :creation-type="props.creationType ?? null"
-      :orbit-add-owner-id="props.orbitAddOwnerId"
-      :orbit-add-preview="props.creationPreview"
+      :orbit-creation-preview="props.orbitCreationPreview"
       :creation-other-type="props.creationOtherType ?? null"
       :object-add-pinned-owner-id="props.objectAddPinnedOwnerId ?? null"
       :is-entity-command-blocked="props.isEntityCommandBlocked"
@@ -198,6 +197,7 @@ import type {
   MapInteractionMode,
   MapHistoryTarget,
   OrbitCenterMoveCandidate,
+  OrbitCreationMapPreview,
   OrbitPlacementPreview,
   SystemCreationCandidate,
   SystemCreationPreview,
@@ -257,7 +257,7 @@ const props = defineProps<{
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
   feedbackElement?: HTMLElement | null
   creationType?: SystemCreationType | null
-  orbitAddOwnerId?: string
+  orbitCreationPreview?: OrbitCreationMapPreview | null
   creationOtherType?: string | null
   objectAddPinnedOwnerId?: string | null
   creationPreview?: SystemCreationPreview | null
@@ -574,10 +574,23 @@ const orbitInput = useOrbitPlacementInput({
   isSystemView: () => props.continuousMap === true || props.activeView === 'system',
   mapKey: () => props.mapKey,
   hasAddOrbitIntent: hasOrbitAddIntent,
-  begin: (scenePoint, event) => {
-    if (!props.continuousMap) return commands.creation.beginOrbitDrag(scenePoint)
-    const start = continuousWardenMapRef.value?.getOrbitDragStart(event)
-    return !!start && commands.creation.beginOrbitDrag(start.point, start.candidates)
+  begin: (event) => {
+    if (!props.continuousMap) {
+      const map = systemMapRef.value
+      const point = map?.clientPointToScene(event.clientX, event.clientY)
+      return map && point && commands.creation.beginOrbitDrag(point) ? map : null
+    }
+    const map = continuousWardenMapRef.value
+    const start = map?.getOrbitDragStart(event)
+    if (!map || !start || !commands.creation.beginOrbitDrag(start.point, start.candidates, start)) return null
+    return {
+      clientPointToScene: (x, y) => continuousWardenMapRef.value === map
+        ? map.orbitDragPointFromClient(start.systemId, x, y)
+        : null,
+      getOrbitDragSceneClearance: () => continuousWardenMapRef.value === map
+        ? map.getOrbitDragSceneClearance(start.systemId)
+        : null,
+    }
   },
   update: (scenePoint, clearance) => commands.creation.updateOrbitDrag(scenePoint, clearance),
   complete: () => commands.creation.completeOrbitDrag(),
@@ -735,9 +748,10 @@ function forwardMoveObjectInSystem(
 }
 
 function hasOrbitAddIntent(): boolean {
-  return (props.activeView === 'system' || props.continuousMap === true && !!props.orbitAddOwnerId)
+  return (props.activeView === 'system' || props.continuousMap === true)
     && props.creationType?.kind === 'orbit'
     && !props.creationChooserOpen
+    && !props.clusterChooserOpen
     && !props.moveTargeting
 }
 

@@ -55,6 +55,20 @@
             />
 
             <g
+              class="cluster-system-node continuous-warden-system-anchor"
+              :class="{ 'is-selected': selectedSystemId === projection.id, 'is-move-preview': previewPositions.has(projection.id) }"
+              :data-system-id="projection.id"
+              :transform="anchorTransform(projection)"
+              role="button"
+              tabindex="0"
+              :aria-label="`Select ${projection.name}`"
+            >
+              <circle class="continuous-warden-anchor-hit-target" r="16" />
+              <circle class="continuous-warden-anchor-mark" r="7" />
+              <circle class="continuous-warden-anchor-core" r="2" />
+            </g>
+
+            <g
               v-if="detailSystemIds.has(projection.id)"
               class="continuous-warden-system-detail"
               :transform="systemTransform(projection)"
@@ -97,6 +111,7 @@
                     role="slider"
                     tabindex="0"
                     :aria-label="`Resize horizontal radius of ${orbitLabel(projection.id, orbit.id)}`"
+                    v-bind="orbitRadiusSliderValues(projection.id, orbit, 'horizontal')"
                     :cx="orbitAxisHandlePoint(orbit, 'horizontal').x"
                     :cy="orbitAxisHandlePoint(orbit, 'horizontal').y"
                     :r="orbitEditHandleRadius(projection)"
@@ -111,6 +126,8 @@
                     role="slider"
                     tabindex="0"
                     :aria-label="`Resize vertical radius of ${orbitLabel(projection.id, orbit.id)}`"
+                    v-bind="orbitRadiusSliderValues(projection.id, orbit, 'vertical')"
+                    aria-orientation="vertical"
                     :cx="orbitAxisHandlePoint(orbit, 'vertical').x"
                     :cy="orbitAxisHandlePoint(orbit, 'vertical').y"
                     :r="orbitEditHandleRadius(projection)"
@@ -124,6 +141,10 @@
                     role="slider"
                     tabindex="0"
                     :aria-label="`Rotate ${orbitLabel(projection.id, orbit.id)}`"
+                    :aria-valuemin="0"
+                    :aria-valuemax="360"
+                    :aria-valuenow="orbit.rotation"
+                    :aria-valuetext="`${Math.round(orbit.rotation)} degrees`"
                     :cx="orbitRotationHandlePoint(orbit.center, orbit.radii, orbit.rotation).x"
                     :cy="orbitRotationHandlePoint(orbit.center, orbit.radii, orbit.rotation).y"
                     :r="orbitEditHandleRadius(projection)"
@@ -214,19 +235,6 @@
                 :transform="`rotate(${orbitAddPreview.rotation} ${orbitAddPreview.center.x} ${orbitAddPreview.center.y})`"
                 aria-hidden="true"
               />
-            </g>
-            <g
-              class="cluster-system-node continuous-warden-system-anchor"
-              :class="{ 'is-selected': selectedSystemId === projection.id, 'is-move-preview': previewPositions.has(projection.id) }"
-              :data-system-id="projection.id"
-              :transform="anchorTransform(projection)"
-              role="button"
-              tabindex="0"
-              :aria-label="`Select ${projection.name}`"
-            >
-              <circle class="continuous-warden-anchor-hit-target" r="16" />
-              <circle class="continuous-warden-anchor-mark" r="7" />
-              <circle class="continuous-warden-anchor-core" r="2" />
             </g>
           </g>
           <g
@@ -387,7 +395,7 @@ import { normalizeOrbitRotation } from '../domain/workspace-orbits'
 import { getDetachedOrbitCenter, objectPositions, objectsMovedWithOrbit, orbitCenter, orbitPointAtAngle, orbitRadii as readOrbitRadii, orbitRotation, orbitRotationHandlePoint, rotatePoint, requiredPosition } from '../utils/system-map-geometry'
 import { orbitGeometrySource } from '../utils/orbit-geometry-source'
 import { continuousOrbitKeyboardChange } from '../utils/continuous-orbit-interaction'
-import type { EntityCommand, MapHistoryTarget, MapInteractionMode, OrbitCenterMoveCandidate, SystemCreationCandidate, SystemCreationPreview, SystemCreationType, SystemObjectMoveTarget } from '../composables/editor-workflows/types'
+import type { EntityCommand, MapHistoryTarget, MapInteractionMode, OrbitCenterMoveCandidate, OrbitCreationMapPreview, SystemCreationCandidate, SystemCreationType, SystemObjectMoveTarget } from '../composables/editor-workflows/types'
 import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
 import type { InspectedMapTarget } from '../stores/editor-ui'
@@ -472,8 +480,7 @@ const props = defineProps<{
   inspectedTarget: InspectedMapTarget | null
   mode: MapInteractionMode
   creationType: SystemCreationType | null
-  orbitAddOwnerId?: string
-  orbitAddPreview?: SystemCreationPreview | null
+  orbitCreationPreview?: OrbitCreationMapPreview | null
   creationOtherType: string | null
   objectAddPinnedOwnerId: string | null
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
@@ -983,6 +990,24 @@ function orbitAxisHandlePoint(
   axis: 'horizontal' | 'vertical',
 ): Point {
   return orbitPointAtAngle(orbit.center, orbit.radii, axis === 'horizontal' ? 0 : -Math.PI / 2, orbit.rotation)
+}
+
+function orbitRadiusSliderValues(
+  systemId: string,
+  orbit: ContinuousWardenSystemProjection['orbits'][number],
+  axis: 'horizontal' | 'vertical',
+) {
+  const system = props.cluster.systems.find(candidate => candidate.id === systemId)
+  const source = system?.orbits.find(candidate => candidate.id === orbit.id)
+  const radius = orbit.radii[axis]
+  const minimum = system && source ? minimumOrbitRadius(system, source) : 0
+  return {
+    'aria-valuemin': Math.min(minimum, radius),
+    // End advances the current radius by 400 map units.
+    'aria-valuemax': radius + 400,
+    'aria-valuenow': radius,
+    'aria-valuetext': `${Math.round(radius)} map units`,
+  }
 }
 
 function orbitEditHandleRadius(projection: ContinuousWardenSystemProjection): number {
@@ -1648,24 +1673,24 @@ function offerOrbitAdd(point: Point, target: EventTarget | null): void {
   emit('continuous-orbit-add-target', owners, requiresOwnerChoice, props.workspace)
 }
 
-function getOrbitDragStart(event: PointerEvent): { point: Point; candidates: SystemCreationCandidate[] } | null {
+function getOrbitDragStart(event: PointerEvent): (OrbitAddOwner & { point: Point; workspace: LocalWorkspace }) | null {
   const point = cameraPoint(event)
   if (!point) return null
   const { owners, requiresOwnerChoice } = orbitAddAtPoint(point, event.target)
   const owner = owners[0]
-  if (requiresOwnerChoice || !owner || owner.systemId !== props.orbitAddOwnerId) return null
-  const localPoint = orbitDragPointFromClient(event.clientX, event.clientY)
-  return localPoint ? { point: localPoint, candidates: owner.candidates } : null
+  if (requiresOwnerChoice || !owner) return null
+  const localPoint = orbitDragPointFromClient(owner.systemId, event.clientX, event.clientY)
+  return localPoint ? { ...owner, point: localPoint, workspace: props.workspace } : null
 }
 
-function orbitDragPointFromClient(clientX: number, clientY: number): Point | null {
+function orbitDragPointFromClient(systemId: string, clientX: number, clientY: number): Point | null {
   const point = cameraPoint({ clientX, clientY })
-  const owner = projections.value.find(candidate => candidate.id === props.orbitAddOwnerId)
+  const owner = projections.value.find(candidate => candidate.id === systemId)
   return point && owner ? owner.unprojectLocalPoint(point) : null
 }
 
-function getOrbitDragSceneClearance(): number | null {
-  const owner = projections.value.find(candidate => candidate.id === props.orbitAddOwnerId)
+function getOrbitDragSceneClearance(systemId: string): number | null {
+  const owner = projections.value.find(candidate => candidate.id === systemId)
   if (!owner) return null
   const scale = getViewport().k * svgPixelScale.value * owner.scale
   return Number.isFinite(scale) && scale > 0 ? 4 / scale + (2.4 + 2.5) / 2 : null
@@ -1678,16 +1703,19 @@ function isOrbitDragPointOnMap(clientX: number, clientY: number): boolean {
 }
 
 const orbitAddPreview = computed(() => {
-  const preview = props.orbitAddPreview
-  const projection = projections.value.find(candidate => candidate.id === props.orbitAddOwnerId)
-  if (!preview?.radii || !projection) return null
+  const placement = props.orbitCreationPreview
+  const radii = placement?.preview.radii
+  if (!placement || !radii) return null
+  const projection = projections.value.find(candidate => candidate.id === placement.systemId)
+  if (!projection) return null
+  const preview = placement.preview
   const target = preview.target
   const center = target.kind === 'free'
     ? fromNormalizedMapPoint(target.point)
     : target.kind === 'host'
       ? projection.objects.find(object => object.id === target.objectId)?.position
       : undefined
-  return center ? { systemId: projection.id, center, radii: preview.radii, rotation: preview.rotation ?? 0 } : null
+  return center ? { systemId: projection.id, center, radii, rotation: preview.rotation ?? 0 } : null
 })
 
 function addOwnersAtPoint(
@@ -3187,7 +3215,7 @@ defineExpose({
   moveViewPan,
   endViewPan,
   startTouchNavigation,
-  clientPointToScene: orbitDragPointFromClient,
+  orbitDragPointFromClient,
   getOrbitDragStart,
   getOrbitDragSceneClearance,
   isOrbitDragPointOnMap,

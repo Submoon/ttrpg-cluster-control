@@ -3,9 +3,12 @@ import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 import { createOrbitTouchGesture, type OrbitTouchAction, type OrbitTouchContact } from './orbit-touch-gesture'
 import type { Point } from '../../domain/workspace'
 
-export interface OrbitPlacementMap {
+export interface OrbitPlacementProjection {
   clientPointToScene(clientX: number, clientY: number): Point | null
   getOrbitDragSceneClearance(): number | null
+}
+
+export interface OrbitPlacementMap {
   isOrbitDragPointOnMap(clientX: number, clientY: number): boolean
   startOrbitTouchPinch(points: readonly { clientX: number; clientY: number }[]): void
   moveOrbitTouchPinch(points: readonly { clientX: number; clientY: number }[]): void
@@ -18,7 +21,7 @@ export interface OrbitPlacementInputOptions {
   isSystemView(): boolean
   mapKey(): string
   hasAddOrbitIntent(): boolean
-  begin(scenePoint: Point, event: PointerEvent): boolean
+  begin(event: PointerEvent): OrbitPlacementProjection | null
   update(scenePoint: Point, sceneClearance: number): void
   complete(): Promise<boolean>
   cancel(): void
@@ -37,6 +40,7 @@ type OrbitDragPointer = {
   startY: number
   mapKey: string
   phase: 'pending' | 'dragging' | 'cancelled'
+  projection: OrbitPlacementProjection
 }
 
 type OrbitDragClickGuard = {
@@ -55,6 +59,7 @@ export function useOrbitPlacementInput(options: OrbitPlacementInputOptions) {
   let orbitPointer: OrbitDragPointer | null = null
   let orbitTouch: ReturnType<typeof createOrbitTouchGesture> | null = null
   let orbitTouchMapKey: string | null = null
+  let orbitTouchProjection: OrbitPlacementProjection | null = null
   let clickGuard: OrbitDragClickGuard | null = null
   let lastSample: LastOrbitSample | null = null
   let childGestureActive = false
@@ -129,6 +134,7 @@ export function useOrbitPlacementInput(options: OrbitPlacementInputOptions) {
   function clearTouchGesture(): void {
     orbitTouch = null
     orbitTouchMapKey = null
+    orbitTouchProjection = null
     lastSample = null
     syncEditingGesture()
   }
@@ -158,12 +164,18 @@ export function useOrbitPlacementInput(options: OrbitPlacementInputOptions) {
     }
   }
 
+  function activeProjection(): OrbitPlacementProjection | null {
+    return orbitPointer && orbitPointer.phase !== 'cancelled' ? orbitPointer.projection : orbitTouchProjection
+  }
+
   function updatePreviewAt(contact: ClientPoint, allowOutsideMap = false): boolean {
     if (!options.hasAddOrbitIntent() || !options.isSystemView()) return false
     const map = options.map()
     if (!map || (!allowOutsideMap && !map.isOrbitDragPointOnMap(contact.clientX, contact.clientY))) return false
-    const scenePoint = map.clientPointToScene(contact.clientX, contact.clientY)
-    const clearance = map.getOrbitDragSceneClearance()
+    const projection = activeProjection()
+    if (!projection) return false
+    const scenePoint = projection.clientPointToScene(contact.clientX, contact.clientY)
+    const clearance = projection.getOrbitDragSceneClearance()
     if (!scenePoint || clearance === null) return false
     options.update(scenePoint, clearance)
     lastSample = {
@@ -186,8 +198,7 @@ export function useOrbitPlacementInput(options: OrbitPlacementInputOptions) {
 
   function hasUsableReleasePreview(): boolean {
     if (!lastSample) return false
-    const map = options.map()
-    const currentClearance = map?.getOrbitDragSceneClearance()
+    const currentClearance = activeProjection()?.getOrbitDragSceneClearance()
     if (currentClearance === null || currentClearance === undefined) return false
     if (Math.abs(currentClearance - lastSample.clearance) <= 1e-7) return true
     // The release coordinate is deliberately ignored. A viewport refresh must have displayed
@@ -242,6 +253,7 @@ export function useOrbitPlacementInput(options: OrbitPlacementInputOptions) {
       options.map()?.endOrbitTouchPinch()
       orbitTouch = null
       orbitTouchMapKey = null
+      orbitTouchProjection = null
       lastSample = null
     } else if (action === 'cancel') {
       options.cancel()
@@ -284,11 +296,12 @@ export function useOrbitPlacementInput(options: OrbitPlacementInputOptions) {
     if (!event.isPrimary || event.button !== 0 || !options.hasAddOrbitIntent()
       || !options.isSystemView()
       || !options.map()?.isOrbitDragPointOnMap(event.clientX, event.clientY)) return false
-    const scenePoint = options.map()?.clientPointToScene(event.clientX, event.clientY)
-    if (!scenePoint || !options.begin(scenePoint, event)) return false
+    const projection = options.begin(event)
+    if (!projection) return false
 
     orbitTouch = createOrbitTouchGesture(touchContact(event))
     orbitTouchMapKey = options.mapKey()
+    orbitTouchProjection = projection
     lastSample = null
     options.clearPointerLongPress()
     options.clearLongPress()
@@ -314,8 +327,8 @@ export function useOrbitPlacementInput(options: OrbitPlacementInputOptions) {
       && (event.pointerType === 'mouse' || event.pointerType === 'pen')
       && options.hasAddOrbitIntent() && options.isSystemView()
       && options.map()?.isOrbitDragPointOnMap(event.clientX, event.clientY)) {
-      const scenePoint = options.map()?.clientPointToScene(event.clientX, event.clientY)
-      if (scenePoint && options.begin(scenePoint, event)) {
+      const projection = options.begin(event)
+      if (projection) {
         orbitPointer = {
           pointerId: event.pointerId,
           pointerType: event.pointerType,
@@ -323,6 +336,7 @@ export function useOrbitPlacementInput(options: OrbitPlacementInputOptions) {
           startY: event.clientY,
           mapKey: options.mapKey(),
           phase: 'pending',
+          projection,
         }
         lastSample = null
         options.clearPointerLongPress()
@@ -574,6 +588,7 @@ export function useOrbitPlacementInput(options: OrbitPlacementInputOptions) {
     orbitPointer = null
     orbitTouch = null
     orbitTouchMapKey = null
+    orbitTouchProjection = null
     childGestureActive = false
     lastSample = null
     pendingPublications.clear()
@@ -587,7 +602,7 @@ export function useOrbitPlacementInput(options: OrbitPlacementInputOptions) {
     resizeObserver?.disconnect()
     resizeObserver = null
     if (!options.isSystemView() || typeof ResizeObserver === 'undefined') return
-    const svg = options.root()?.querySelector<SVGSVGElement>('.system-map-svg')
+    const svg = options.root()?.querySelector<SVGSVGElement>('.continuous-warden-map-svg, .system-map-svg')
     if (!svg) return
     resizeObserver = new ResizeObserver(refreshForViewportChange)
     resizeObserver.observe(svg)
