@@ -26,6 +26,8 @@ During implementation on 2026-11-16, both `main` and `origin/main` advanced to `
 
 On 2026-11-17, the Preview preparation fetch advanced `origin/main` to `686ea383378184778711af552db589f6cfa14037`. Local `main` was fast-forwarded to match. The integration branch incorporated that application baseline at `6dbf693c6aa5f255f14c91a2a1ef91e9c2944892`, retaining marker colors, Warden draft presentation, and Dropbox backup and restore for the final qualification. Earlier isolated ticket checks used the integrated `88d84f17` baseline.
 
+On 2026-11-18, local `main` was fast-forwarded to `0774efc2f80490aa9889d73c61660792115ca033`. Integration commit `96b1e9fb69b4c15e370dd04cb373e6a7811e9996` incorporates the shared cloud backup restore UI and updated Preview verification.
+
 ## User Stories
 
 ### Explore and arrange the map
