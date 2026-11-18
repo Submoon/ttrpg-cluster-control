@@ -61,7 +61,8 @@ globalThis.measureContinuousMap = function measureContinuousMap(scene, scenario)
       }
       if (selection?.mark === target && record.attributeName === 'aria-pressed' && target.getAttribute('aria-pressed') === 'true') {
         const pending = selection
-        requestAnimationFrame(frame => { if (selection === pending) selectionPaint ??= frame - clockStart })
+        // The RAF timestamp can precede input in the same browser frame. Read the clock when this callback actually runs.
+        requestAnimationFrame(() => { if (selection === pending) selectionPaint ??= performance.now() - clockStart })
       }
     }
   }
