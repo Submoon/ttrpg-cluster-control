@@ -69,7 +69,7 @@
           <MapEditorLayout
           mode="cluster"
           :hierarchy-label="activeView === 'cluster' ? 'Jump Cluster contents' : 'System hierarchy'"
-          :inspector-label="activeView === 'cluster' ? 'Jump Route inspector' : 'Object inspector'"
+          :inspector-label="inspectorLabel"
           :hierarchy-visible="hierarchyPanelVisible"
           :inspector-visible="inspectorPanelVisible"
           :entity-inspector-active="!chartEditing && inspectorMode === 'system' && Boolean(inspectorSelectedObject || inspectorSelectedOrbit)"
@@ -448,8 +448,8 @@
                     :feedback-element="workspaceFeedbackRef"
                     @select-cluster-system="selectClusterSystem"
                     @move-select-cluster-system="selectClusterSystem($event, false)"
-                    @select-continuous-object="(systemId, objectId) => inspectContinuousTarget({ kind: 'object', systemId, objectId })"
-                    @select-continuous-orbit="(systemId, orbitId) => inspectContinuousTarget({ kind: 'orbit', systemId, orbitId })"
+                    @select-continuous-object="(systemId, objectId, openInspector) => inspectContinuousTarget({ kind: 'object', systemId, objectId }, openInspector)"
+                    @select-continuous-orbit="(systemId, orbitId, openInspector) => inspectContinuousTarget({ kind: 'orbit', systemId, orbitId }, openInspector)"
                     @select-route="selectRoute"
                     @move-select-route="selectRoute($event, false)"
                     @select-object="selectObject"
@@ -1161,6 +1161,17 @@ const {
   routeSession, hasModifiedRouteSession, offerRouteSystems, chooseRouteSystem, chooseRoutePoint, updateRouteInput,
   applyRouteSession, discardRouteSession, cancelRouteCreation,
 } = inspector
+const inspectorLabel = computed(() => {
+  if (chartEditing.value) return 'Jump Cluster details editor'
+  if (inspectorMode.value === 'system') {
+    if (selectedObjectIds.value.length > 1) return 'Object selection'
+    if (inspectorSelectedObject.value) return 'Object inspector'
+    if (inspectorSelectedOrbit.value) return 'Orbit inspector'
+  } else if (routeSession.value || selectedRoute.value) {
+    return 'Jump Route inspector'
+  }
+  return inspectorSelectedSystem.value ? 'Star System details' : 'Jump Cluster details'
+})
 const { editorError } = feedback
 const moveSelectionError = workflows.move.error
 const { orbitAdjustmentPreview, updateOrbitAdjustment, beforeWorkspaceOperation, resetOrbitAdjustments } = adjustments
