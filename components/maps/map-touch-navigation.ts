@@ -3,10 +3,14 @@ import { MAP_ZOOM_MAX_SCALE } from '../../utils/map-zoom'
 export type MapTouchSurface = 'cluster' | 'system'
 
 export const MAP_TOUCH_PAN_THRESHOLD_PX = 9
+const MAX_TAP_DURATION_MS = 250
+const DOUBLE_TAP_INTERVAL_MS = 300
+const DOUBLE_TAP_RADIUS_PX = 24
 
 export interface MapTouchPoint {
   clientX: number
   clientY: number
+  identifier?: number
 }
 
 /** The native touch fields and event methods used by the mounted map controller. */
@@ -14,6 +18,9 @@ export interface MapTouchEvent {
   readonly touches: ArrayLike<MapTouchPoint>
   readonly target: EventTarget | null
   readonly ctrlKey: boolean
+  readonly type?: string
+  readonly timeStamp?: number
+  readonly changedTouches?: ArrayLike<MapTouchPoint>
   preventDefault(): void
   stopPropagation(): void
   stopImmediatePropagation(): void
@@ -40,6 +47,7 @@ export interface MapTouchNavigationOptions {
   isEnabled(): boolean
   moveEnabled(): boolean
   getCamera(): MapTouchCamera | null
+  canDoubleTap?(target: EventTarget | null): boolean
   /** Cancels the map's local editing/placement previews before an ordinary multi-touch takeover. */
   onPinchTakeover(): void
 }
@@ -71,6 +79,7 @@ type TouchGesture =
       viewport: MapTouchViewport
       start: [number, number]
       startClient: [number, number]
+      tap: { id: number; startedAt: number } | null
     }
   | { kind: 'pan'; viewport: MapTouchViewport; start: [number, number] }
   | {
@@ -87,6 +96,39 @@ type TouchGesture =
  */
 export function createMapTouchNavigation(options: MapTouchNavigationOptions) {
   let gesture: TouchGesture | null = null
+  let previousTap: { point: MapTouchPoint; endedAt: number; viewport: MapTouchViewport } | null = null
+
+  function clearDoubleTap(): void {
+    previousTap = null
+    if (gesture?.kind === 'pending-pan') gesture.tap = null
+  }
+
+  function finishTap(pending: Extract<TouchGesture, { kind: 'pending-pan' }>, event: MapTouchEvent, camera: MapTouchCamera): void {
+    const prior = previousTap
+    previousTap = null
+    const release = event.changedTouches?.[0]
+    const endedAt = event.timeStamp
+    if (!pending.tap || !release || event.changedTouches?.length !== 1 || event.type !== 'touchend'
+      || release.identifier !== pending.tap.id || typeof endedAt !== 'number' || !Number.isFinite(endedAt)
+      || endedAt < pending.tap.startedAt || endedAt - pending.tap.startedAt > MAX_TAP_DURATION_MS
+      || Math.hypot(release.clientX - pending.startClient[0], release.clientY - pending.startClient[1]) > MAP_TOUCH_PAN_THRESHOLD_PX
+      || !camera.isPinchReady() || !options.canDoubleTap?.(event.target)) return
+
+    const viewport = camera.getViewport()
+    if (!prior || pending.tap.startedAt < prior.endedAt || endedAt - prior.endedAt > DOUBLE_TAP_INTERVAL_MS
+      || Math.hypot(release.clientX - prior.point.clientX, release.clientY - prior.point.clientY) > DOUBLE_TAP_RADIUS_PX
+      || viewport.x !== prior.viewport.x || viewport.y !== prior.viewport.y || viewport.k !== prior.viewport.k) {
+      previousTap = { point: { clientX: release.clientX, clientY: release.clientY }, endedAt, viewport }
+      return
+    }
+
+    const [x, y] = camera.pointFromClient(release)
+    const k = Math.min(MAP_ZOOM_MAX_SCALE, viewport.k * 2)
+    const ratio = k / viewport.k
+    camera.applyViewport({ x: x - (x - viewport.x) * ratio, y: y - (y - viewport.y) * ratio, k })
+    event.preventDefault()
+    event.stopImmediatePropagation()
+  }
 
   function beginPinch(camera: MapTouchCamera | null, points: readonly MapTouchPoint[]): void {
     if (!camera || !camera.isPinchReady() || points.length < 2) return
@@ -120,29 +162,41 @@ export function createMapTouchNavigation(options: MapTouchNavigationOptions) {
   }
 
   function start(event: MapTouchEvent): void {
-    if (!options.isEnabled()) return
+    if (!options.isEnabled()) {
+      cancel()
+      return
+    }
     const points = Array.from(event.touches)
     if (points.length === 1) {
       const camera = options.getCamera()
       if (!camera || (options.moveEnabled() && event.ctrlKey)
         || !isSingleTouchPanEligible(event.target, options.moveEnabled(), options.surface)) {
-        gesture = null
+        cancel()
         return
       }
       camera.interrupt()
       const liveCamera = options.getCamera()
       if (!liveCamera) {
-        gesture = null
+        cancel()
         return
       }
+      const point = points[0]!
+      const startedAt = event.timeStamp
+      const tap = event.type === 'touchstart' && typeof startedAt === 'number' && Number.isFinite(startedAt)
+        && point.identifier !== undefined && options.canDoubleTap?.(event.target)
+        ? { id: point.identifier, startedAt }
+        : null
+      if (!tap) clearDoubleTap()
       gesture = {
         kind: 'pending-pan',
         viewport: liveCamera.getViewport(),
-        start: liveCamera.pointFromClient(points[0]!),
-        startClient: [points[0]!.clientX, points[0]!.clientY],
+        start: liveCamera.pointFromClient(point),
+        startClient: [point.clientX, point.clientY],
+        tap,
       }
       return
     }
+    clearDoubleTap()
     if (points.length < 2) return
 
     // Takeover can synchronously cancel this controller or redraw its map, so reacquire the
@@ -160,11 +214,13 @@ export function createMapTouchNavigation(options: MapTouchNavigationOptions) {
     if (!camera || !camera.isPinchReady()) return
     const points = Array.from(event.touches)
     if (gesture.kind === 'pending-pan') {
+      if (points.length !== 1) clearDoubleTap()
       const touch = points[0]
       if (!touch || Math.hypot(
         touch.clientX - gesture.startClient[0],
         touch.clientY - gesture.startClient[1],
       ) <= MAP_TOUCH_PAN_THRESHOLD_PX) return
+      clearDoubleTap()
       gesture = { kind: 'pan', viewport: gesture.viewport, start: gesture.start }
     }
 
@@ -184,9 +240,15 @@ export function createMapTouchNavigation(options: MapTouchNavigationOptions) {
   }
 
   function end(event: MapTouchEvent): void {
-    if (!options.isEnabled() || !gesture) return
+    if (!options.isEnabled() || !gesture) {
+      clearDoubleTap()
+      return
+    }
     const camera = options.getCamera()
-    if (!camera || (options.surface === 'system' && !camera.isPinchReady())) return
+    if (!camera || (options.surface === 'system' && !camera.isPinchReady())) {
+      clearDoubleTap()
+      return
+    }
     const points = Array.from(event.touches)
     if (points.length >= 2) {
       beginPinch(camera, points)
@@ -199,6 +261,8 @@ export function createMapTouchNavigation(options: MapTouchNavigationOptions) {
         }
       }
     } else {
+      if (gesture.kind === 'pending-pan') finishTap(gesture, event, camera)
+      else clearDoubleTap()
       gesture = null
     }
   }
@@ -206,6 +270,7 @@ export function createMapTouchNavigation(options: MapTouchNavigationOptions) {
   /** Starts an Orbit-owned pinch without triggering ordinary edit takeover or DOM consumption. */
   function startPinch(points: readonly MapTouchPoint[]): void {
     if (!options.isEnabled() || points.length < 2) return
+    clearDoubleTap()
     options.getCamera()?.interrupt()
     beginPinch(options.getCamera(), points)
   }
@@ -219,7 +284,8 @@ export function createMapTouchNavigation(options: MapTouchNavigationOptions) {
 
   function cancel(): void {
     gesture = null
+    clearDoubleTap()
   }
 
-  return { start, move, end, startPinch, movePinch, endPinch: cancel, cancel }
+  return { start, move, end, startPinch, movePinch, endPinch: cancel, cancel, clearDoubleTap }
 }
