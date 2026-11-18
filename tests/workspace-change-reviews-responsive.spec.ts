@@ -2,10 +2,10 @@ import { expect, test, type Locator } from './fixtures'
 import { createLocalWorkspace, exportJumpCluster } from '../domain/workspace'
 import {
   captureMapExportBlobs,
+  createSingleSystemWorkspace,
   downloadJson,
-  returnToClusterMap,
   reviewJumpClusterBackup,
-  setWorkspaceMapMode,
+  wardenObjectMark,
 } from './helpers'
 
 type ReviewViewport = {
@@ -43,20 +43,16 @@ async function expectReviewActionInViewport(
 
 for (const viewport of reviewViewports) {
   test(`deletion and cluster replacement reviews fit and return focus at ${viewport.width}×${viewport.height} ${viewport.theme}`, async ({ page }) => {
-    await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await page.emulateMedia({ colorScheme: viewport.theme })
     await captureMapExportBlobs(page)
-    await page.goto('/')
+    const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+      viewport: { width: viewport.width, height: viewport.height },
+    })
     await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${viewport.theme}\\b`))
-    await page.getByLabel('Jump Cluster', { exact: true }).fill('Kestrel Reach')
-    await page.getByLabel('First star system', { exact: true }).fill('Vesper')
-    await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
 
-    await setWorkspaceMapMode(page, 'Select')
-    const systemMap = page.getByRole('group', { name: 'Vesper star system map', exact: true })
-    const primaryStar = systemMap.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true })
+    const primaryStar = wardenObjectMark(page, systemId, primaryObjectId)
     await expect(primaryStar).toBeInViewport()
-    await primaryStar.click()
+    await primaryStar.press('Enter')
     const inspector = page.locator('#workspace-inspector-panel')
     await expect(inspector).toBeVisible()
     const deleteButton = page.getByRole('button', { name: 'Delete Primary Star', exact: true })
@@ -79,7 +75,6 @@ for (const viewport of reviewViewports) {
     await expect(deleteButton).toBeVisible()
     await expect(inspector).toContainText('Primary Star')
     await page.getByRole('button', { name: 'Hide inspector', exact: true }).click()
-    await returnToClusterMap(page)
 
     const incomingJson = JSON.stringify(exportJumpCluster(createLocalWorkspace('Incoming Reach', 'Incoming Vesper')))
     const restoreReview = await reviewJumpClusterBackup(page, 'incoming-reach.json', incomingJson)

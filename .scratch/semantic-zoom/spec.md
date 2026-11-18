@@ -28,6 +28,8 @@ On 2026-11-17, the Preview preparation fetch advanced `origin/main` to `686ea383
 
 On 2026-11-18, local `main` was fast-forwarded to `0774efc2f80490aa9889d73c61660792115ca033`. Integration commit `96b1e9fb69b4c15e370dd04cb373e6a7811e9996` incorporates the shared cloud backup restore UI and updated Preview verification.
 
+A second fetch on 2026-11-18 advanced local `main` and `origin/main` to `48873799dac97b84856db676176b5c6b869b5620`, including the application logo and favicon. The activation runs through `06f6b1d64bbbc5c1ea95b7fe93fddbb1571edc5c` intentionally retained the earlier baseline for exact verification. Integration `cb76f4ecc9bfcd930df8e108b4c467981f742bc6` incorporates the refreshed baseline for subsequent qualification.
+
 ## User Stories
 
 ### Explore and arrange the map

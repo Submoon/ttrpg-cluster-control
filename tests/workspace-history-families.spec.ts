@@ -30,7 +30,7 @@ import {
   createSingleSystemWorkspace,
   downloadJson,
   openWorkspaceHierarchy,
-  returnToClusterMap,
+  fitWorkspaceMap,
 } from './helpers'
 
 function fakeImportInput(content: string, readContent: () => Promise<string> = async () => content): { event: Event; restore(): void } {
@@ -781,7 +781,7 @@ test('reviewed system deletion restores the same cascade through the editor Undo
   test.setTimeout(60_000)
   await captureMapExportBlobs(page)
   await createSingleSystemWorkspace(page)
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
   await addClusterSystem(page)
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
   await openWorkspaceHierarchy(page, 'Jump Cluster contents')

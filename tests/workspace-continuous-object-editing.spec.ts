@@ -8,7 +8,7 @@ import {
   selectCatalogueObjectButton,
   selectInspectorOption,
   waitForWorkspaceSaved,
-  waitForWorkspaceStartup,
+  wardenMap,
   workspaceZoomControls,
 } from './helpers'
 
@@ -102,10 +102,9 @@ test('continuous Add keeps a definite owner, uses local geometry, and asks befor
   await captureMapExportBlobs(page)
   const { systemId, systemName, primaryObjectId } = await createSingleSystemWorkspace(page)
 
-  const systemMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
-  const existingOrbits = new Set(await systemMap.locator('.orbit-mark[data-orbit-id]').evaluateAll(elements =>
-    elements.map(element => element.getAttribute('data-orbit-id')).filter((value): value is string => value !== null),
-  ))
+  const map = wardenMap(page)
+  const orbit = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"]`)
+  await expect(orbit).toHaveCount(0)
   await (await dockAction(page, 'Add orbit')).click()
   const orbitControls = page.getByRole('group', { name: 'Orbit creation controls', exact: true })
   const placementToggle = orbitControls.getByRole('button', { name: 'Placement', exact: true })
@@ -118,22 +117,17 @@ test('continuous Add keeps a definite owner, uses local geometry, and asks befor
   await page.getByLabel('Rotation', { exact: true }).fill('23')
   await page.getByRole('form', { name: 'Placement', exact: true })
     .getByRole('button', { name: 'Add', exact: true }).click()
-  const orbitMarks = systemMap.locator('.orbit-mark[data-orbit-id]')
-  await expect(orbitMarks).toHaveCount(existingOrbits.size + 1)
-  const orbitId = await orbitMarks.evaluateAll((elements, oldIds) =>
-    elements.map(element => element.getAttribute('data-orbit-id'))
-      .find((value): value is string => value !== null && !oldIds.includes(value)),
-    [...existingOrbits],
-  )
-  if (!orbitId) throw new Error('The added Orbit is missing its domain identity.')
   await quitSystemAdd(page)
   await waitForWorkspaceSaved(page)
 
-  await page.goto('/?map=continuous')
-  await waitForWorkspaceStartup(page)
-  const map = page.getByRole('group', { name: /continuous map$/ }).first()
+  const addedOrbitSnapshot = await downloadJson(page, 'Export Jump Cluster JSON')
+  const createdOrbit = addedOrbitSnapshot.cluster?.systems.find(system => system.id === systemId)?.orbits[0]
+  if (!createdOrbit) throw new Error('The added Orbit is missing from its owner in the saved layout.')
+  const orbitId = createdOrbit.id
+  expect(createdOrbit.hostId).toBe(primaryObjectId)
+  expect(addedOrbitSnapshot.layout.orbitRadii[orbitId]).toEqual({ horizontal: 400, vertical: 320 })
+  expect(addedOrbitSnapshot.layout.orbitRotations?.[orbitId]).toBe(23)
   const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
-  const orbit = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"][data-orbit-id="${orbitId}"]`)
   for (let attempt = 0; attempt < 18 && !(await orbit.isVisible().catch(() => false)); attempt += 1) {
     await zoomIn.click()
   }
@@ -216,13 +210,12 @@ test('continuous Add keeps a definite owner, uses local geometry, and asks befor
 })
 
 test('continuous Add protects a modified route draft after a different Cluster Add tool was armed', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 960 })
-  const { systemName } = await createSingleSystemWorkspace(page)
-  await page.goto('/?map=continuous')
-  await waitForWorkspaceStartup(page)
+  const { systemName } = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
 
   await (await dockAction(page, 'Add Jump Route')).click()
-  const inspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
+  const resumeRoute = page.getByRole('button', { name: 'Resume Jump Route', exact: true })
+  await resumeRoute.click()
+  const inspector = page.locator('#workspace-inspector-panel')
   const origin = inspector.getByLabel('From system', { exact: true })
   await selectInspectorOption(origin, systemName)
   await expect(origin).toContainText(systemName)
@@ -234,5 +227,6 @@ test('continuous Add protects a modified route draft after a different Cluster A
   await stay.click()
 
   await expect(page.getByRole('dialog', { name: 'Name this object type', exact: true })).toBeHidden()
+  if (!await origin.isVisible()) await resumeRoute.click()
   await expect(origin).toContainText(systemName)
 })

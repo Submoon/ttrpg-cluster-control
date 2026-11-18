@@ -630,6 +630,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       },
       creation: {
         creationSession: systemCreation.creationSession,
+        orbitDragPreview: systemCreation.orbitDragPreview,
         chooseCreationType: systemCreation.chooseCreationType,
         chooseCreationCandidate: systemCreation.chooseCreationCandidate,
         updateCreationInput: systemCreation.updateCreationInput,

@@ -1,265 +1,112 @@
-import { expect, test, type Page } from './fixtures'
+import { expect, test } from './fixtures'
 import {
-  activeWorkspaceFeedback,
   addClusterSystem,
-  dragHtmlElementToWorldPoint,
-  ensureMapDragPointsReachable,
+  centerWorkspaceSelection,
+  createSingleSystemWorkspace,
+  editMapObject,
+  fitWorkspaceMap,
   openWorkspaceHierarchy,
-  openWorkspaceZoomNavigation,
-  parseMapCameraTransform,
-  quitSystemAdd,
-  selectCatalogueObjectButton,
+  setWorkspaceMapMode,
+  wardenMap,
+  wardenObjectMark,
+  wardenSystemMark,
+  workspaceNavigation,
 } from './helpers'
 
-async function createWorkspace(page: Page): Promise<void> {
-  await page.goto('/')
-  await page.getByRole('textbox', { name: 'Jump Cluster' }).fill('Kestrel Reach')
-  await page.getByRole('textbox', { name: 'First star system' }).fill('Vesper')
-  await expect(page.getByRole('button', { name: 'Back to Jump Cluster' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Hierarchy' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Inspect' })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await expect(page.getByRole('toolbar', { name: 'Workspace navigation' })).toBeVisible()
-  await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
-}
-
-
-
-test('Navigate opens systems, Select inspects them, and Hierarchy opens inline chart editing in Inspector', async ({ page }) => {
-  await createWorkspace(page)
-  await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
-
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await expect(page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }))
-    .toHaveAttribute('aria-pressed', 'true')
-  await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Navigate' }).click()
-  const navigateSystemMark = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
-  const contextMenu = page.getByRole('menu', { name: 'Player visibility', exact: true })
-  await navigateSystemMark.click({ button: 'right' })
-  await expect(contextMenu.getByRole('menuitem', { name: 'Change Visibility', exact: true })).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(contextMenu).toBeHidden()
-  await navigateSystemMark.click()
-  await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
-  await expect(page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }))
-    .toHaveAttribute('aria-pressed', 'true')
-  await expect(clusterMap).toHaveCount(0)
-
-  await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
-  await expect(page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }))
-    .toHaveAttribute('aria-pressed', 'true')
-  const selectMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Move' }).click()
-  const systemMark = selectMap.getByRole('button', { name: 'Select Vesper system' })
-  const scene = selectMap.locator('.cluster-map-content')
+test('the unified Warden map pans on a right drag and opens the visibility menu on a right click', async ({ page }) => {
+  const { systemId } = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 900 } })
+  await addClusterSystem(page)
+  await fitWorkspaceMap(page)
+  await setWorkspaceMapMode(page, 'Move')
+  const map = wardenMap(page)
+  const system = wardenSystemMark(page, systemId)
+  const scene = map.locator('.cluster-map-content')
   const viewportBeforeDrag = await scene.getAttribute('transform')
-  const bounds = await systemMark.boundingBox()
-  if (!bounds || !viewportBeforeDrag) throw new Error('The cluster map is not ready for right-drag.')
-  // Exercise browsers that emit contextmenu on press, before the drag threshold is reached.
-  const pressRightButtonOnSystem = async (point: { x: number; y: number }) => {
+  const anchorBeforeDrag = await system.getAttribute('transform')
+  if (!viewportBeforeDrag || !anchorBeforeDrag) throw new Error('The system and camera must be ready for right-drag.')
+  const contextMenu = page.getByRole('menu', { name: 'Player visibility', exact: true })
+
+  // Exercise a browser that emits contextmenu on press before the drag crosses the threshold.
+  const pressRightButtonOnSystem = async () => {
+    const bounds = await system.boundingBox()
+    if (!bounds) throw new Error('The right-button target has no visible bounds.')
+    const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
     await page.mouse.move(point.x, point.y)
     await page.mouse.down({ button: 'right' })
     await page.evaluate(({ x, y }) => {
       const target = document.elementFromPoint(x, y)
-      if (!target?.closest('.cluster-system-node')) throw new Error('The right button press did not hit a system.')
+      if (!target?.closest('.continuous-warden-system-anchor')) throw new Error('The right press did not hit the system anchor.')
       target.dispatchEvent(new MouseEvent('contextmenu', {
-        bubbles: true,
-        cancelable: true,
-        button: 2,
-        buttons: 2,
-        clientX: x,
-        clientY: y,
+        bubbles: true, cancelable: true, button: 2, buttons: 2, clientX: x, clientY: y,
       }))
     }, point)
+    return point
   }
-  const start = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
-  await pressRightButtonOnSystem(start)
+
+  const start = await pressRightButtonOnSystem()
   await page.mouse.move(start.x + 75, start.y + 32, { steps: 5 })
   await page.mouse.up({ button: 'right' })
   await expect(contextMenu).toHaveCount(0)
   await expect(scene).not.toHaveAttribute('transform', viewportBeforeDrag)
-  await expect(selectMap.locator('.cluster-system-node.is-selected')).toHaveCount(0)
+  await expect(system).toHaveAttribute('transform', anchorBeforeDrag)
 
-  // Recalculate the target after the camera moves and verify that a new click is not suppressed.
-  const movedBounds = await systemMark.boundingBox()
-  if (!movedBounds) throw new Error('The system is not ready for a right click after the pan.')
-  await pressRightButtonOnSystem({
-    x: movedBounds.x + movedBounds.width / 2,
-    y: movedBounds.y + movedBounds.height / 2,
-  })
+  await pressRightButtonOnSystem()
   await expect(contextMenu).toHaveCount(0)
   await page.mouse.up({ button: 'right' })
   await expect(contextMenu.getByRole('menuitem', { name: 'Change Visibility', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(contextMenu).toBeHidden()
-  await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
-  await systemMark.click()
+})
 
-  await expect(selectMap).toBeVisible()
-  await expect(page.locator('#workspace-inspector-panel').getByRole('heading', { name: 'Vesper', exact: true })).toBeVisible()
-  await addClusterSystem(page)
+test('one Warden camera keeps the inspected draft and keyboard focus through semantic detail changes', async ({ page }) => {
+  const { systemId, primaryObjectId, systemName } = await createSingleSystemWorkspace(page, {
+    viewport: { width: 1440, height: 900 },
+  })
+  await addClusterSystem(page, { position: { x: 0.86, y: 0.72 } })
+  await fitWorkspaceMap(page)
+  const map = wardenMap(page)
+  await expect(map).toHaveCount(1)
+  await expect(page.locator('svg.system-map-svg')).toHaveCount(0)
+  const scene = map.locator('.cluster-map-content')
+  const systemNameMark = map.locator('.continuous-warden-name-target')
+    .and(map.getByRole('button', { name: `Select ${systemName}`, exact: true }))
+  const initialCamera = await scene.getAttribute('transform')
+  if (!initialCamera) throw new Error('The Warden camera must be initialized.')
 
-  const secondSystem = selectMap.getByRole('button', { name: 'Select New System 2 system', exact: true })
-  await secondSystem.click()
+  const modeGroup = workspaceNavigation(page).getByRole('group', { name: 'Map interaction mode' })
+  await expect(modeGroup.getByRole('button', { name: 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(modeGroup.getByRole('button', { name: 'Navigate', exact: true })).toHaveCount(0)
+  await systemNameMark.click()
+  await expect(systemNameMark).toHaveClass(/is-selected/)
+  await expect(scene).toHaveAttribute('transform', initialCamera)
+  await centerWorkspaceSelection(page)
+  const star = wardenObjectMark(page, systemId, primaryObjectId)
+  await expect(star).toBeVisible()
+  await expect(scene).not.toHaveAttribute('transform', initialCamera)
 
+  await star.press('Enter')
+  await editMapObject(page)
   const inspector = page.locator('#workspace-inspector-panel')
-  await expect(inspector.getByRole('region', { name: 'Jump Cluster details', exact: true })).toBeVisible()
-  await expect(inspector.getByRole('heading', { name: 'New System 2', exact: true })).toBeVisible()
+  const draftName = inspector.getByLabel('Name', { exact: true })
+  await draftName.fill('Unapplied Primary')
+  await expect(star).toHaveAccessibleName(/Unapplied Primary/)
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  const openChartDetails = hierarchy.getByRole('button', { name: 'Open Jump Cluster details', exact: true })
-  await expect(openChartDetails).toHaveCount(1)
-  await expect(hierarchy.getByRole('button', { name: 'Edit Jump Cluster details', exact: true })).toHaveCount(0)
-  await openChartDetails.click()
-  const starSystemDetails = inspector.getByRole('region', { name: 'Jump Cluster details', exact: true })
-  await expect(starSystemDetails.getByText('Jump Cluster details', { exact: true })).toBeVisible()
-  const editChartDetails = starSystemDetails.getByRole('button', { name: 'Edit Jump Cluster details', exact: true })
-  await expect(editChartDetails).toBeVisible()
-  await expect(inspector.getByRole('button', { name: /^(Chart|Jump Cluster) details$/i })).toHaveCount(0)
-  await editChartDetails.click()
-  const editor = page.getByRole('form', { name: 'Edit Jump Cluster details', exact: true })
-  await expect(editor).toBeVisible()
-  await expect(inspector.getByRole('heading', { name: 'Edit Jump Cluster details', exact: true })).toBeVisible()
-  await expect(page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })).toHaveCount(0)
-  await expect(editor.getByLabel('Star system', { exact: true })).toHaveValue('New System 2')
-  await expect(page.locator('.cluster-map-svg')).toBeVisible()
-  await editor.getByLabel('Star system', { exact: true }).fill('Unapplied System 2')
-  await expect(selectMap.getByRole('button', { name: 'Select Unapplied System 2 system', exact: true })).toBeVisible()
-  await expect(hierarchy.getByRole('button', { name: 'Open Unapplied System 2 system map', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
-  await expect(inspector).toBeHidden()
-  await expect(editor).toBeHidden()
-  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft', exact: true })
-  await resumeDraft.click()
-  await expect(editor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied System 2')
-  await expect(editor.getByLabel('Jump Cluster', { exact: true })).toBeFocused()
-  await expect(selectMap).toBeVisible()
+  const starRow = hierarchy.getByRole('treeitem', { name: /Select .*Unapplied Primary/ })
+  await expect(starRow).toHaveAttribute('aria-selected', 'true')
+
+  await star.focus()
+  const bounds = await map.boundingBox()
+  if (!bounds) throw new Error('The Warden canvas must be visible for wheel zoom.')
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+  await page.mouse.wheel(0, 1800)
+  await expect(star).toHaveCount(0)
+  await expect(systemNameMark.or(map).and(page.locator(':focus'))).toHaveCount(1)
+  await expect(draftName).toHaveValue('Unapplied Primary')
+  await expect(starRow).toHaveAttribute('aria-selected', 'true')
+
+  await centerWorkspaceSelection(page)
+  await expect(star).toHaveAttribute('aria-pressed', 'true')
+  await expect(star).toHaveAccessibleName(/Unapplied Primary/)
+  await expect(draftName).toHaveValue('Unapplied Primary')
+  await expect(map).toHaveCount(1)
 })
-
-
-
-test('A to B to A restores each system camera and the selected map object', async ({ page }) => {
-  await createWorkspace(page)
-  const starLabel = 'Select A, Primary Star (Star)'
-  const hierarchyStarLabel = 'Select A, Primary Star'
-  await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
-  await page.getByRole('group', { name: 'Vesper star system map' }).getByRole('button', { name: starLabel }).click()
-  const firstHierarchy = await openWorkspaceHierarchy(page)
-  const firstStar = firstHierarchy.getByRole('treeitem', { name: hierarchyStarLabel })
-  await expect(firstStar).toHaveAttribute('aria-selected', 'true')
-  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-
-  const scene = page.locator('.system-map-svg .system-map-content')
-  const cameraBeforeFirstPan = parseMapCameraTransform(await scene.getAttribute('transform'))
-  await (await openWorkspaceZoomNavigation(page)).getByRole('button', { name: 'Pan map right' }).click()
-  await expect.poll(async () => parseMapCameraTransform(await scene.getAttribute('transform'))).toEqual({
-    ...cameraBeforeFirstPan,
-    x: cameraBeforeFirstPan.x + 80,
-  })
-  const firstSystemViewport = await scene.getAttribute('transform')
-
-  await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
-  await addClusterSystem(page, { open: true })
-  await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }).click()
-  await page.getByRole('group', { name: 'New System 2 star system map' }).getByRole('button', { name: starLabel }).click()
-
-  const secondSystemScene = page.locator('.system-map-svg .system-map-content')
-  const cameraBeforeSecondPan = parseMapCameraTransform(await secondSystemScene.getAttribute('transform'))
-  await (await openWorkspaceZoomNavigation(page)).getByRole('button', { name: 'Pan map left' }).click()
-  await expect.poll(async () => parseMapCameraTransform(await secondSystemScene.getAttribute('transform'))).toEqual({
-    ...cameraBeforeSecondPan,
-    x: cameraBeforeSecondPan.x - 80,
-  })
-  const secondSystemViewport = await secondSystemScene.getAttribute('transform')
-
-  await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
-  await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Navigate' }).click()
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await clusterMap.getByRole('button', { name: 'Open Vesper system map' }).click()
-  await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
-  const restoredFirstHierarchy = await openWorkspaceHierarchy(page)
-  await expect(restoredFirstHierarchy.getByRole('treeitem', { name: hierarchyStarLabel })).toHaveAttribute('aria-selected', 'true')
-  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-  await expect(page.locator('.system-map-svg .system-map-content')).toHaveAttribute('transform', firstSystemViewport!)
-
-  await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
-  const clusterMapAfterReturn = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await page.getByRole('button', { name: 'Fit map' }).click()
-  await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Navigate' }).click()
-  await clusterMapAfterReturn.getByRole('button', { name: 'Open New System 2 system map' }).click()
-  await expect(page.getByRole('group', { name: 'New System 2 star system map' })).toBeVisible()
-  const restoredSecondHierarchy = await openWorkspaceHierarchy(page)
-  await expect(restoredSecondHierarchy.getByRole('treeitem', { name: hierarchyStarLabel })).toHaveAttribute('aria-selected', 'true')
-  await expect(page.locator('.system-map-svg .system-map-content')).toHaveAttribute('transform', secondSystemViewport!)
-})
-
-
-
-
-
-test('a held mouse press inspects an entity without navigating or publishing a click', async ({ page }) => {
-  await createWorkspace(page)
-  await page.getByRole('button', { name: 'Back to Jump Cluster' }).click()
-  await page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Navigate' }).click()
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  const system = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
-  const bounds = await system.boundingBox()
-  expect(bounds).not.toBeNull()
-
-  await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2)
-  await page.mouse.down()
-  await page.waitForTimeout(620)
-  await page.mouse.up()
-
-  await expect(clusterMap).toBeVisible()
-  await expect(page.getByRole('group', { name: 'Vesper star system map' })).toHaveCount(0)
-  await expect(page.locator('#workspace-inspector-panel').getByRole('heading', { name: 'Vesper', exact: true })).toBeVisible()
-
-  // Long-press consumes its own follow-up click; the next click is a separate action.
-  await system.click()
-  await expect(page.getByRole('group', { name: 'Vesper star system map' })).toBeVisible()
-})
-
-
-
-const legacyPaletteModes = ['Move'] as const
-const legacyPaletteObjectPoint = { x: 220, y: 180 }
-const legacyPaletteOrbitPoint = { x: 730, y: 150 }
-
-for (const mode of legacyPaletteModes) {
-  test(`legacy Object and Orbit palette drags work in ${mode} mode`, async ({ page }) => {
-    await createWorkspace(page)
-    const map = page.getByRole('group', { name: 'Vesper star system map' })
-    const modeButton = page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: mode })
-    await modeButton.click()
-    await expect(modeButton).toHaveAttribute('aria-pressed', 'true')
-
-    const objectCount = await map.locator('.system-object').count()
-    const addPlanet = await selectCatalogueObjectButton(page, 'planet')
-    await ensureMapDragPointsReachable(page, map, addPlanet, legacyPaletteObjectPoint)
-    await dragHtmlElementToWorldPoint(page, addPlanet, map, legacyPaletteObjectPoint)
-    await expect(map.locator('.system-object')).toHaveCount(objectCount + 1)
-    await quitSystemAdd(page)
-    await expect(page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }))
-      .toHaveAttribute('aria-pressed', 'true')
-
-    await modeButton.click()
-    await expect(modeButton).toHaveAttribute('aria-pressed', 'true')
-    const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
-    if (await inspectToggle.getAttribute('aria-expanded') === 'true') await inspectToggle.click()
-
-    const addToggle = page.getByRole('button', { name: 'Add to map', exact: true, includeHidden: true })
-    if (await addToggle.getAttribute('aria-expanded') !== 'true') await addToggle.click()
-    await expect(addToggle).toHaveAttribute('aria-expanded', 'true')
-    await expect(page.getByRole('region', { name: 'Object palette', exact: true })).toBeVisible()
-
-    const orbitCount = await map.locator('.orbit-mark').count()
-    const addOrbit = page.getByRole('button', { name: 'Add orbit', exact: true })
-    await ensureMapDragPointsReachable(page, map, addOrbit, legacyPaletteOrbitPoint)
-    await dragHtmlElementToWorldPoint(page, addOrbit, map, legacyPaletteOrbitPoint)
-    await expect(map.locator('.orbit-mark')).toHaveCount(orbitCount + 1)
-    await page.keyboard.press('Escape')
-    await expect(page.getByRole('button', { name: 'Quit Add and return to Select', exact: true })).toHaveCount(0)
-    await expect(page.getByRole('group', { name: 'Map interaction mode' }).getByRole('button', { name: 'Select' }))
-      .toHaveAttribute('aria-pressed', 'true')
-  })
-}

@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { waitForWorkspaceSaved, createSingleSystemWorkspace, openChartDetailsEditor } from './helpers'
+import { waitForWorkspaceSaved, createSingleSystemWorkspace, openChartDetailsEditor, wardenMap } from './helpers'
 import {
   installHistoryStorageGate, pendingHistoryAcknowledgements, releaseHistoryAcknowledgements, setHistoryStorageGate,
 } from './scenarios/history-storage-gate'
@@ -171,7 +171,7 @@ test('native text controls and editable descendants keep Ctrl+Z and Ctrl+Y even 
   await textInput.focus()
   await page.keyboard.press('Control+z')
   await expect(textInput).toHaveValue('')
-  await expectSystemMapActive(page, 'Vesper Prime')
+  await expectSystemName(page, 'Vesper Prime')
   await expect(undo).toBeEnabled()
   await expect.poll(() => page.evaluate(() =>
     (window as Window & { __historyShortcutDefaults?: boolean[] }).__historyShortcutDefaults?.at(-1),
@@ -180,7 +180,7 @@ test('native text controls and editable descendants keep Ctrl+Z and Ctrl+Y even 
   await textInput.pressSequentially('Native text')
   await textInput.press('Control+z')
   await expect(textInput).toHaveValue('')
-  await expectSystemMapActive(page, 'Vesper Prime')
+  await expectSystemName(page, 'Vesper Prime')
   await textInput.press('Control+y')
   await expect(textInput).toHaveValue('Native text')
 
@@ -188,22 +188,22 @@ test('native text controls and editable descendants keep Ctrl+Z and Ctrl+Y even 
   await textarea.focus()
   await page.keyboard.press('Control+z')
   await expect(textarea).toHaveValue('')
-  await expectSystemMapActive(page, 'Vesper Prime')
+  await expectSystemName(page, 'Vesper Prime')
   await textarea.pressSequentially('Native note')
   await textarea.press('Control+z')
   await expect(textarea).toHaveValue('')
-  await expectSystemMapActive(page, 'Vesper Prime')
+  await expectSystemName(page, 'Vesper Prime')
 
   const nativeSelect = page.getByLabel('Native select ownership')
   await nativeSelect.focus()
   await page.keyboard.press('Control+z')
   await expect(nativeSelect).toHaveValue('First')
-  await expectSystemMapActive(page, 'Vesper Prime')
+  await expectSystemName(page, 'Vesper Prime')
 
   for (const name of ['Native checkbox ownership', 'Native range ownership']) {
     await page.getByLabel(name).focus()
     await page.keyboard.press('Control+z')
-    await expectSystemMapActive(page, 'Vesper Prime')
+    await expectSystemName(page, 'Vesper Prime')
     await expect(undo).toBeEnabled()
   }
 
@@ -216,11 +216,11 @@ test('native text controls and editable descendants keep Ctrl+Z and Ctrl+Y even 
   await expect(editableChild).toHaveText('Initial content updated')
   await page.keyboard.press('Control+z')
   await expect(editableChild).toHaveText('Initial content')
-  await expectSystemMapActive(page, 'Vesper Prime')
+  await expectSystemName(page, 'Vesper Prime')
 
   await page.locator('#history-readonly-editable-child').click()
   await page.keyboard.press('Control+z')
-  await expectSystemMapActive(page, 'Vesper Prime')
+  await expectSystemName(page, 'Vesper Prime')
   await expect(undo).toBeEnabled()
 
   await page.evaluate(() => {
@@ -228,10 +228,10 @@ test('native text controls and editable descendants keep Ctrl+Z and Ctrl+Y even 
     shadowInput?.focus()
   })
   await page.keyboard.press('Control+z')
-  await expectSystemMapActive(page, 'Vesper Prime')
+  await expectSystemName(page, 'Vesper Prime')
   await page.keyboard.type('Shadow text')
   await page.keyboard.press('Control+z')
-  await expectSystemMapActive(page, 'Vesper Prime')
+  await expectSystemName(page, 'Vesper Prime')
   await page.keyboard.press('Control+y')
   expect(await page.locator('#history-shadow-host').evaluate(element =>
     element.shadowRoot?.querySelector('input')?.value,
@@ -261,16 +261,12 @@ async function expectClusterSystemName(
   clusterName: string,
   systemName: string,
 ): Promise<void> {
-  const clusterMap = page.getByRole('group', { name: `${clusterName} Jump Cluster map`, exact: true })
-  await expect(clusterMap.getByRole('button', {
-    name: new RegExp(`^(Open|Select) ${escapeRegExp(systemName)} system(?: map)?$`),
-  })).toBeVisible()
+  await expect(wardenMap(page)).toHaveAccessibleName(`${clusterName} continuous map`)
+  await expectSystemName(page, systemName)
 }
 
-async function expectSystemMapActive(page: import('@playwright/test').Page, systemName: string): Promise<void> {
-  await expect(page.getByRole('group', { name: `${systemName} star system map`, exact: true })).toBeVisible()
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+async function expectSystemName(page: import('@playwright/test').Page, systemName: string): Promise<void> {
+  const map = wardenMap(page)
+  await expect(map.locator('.continuous-warden-name-target')
+    .and(map.getByRole('button', { name: `Select ${systemName}`, exact: true }))).toBeVisible()
 }

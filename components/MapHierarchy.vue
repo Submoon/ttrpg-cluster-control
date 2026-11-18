@@ -122,6 +122,8 @@
             :class="ui.link({ selected })"
             :aria-label="item.kind === 'object' ? item.ariaLabel : item.label"
             :aria-description="item.kind === 'orbit' ? item.ownerSystemName : item.ariaDescription"
+            @contextmenu="openHierarchyMenu($event, item)"
+            @keydown.capture="openHierarchyMenuFromKeyboard($event, item)"
           >
             <span class="tree-leading" aria-hidden="true">
               <span v-if="item.kind === 'system'" class="system-seal grid size-[1.5rem] place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
@@ -129,9 +131,22 @@
               <span v-else class="orbit-mark">R</span>
             </span>
             <span :class="ui.linkLabel({ class: 'tree-copy min-w-0 flex-1 [overflow-wrap:anywhere]' })">
-              <span class="tree-object-name flex min-w-0 items-center gap-1">{{ item.label }}</span>
+              <span class="tree-object-name flex min-w-0 items-center gap-1">
+                <span class="min-w-0 [overflow-wrap:anywhere]">{{ item.label }}</span>
+                <template v-if="item.kind === 'object'">
+                  <UTooltip :text="hierarchyObjectPublicationStatus(item).description">
+                    <UIcon :name="publicationPresentation(item.row.object.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
+                  </UTooltip>
+                  <UTooltip v-if="hierarchyObjectPublicationStatus(item).parentBlocked" text="System map unavailable to players until this system is Revealed.">
+                    <UIcon name="i-lucide-lock-keyhole" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
+                  </UTooltip>
+                </template>
+              </span>
               <small v-if="item.kind === 'system'" class="mt-[0.18rem] block">
                 {{ item.system.objects.length }} map objects
+              </small>
+              <small v-if="item.kind === 'object'" class="tree-type-label mt-[0.18rem] block [overflow-wrap:anywhere]">
+                {{ catalogueFamilyLabel(item.row.object.family) }} / {{ catalogueSubtypeLabel(item.row.object) }}
               </small>
               <small v-if="item.kind === 'object'" class="mt-[0.18rem] block">
                 <span class="key-tag">{{ item.row.object.locationKey }}</span>
@@ -139,6 +154,19 @@
               </small>
               <small v-if="item.kind !== 'system'" class="mt-[0.12rem] block">{{ item.ownerSystemName }}</small>
             </span>
+            <UButton
+              v-if="item.kind === 'object'"
+              class="tree-publication-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :tabindex="-1"
+              :aria-label="`Change visibility for ${item.row.object.name}`"
+              :title="`Change visibility for ${item.row.object.name}`"
+              @click.stop="openObjectMenuFromButton($event, item.row.object.id, item.ownerSystemId)"
+            >
+              <UIcon name="i-lucide-eye" aria-hidden="true" />
+            </UButton>
             <UButton
               v-if="item.children?.length"
               class="tree-expand-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
@@ -399,10 +427,13 @@ const maximumHierarchyLevel = computed(() => props.continuousMap
   : hierarchyRows.value.reduce((maximum, row) => Math.max(maximum, row.depth + 1), 1))
 const hierarchyIndentStep = computed(() => `${Math.min(5, 40 / Math.max(1, maximumHierarchyLevel.value - 1))}px`)
 const selectedHierarchyKey = computed(() => {
-  const target = props.inspectedTarget
-  if (props.continuousMap && target?.kind === 'object') return `object:${target.systemId}:${target.objectId}`
-  if (props.continuousMap && target?.kind === 'orbit') return `orbit:${target.systemId}:${target.orbitId}`
-  if (props.continuousMap && target?.kind === 'system') return `system:${target.systemId}`
+  if (props.continuousMap) {
+    const target = props.inspectedTarget
+    if (target?.kind === 'object') return `object:${target.systemId}:${target.objectId}`
+    if (target?.kind === 'orbit') return `orbit:${target.systemId}:${target.orbitId}`
+    if (target?.kind === 'system') return `system:${target.systemId}`
+    return ''
+  }
   const lastSelectedObjectId = store.selectedObjectIds[store.selectedObjectIds.length - 1]
   if (lastSelectedObjectId) return objectHierarchyKey(lastSelectedObjectId)
   if (store.selectedObjectId) return objectHierarchyKey(store.selectedObjectId)
@@ -455,13 +486,30 @@ watch(hierarchyBranches, (branches, previousBranches) => {
 watch(
   [hierarchyIdentity, selectedHierarchyKey, selectedHierarchyPath],
   ([, selectedKey, selectedPath]) => {
-    if (!selectedKey || !selectedPath) return
-    const expanded = new Set(expandedHierarchyKeys.value)
-    for (const ancestorKey of selectedPath.split('\u001f')) expanded.add(ancestorKey)
-    expandedHierarchyKeys.value = [...expanded]
+    if (selectedKey && selectedPath) expandHierarchyBranches(selectedPath.split('\u001f'))
   },
   { immediate: true },
 )
+
+watch(
+  [hierarchyIdentity, selectedHierarchyItems],
+  ([identity, selectedItems], [previousIdentity, previousItems]) => {
+    if (!props.continuousMap) return
+    const previousKeys = new Set(identity === previousIdentity ? previousItems?.map(item => item.key) : [])
+    // Group selection can change while the Inspector retains its previous target.
+    const newAncestors = selectedItems
+      .filter(item => item.kind === 'object' && !previousKeys.has(item.key))
+      .flatMap(item => item.ancestorKeys)
+    expandHierarchyBranches(newAncestors)
+  },
+  { immediate: true },
+)
+
+function expandHierarchyBranches(keys: readonly string[]): void {
+  if (keys.length === 0) return
+  const expanded = new Set([...expandedHierarchyKeys.value, ...keys])
+  if (expanded.size > expandedHierarchyKeys.value.length) expandedHierarchyKeys.value = [...expanded]
+}
 
 function objectHierarchyKey(objectId: string): string {
   if (!props.continuousMap) return `object:${objectId}`
@@ -471,6 +519,11 @@ function objectHierarchyKey(objectId: string): string {
 
 function ownerSystemForObject(objectId: string): StarSystem | undefined {
   return props.workspace.cluster.systems.find(system => system.objects.some(object => object.id === objectId))
+}
+
+function hierarchyObjectPublicationStatus(item: Extract<HierarchyTreeItem, { kind: 'object' }>) {
+  const parentPublication = props.workspace.cluster.systems.find(system => system.id === item.ownerSystemId)?.publication
+  return publicationStatus(item.row.object.publication, parentPublication)
 }
 
 function buildHierarchyTreeItems(
@@ -698,14 +751,14 @@ function openHierarchyMenuFromKeyboard(event: KeyboardEvent, item: HierarchyTree
   openObjectMenu(event, item.row.object.id, opener, { x: bounds.left, y: bounds.bottom }, true, item.ownerSystemId)
 }
 
-function openObjectMenuFromButton(event: MouseEvent, objectId: string): void {
+function openObjectMenuFromButton(event: MouseEvent, objectId: string, ownerSystemId?: string): void {
   const opener = event.currentTarget
   if (!(opener instanceof HTMLElement)) return
   const bounds = opener.getBoundingClientRect()
   const point = event.detail === 0
     ? { x: bounds.left, y: bounds.bottom }
     : { x: event.clientX, y: event.clientY }
-  openObjectMenu(event, objectId, opener, point)
+  openObjectMenu(event, objectId, opener, point, false, ownerSystemId)
 }
 
 function toggleHierarchyItem(event: TreeItemToggleEvent<HierarchyTreeItem>): void {

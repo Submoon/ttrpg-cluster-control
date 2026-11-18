@@ -1,7 +1,7 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 import type { MapInteractionMode } from './editor-workflows/types'
 
-type MapToolMode = Extract<MapInteractionMode, 'navigate' | 'select' | 'move'>
+type MapToolMode = Extract<MapInteractionMode, 'select' | 'move'>
 
 interface MapToolShortcutOptions {
   workspaceEnabled(): boolean
@@ -9,19 +9,17 @@ interface MapToolShortcutOptions {
   editingGestureActive(): boolean
   activeMapKey(): string | null
   mapMode(): MapInteractionMode
-  continuousMapEnabled(): boolean
   addIntentActive(): boolean
   changeMapMode(mode: MapToolMode): Promise<void>
   openAddChooser(): void
   focusActiveMap(): void
 }
 
-const mapRootSelector = 'svg.cluster-map-svg, svg.system-map-svg, svg.continuous-warden-map-svg'
-const mapMarkSelector = '.cluster-system-node, .cluster-route, .system-object, .orbit-hit-target, .continuous-warden-object, .continuous-warden-orbit-target'
+const mapRootSelector = 'svg.continuous-warden-map-svg'
+const mapMarkSelector = '.cluster-system-node, .cluster-route, .continuous-warden-object, .continuous-warden-orbit-target'
 
-export function mapModeForShortcut(key: string, continuousMapEnabled = false): MapToolMode | null {
+export function mapModeForShortcut(key: string): MapToolMode | null {
   switch (key) {
-    case 'n': return continuousMapEnabled ? null : 'navigate'
     case 's': return 'select'
     case 'm': return 'move'
     default: return null
@@ -37,7 +35,7 @@ export function useMapToolShortcuts(options: MapToolShortcutOptions): { isMapInp
 
   function keydown(event: KeyboardEvent): void {
     const key = event.key.toLowerCase()
-    const mode = mapModeForShortcut(key, options.continuousMapEnabled())
+    const mode = mapModeForShortcut(key)
     if ((!mode && key !== 'a') || event.defaultPrevented || event.repeat
       || event.isComposing || event.keyCode === 229 || compositionActive
       || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey

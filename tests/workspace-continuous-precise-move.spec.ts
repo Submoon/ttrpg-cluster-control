@@ -1,39 +1,41 @@
 import { expect, test } from './fixtures'
 import {
-  clickDockAction,
+  captureMapExportBlobs,
+  clickWardenSystemPoint,
+  dockAction,
+  downloadJson,
   createSingleSystemWorkspace,
   openWorkspaceHierarchy,
+  quitSystemAdd,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
-  waitForWorkspaceStartup,
-  workspaceZoomControls,
+  wardenMap,
+  wardenObjectMark,
   workspaceZoomOutput,
 } from './helpers'
 
 type LocalPoint = { x: number; y: number }
 
 async function prepareContinuousOrbitMap(page: import('@playwright/test').Page) {
-  const { clusterName, primaryObjectId, systemName } = await createSingleSystemWorkspace(page, {
+  await captureMapExportBlobs(page)
+  const { systemId, primaryObjectId, systemName } = await createSingleSystemWorkspace(page, {
     viewport: { width: 1440, height: 960 },
   })
-  const orbitId = await clickDockAction(page, 'Add orbit', {
-    target: { kind: 'center', x: 0.3, y: 0.3 },
-  })
-  if (!orbitId) throw new Error('The unoccupied Orbit could not be created.')
-
-  await page.goto('/?map=continuous')
-  await waitForWorkspaceStartup(page)
-  const map = page.getByRole('group', { name: `${clusterName} continuous map`, exact: true })
-  await expect(map).toBeVisible()
-  await setWorkspaceMapMode(page, 'Move')
-
-  const orbit = map.locator(`.continuous-warden-orbit-target[data-orbit-id="${orbitId}"]`)
-  const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
-  for (let step = 0; step < 32 && await orbit.count() === 0; step += 1) {
-    await zoomIn.click()
-  }
+  const map = wardenMap(page)
+  const orbit = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"]`)
+  await (await dockAction(page, 'Add orbit')).click()
+  const delivered = await clickWardenSystemPoint(page, systemId, { x: 0.3, y: 0.3 })
   await expect(orbit).toHaveCount(1)
-  return { map, orbit, orbitId, primaryObjectId, systemName }
+  await quitSystemAdd(page)
+  await waitForWorkspaceSaved(page)
+  const snapshot = await downloadJson(page, 'Export Jump Cluster JSON')
+  const createdOrbit = snapshot.cluster?.systems.find(system => system.id === systemId)?.orbits[0]
+  if (!createdOrbit) throw new Error('The saved unoccupied Orbit is missing from its owner.')
+  expect(createdOrbit.hostId).toBeNull()
+  expect(createdOrbit.center?.x).toBeCloseTo(delivered.x, 5)
+  expect(createdOrbit.center?.y).toBeCloseTo(delivered.y, 5)
+  await setWorkspaceMapMode(page, 'Move')
+  return { map, orbit, orbitId: createdOrbit.id, primaryObjectId, systemId, systemName }
 }
 
 async function orbitClientPoint(
@@ -72,10 +74,13 @@ function objectLocalPosition(transform: string | null): LocalPoint {
 }
 
 test('continuous precise Free placement stays exact beside an Orbit and commits to its inspected owner', async ({ page }) => {
-  const { map, orbitId, primaryObjectId, systemName } = await prepareContinuousOrbitMap(page)
+  const { map, orbitId, primaryObjectId, systemId, systemName } = await prepareContinuousOrbitMap(page)
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const systemBranch = hierarchy.getByRole('treeitem', { name: systemName, exact: true })
   const primaryObject = hierarchy.getByRole('treeitem', { name: /^Select [^,]+, Primary Star\b/ })
+  if (await systemBranch.getAttribute('aria-expanded') === 'true') {
+    await systemBranch.getByRole('button', { name: `Collapse ${systemName}`, exact: true }).click()
+  }
   await expect(systemBranch).toHaveAttribute('aria-expanded', 'false')
   await expect(primaryObject).toBeHidden()
   await systemBranch.getByRole('button', { name: `Expand ${systemName}`, exact: true }).click()
@@ -83,10 +88,11 @@ test('continuous precise Free placement stays exact beside an Orbit and commits 
   await expect(systemBranch).toBeFocused()
   await systemBranch.press('ArrowLeft')
   await expect(primaryObject).toBeHidden()
-  await hierarchy.getByRole('button', { name: `Inspect ${systemName}`, exact: true }).click()
+  await systemBranch.getByRole('button', { name: `Expand ${systemName}`, exact: true }).click()
+  await expect(systemBranch).toHaveAttribute('aria-expanded', 'true')
   await expect(primaryObject).toBeVisible()
   await primaryObject.click()
-  const object = map.locator(`.continuous-warden-object[data-object-id="${primaryObjectId}"]`)
+  const object = wardenObjectMark(page, systemId, primaryObjectId)
   await expect(object).toBeVisible()
   const placement = page.getByRole('button', { name: 'Placement', exact: true })
   await expect(placement).toBeVisible()
@@ -122,7 +128,7 @@ test('continuous precise Free placement stays exact beside an Orbit and commits 
 })
 
 test('continuous Orbit resize rolls back on Escape and accepts the next pointer gesture', async ({ page }) => {
-  const { map, orbit, orbitId } = await prepareContinuousOrbitMap(page)
+  const { map, orbit, orbitId, systemId } = await prepareContinuousOrbitMap(page)
   const ringHit = await orbit.evaluate((element) => {
     if (!(element instanceof SVGEllipseElement)) throw new Error('The Orbit has no ellipse.')
     const transform = element.getScreenCTM()
@@ -138,11 +144,12 @@ test('continuous Orbit resize rolls back on Escape and accepts the next pointer 
   })
   await page.mouse.click(ringHit.x, ringHit.y)
   const resize = map.locator(
-    `.continuous-warden-orbit-edit-handle[data-system-id][data-orbit-id="${orbitId}"][data-resize-axis="horizontal"]`,
+    `.continuous-warden-orbit-edit-handle[data-system-id="${systemId}"][data-orbit-id="${orbitId}"][data-resize-axis="horizontal"]`,
   )
   await expect(resize).toBeVisible()
 
   const ring = orbit
+  const before = await downloadJson(page, 'Export Jump Cluster JSON')
   const initialRadius = Number(await ring.getAttribute('rx'))
   const dragHandle = async (distance: number): Promise<void> => {
     const bounds = await resize.boundingBox()
@@ -158,14 +165,19 @@ test('continuous Orbit resize rolls back on Escape and accepts the next pointer 
     .toBeGreaterThan(initialRadius)
   await page.keyboard.press('Escape')
   await expect(ring).toHaveAttribute('rx', String(initialRadius))
+  // Keep the canceled contact held past the compatibility-click deadline.
+  await page.waitForTimeout(1_200)
   await page.mouse.up()
   await expect(ring).toHaveAttribute('rx', String(initialRadius))
+  expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(before)
 
   await dragHandle(32)
   await page.mouse.up()
   await expect.poll(async () => Number(await ring.getAttribute('rx')))
     .toBeGreaterThan(initialRadius)
   await waitForWorkspaceSaved(page)
+  const after = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(after.layout.orbitRadii[orbitId]).not.toEqual(before.layout.orbitRadii[orbitId])
 
   await resize.focus()
   await expect(resize).toBeFocused()

@@ -1,3 +1,4 @@
+import { exportJumpCluster, restoreJumpClusterBackup } from '../domain/workspace'
 import { expect, test } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import {
@@ -20,6 +21,7 @@ import {
 } from './helpers'
 import type { DownloadWindow, ExportedMap } from './helpers'
 import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
+import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 
 type ImageCaptureWindow = Window & { __ticket28PngBlob?: Blob }
 type SceneBounds = { x: number; y: number; width: number; height: number }
@@ -1091,8 +1093,17 @@ test('system image exports retain applied geometry during local and parent-owned
   )
 
   await orbitInspector.getByRole('button', { name: /Discard changes/ }).click()
-  await returnToClusterMap(page)
-  await page.goto('/?map=continuous')
+})
+
+test('the default Warden map exports all three scopes from applied layout and camera state', async ({ page }) => {
+  test.setTimeout(120_000)
+  const fixture = exportJumpCluster(restoreJumpClusterBackup(campaignWithExportPreviews()))
+  await importCampaignWorkspace(page, fixture, { width: 1440, height: 960 })
+  const orbitId = 'ticket28-preview-unoccupied-orbit'
+  const transferMoonId = 'ticket28-preview-transfer-moon'
+  const nestedTravelerId = 'ticket28-preview-nested-traveler'
+  const iriaId = 'campaign-baseline-iria'
+  const nixId = 'campaign-baseline-nix'
   const continuousMap = page.locator('svg.continuous-warden-map-svg')
   await expect(continuousMap).toBeVisible()
   await setWorkspaceMapMode(page, 'Select')

@@ -2,16 +2,21 @@ import { expect, test, preparedCampaignTest as campaignTest, type Page } from '.
 import { importCampaignWorkspace, openImportedCampaignWorkspace } from './scenarios/campaign-workspace'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import {
-  addCatalogueObject,
+  centerWorkspaceSelection,
+  clickWardenSystemPoint,
   clickDockAction,
   downloadJson,
+  fitWorkspaceMap,
+  openWorkspaceHierarchy,
+  quitSystemAdd,
   readInspectorSelection,
   releaseMapExportBlobs,
-  returnToClusterMap,
+  selectCatalogueObjectButton,
   selectInspectorOption,
-  setWorkspaceMapMode,
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
+  wardenObjectMark,
+  wardenSystemMark,
   workspaceNavigation,
 } from './helpers'
 
@@ -27,22 +32,26 @@ campaignTest('prepared campaign snapshots stay isolated between fresh browser co
 }) => {
   const baseline = await campaignSnapshotProvider()
   const systemName = 'Vesper Prime'
-  await setWorkspaceMapMode(page, 'Navigate')
-  const firstMap = page.getByRole('group', { name: /Jump Cluster map$/ })
-  await firstMap.getByRole('button', { name: `Open ${systemName} system map`, exact: true }).click()
-  const originalWorkspace = await downloadJson(page, 'Export star system JSON')
-  const originalSystem = originalWorkspace.system
-  if (!originalSystem) throw new Error('The prepared campaign must export its active star system.')
+  const originalWorkspace = await downloadJson(page, 'Export Jump Cluster JSON')
+  const originalSystem = originalWorkspace.cluster?.systems.find(system => system.name === systemName)
+  if (!originalSystem) throw new Error('The prepared campaign must contain its Vesper system.')
   expect(originalSystem.objects.length).toBeGreaterThan(0)
 
-  const isolatedObjectId = await addCatalogueObject(page, 'other', {
-    target: { kind: 'free', x: 0.2, y: 0.2 },
-    typeLabel: 'Ticket 05 context sentinel',
-    noSelection: true,
-  })
-  const firstSystemMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
-  await expect(firstSystemMap.locator(`.system-object[data-object-id="${isolatedObjectId}"]`)).toHaveCount(1)
+  const hierarchy = await openWorkspaceHierarchy(page)
+  await hierarchy.getByRole('button', { name: `Inspect ${systemName}`, exact: true }).click()
+  await centerWorkspaceSelection(page)
+  await (await selectCatalogueObjectButton(page, 'other')).click()
+  const otherType = page.getByRole('dialog', { name: 'Name this object type', exact: true })
+  await otherType.getByLabel('Type name', { exact: true }).fill('Context Sentinel')
+  await otherType.getByRole('button', { name: 'Start Add', exact: true }).click()
+  await clickWardenSystemPoint(page, originalSystem.id, { x: 0.3, y: 0.65 })
   await waitForWorkspaceSaved(page)
+  const changed = await downloadJson(page, 'Export Jump Cluster JSON')
+  const isolatedObject = changed.cluster?.systems.find(system => system.id === originalSystem.id)
+    ?.objects.find(object => object.subtype === 'Context Sentinel')
+  if (!isolatedObject) throw new Error('The sentinel must belong to Vesper in the first browser context.')
+  await expect(wardenObjectMark(page, originalSystem.id, isolatedObject.id)).toBeVisible()
+  await quitSystemAdd(page)
 
   const secondContext = await browser.newContext({
     baseURL: new URL(page.url()).origin,
@@ -52,12 +61,8 @@ campaignTest('prepared campaign snapshots stay isolated between fresh browser co
   try {
     secondPage = await secondContext.newPage()
     await openImportedCampaignWorkspace(secondPage, { width: 1440, height: 960 })
-    await setWorkspaceMapMode(secondPage, 'Navigate')
-
-    const secondMap = secondPage.getByRole('group', { name: /Jump Cluster map$/ })
-    await secondMap.getByRole('button', { name: `Open ${systemName} system map`, exact: true }).click()
-    const isolatedWorkspace = await downloadJson(secondPage, 'Export star system JSON')
-    expect(isolatedWorkspace.system).toEqual(originalSystem)
+    const isolatedWorkspace = await downloadJson(secondPage, 'Export Jump Cluster JSON')
+    expect(isolatedWorkspace).toEqual(originalWorkspace)
   } finally {
     try {
       if (secondPage) await releaseMapExportBlobs(secondPage)
@@ -108,16 +113,16 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
   await clickDockAction(page, 'Add Jump Route')
 
   const addButton = workspaceNavigation(page).getByRole('button', { name: 'Add to map', exact: true })
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
   const inspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
   const fromSystem = inspector.getByLabel('From system')
   const toSystem = inspector.getByLabel('To system')
   const fromPoint = inspector.getByLabel('From Jump Point')
   await selectInspectorOption(inspector.getByLabel('Route destination'), 'Known system')
 
-  const overlappingAnchorMark = clusterMap.locator(`.cluster-system-node[data-system-id="${anchorSystemIdAfterImport}"]`)
+  const overlappingAnchorMark = wardenSystemMark(page, anchorSystemIdAfterImport)
   await expect(overlappingAnchorMark).toBeVisible()
-  await overlappingAnchorMark.click()
+  // An empty point shared by the overlapping envelopes offers both owners.
+  await clickWardenSystemPoint(page, originSystemId, { x: 0.35, y: 0.68 })
   await fromSystem.click()
   const originChoice = page.getByRole('option', { name: 'Vesper Prime', exact: true })
   await expect(originChoice).toBeVisible()
@@ -170,7 +175,7 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
   await waitForWorkspaceSaved(page)
   await page.reload()
   await waitForWorkspaceStartup(page)
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
   const reloaded = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(reloaded.cluster?.routes).toHaveLength(2)
   expect(reloaded.cluster?.routes).toContainEqual(expect.objectContaining({

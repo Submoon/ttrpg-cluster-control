@@ -1,13 +1,13 @@
 import { readFile } from 'node:fs/promises'
-import { expect, test, type Locator, type Page } from './fixtures'
-import { activeWorkspaceFeedback, exposedContinuousObjectHitPoint, type ExportedMap, waitForWorkspaceSaved, waitForWorkspaceStartup, openMapFilesSection, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, workspaceNavigation, workspaceZoomControls } from './helpers'
+import { expect, test, type Page } from './fixtures'
+import { activeWorkspaceFeedback, centerWorkspaceSelection, createSingleSystemWorkspace, exposedContinuousObjectHitPoint, type ExportedMap, waitForWorkspaceSaved, openMapFilesSection, openPlayerPreview, openWorkspaceZoomNavigation, setWorkspaceMapMode, wardenMap, wardenObjectMark, workspaceNavigation } from './helpers'
 
-async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }, systemName = 'Vesper'): Promise<void> {
+async function createWorkspace(page: Page, viewport = { width: 1440, height: 960 }): Promise<void> {
   await page.setViewportSize(viewport)
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible({ timeout: 30_000 })
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill(systemName)
+  await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
 }
@@ -38,13 +38,16 @@ async function expectCompactPanel(
   expect(bounds.height).toBeGreaterThan(200)
 }
 
-test('desktop Hierarchy and Inspector start open while Map files exports system and Jump Cluster JSON from Star System view @ui-smoke', async ({ page }) => {
+test('desktop panels start open and Map files exports the inspected system and whole Jump Cluster @ui-smoke', async ({ page }) => {
   await createWorkspace(page)
 
   const hierarchy = page.locator('#workspace-hierarchy-panel')
   const inspector = page.locator('#workspace-inspector-panel')
   await expect(hierarchy).toBeVisible()
   await expect(inspector).toBeVisible()
+  await hierarchy.getByRole('button', { name: 'Inspect Vesper', exact: true }).click()
+  await expect(inspector).toHaveAccessibleName('Star System details')
+  await expect(wardenMap(page)).toHaveAccessibleName('Kestrel Reach continuous map')
 
   const filesToggle = page.getByRole('button', { name: 'Map files', exact: true })
   const filesHint = page.getByRole('tooltip', { name: 'Map files', exact: true })
@@ -86,7 +89,10 @@ test('desktop Hierarchy and Inspector start open while Map files exports system 
 
   const downloadPromise = page.waitForEvent('download')
   await exportButton.click()
-  await downloadPromise
+  const systemDownload = await downloadPromise
+  const systemExport = JSON.parse(await readFile(await systemDownload.path(), 'utf8')) as ExportedMap
+  expect(systemExport.type).toBe('system')
+  expect(systemExport.system?.name).toBe('Vesper')
 
   const clusterFiles = await openMapFilesSection(page, 'Download or back up')
   const clusterBackupButton = clusterFiles.getByRole('menuitem', { name: 'Download private Jump Cluster JSON', exact: true })
@@ -97,6 +103,7 @@ test('desktop Hierarchy and Inspector start open while Map files exports system 
   expect(clusterExport.type).toBe('cluster')
   expect(clusterExport.cluster?.name).toBe('Kestrel Reach')
   expect(clusterExport.cluster?.systems.map(system => system.name)).toEqual(['Vesper'])
+  expect(clusterExport.cluster?.systems[0]?.id).toBe(systemExport.system?.id)
 
   const restore = await openMapFilesSection(page, 'Import or restore')
   const restoreJson = restore.getByRole('menuitem', { name: 'Restore Jump Cluster from JSON', exact: true })
@@ -108,15 +115,18 @@ test('desktop Hierarchy and Inspector start open while Map files exports system 
 })
 
 test('short landscape Header, Select, and Hierarchy entries open one exclusive fullscreen panel and return focus @ui-smoke', async ({ page }) => {
-  const systemName = 'Vesper Observatory and the Outer Beacon of the Meridian Expanse'
-  await createWorkspace(page, { width: 390, height: 844 }, systemName)
+  const clusterName = 'Vesper Observatory and the Outer Beacon of the Meridian Expanse'
+  const { systemId, primaryObjectId, systemName } = await createSingleSystemWorkspace(page, {
+    clusterName,
+    viewport: { width: 390, height: 844 },
+  })
 
   const toolbar = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
-  await expect(toolbar.getByRole('heading', { name: systemName, exact: true })).toBeInViewport({ ratio: 1 })
-  const nameLabel = `${systemName}, show full map name`
+  await expect(toolbar.getByRole('heading', { name: clusterName, exact: true })).toBeInViewport({ ratio: 1 })
+  const nameLabel = `${clusterName}, show full map name`
   const showName = toolbar.getByRole('button', { name: nameLabel, exact: true })
   await showName.press('Enter')
-  const fullName = page.getByRole('dialog', { name: nameLabel, exact: true }).getByText(systemName, { exact: true })
+  const fullName = page.getByRole('dialog', { name: nameLabel, exact: true }).getByText(clusterName, { exact: true })
   await expect(fullName).toBeInViewport({ ratio: 1 })
   await page.keyboard.press('Escape')
   await expect(fullName).toBeHidden()
@@ -153,8 +163,8 @@ test('short landscape Header, Select, and Hierarchy entries open one exclusive f
   const selectMode = dock.getByRole('button', { name: 'Select', exact: true })
   await selectMode.click()
   await expect(selectMode).toHaveAttribute('aria-pressed', 'true')
-  const map = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
-  const primaryStar = map.getByRole('button', { name: /Select A, Primary Star/ })
+  await centerWorkspaceSelection(page)
+  const primaryStar = wardenObjectMark(page, systemId, primaryObjectId)
   await primaryStar.focus()
   await page.keyboard.press('Enter')
   await expectCompactPanel(page, 'inspector')
@@ -171,152 +181,97 @@ test('short landscape Header, Select, and Hierarchy entries open one exclusive f
 
   await hierarchyToggle.click()
   await expectCompactPanel(page, 'hierarchy')
-  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
+  await hierarchy.getByRole('treeitem', { name: `Select A, Primary Star in ${systemName}`, exact: true }).click()
   await expectCompactPanel(page, 'inspector')
 })
 
-test('touch long press keeps focus inside the compact inspector after the touch is released', async ({ page }) => {
+test('the default compact Warden map consumes a held selection and keeps inspector focus on a fresh tap', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' })
-  await createWorkspace(page, { width: 390, height: 844 })
-  await page.getByRole('button', { name: 'Back to Jump Cluster', exact: true }).click()
-
-  const filesToggle = page.getByRole('button', { name: 'Map files', exact: true })
-  await filesToggle.click()
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+    viewport: { width: 390, height: 844 },
+  })
+  const map = wardenMap(page)
+  const object = wardenObjectMark(page, systemId, primaryObjectId)
+  const inspector = page.locator('#workspace-inspector-panel')
+  const closeInspector = page.getByRole('button', { name: 'Close inspector panel', exact: true })
+  const files = page.getByRole('button', { name: 'Map files', exact: true })
+  await files.click()
   await page.keyboard.press('Escape')
-  await expect(filesToggle).toBeFocused()
+  await expect(files).toBeFocused()
 
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map' })
-  await setWorkspaceMapMode(page, 'Navigate')
-  const system = clusterMap.getByRole('button', { name: 'Open Vesper system map' })
-  const bounds = await system.boundingBox()
-  if (!bounds) throw new Error('The system long-press target has no visible bounds.')
-  const touchPoint = { id: 1, x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
   const cdp = await page.context().newCDPSession(page)
-
   try {
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 })
-    const scene = clusterMap.locator('.cluster-map-content')
+    const mapPoint = await map.evaluate(element => {
+      const bounds = element.getBoundingClientRect()
+      for (const x of [.2, .5, .8]) {
+        for (const y of [.3, .5, .7]) {
+          const point = { x: bounds.left + bounds.width * x, y: bounds.top + bounds.height * y }
+          if (document.elementFromPoint(point.x, point.y) === element) return point
+        }
+      }
+      return null
+    })
+    if (!mapPoint) throw new Error('The compact map has no reachable canvas background for touch pan.')
+    const scene = map.locator('.cluster-map-content')
     const viewportBeforePan = await scene.getAttribute('transform')
-    if (!viewportBeforePan) throw new Error('The cluster map is not ready for touch pan.')
-    const inspector = page.locator('#workspace-inspector-panel')
+    if (!viewportBeforePan) throw new Error('The compact map camera must be initialized.')
     await cdp.send('Input.dispatchTouchEvent', {
-      type: 'touchStart',
-      touchPoints: [{ ...touchPoint, radiusX: 2, radiusY: 2, force: 1 }],
+      type: 'touchStart', touchPoints: [{ id: 1, ...mapPoint }],
     })
     await cdp.send('Input.dispatchTouchEvent', {
-      type: 'touchMove',
-      touchPoints: [{ ...touchPoint, x: touchPoint.x + 24, y: touchPoint.y + 18 }],
+      type: 'touchMove', touchPoints: [{ id: 1, x: mapPoint.x + 24, y: mapPoint.y + 18 }],
     })
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
     await expect(scene).not.toHaveAttribute('transform', viewportBeforePan)
-    await expect(clusterMap).toBeVisible()
     await expect(inspector).toBeHidden()
 
-    const pannedBounds = await system.boundingBox()
-    if (!pannedBounds) throw new Error('The panned system is not visible for long-press.')
-    await cdp.send('Input.dispatchTouchEvent', {
-      type: 'touchStart',
-      touchPoints: [{ id: 1, x: pannedBounds.x + pannedBounds.width / 2, y: pannedBounds.y + pannedBounds.height / 2 }],
-    })
-    const closeInspector = page.getByRole('button', { name: 'Close inspector panel' })
-    await expect(inspector).toBeVisible()
-    await expect(inspector).toHaveAttribute('role', 'dialog')
+    const pressObject = async () => {
+      const point = await exposedContinuousObjectHitPoint(object)
+      if (!point) throw new Error('The owner-qualified object must be hittable on the compact map.')
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchStart', touchPoints: [{ id: 1, ...point, radiusX: 2, radiusY: 2, force: 1 }],
+      })
+    }
+    const releaseObject = () => cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await pressObject()
+    await expect(object).toHaveAttribute('aria-pressed', 'true')
+    // Keep the activated selection held beyond both compatibility-click suppression timers.
+    await page.waitForTimeout(1_200)
+    await expect(inspector).toBeHidden()
+    await releaseObject()
+    await expect(object).toHaveAttribute('aria-pressed', 'true')
+    await expect(inspector).toBeHidden()
+
+    await pressObject()
+    await expect(object).toHaveAttribute('aria-pressed', 'false')
+    await releaseObject()
+    await expect(inspector).toBeHidden()
+
+    await pressObject()
+    const move = workspaceNavigation(page).getByRole('button', { name: 'Move', exact: true })
+    // Activate the real mode control while the original touch is still down.
+    await move.evaluate(button => (button as HTMLButtonElement).click())
+    await expect(move).toHaveAttribute('aria-pressed', 'true')
+    await page.waitForTimeout(1_200)
+    await expect(object).toHaveAttribute('aria-pressed', 'false')
+    await releaseObject()
+    await expect(object).toHaveAttribute('aria-pressed', 'false')
+    await expect(inspector).toBeHidden()
+
+    await setWorkspaceMapMode(page, 'Select')
+    await pressObject()
+    await releaseObject()
     await expect(inspector).toHaveAttribute('aria-modal', 'true')
-    await expect(page.getByRole('dialog')).toHaveCount(1)
-    await expect(page.locator('#workspace-hierarchy-panel')).toBeHidden()
-    await expect(workspaceNavigation(page)).toBeHidden()
-    await expect(inspector.getByRole('heading', { name: 'Vesper', exact: true })).toBeVisible()
     await expect(closeInspector).toBeFocused()
-
-    // Keep the original contact held beyond the old click-suppression window.
-    await page.waitForTimeout(1_000)
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-    await expect.poll(async () => page.evaluate(() => {
-      const active = document.activeElement
-      const layout = document.querySelector('.map-editor-layout')
-      const panel = document.querySelector('#workspace-inspector-panel')
-      return {
-        tag: active?.tagName,
-        id: active?.id,
-        className: active instanceof HTMLElement ? active.className : '',
-        isLayoutRoot: active === layout,
-        insideLayout: !!active && !!layout?.contains(active),
-        insidePanel: !!active && !!panel?.contains(active),
-      }
-    }), { message: 'Touch release must leave focus inside the active inspector panel.' })
-      .toMatchObject({ insidePanel: true })
-    await expect(closeInspector).toBeFocused()
-
     await closeInspector.click()
-    await expect(inspector).toBeHidden()
-    const nextBounds = await system.boundingBox()
-    if (!nextBounds) throw new Error('The fresh long-press target has no visible bounds.')
-    await cdp.send('Input.dispatchTouchEvent', {
-      type: 'touchStart',
-      touchPoints: [{ id: 1, x: nextBounds.x + nextBounds.width / 2, y: nextBounds.y + nextBounds.height / 2 }],
-    })
-    await expect(closeInspector).toBeFocused()
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })
-    await expect(closeInspector).toBeFocused()
-
-    // A deliberate new mouse action must still open the preview after cancellation.
-    await closeInspector.click()
-    await expect(inspector).toBeHidden()
     const preview = await openPlayerPreview(page)
     await preview.getByRole('button', { name: 'Close player preview', exact: true }).click()
-    await expect(page.getByRole('button', { name: 'Map files', exact: true })).toBeFocused()
-
-    await page.goto('/?map=continuous')
-    await waitForWorkspaceStartup(page)
-    const continuousMap = page.getByRole('group', { name: 'Kestrel Reach continuous map', exact: true })
-    await setWorkspaceMapMode(page, 'Select')
-    const inspectorPanel = page.locator('#workspace-inspector-panel')
-    const closeInspectorPanel = page.getByRole('button', { name: 'Close inspector panel', exact: true })
-    if (await closeInspectorPanel.isVisible()) await closeInspectorPanel.click()
-    await expect(inspectorPanel).toBeHidden()
-    const continuousObjects = continuousMap.locator(
-      '.continuous-warden-object[data-system-id][data-object-id]',
-    )
-    const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
-    let continuousObject: Locator | null = null
-    let objectPoint: { x: number; y: number } | null = null
-    for (let step = 0; step <= 12 && !objectPoint; step += 1) {
-      for (let index = 0; index < await continuousObjects.count(); index += 1) {
-        const candidate = continuousObjects.nth(index)
-        const exposedPoint = await exposedContinuousObjectHitPoint(candidate)
-        if (!exposedPoint) continue
-        continuousObject = candidate
-        objectPoint = exposedPoint
-        break
-      }
-      if (!objectPoint && step < 12) await zoomIn.click()
-    }
-    if (!continuousObject || !objectPoint) {
-      throw new Error('No visible continuous map object has an exposed, owner-qualified touch target.')
-    }
-    await expect(continuousObject).toBeVisible()
-    const objectId = await continuousObject.getAttribute('data-object-id')
-    const systemId = await continuousObject.getAttribute('data-system-id')
-    if (!objectId || !systemId) throw new Error('The continuous map object has no owner-qualified selection identity.')
-    await cdp.send('Input.dispatchTouchEvent', {
-      type: 'touchStart',
-      touchPoints: [{ id: 1, x: objectPoint.x, y: objectPoint.y, radiusX: 2, radiusY: 2, force: 1 }],
-    })
-    const selectedObject = continuousMap.locator(
-      `.continuous-warden-object[data-system-id="${systemId}"][data-object-id="${objectId}"]`,
-    )
-    await expect(selectedObject).toHaveAttribute('aria-pressed', 'true')
-    // Keep the individual selection hold beyond both compatibility-click suppression timers.
-    await page.waitForTimeout(1_200)
-    await expect(inspectorPanel).toBeHidden()
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-    await expect(selectedObject).toHaveAttribute('aria-pressed', 'true')
-    await expect(inspectorPanel).toBeHidden()
+    await expect(files).toBeFocused()
   } finally {
     await cdp.detach()
   }
 })
-
 
 test('inline chart editing stays inside the compact Inspector focus trap @ui-smoke', async ({ page }) => {
   await createWorkspace(page, { width: 844, height: 390 })

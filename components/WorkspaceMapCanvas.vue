@@ -51,6 +51,7 @@
       :selected-route-id="props.selectedRouteId"
       :mode="props.mode"
       :creation-type="props.creationType ?? null"
+      :orbit-creation-preview="props.orbitCreationPreview"
       :creation-other-type="props.creationOtherType ?? null"
       :object-add-pinned-owner-id="props.objectAddPinnedOwnerId ?? null"
       :is-entity-command-blocked="props.isEntityCommandBlocked"
@@ -67,11 +68,12 @@
       :initial-viewport="props.initialViewport"
       touch-navigation
       @activate-system="handleSystemActivation"
-      @select-object="(systemId, objectId) => emit('select-continuous-object', systemId, objectId)"
-      @select-orbit="(systemId, orbitId) => emit('select-continuous-orbit', systemId, orbitId)"
+      @select-object="(systemId, objectId) => emit('select-continuous-object', systemId, objectId, props.mode !== 'move')"
+      @select-orbit="(systemId, orbitId) => emit('select-continuous-orbit', systemId, orbitId, props.mode !== 'move')"
       @select-route="handleRouteSelection"
       @cluster-target="forwardClusterTarget"
       @continuous-object-add-target="emit('continuous-object-add-target', $event)"
+      @continuous-orbit-add-target="(owners, requiresChoice, workspace) => emit('continuous-orbit-add-target', owners, requiresChoice, workspace)"
       @orbit-adjustment="forwardOrbitAdjustment"
       @entity-command-blocked="emit('entity-command-blocked', $event)"
       @move-object-in-system="forwardMoveObjectInSystem"
@@ -82,6 +84,7 @@
       @standalone-import-placement-anchor="forwardStandaloneImportPlacementAnchor"
       @move-target="forwardMoveTarget"
       @move-system="forwardMoveSystem"
+      @move-unresolved-exit="(id, point) => emit('move-unresolved-exit', id, point)"
       @editing-gesture-change="orbitInput.setChildGestureActive"
       @viewport-change="emitViewport"
     />
@@ -194,6 +197,7 @@ import type {
   MapInteractionMode,
   MapHistoryTarget,
   OrbitCenterMoveCandidate,
+  OrbitCreationMapPreview,
   OrbitPlacementPreview,
   SystemCreationCandidate,
   SystemCreationPreview,
@@ -253,6 +257,7 @@ const props = defineProps<{
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
   feedbackElement?: HTMLElement | null
   creationType?: SystemCreationType | null
+  orbitCreationPreview?: OrbitCreationMapPreview | null
   creationOtherType?: string | null
   objectAddPinnedOwnerId?: string | null
   creationPreview?: SystemCreationPreview | null
@@ -300,8 +305,8 @@ const systemMapPresentation = computed<WardenSystemMapPresentation | null>(() =>
 
 const emit = defineEmits<{
   'navigate-system': [id: string]
-  'select-continuous-object': [systemId: string, objectId: string]
-  'select-continuous-orbit': [systemId: string, orbitId: string]
+  'select-continuous-object': [systemId: string, objectId: string, openInspector?: boolean]
+  'select-continuous-orbit': [systemId: string, orbitId: string, openInspector?: boolean]
   'select-cluster-system': [id: string]
   'move-select-cluster-system': [id: string]
   'select-route': [id: string]
@@ -322,6 +327,7 @@ const emit = defineEmits<{
   'cancel-map-move': []
   'cluster-target': [point: Point, systemIds: string[]]
   'continuous-object-add-target': [request: ContinuousObjectAddTarget]
+  'continuous-orbit-add-target': [owners: readonly { systemId: string; candidates: SystemCreationCandidate[] }[], requiresChoice: boolean, workspace: LocalWorkspace]
   'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace]
   'standalone-import-placement-anchor': [anchor: Point]
   'cancel-standalone-import-placement': []
@@ -564,11 +570,28 @@ function finishSelectionRectangle(cancelled: boolean): void {
 
 const orbitInput = useOrbitPlacementInput({
   root: () => canvasRoot.value,
-  map: () => systemMapRef.value,
-  isSystemView: () => props.activeView === 'system',
+  map: () => props.continuousMap ? continuousWardenMapRef.value : systemMapRef.value,
+  isSystemView: () => props.continuousMap === true || props.activeView === 'system',
   mapKey: () => props.mapKey,
   hasAddOrbitIntent: hasOrbitAddIntent,
-  begin: scenePoint => commands.creation.beginOrbitDrag(scenePoint),
+  begin: (event) => {
+    if (!props.continuousMap) {
+      const map = systemMapRef.value
+      const point = map?.clientPointToScene(event.clientX, event.clientY)
+      return map && point && commands.creation.beginOrbitDrag(point) ? map : null
+    }
+    const map = continuousWardenMapRef.value
+    const start = map?.getOrbitDragStart(event)
+    if (!map || !start || !commands.creation.beginOrbitDrag(start.point, start.candidates, start)) return null
+    return {
+      clientPointToScene: (x, y) => continuousWardenMapRef.value === map
+        ? map.orbitDragPointFromClient(start.systemId, x, y)
+        : null,
+      getOrbitDragSceneClearance: () => continuousWardenMapRef.value === map
+        ? map.getOrbitDragSceneClearance(start.systemId)
+        : null,
+    }
+  },
   update: (scenePoint, clearance) => commands.creation.updateOrbitDrag(scenePoint, clearance),
   complete: () => commands.creation.completeOrbitDrag(),
   cancel: () => commands.creation.cancelOrbitDrag(),
@@ -706,6 +729,7 @@ function hasMapAddIntent(): boolean {
   return props.standaloneImportPlacementEnabled === true
     || hasClusterAddIntent()
     || hasContinuousObjectAddIntent()
+    || hasOrbitAddIntent()
     || (props.activeView === 'system' && props.creationType != null)
 }
 
@@ -724,9 +748,10 @@ function forwardMoveObjectInSystem(
 }
 
 function hasOrbitAddIntent(): boolean {
-  return props.activeView === 'system'
+  return (props.activeView === 'system' || props.continuousMap === true)
     && props.creationType?.kind === 'orbit'
     && !props.creationChooserOpen
+    && !props.clusterChooserOpen
     && !props.moveTargeting
 }
 
@@ -1312,6 +1337,7 @@ function onWindowPointerUp(event: PointerEvent): void {
     const placement = event.type === 'pointerup' && event.button === 0
       && props.workspace === lease.workspaceReference
       && isSystemTransferMapOwnerCurrent(lease.destinationSystemId, lease.mapOwner)
+      && continuousWardenMapRef.value?.isClientPointOnMap(event.clientX, event.clientY)
       ? systemTransferPlacementAtClient(lease, event.clientX, event.clientY)
       : null
     if (placement) completeSystemTransferPlacement(lease, placement)
@@ -1437,7 +1463,7 @@ function publicationTargetAt(target: EventTarget | null): { target: PublicationT
   if (props.moveTargeting || props.clusterChooserOpen
     || props.clusterMoveTargeting
     || (props.activeView === 'cluster' && props.clusterAddType != null)
-    || (props.activeView === 'cluster' && props.continuousMap && props.creationType?.kind === 'object')
+    || (props.activeView === 'cluster' && props.continuousMap && props.creationType != null)
     || (props.activeView === 'system' && (props.creationType != null || props.creationChooserOpen))) {
     return null
   }
@@ -1749,6 +1775,7 @@ function forwardCancelCreationPreview(): void {
 }
 
 function emitViewport(viewport: MapViewport): void {
+  if (props.continuousMap) orbitInput.refreshForViewportChange()
   if (mapReady) emit('viewport-change', { key: sourceMapKey, viewport })
 }
 

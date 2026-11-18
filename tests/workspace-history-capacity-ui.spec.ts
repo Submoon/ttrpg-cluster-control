@@ -2,10 +2,10 @@ import { expect, test } from './fixtures'
 import { createLocalWorkspace, exportStarSystem } from '../domain/workspace'
 import {
   activeWorkspaceFeedback,
+  fitWorkspaceMap,
   hideWorkspaceInspector,
   openChartDetailsEditor,
   resolveImportReview,
-  returnToClusterMap,
   reviewStarSystemImport,
   setHeaderMapActionsOpen,
   waitForWorkspaceSaved,
@@ -19,7 +19,7 @@ test('an oversized edit requires explicit consent and cancellation preserves its
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
 
   const incoming = createLocalWorkspace('Measured Reach', 'Measured System')
   const primary = incoming.cluster.systems[0]?.objects[0]

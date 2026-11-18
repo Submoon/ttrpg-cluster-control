@@ -9,14 +9,17 @@ import {
   type StarSystem,
 } from '../domain/workspace'
 import {
+  centerWorkspaceSelection,
   downloadJson,
+  fitWorkspaceMap,
+  hideWorkspaceInspector,
   openWorkspaceHierarchy,
-  panMap,
+  openWorkspaceZoomNavigation,
   resolveJumpClusterRestoreReview,
   reviewJumpClusterBackup,
-  returnToClusterMap,
-  setWorkspaceMapMode,
   waitForWorkspaceStartup,
+  wardenMap,
+  wardenObjectMark,
 } from './helpers'
 
 function largeSearchClusterContent(systemCount: number, matchingObjectsPerSystem: number): string {
@@ -72,8 +75,8 @@ async function expectSearchListboxAssociation(page: Page, searchDialog: Locator,
 
 
 
-test('an exact Location-key result from system A overrides system B selection and remembered camera', async ({ page }, testInfo) => {
-  await importCampaignWorkspace(page)
+test('an exact Location-key result selects the matching owner and reframes the current Warden camera', async ({ page }, testInfo) => {
+  await importCampaignWorkspace(page, undefined, { width: 1440, height: 960 })
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   if (await inspectToggle.getAttribute('aria-expanded') === 'true') await inspectToggle.click()
   await expect(inspectToggle).toHaveAttribute('aria-expanded', 'false')
@@ -82,31 +85,28 @@ test('an exact Location-key result from system A overrides system B selection an
   const harrowSystem = exported.cluster?.systems.find(system => system.name === 'Harrow')
   const targetObject = harrowSystem?.objects.find(object => object.name === 'Primary Star')
   const rememberedObject = harrowSystem?.objects.find(object => object.name === 'Harrow Arrival')
-  if (!targetObject || !rememberedObject) throw new Error('The public cluster export has no Harrow search targets.')
+  if (!harrowSystem || !targetObject || !rememberedObject) throw new Error('The public cluster export has no Harrow search targets.')
 
-  let hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await hierarchy.getByRole('navigation', { name: 'Star systems', exact: true })
-    .getByRole('button', { name: 'Open Harrow system map', exact: true }).click()
-  const harrowMap = page.getByRole('group', { name: 'Harrow star system map', exact: true })
-  const harrowContent = harrowMap.locator('.system-map-content')
-  await expect(harrowMap).toBeVisible()
-  await setWorkspaceMapMode(page, 'Navigate')
-  await panMap(page, harrowMap, { x: 42, y: 24 })
-  const rememberedCamera = await harrowContent.getAttribute('transform')
-  if (!rememberedCamera) throw new Error('The Harrow map has no remembered camera transform.')
-  await setWorkspaceMapMode(page, 'Select')
-  const rememberedMark = harrowMap.locator(`.system-object[data-object-id="${rememberedObject.id}"]`)
-  await rememberedMark.click()
-  await expect(rememberedMark).toHaveClass(/is-selected/)
-  if (await inspectToggle.getAttribute('aria-expanded') === 'true') await inspectToggle.click()
-  await expect(inspectToggle).toHaveAttribute('aria-expanded', 'false')
+  const map = wardenMap(page)
+  const scene = map.locator('.cluster-map-content')
+  const hierarchy = await openWorkspaceHierarchy(page)
+  const systems = hierarchy.getByRole('navigation', { name: 'Star systems', exact: true })
+  await systems.getByRole('button', { name: 'Inspect Harrow', exact: true }).click()
+  await centerWorkspaceSelection(page)
+  const previousSelection = wardenObjectMark(page, harrowSystem.id, rememberedObject.id)
+  await previousSelection.press('Enter')
+  await expect(previousSelection).toHaveAttribute('aria-pressed', 'true')
+  await hideWorkspaceInspector(page)
 
-  await returnToClusterMap(page)
-  hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await hierarchy.getByRole('navigation', { name: 'Star systems', exact: true })
-    .getByRole('button', { name: 'Open Vesper Prime system map', exact: true }).click()
-  const sourceMap = page.getByRole('group', { name: 'Vesper Prime star system map', exact: true })
-  await expect(sourceMap).toBeVisible()
+  await systems.getByRole('button', { name: 'Inspect Vesper Prime', exact: true }).click()
+  await centerWorkspaceSelection(page)
+  await hideWorkspaceInspector(page)
+  const beforePan = await scene.getAttribute('transform')
+  if (!beforePan) throw new Error('The Warden camera must be initialized.')
+  await (await openWorkspaceZoomNavigation(page)).getByRole('button', { name: 'Pan map right', exact: true }).click()
+  await expect(scene).not.toHaveAttribute('transform', beforePan)
+  const sourceCamera = await scene.getAttribute('transform')
+  if (!sourceCamera) throw new Error('The panned workspace needs a live camera.')
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
@@ -120,16 +120,14 @@ test('an exact Location-key result from system A overrides system B selection an
   await expect(harrowResult).toContainText('Location key: A')
   await harrowResult.click()
 
-  await expect(harrowMap).toBeVisible()
+  await expect(map).toHaveCount(1)
   await expect(searchDialog).toHaveCount(0)
-  await expect(harrowMap).toBeFocused()
-  const exactTarget = harrowMap.locator(`.system-object[data-object-id="${targetObject.id}"]`)
-  const previousSelection = harrowMap.locator(`.system-object[data-object-id="${rememberedObject.id}"]`)
-  await expect(exactTarget).toHaveClass(/is-selected/)
-  await expect(exactTarget).toHaveAttribute('aria-label', /^Select A, Primary Star/)
-  await expect(previousSelection).not.toHaveClass(/is-selected/)
-  const searchCamera = await harrowContent.getAttribute('transform')
-  expect(searchCamera).not.toBe(rememberedCamera)
+  await expect(map).toBeFocused()
+  const exactTarget = wardenObjectMark(page, harrowSystem.id, targetObject.id)
+  await expect(exactTarget).toHaveAttribute('aria-pressed', 'true')
+  await expect(exactTarget).toHaveAccessibleName('Select A, Primary Star')
+  await expect(previousSelection).toHaveAttribute('aria-pressed', 'false')
+  await expect(scene).not.toHaveAttribute('transform', sourceCamera)
   await expect(inspectToggle).toHaveAttribute('aria-expanded', 'false')
 
   const screenshotPath = testInfo.outputPath('global-search-system-a-to-b-desktop.png')
@@ -152,7 +150,7 @@ test('native search consults and reveals the last of 500 ordered objects by keyb
     largeSearchClusterContent(20, 25),
   )
   await resolveJumpClusterRestoreReview(restoreReview, 'confirm')
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
   const initialClusterTransform = await page.locator('.cluster-map-content').getAttribute('transform')
   if (!initialClusterTransform) throw new Error('The cluster consultation fixture has no map camera transform.')
 
@@ -201,25 +199,24 @@ test('native search consults and reveals the last of 500 ordered objects by keyb
 
   await query.press('Enter')
 
-  const destinationMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
-  await expect(destinationMap).toBeVisible()
+  const map = wardenMap(page)
+  await expect(map).toHaveAccessibleName('Global Search Atlas continuous map')
   await expect(searchDialog).toHaveCount(0)
-  await expect(destinationMap).toBeFocused()
-  const selectedObject = destinationMap.locator('.system-object.is-selected')
+  await expect(map).toBeFocused()
+  const owner = map.locator('.continuous-warden-system-anchor')
+    .and(map.getByRole('button', { name: `Select ${systemName}`, exact: true }))
+  const ownerId = await owner.getAttribute('data-system-id')
+  if (!ownerId) throw new Error('The last match must have a rendered owning system.')
+  const selectedObject = map.locator('.continuous-warden-object[aria-pressed="true"]')
   await expect(selectedObject).toHaveCount(1)
-  await expect(selectedObject).toHaveAttribute('aria-label', `Select ${locationKey}, Global Beacon (Planet)`)
-  const selectedNameLabel = selectedObject.locator('.object-name')
-  const selectedKeyLabel = selectedObject.locator('.object-key')
-  const selectedGlyph = selectedObject.locator('.system-object-glyph')
-  const selectedTypeMark = selectedObject.locator('.object-type-mark')
+  await expect(selectedObject).toHaveAttribute('data-system-id', ownerId)
+  await expect(selectedObject).toHaveAccessibleName(`Select ${locationKey}, Global Beacon`)
+  const selectedNameLabel = selectedObject.locator('.continuous-warden-object-name')
+  const selectedKeyLabel = selectedObject.locator('.continuous-warden-object-key')
+  const selectedGlyph = selectedObject.locator('.continuous-warden-object-glyph')
   await expect(selectedNameLabel).toHaveText('Global Beacon')
   await expect(selectedKeyLabel).toHaveText(locationKey)
-  await expectPaintedInsideUsableMap(page, destinationMap, [
-    selectedGlyph,
-    selectedTypeMark,
-    selectedNameLabel,
-    selectedKeyLabel,
-  ])
+  await expectPaintedInsideUsableMap(page, map, [selectedGlyph, selectedNameLabel, selectedKeyLabel])
   await expect(inspectToggle(page)).toHaveAttribute('aria-expanded', 'false')
 })
 

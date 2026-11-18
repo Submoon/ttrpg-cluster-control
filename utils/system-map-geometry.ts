@@ -554,16 +554,17 @@ export function orbitPlacementHitsAtPoint(
 }
 
 /**
- * Resolves the first supported map-placement candidate for a catalogue object.
+ * Resolves map placement candidates for a catalogue object or Orbit.
  * The click point is raw SVG scene geometry; the returned free point uses the saved normalized map frame.
- * Existing marks and their labels remain occupied targets instead of silently becoming free centers.
+ * Collapsed interiors offer neither Orbit paths for objects nor hosts for new Orbits. Existing objects
+ * still block overlapping free object placement, and existing detached centers retain their spacing.
  */
 export function creationCandidatesAtPoint(
   system: StarSystem,
   point: Point,
   type: SystemCreationType,
   geometry: SystemMapGeometry,
-  includeOrbitTargets = true,
+  detailTargetsVisible = true,
 ): SystemCreationCandidate[] {
   if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return []
 
@@ -576,7 +577,7 @@ export function creationCandidatesAtPoint(
     .sort((left, right) => left.distance - right.distance)
 
   if (type.kind === 'object') {
-    const nearbyOrbits = includeOrbitTargets ? system.orbits
+    const nearbyOrbits = detailTargetsVisible ? system.orbits
       .map(orbit => {
         const center = orbitCenter(orbit, positions)
         const radii = orbitRadii(system, orbit, geometry)
@@ -612,7 +613,7 @@ export function creationCandidatesAtPoint(
     }]
   }
 
-  if (nearbyObjects.length > 0) {
+  if (detailTargetsVisible && nearbyObjects.length > 0) {
     return nearbyObjects.map(({ object }) => ({
       key: `host:${object.id}`,
       label: `Orbit around ${object.name}`,

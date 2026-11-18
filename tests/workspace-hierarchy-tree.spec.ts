@@ -15,6 +15,7 @@ import {
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
+  wardenObjectMark,
   workspaceNavigation,
   workspaceZoomControls,
 } from './helpers'
@@ -570,10 +571,10 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   expect(await downloadJsonFromFile(page, 'Export star system JSON')).toEqual(moved)
 })
 
-freshTest('continuous Warden group movement previews and commits across owning systems', async ({ page }) => {
+freshTest('the default Warden map moves a group across owning systems and restores the saved edit', async ({ page }) => {
   freshTest.setTimeout(60_000)
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/?map=continuous')
+  await page.goto('/')
   const fixture = JSON.parse(await readFile(new URL('./fixtures/workspace-data-campaign-baseline.json', import.meta.url), 'utf8')) as ExportedMap
   const [sourceOwner, otherOwner] = fixture.cluster?.systems ?? []
   const sourceObject = sourceOwner?.objects.find(candidate => candidate.name === 'Iria')
@@ -600,13 +601,8 @@ freshTest('continuous Warden group movement previews and commits across owning s
   await waitForWorkspaceStartup(page)
   const clusterBeforeGroupMove = await downloadJsonFromFile(page, 'Export Jump Cluster JSON')
   await setWorkspaceMapMode(page, 'Select')
-  const continuousMap = page.getByRole('group', { name: `${fixture.cluster.name} continuous map`, exact: true })
-  const sourceMark = continuousMap.locator(
-    `.continuous-warden-object[data-system-id="${sourceOwner.id}"][data-object-id="${sourceObject.id}"]`,
-  )
-  const otherMark = continuousMap.locator(
-    `.continuous-warden-object[data-system-id="${otherOwner.id}"][data-object-id="${otherOwnerObject.id}"]`,
-  )
+  const sourceMark = wardenObjectMark(page, sourceOwner.id, sourceObject.id)
+  const otherMark = wardenObjectMark(page, otherOwner.id, otherOwnerObject.id)
   const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
   let sourcePoint = null
   let otherPoint = null
@@ -627,6 +623,21 @@ freshTest('continuous Warden group movement previews and commits across owning s
   await expect(sourceMark).toHaveAttribute('aria-pressed', 'true')
   await expect(otherMark).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByText('2 objects selected', { exact: true })).toBeVisible()
+
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  const sourceRow = hierarchy.getByRole('treeitem', {
+    name: `Select ${sourceObject.locationKey}, ${sourceObject.name} in ${sourceOwner.name}`, exact: true, selected: true,
+  })
+  const otherRow = hierarchy.getByRole('treeitem', {
+    name: `Select ${otherOwnerObject.locationKey}, ${otherOwnerObject.name} in ${otherOwner.name}`, exact: true, selected: true,
+  })
+  await expect(sourceRow).toBeVisible()
+  await expect(otherRow).toBeVisible()
+  const otherBranch = hierarchy.getByRole('treeitem', { name: otherOwner.name, exact: true })
+  await otherBranch.getByRole('button', { name: `Collapse ${otherOwner.name}`, exact: true }).click()
+  await expect(otherRow).toBeHidden()
+  await expect(otherMark).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
 
   await setWorkspaceMapMode(page, 'Move')
   const originalTransform = await sourceMark.getAttribute('transform')
@@ -661,4 +672,19 @@ freshTest('continuous Warden group movement previews and commits across owning s
   expect(groupObjectState(clusterAfterGroupMove, otherOwner.id, otherOwnerObject.id))
     .not.toEqual(groupObjectState(clusterBeforeGroupMove, otherOwner.id, otherOwnerObject.id))
   expect(movedAcrossSystemObject).toBeDefined()
+  expect(groupObjectState(clusterAfterGroupMove, sourceOwner.id, sourceObject.id))
+    .not.toEqual(groupObjectState(clusterBeforeGroupMove, sourceOwner.id, sourceObject.id))
+
+  const undo = page.getByRole('button', { name: /^Undo: Move selected objects/ })
+  const redo = page.getByRole('button', { name: /^Redo: Move selected objects/ })
+  await undo.click()
+  await waitForWorkspaceSaved(page)
+  expect(await downloadJsonFromFile(page, 'Export Jump Cluster JSON')).toEqual(clusterBeforeGroupMove)
+  await redo.click()
+  await waitForWorkspaceSaved(page)
+  expect(await downloadJsonFromFile(page, 'Export Jump Cluster JSON')).toEqual(clusterAfterGroupMove)
+
+  await page.reload()
+  await waitForWorkspaceStartup(page)
+  expect(await downloadJsonFromFile(page, 'Export Jump Cluster JSON')).toEqual(clusterAfterGroupMove)
 })

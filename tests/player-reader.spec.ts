@@ -4,6 +4,7 @@ import { serializePlayerJson } from '../domain/workspace'
 import { createPlayerShareUrl } from '../utils/player-share-link'
 import { expect, test, type Locator } from './fixtures'
 import { createPlayerInterfaceFixture } from './fixtures/player-interface-fixture'
+import { parseMapCameraTransform } from './helpers'
 
 type PlayerReadProbe = Window & {
   releaseOlderPlayerRead?: () => void
@@ -89,7 +90,7 @@ function playerRouteFitsViewport(path: Locator): Promise<boolean> {
   })
 }
 
-test('the standalone player reader opens a shared snapshot and keeps the latest file selection', async ({ page, baseURL }) => {
+test('the default player reader opens shared links and files with one camera and public image scopes', async ({ page, baseURL }) => {
   test.setTimeout(60_000)
   if (!baseURL) throw new Error('The player reader requires a configured base URL.')
   const { document } = createPlayerInterfaceFixture()
@@ -152,6 +153,7 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   expect(html).not.toContain(document.title)
   const title = page.getByRole('heading', { name: document.title, exact: true })
   await expect(title).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('[data-player-continuous-map] svg.player-continuous-map-scene')).toHaveCount(1)
   await page.getByRole('link', { name: 'Open player JSON instead', exact: true }).click()
 
   const input = page.getByLabel('Open player JSON', { exact: true })
@@ -196,41 +198,47 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
     await page.evaluate(() => (window as PlayerReadProbe).restorePlayerRead?.())
   }
 
-  const cluster = page.getByRole('region', { name: 'Player-visible Jump Cluster map', exact: true })
-  const system = page.getByRole('region', { name: 'Player-visible system map', exact: true })
-  const opener = cluster.getByRole('button', { name: 'Open Public System system preview', exact: true })
-  await cluster.getByRole('group', { name: 'Star system', exact: true }).click()
-  await expect(system).toHaveCount(0)
-  await cluster.getByRole('button', { name: 'Zoom in', exact: true }).click()
-  const scene = cluster.getByRole('group', { name: `${document.title} player map`, exact: true })
-  const cameraBeforePan = await scene.getAttribute('viewBox')
-  const bounds = await opener.boundingBox()
-  if (!bounds || !cameraBeforePan) throw new Error('The player cluster map is not ready for panning.')
-  const x = bounds.x + bounds.width / 2
-  const y = bounds.y + bounds.height / 2
-  await page.mouse.move(x, y)
-  await page.mouse.down()
-  await page.mouse.move(x + 30, y + 15, { steps: 4 })
-  await page.mouse.up()
-  await expect(scene).not.toHaveAttribute('viewBox', cameraBeforePan)
-  await expect(system).toHaveCount(0)
-  await opener.click()
-  await expect(system).toBeVisible()
+  const system = page.getByRole('region', { name: 'Player-visible continuous map', exact: true })
+  const scene = system.locator('svg.player-continuous-map-scene')
+  const camera = scene.locator(':scope > g')
+  const publicSystemMarks = system.locator(`.player-continuous-system[data-player-system-id="${publicSystem.id}"]`)
+  const publicSystemName = system.locator('.player-continuous-name-target')
+    .and(system.getByRole('button', { name: 'Inspect Public System', exact: true }))
+  const knownSystemMark = system.locator('.player-continuous-system-anchor[data-player-system-id="system-2"]')
+  // At the compact Fit scale the frontmost revealed anchor can cover this marker.
+  await knownSystemMark.press('Enter')
+  await expect(knownSystemMark).toHaveAttribute('aria-pressed', 'true')
+  await expect(system.locator('.player-continuous-object[data-player-system-id="system-2"]')).toHaveCount(0)
+
+  await system.getByRole('button', { name: 'Zoom in', exact: true }).click()
+  const cameraBeforePan = await camera.getAttribute('transform')
+  if (!cameraBeforePan) throw new Error('The public camera is not ready for panning.')
+  await system.getByRole('button', { name: 'Pan left', exact: true }).click()
+  await expect(camera).not.toHaveAttribute('transform', cameraBeforePan)
+  const cameraBeforeInspect = await camera.getAttribute('transform')
+  if (!cameraBeforeInspect) throw new Error('The public camera did not retain its transform.')
+  // Select the name through its keyboard action after panning may move it behind map controls.
+  await publicSystemName.press('Enter')
+  await expect(publicSystemName).toHaveAttribute('aria-pressed', 'true')
+  await expect(camera).toHaveAttribute('transform', cameraBeforeInspect)
+  await system.getByRole('button', { name: 'Center selection', exact: true }).click()
+  await expect(publicSystemMarks.getByRole('button', { name: 'Inspect Harbor World', exact: true })).toBeVisible()
+  await expect(scene).toHaveCount(1)
 
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
   const filters = page.getByRole('dialog', { name: /^Filters(?: \(\d+ active criteri(?:on|a)\))?$/ })
   const celestialTypes = filters.getByRole('group', { name: 'Celestial body', exact: true })
   await celestialTypes.getByRole('checkbox', { name: 'Moon', exact: true }).check()
   await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
-  const harborMarker = system.getByRole('button', { name: 'Inspect Harbor World', exact: true })
-  const moonMarker = system.getByRole('button', { name: 'Inspect Quiet Moon', exact: true })
-  const unknownMarker = system.getByRole('button', { name: 'Inspect Unknown presence', exact: true })
-  await expect(harborMarker).toHaveClass(/player-system-object-marker--dimmed/)
-  await expect(moonMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
-  await expect(unknownMarker).toHaveClass(/player-system-object-marker--dimmed/)
+  const harborMarker = publicSystemMarks.getByRole('button', { name: 'Inspect Harbor World', exact: true })
+  const moonMarker = publicSystemMarks.getByRole('button', { name: 'Inspect Quiet Moon', exact: true })
+  const unknownMarker = publicSystemMarks.getByRole('button', { name: 'Inspect Unknown presence', exact: true })
+  await expect(harborMarker).toHaveClass(/player-continuous-object--dimmed/)
+  await expect(moonMarker).not.toHaveClass(/player-continuous-object--dimmed/)
+  await expect(unknownMarker).toHaveClass(/player-continuous-object--dimmed/)
   const filterButton = page.getByRole('button', { name: 'Filters (1 active criterion)', exact: true })
   await expect(filterButton).toBeVisible()
-  await expect(system.locator('.player-system-orbits ellipse').first()).toHaveCSS('opacity', '1')
+  await expect(system.locator('.player-continuous-system-orbits ellipse').first()).toHaveCSS('opacity', '1')
 
   await filterButton.click()
   await filters.getByRole('combobox', { name: 'Add Field filter', exact: true }).click()
@@ -242,8 +250,8 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await expect(filters).toHaveCount(1)
   await expect(filters).toHaveAccessibleName('Filters (2 active criteria)')
   await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
-  await expect(harborMarker).toHaveClass(/player-system-object-marker--dimmed/)
-  await expect(moonMarker).toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(harborMarker).toHaveClass(/player-continuous-object--dimmed/)
+  await expect(moonMarker).toHaveClass(/player-continuous-object--dimmed/)
   await expect(page.getByText('No objects match', { exact: true })).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Filters (2 active criteria)', exact: true }).click()
@@ -253,8 +261,8 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
   const fieldFilterButton = page.getByRole('button', { name: 'Filters (1 active criterion)', exact: true })
   await expect(fieldFilterButton).toHaveCount(1)
-  await expect(harborMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
-  await expect(moonMarker).toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(harborMarker).not.toHaveClass(/player-continuous-object--dimmed/)
+  await expect(moonMarker).toHaveClass(/player-continuous-object--dimmed/)
   await fieldFilterButton.click()
   await filters.getByRole('checkbox', { name: 'Moon', exact: true }).check()
   await filters.getByRole('button', { name: 'Clear all', exact: true }).click()
@@ -263,14 +271,14 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
   const clearedFilterButton = page.getByRole('button', { name: 'Filters', exact: true })
   await expect(clearedFilterButton).toHaveCount(1)
-  await expect(harborMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
-  await expect(moonMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(harborMarker).not.toHaveClass(/player-continuous-object--dimmed/)
+  await expect(moonMarker).not.toHaveClass(/player-continuous-object--dimmed/)
   await clearedFilterButton.click()
   await filters.getByRole('checkbox', { name: 'Moon', exact: true }).check()
   await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Filters (1 active criterion)', exact: true })).toHaveCount(1)
-  await expect(harborMarker).toHaveClass(/player-system-object-marker--dimmed/)
-  await expect(moonMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(harborMarker).toHaveClass(/player-continuous-object--dimmed/)
+  await expect(moonMarker).not.toHaveClass(/player-continuous-object--dimmed/)
 
   const systemZoom = system.getByRole('button', { name: 'Zoom in', exact: true })
   for (let step = 0; step < 8; step += 1) {
@@ -301,8 +309,7 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
     if (!moved) break
   }
   expect(isPlayerAnchorInsideMap(harborAnchor)).toBe(false)
-  const viewBoxBeforeSearch = await system.locator('svg.player-system-map-scene').getAttribute('viewBox')
-  if (!viewBoxBeforeSearch) throw new Error('The player system map has no camera viewBox.')
+  const scaleBeforeSearch = parseMapCameraTransform(await camera.getAttribute('transform')).k
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const search = page.getByRole('dialog', { name: 'Search player map', exact: true })
   await search.getByRole('combobox').fill('Harbor World')
@@ -316,42 +323,32 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await expect(fields.locator('dd')).toHaveText(['Breathable', '0', 'false'])
   await inspector.getByRole('button', { name: 'Return to map', exact: true }).click()
   await expect(inspector).toBeHidden()
-  await expect(system.locator('svg.player-system-map-scene')).toBeFocused()
+  await expect(scene).toBeFocused()
   harborAnchor = await readPlayerMarkerAnchor(harborMarker)
   expect(isPlayerAnchorInsideMap(harborAnchor)).toBe(true)
-  const viewBoxAfterReveal = await system.locator('svg.player-system-map-scene').getAttribute('viewBox')
-  if (!viewBoxAfterReveal) throw new Error('The player system map lost its camera viewBox.')
-  expect(viewBoxAfterReveal.split(/\s+/).slice(2).map(Number))
-    .toEqual(viewBoxBeforeSearch.split(/\s+/).slice(2).map(Number))
+  expect(parseMapCameraTransform(await camera.getAttribute('transform')).k).toBe(scaleBeforeSearch)
   await expect(harborMarker).toHaveAttribute('aria-pressed', 'true')
-  const harborGlyph = harborMarker.locator('.player-system-object-glyph')
-  const selectionOutline = harborMarker.locator('.player-system-object-selection-outline')
-  const keyboardFocusOutline = harborMarker.locator('.player-system-object-focus-outline')
+  const harborGlyph = harborMarker.locator('.player-continuous-object-glyph')
+  const markerOutline = harborMarker.locator('.player-continuous-object-marker-outline')
   await expect(harborGlyph).toHaveCSS('fill', 'rgb(161, 59, 124)')
-  await expect(selectionOutline).toHaveCSS('opacity', '1')
-  await expect(keyboardFocusOutline).toHaveCSS('opacity', '0')
-  await expect(harborMarker).toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(markerOutline).not.toHaveCSS('stroke', 'rgba(0, 0, 0, 0)')
+  await expect(harborMarker).toHaveClass(/player-continuous-object--dimmed/)
   const searchLocator = system.locator('[data-map-search-locator]')
   await expect(searchLocator).toBeVisible()
-  await system.locator('svg.player-system-map-scene').focus()
+  await scene.focus()
   let harborHasKeyboardFocus = false
-  for (let index = 0; index < 24 && !harborHasKeyboardFocus; index += 1) {
+  for (let index = 0; index < 36 && !harborHasKeyboardFocus; index += 1) {
     await page.keyboard.press('Tab')
     harborHasKeyboardFocus = await harborMarker.evaluate(element => element.matches(':focus-visible'))
   }
   expect(harborHasKeyboardFocus).toBe(true)
   await expect(harborGlyph).toHaveCSS('fill', 'rgb(161, 59, 124)')
-  await expect(selectionOutline).toHaveCSS('opacity', '1')
-  await expect(keyboardFocusOutline).toHaveCSS('opacity', '1')
-  expect(await keyboardFocusOutline.evaluate(element => getComputedStyle(element).strokeDasharray)).not.toBe('none')
-  const selectionBounds = await selectionOutline.boundingBox()
-  const focusBounds = await keyboardFocusOutline.boundingBox()
-  if (!selectionBounds || !focusBounds) throw new Error('The selection and keyboard focus outlines need visible bounds.')
-  expect(selectionBounds.width).toBeGreaterThan(focusBounds.width)
+  await expect(markerOutline).not.toHaveCSS('stroke', 'rgba(0, 0, 0, 0)')
   await expect(searchLocator).toBeVisible()
   await page.getByRole('button', { name: 'Map files', exact: true }).click()
+  await page.getByRole('radio', { name: 'Selected system', exact: true }).click()
   const svgDownloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export star system Public System SVG', exact: true }).click()
+  await page.getByRole('button', { name: 'Export Selected system SVG', exact: true }).click()
   const svgDownload = await svgDownloadPromise
   const exportedSvg = await readFile(await svgDownload.path(), 'utf8')
   for (const publicName of ['Public Star', 'Harbor World', 'Quiet Moon', 'Unknown presence']) {
@@ -360,10 +357,12 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   expect(exportedSvg).toContain('fill="#A13B7C"')
   expect(exportedSvg).not.toContain('map-search-locator')
   await expect(searchLocator).toBeVisible()
+  await page.getByRole('button', { name: 'Map files', exact: true }).click()
 
   await system.getByRole('button', { name: 'Fit player map', exact: true }).click()
   await expect(searchLocator).toHaveCount(0)
-  await expect(harborMarker).toHaveClass(/player-system-object-marker--dimmed/)
+  await system.getByRole('button', { name: 'Center selection', exact: true }).click()
+  await expect(harborMarker).toHaveClass(/player-continuous-object--dimmed/)
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const normalResultSearch = page.getByRole('dialog', { name: 'Search player map', exact: true })
@@ -372,7 +371,7 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   const normalResultInspector = page.getByRole('dialog', { name: 'Player details', exact: true })
   await normalResultInspector.getByRole('button', { name: 'Return to map', exact: true }).click()
   await expect(normalResultInspector).toBeHidden()
-  await expect(moonMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(moonMarker).not.toHaveClass(/player-continuous-object--dimmed/)
   await expect(searchLocator).toHaveCount(0)
 
   const activeTypeFilters = page.getByRole('button', { name: 'Filters (1 active criterion)', exact: true })
@@ -393,7 +392,7 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await crossSystemInspector.getByRole('button', { name: 'Return to map', exact: true }).click()
   await expect(crossSystemInspector).toBeHidden()
   const remoteMarker = system.getByRole('button', { name: 'Inspect Remote Echo', exact: true })
-  await expect(remoteMarker).toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(remoteMarker).toHaveClass(/player-continuous-object--dimmed/)
   await expect(searchLocator).toBeVisible()
 
   await page.getByRole('button', { name: 'Filters (2 active criteria)', exact: true }).click()
@@ -401,11 +400,20 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await activeFilters.getByRole('button', { name: 'Clear all', exact: true }).click()
   await activeFilters.getByRole('button', { name: 'Close filters', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Filters', exact: true })).toBeVisible()
-  await expect(remoteMarker).not.toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(remoteMarker).not.toHaveClass(/player-continuous-object--dimmed/)
   await expect(searchLocator).toHaveCount(0)
   await page.getByRole('button', { name: 'Map files', exact: true }).click()
+  await page.getByRole('radio', { name: 'Entire Cluster', exact: true }).click()
+  const overviewDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export Entire Cluster SVG', exact: true }).click()
+  const overviewSvg = await readFile(await (await overviewDownload).path(), 'utf8')
+  expect(overviewSvg).toContain('Public System')
+  expect(overviewSvg).toContain('Remote System')
+  expect(overviewSvg).toContain('class="cluster-route-line"')
+  expect(overviewSvg).not.toContain('Harbor World')
+  await page.getByRole('radio', { name: 'Selected system', exact: true }).click()
   const pendingDownload = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export star system Remote System PNG', exact: true }).click()
+  await page.getByRole('button', { name: 'Export Selected system PNG', exact: true }).click()
   const download = await pendingDownload
   expect(download.suggestedFilename()).toMatch(/\.png$/i)
   expect((await readFile(await download.path())).subarray(0, 8))
@@ -415,7 +423,7 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   const remoteFilters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
   await remoteFilters.getByRole('checkbox', { name: 'Moon', exact: true }).check()
   await remoteFilters.getByRole('button', { name: 'Close filters', exact: true }).click()
-  await expect(remoteMarker).toHaveClass(/player-system-object-marker--dimmed/)
+  await expect(remoteMarker).toHaveClass(/player-continuous-object--dimmed/)
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const deferredSearch = page.getByRole('dialog', { name: 'Search player map', exact: true })
   await deferredSearch.getByRole('combobox').fill('Remote Echo')
@@ -425,7 +433,10 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await uploadPlayerJson(input, 'replacement-player.json', serializePlayerJson(replacementDocument))
   await expect(page.getByRole('heading', { name: 'Replacement Reach', exact: true })).toBeVisible()
   await expect(page.locator('[data-map-search-locator]')).toHaveCount(0)
-  await expect(system).toHaveCount(0)
+  await expect(scene).toHaveCount(1)
+  await expect(system.locator('[aria-pressed="true"]')).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: 'Player details', exact: true })).toBeHidden()
+  await expect(system.getByRole('button', { name: 'Center selection', exact: true })).toBeDisabled()
 
   await uploadPlayerJson(input, 'invalid-player.json', '{"private":"PRIVATE-TRUNCATED-MARKER"')
   await expect(page.getByRole('alert')).toHaveText('The player JSON file is not valid JSON.')
@@ -440,7 +451,6 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
     destination: { kind: 'system' as const, systemId: publicSystem.id },
   }
   const legacyShareUrl = new URL(readerUrl)
-  legacyShareUrl.searchParams.set('map', 'continuous')
   legacyShareUrl.hash = `player=1.gzip.${gzipSync(Buffer.from(JSON.stringify({
     ...document,
     version: 1,
@@ -453,7 +463,7 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   const continuousMap = page.getByRole('region', { name: 'Player-visible continuous map', exact: true })
   const continuousScene = continuousMap.getByRole('group', { name: `${document.title} continuous player map`, exact: true })
   await expect(continuousScene).toBeVisible()
-  await expect(continuousMap.locator('.player-cluster-route')).toHaveCount(0)
+  await expect(continuousMap.locator('.cluster-route[data-route-id="route-1"]')).toHaveCount(0)
   const publicRouteMark = continuousMap.locator('.cluster-route[data-route-id="route-2"]')
   const publicRouteStroke = publicRouteMark.locator('.cluster-route-hit-target')
   await expect(publicRouteMark).toBeVisible()
@@ -469,7 +479,7 @@ test('the standalone player reader opens a shared snapshot and keeps the latest 
   await expect.poll(() => playerRouteFitsViewport(publicRouteMark.locator('.cluster-route-line'))).toBe(true)
 
   const knownMarker = continuousMap.locator('.player-continuous-system-anchor[data-player-system-id="system-2"]')
-  await knownMarker.click()
+  await knownMarker.press('Enter')
   const zoomInForRoute = continuousMap.getByRole('button', { name: 'Zoom in', exact: true })
   let clippedRoutePoint = await playerRouteStrokePoint(publicRouteStroke, true)
   for (let step = 0; !clippedRoutePoint && step < 14; step++) {

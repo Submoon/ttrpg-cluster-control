@@ -186,7 +186,11 @@ watch(
 )
 
 onBeforeUnmount(stopAnimation)
-defineExpose({ routeIdAtStroke, focusRoute })
+function getRenderedRouteEnd(id: string): Point | undefined {
+  return (animated.value.get(id) ?? props.geometries.get(id))?.end
+}
+
+defineExpose({ routeIdAtStroke, focusRoute, getRenderedRouteEnd })
 </script>
 
 <style scoped>
