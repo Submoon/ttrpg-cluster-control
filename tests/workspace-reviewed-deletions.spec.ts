@@ -32,7 +32,7 @@ test('object deletion reviews the current cascade before resolving its inspector
     await owner.getByRole('button', { name: 'Expand Vesper', exact: true }).click()
   }
   await expect(owner).toHaveAttribute('aria-expanded', 'true')
-  await tree.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
+  await tree.getByRole('treeitem', { name: 'Select A, Primary Star in Vesper', exact: true }).click()
   await editMapObject(page)
   const nameInput = page.getByLabel('Name', { exact: true })
   await nameInput.fill('Unapplied star')
@@ -66,7 +66,7 @@ test('object deletion reviews the current cascade before resolving its inspector
   await review.getByRole('button', { name: 'Cancel deletion', exact: true }).click()
   await expect(review).toBeHidden()
 
-  await expect(tree.getByRole('treeitem', { name: 'Select A, Unapplied star', exact: true })).toBeVisible()
+  await expect(tree.getByRole('treeitem', { name: 'Select A, Unapplied star in Vesper', exact: true })).toBeVisible()
   await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Unapplied star')
 })
 
