@@ -1,39 +1,50 @@
 import { expect, test } from './fixtures'
 import {
-  addCatalogueObject,
   captureMapExportBlobs,
+  centerWorkspaceSelection,
+  clickWardenSystemPoint,
+  createSingleSystemWorkspace,
   downloadImage,
+  downloadJson,
   editMapObject,
   openWorkspaceHierarchy,
-  returnToClusterMap,
+  quitSystemAdd,
   saveMapObject,
+  selectCatalogueObjectButton,
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
+  wardenMap,
+  wardenObjectMark,
 } from './helpers'
 
 test('object Inspectors follow selection and apply, discard, and reset marker colors', async ({ page }, testInfo) => {
   test.setTimeout(90_000)
   await page.emulateMedia({ colorScheme: 'light' })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-
-  const hierarchy = await openWorkspaceHierarchy(page)
-  await addCatalogueObject(page, 'planet')
+  await captureMapExportBlobs(page)
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
+  const map = wardenMap(page)
+  const system = map.locator(`.continuous-warden-system[data-system-id="${systemId}"]`)
+  const star = wardenObjectMark(page, systemId, primaryObjectId)
+  const starGlyph = star.locator('.continuous-warden-object-glyph')
+  await (await selectCatalogueObjectButton(page, 'planet')).click()
+  await clickWardenSystemPoint(page, systemId, { x: 0.33, y: 0.64 })
+  const createdPlanet = system.getByRole('button', { name: 'Select PL-01, New planet 1', exact: true })
+  await expect(createdPlanet).toBeVisible()
+  const planetId = await createdPlanet.getAttribute('data-object-id')
+  if (!planetId) throw new Error('The created Planet must have its own identity.')
+  await quitSystemAdd(page)
+  const planet = wardenObjectMark(page, systemId, planetId)
+  const planetGlyph = planet.locator('.continuous-warden-object-glyph')
+  await planet.press('Enter')
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Iria')
   await saveMapObject(page)
 
-  const starRow = hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true })
-  const planetRow = hierarchy.getByRole('treeitem', { name: /Select .*Iria/ })
+  const hierarchy = await openWorkspaceHierarchy(page)
+  const starRow = hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star in Vesper', exact: true })
+  const planetRow = hierarchy.getByRole('treeitem', { name: 'Select PL-01, Iria in Vesper', exact: true })
   await starRow.click()
   await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Primary Star')
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
-  const star = map.getByRole('button', { name: /Select A, Primary Star/ })
-  const starGlyph = star.locator('.system-object-glyph')
-  const planet = map.getByRole('button', { name: /Select .*Iria/ })
-  const planetGlyph = planet.locator('.system-object-glyph')
   const colorButton = page.getByRole('button', { name: /^Marker color:/ })
   const rgb = 'rgb(161, 81, 191)'
   const appliedStarFill = await starGlyph.evaluate(glyph => getComputedStyle(glyph).fill)
@@ -62,18 +73,20 @@ test('object Inspectors follow selection and apply, discard, and reset marker co
   await expect(hexColor).toHaveValue('#a151bf')
   await page.keyboard.press('Escape')
   await expect(colorButton).toBeFocused()
-  await captureMapExportBlobs(page)
-  const image = await downloadImage(page, 'image/svg+xml')
-  const starId = await star.getAttribute('data-object-id')
-  if (!image.text || !starId) throw new Error('The Warden SVG or its marker identity is missing.')
-  const exportedStarFill = await page.evaluate(({ text, objectId }) => {
+  const image = await downloadImage(page, 'image/svg+xml', 'Selected system')
+  if (!image.text) throw new Error('The Warden SVG is missing.')
+  const exportedStarFill = await page.evaluate(({ text, ownerId, objectId }) => {
     const svg = new DOMParser().parseFromString(text, 'image/svg+xml')
-    return svg.querySelector<SVGTextElement>(
-      `.system-object[data-object-id="${objectId}"] .system-object-glyph`,
-    )?.style.fill
-  }, { text: image.text, objectId: starId })
-  expect(exportedStarFill).toMatch(/^rgb\(/)
-  expect(exportedStarFill).not.toBe(rgb)
+    const glyph = svg.querySelector<SVGTextElement>(
+      `.continuous-warden-object[data-system-id="${ownerId}"][data-object-id="${objectId}"] .continuous-warden-object-glyph`,
+    )
+    if (!glyph) throw new Error('The applied SVG must include the original Star.')
+    return glyph.style.fill
+  }, { text: image.text, ownerId: systemId, objectId: primaryObjectId })
+  expect(exportedStarFill).toBe('')
+  const beforeApply = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(beforeApply.cluster?.systems.find(system => system.id === systemId)
+    ?.objects.find(object => object.id === primaryObjectId)?.markerColor).toBeUndefined()
   await expect(starGlyph).toHaveCSS('fill', rgb)
   await saveMapObject(page)
   await expect(starGlyph).toHaveCSS('fill', rgb)
@@ -107,9 +120,7 @@ test('object Inspectors follow selection and apply, discard, and reset marker co
   await expect(colorButton).toBeFocused()
   await saveMapObject(page)
 
-  const planetId = await planet.getAttribute('data-object-id')
-  if (!planetId) throw new Error('Iria has no map identity.')
-  const ring = map.locator(`[data-selection-object-id="${planetId}"] .system-object-selection-outline`)
+  const ring = planet.locator('.system-object-selection-outline')
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme })
     await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${theme}\\b`))
@@ -123,7 +134,7 @@ test('object Inspectors follow selection and apply, discard, and reset marker co
   await page.keyboard.press('Shift+Tab')
   await expect(star).toBeFocused()
   await expect(star).toHaveAttribute('aria-pressed', 'false')
-  await expect(star.locator('.object-hit-target')).not.toHaveCSS('stroke', 'none')
+  await expect(star.locator('.continuous-warden-object-marker-outline')).not.toHaveCSS('stroke', 'none')
   await expect(starGlyph).toHaveCSS('fill', rgb)
   await expect(ring).toBeVisible()
 
@@ -137,12 +148,15 @@ test('object Inspectors follow selection and apply, discard, and reset marker co
   await waitForWorkspaceSaved(page)
   await page.reload()
   await waitForWorkspaceStartup(page)
-  await returnToClusterMap(page)
-  const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await clusterHierarchy.getByRole('button', { name: 'Open Vesper system map', exact: true }).click()
+  const clusterHierarchy = await openWorkspaceHierarchy(page)
+  await clusterHierarchy.getByRole('button', { name: 'Inspect Vesper', exact: true }).click()
+  await centerWorkspaceSelection(page)
   await expect(planetGlyph).toHaveCSS('fill', rgb)
+  const durable = await downloadJson(page, 'Export Jump Cluster JSON')
+  const durableOwner = durable.cluster?.systems.find(system => system.id === systemId)
+  expect(durableOwner?.objects.find(object => object.id === planetId)?.markerColor).toMatch(/^#a151bf$/i)
+  expect(durableOwner?.objects.find(object => object.id === primaryObjectId)?.markerColor).toMatch(/^#a151bf$/i)
 
-  await openWorkspaceHierarchy(page, 'System hierarchy')
   await planetRow.click()
   await editMapObject(page)
   await page.emulateMedia({ colorScheme: 'dark' })
@@ -164,4 +178,9 @@ test('object Inspectors follow selection and apply, discard, and reset marker co
   await saveMapObject(page)
   await expect(planetGlyph).toHaveCSS('fill', defaultFill)
   await expect(starGlyph).toHaveCSS('fill', rgb)
+  await waitForWorkspaceSaved(page)
+  const afterReset = await downloadJson(page, 'Export Jump Cluster JSON')
+  const resetOwner = afterReset.cluster?.systems.find(system => system.id === systemId)
+  expect(resetOwner?.objects.find(object => object.id === planetId)?.markerColor).toBeUndefined()
+  expect(resetOwner?.objects.find(object => object.id === primaryObjectId)?.markerColor).toMatch(/^#a151bf$/i)
 })
