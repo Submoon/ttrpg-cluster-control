@@ -547,6 +547,8 @@ freshTest('a sparse Hierarchy context menu survives replacing its selected sibli
   await betaRow.press('Shift+F10')
   const menu = page.getByRole('menu', { name: 'Player visibility', exact: true })
   await expect(menu.getByRole('menuitem', { name: 'Move selection', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(menu).toBeHidden()
   // Replacing membership prunes Alpha, moving Beta into its preceding sibling's rendered slot.
   await expect(alphaRow).toHaveCount(0)
   await expect(betaRow).toHaveAttribute('aria-selected', 'true')
@@ -555,8 +557,6 @@ freshTest('a sparse Hierarchy context menu survives replacing its selected sibli
   await expect(inspector).toContainText(beta.name)
   await expect(inspector).not.toContainText(alpha.name)
   await expect(camera).toHaveAttribute('transform', cameraBeforeContext!)
-  await page.keyboard.press('Escape')
-  await expect(menu).toBeHidden()
   await expect(betaRow).toBeFocused()
   await expect(hierarchy).toBeVisible()
   await expect(inspector).toBeVisible()
