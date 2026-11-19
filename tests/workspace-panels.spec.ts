@@ -193,7 +193,7 @@ test('the default compact Warden map consumes a held selection and keeps inspect
   const map = wardenMap(page)
   const object = wardenObjectMark(page, systemId, primaryObjectId)
   const inspector = page.locator('#workspace-inspector-panel')
-  const closeInspector = page.getByRole('button', { name: 'Close inspector panel', exact: true })
+  const closeInspector = inspector.getByRole('button', { name: 'Hide inspector', exact: true })
   const files = page.getByRole('button', { name: 'Map files', exact: true })
   await files.click()
   await page.keyboard.press('Escape')
