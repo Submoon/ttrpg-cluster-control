@@ -16,6 +16,7 @@ import {
   openChartDetailsEditor,
   openMapFilesSection,
   openWorkspaceHierarchy,
+  readInspectorSelection,
   resolveJumpClusterRestoreReview,
   reviewJumpClusterBackup,
   quitSystemAdd,
@@ -581,10 +582,11 @@ test('public campaign creation persists a custom value and unresolved route thro
   const clusterMap = wardenMap(page)
   await expect(clusterMap).toHaveAccessibleName('Kestrel Reach Prime continuous map')
   await clickDockAction(page, 'Add Jump Route')
-  await page.getByRole('button', { name: 'Resume Jump Route', exact: true }).click()
   const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
+  await expect(routeInspector.getByRole('heading', { name: 'Connect Systems', exact: true })).toBeVisible()
+  await clickWardenSystemPoint(page, systemId, { x: .5, y: .5 })
+  await expect.poll(() => readInspectorSelection(routeInspector.getByLabel('From system'))).toBe('Vesper Prime')
   await routeInspector.getByRole('spinbutton', { name: 'Jump level' }).fill('12')
-  await selectInspectorOption(routeInspector.getByLabel('From system'), 'Vesper Prime')
   await selectInspectorOption(routeInspector.getByLabel('From Jump Point'), 'Vesper Departure (Vesper Prime)')
   await selectInspectorOption(routeInspector.getByLabel('Route destination'), 'Unresolved external exit')
   await routeInspector.getByLabel('Unknown destination label').fill('The Quiet Expanse')
@@ -602,7 +604,9 @@ test('public campaign creation persists a custom value and unresolved route thro
   expect(exportedPoint.customFieldValues?.[exportedField.id]).toBe('A durable campaign note.')
   expect(beforeReload.cluster!.routes).toEqual([expect.objectContaining({
     jumpLevel: 12,
+    fromSystemId: systemId,
     fromPointId: exportedPoint.id,
+    toSystemId: null,
     toPointId: null,
     unresolvedExit: 'The Quiet Expanse',
   })])

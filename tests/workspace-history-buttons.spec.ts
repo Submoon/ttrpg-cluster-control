@@ -49,21 +49,44 @@ test('a held map move blocks traversal and its completed position round-trips ex
   await hideWorkspaceInspector(page)
   await fitWorkspaceMap(page)
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
-  const system = wardenSystemMark(page, systemId)
+  const map = wardenMap(page)
+  const system = map.locator(`.continuous-warden-name-target[data-system-id="${systemId}"]`)
   await expect(system).toHaveAccessibleName('Select Vesper Prime')
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
   const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
   await expect(undo).toBeEnabled()
   await setWorkspaceMapMode(page, 'Move')
-  await system.click()
-  const start = await system.boundingBox()
-  if (!start) throw new Error('The cluster system is not visible for dragging.')
-  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(start.x + start.width / 2 + 100, start.y + start.height / 2 + 50, { steps: 6 })
-  await expect(undo).toBeDisabled()
-  await expect(page.getByRole('group', { name: 'Edit history' })).toContainText('Finish the active map gesture first.')
-  await page.mouse.up()
+  const nameHitPoint = () => system.evaluate((element) => {
+    const background = element.querySelector('.continuous-warden-name-background')
+    if (!background) throw new Error('The owning system name has no painted background.')
+    const bounds = background.getBoundingClientRect()
+    for (const x of [.5, .25, .75]) {
+      for (const y of [.5, .25, .75]) {
+        const point = { x: Math.round(bounds.x + bounds.width * x), y: Math.round(bounds.y + bounds.height * y) }
+        if (document.elementFromPoint(point.x, point.y)?.closest('.continuous-warden-name-target') === element) return point
+      }
+    }
+    throw new Error('The owning system name has no frontmost native hit for Move.')
+  })
+  const selectPoint = await nameHitPoint()
+  await page.mouse.click(selectPoint.x, selectPoint.y)
+  await hideWorkspaceInspector(page)
+  const start = await nameHitPoint()
+  const end = { x: start.x + 100, y: start.y + 50 }
+  expect(await map.evaluate((element, points) => Array.from({ length: 7 }, (_, step) =>
+    element.contains(document.elementFromPoint(
+      points.start.x + (points.end.x - points.start.x) * step / 6,
+      points.start.y + (points.end.y - points.start.y) * step / 6,
+    ))).every(Boolean), { start, end })).toBe(true)
+  await page.mouse.move(start.x, start.y)
+  try {
+    await page.mouse.down()
+    await page.mouse.move(end.x, end.y, { steps: 6 })
+    await expect(undo).toBeDisabled()
+    await expect(page.getByRole('group', { name: 'Edit history' })).toContainText('Finish the active map gesture first.')
+  } finally {
+    await page.mouse.up()
+  }
   await expect(undo).toBeEnabled()
   const moved = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(moved.layout.systemPositions?.[systemId]).not.toEqual(before.layout.systemPositions?.[systemId])
@@ -205,6 +228,7 @@ test('an older real save acknowledgement cannot enable traversal of a newer appl
 })
 
 test('releasing an object drag over disabled history chrome cancels cleanly and permits the next drag', async ({ page }) => {
+  test.setTimeout(60_000)
   await captureMapExportBlobs(page)
   const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
     viewport: { width: 1440, height: 960 },

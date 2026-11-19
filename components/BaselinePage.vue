@@ -1106,8 +1106,6 @@ const inspectorSelectedOrbit = computed(() => {
   return workspace.value?.cluster.systems.find(system => system.id === target.systemId)?.orbits
     .find(orbit => orbit.id === target.orbitId)
 })
-const inspectorMode = computed(() => inspectedTarget.value?.kind === 'object' || inspectedTarget.value?.kind === 'orbit'
-  ? 'system' : 'cluster')
 const { wardenDraftWorkspace } = workflows
 const wardenWorkspace = computed(() => wardenDraftWorkspace.value ?? workspace.value)
 const wardenSystem = computed(() => wardenDraftWorkspace.value?.cluster.systems.find(system => system.id === inspectorSelectedSystem.value?.id))
@@ -1161,6 +1159,11 @@ const {
   routeSession, hasModifiedRouteSession, offerRouteSystems, chooseRouteSystem, chooseRoutePoint, updateRouteInput,
   applyRouteSession, discardRouteSession, cancelRouteCreation,
 } = inspector
+const inspectorMode = computed(() => {
+  // An admitted route creation session owns the form while retaining the previous inspected target.
+  if (activeView.value === 'cluster' && routeSession.value?.routeId === null) return 'cluster'
+  return inspectedTarget.value?.kind === 'object' || inspectedTarget.value?.kind === 'orbit' ? 'system' : 'cluster'
+})
 const inspectorLabel = computed(() => {
   if (chartEditing.value) return 'Jump Cluster details editor'
   if (inspectorMode.value === 'system') {
@@ -1465,7 +1468,9 @@ const creationTypeLabel = computed(() => {
 const clusterAddPresentation = computed(() => orbitAddArmed.value
   ? {
       label: 'Orbit',
-      status: 'ADD Orbit · Choose a host or clear map position.',
+      status: creationSession.value?.type.kind === 'orbit' && creationSession.value.notice
+        ? `ADD Orbit · ${creationSession.value.notice}`
+        : 'ADD Orbit · Choose a host or clear map position.',
       error: editorError.value || undefined,
     }
   : continuousObjectAddType.value !== null

@@ -1,8 +1,8 @@
 import { expect, preparedCampaignTest as campaignTest, type Locator, type Page } from './fixtures'
 import {
   captureMapExportBlobs, centerWorkspaceSelection, dockAction, downloadJson,
-  exposedContinuousObjectHitPoint, hideWorkspaceInspector, measureMouseDrag, openWorkspaceHierarchy,
-  openWorkspaceZoomNavigation, quitSystemAdd, setWorkspaceMapMode, snapshotSvgCoordinates,
+  hideWorkspaceInspector, measureMouseDrag, openWorkspaceHierarchy,
+  openWorkspaceZoomNavigation, quitSystemAdd, selectInspectorOption, setWorkspaceMapMode, snapshotSvgCoordinates,
   waitForWorkspaceSaved, waitForWorkspaceStartup, wardenMap, wardenObjectMark, wardenSystemMark,
   workspaceZoomControls, workspaceZoomOutput, type ExportedMap,
 } from './helpers'
@@ -178,9 +178,14 @@ campaignTest.describe('prepared campaign map layout', () => {
     await expect(orbit).toHaveAttribute('ry', String(resizedRadius))
     expect(Math.abs(await orbitalAngle(host, orbiting) - angle)).toBeLessThan(.02)
     await (await dockAction(page, 'Add orbit')).click()
-    const point = await exposedContinuousObjectHitPoint(host)
-    if (!point) throw new Error('The Star needs a real hosted-Orbit Add target.')
-    await page.mouse.click(point.x, point.y)
+    const controls = page.getByRole('group', { name: 'Orbit creation controls', exact: true })
+    const placement = controls.getByRole('button', { name: 'Placement', exact: true })
+    if (await placement.getAttribute('aria-expanded') !== 'true') await placement.click()
+    await selectInspectorOption(page.getByLabel('Orbit center or host', { exact: true }), {
+      identity: { attribute: 'data-object-id', id: primary.id },
+    })
+    await page.getByRole('form', { name: 'Placement', exact: true })
+      .getByRole('button', { name: 'Add', exact: true }).click()
     await quitSystemAdd(page)
     const added = await downloadJson(page, 'Export Jump Cluster JSON')
     const second = added.cluster?.systems.find(candidate => candidate.id === system.id)?.orbits

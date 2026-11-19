@@ -37,6 +37,12 @@ test('Add can create a free object from the visible map center with the keyboard
   const expectedPosition = { x: (local.x - 64) / 832, y: (local.y - 72) / 416 }
 
   await map.press('Enter')
+  const ownerDialog = page.getByRole('dialog', { name: 'Choose the owning system', exact: true })
+  await expect(ownerDialog).toBeVisible()
+  const ownerChoice = ownerDialog.getByRole('button', { name: `Add Planet to ${initialOwner.name}`, exact: true })
+  await expect(ownerChoice).toBeEnabled()
+  await ownerChoice.press('Enter')
+  await expect(ownerDialog).toBeHidden()
   const marks = map.locator(`.continuous-warden-object[data-system-id="${systemId}"]`)
   await expect(marks).toHaveCount(initialOwner.objects.length + 1)
   const created = await downloadJson(page, 'Export Jump Cluster JSON')

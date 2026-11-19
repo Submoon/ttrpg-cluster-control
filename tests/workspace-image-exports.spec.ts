@@ -290,7 +290,12 @@ async function expectDownloadedPngBackground(page: Page, fill: string) {
     canvas.width = canvas.height = 1
     const context = canvas.getContext('2d')
     if (!context) throw new Error('The actual PNG needs a decoding canvas.')
-    context.drawImage(image, 0, 0)
+    // These fixtures leave the upper-left interior clear; the fractional viewBox edge can be antialiased.
+    const backgroundInset = 8
+    if (image.naturalWidth <= backgroundInset * 2 || image.naturalHeight <= backgroundInset * 2) {
+      throw new Error('The PNG is too small to sample an interior background pixel.')
+    }
+    context.drawImage(image, -backgroundInset, -backgroundInset)
     const actual = [...context.getImageData(0, 0, 1, 1).data]
     context.clearRect(0, 0, 1, 1)
     context.fillStyle = fill
@@ -573,19 +578,28 @@ test('the default Warden map exports all three scopes from applied layout and ca
   if (!appliedAnchorTransform) throw new Error('Vesper Prime has no applied anchor transform.')
   await setWorkspaceMapMode(page, 'Move')
   const anchor = continuousMap.locator('.continuous-warden-system-anchor[data-system-id="campaign-baseline-vesper"]')
-  const anchorBounds = await anchor.boundingBox()
-  if (!anchorBounds) throw new Error('Vesper Prime has no visible anchor for the movement preview.')
-  await page.mouse.move(anchorBounds.x + anchorBounds.width / 2, anchorBounds.y + anchorBounds.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(anchorBounds.x + anchorBounds.width / 2 + 38, anchorBounds.y + anchorBounds.height / 2 + 18, { steps: 3 })
-  await expect(anchor).toHaveClass(/is-move-preview/)
-  expect(await anchor.getAttribute('transform')).not.toBe(appliedAnchorTransform)
-  const viewportPreviewSvg = await downloadSvgWhilePointerHeld(page)
-  const viewportPreviewScene = await inspectContinuousImage(page, viewportPreviewSvg)
-  expect(viewportPreviewScene.contentTransform).toBe(liveViewportTransform)
-  expect(viewportPreviewScene.anchorTransforms['campaign-baseline-vesper']).toBe(appliedAnchorTransform)
-  await expect(anchor).toHaveClass(/is-move-preview/)
-  await page.mouse.up()
+  const name = continuousMap.locator('.continuous-warden-name-target[data-system-id="campaign-baseline-vesper"]')
+  const nameBounds = await name.locator('.continuous-warden-name-background').boundingBox()
+  if (!nameBounds) throw new Error('Vesper Prime has no visible name target for the movement preview.')
+  const start = { x: Math.round(nameBounds.x + nameBounds.width / 2), y: Math.round(nameBounds.y + nameBounds.height / 2) }
+  expect(await name.evaluate((element, point) =>
+    document.elementFromPoint(point.x, point.y)?.closest('.continuous-warden-name-target') === element, start)).toBe(true)
+  const end = { x: start.x + 38, y: start.y + 18 }
+  expect(await continuousMap.evaluate((element, point) => element.contains(document.elementFromPoint(point.x, point.y)), end)).toBe(true)
+  await page.mouse.move(start.x, start.y)
+  try {
+    await page.mouse.down()
+    await page.mouse.move(end.x, end.y, { steps: 3 })
+    await expect(anchor).toHaveClass(/is-move-preview/)
+    expect(await anchor.getAttribute('transform')).not.toBe(appliedAnchorTransform)
+    const viewportPreviewSvg = await downloadSvgWhilePointerHeld(page)
+    const viewportPreviewScene = await inspectContinuousImage(page, viewportPreviewSvg)
+    expect(viewportPreviewScene.contentTransform).toBe(liveViewportTransform)
+    expect(viewportPreviewScene.anchorTransforms['campaign-baseline-vesper']).toBe(appliedAnchorTransform)
+    await expect(anchor).toHaveClass(/is-move-preview/)
+  } finally {
+    await page.mouse.up()
+  }
   await waitForWorkspaceSaved(page)
 
   const chartDetails = await openChartDetailsEditor(page)

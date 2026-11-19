@@ -27,14 +27,33 @@ async function screenOrigin(locator: import('@playwright/test').Locator): Promis
 async function screenOrbitPoint(orbit: import('@playwright/test').Locator): Promise<ScreenPoint> {
   return orbit.evaluate((element) => {
     if (!(element instanceof SVGEllipseElement)) throw new Error('The Orbit target is not an SVG ellipse.')
+    const systemId = element.getAttribute('data-system-id')
+    const orbitId = element.getAttribute('data-orbit-id')
+    if (!systemId || !orbitId) throw new Error('The Orbit target has no owner-qualified identity.')
     const transform = element.getScreenCTM()
     if (!transform) throw new Error('The Orbit is not attached to an SVG scene.')
-    const local = new DOMPoint(
-      element.cx.baseVal.value + element.rx.baseVal.value,
-      element.cy.baseVal.value,
+    const rx = element.rx.baseVal.value
+    const ry = element.ry.baseVal.value
+    const screenRadius = Math.max(
+      Math.hypot(transform.a * rx, transform.b * rx),
+      Math.hypot(transform.c * ry, transform.d * ry),
     )
-    const point = local.matrixTransform(transform)
-    return { x: point.x, y: point.y }
+    const sampleCount = Math.max(64, Math.ceil(4 * Math.PI * screenRadius))
+    // Prefer the original rim, but require a painted dash above every other map mark and overlay.
+    for (let sample = 0; sample < sampleCount; sample += 1) {
+      const angle = Math.ceil(sample / 2) * (sample % 2 ? 1 : -1) * Math.PI * 2 / sampleCount
+      const screen = new DOMPoint(
+        element.cx.baseVal.value + rx * Math.cos(angle),
+        element.cy.baseVal.value + ry * Math.sin(angle),
+      ).matrixTransform(transform)
+      for (const dx of [0, -1, 1]) {
+        for (const dy of [0, -1, 1]) {
+          const point = { x: Math.round(screen.x) + dx, y: Math.round(screen.y) + dy }
+          if (document.elementFromPoint(point.x, point.y) === element) return point
+        }
+      }
+    }
+    throw new Error(`Orbit ${orbitId} in system ${systemId} has no frontmost painted native Add target.`)
   })
 }
 
@@ -139,6 +158,7 @@ test('continuous Add keeps a definite owner, uses local geometry, and asks befor
   await planetAdd.click()
   const orbitPoint = await screenOrbitPoint(orbit)
   await page.mouse.click(orbitPoint.x, orbitPoint.y)
+  await expect(mapObjects).toHaveCount(beforePointerCount + 1)
   await waitForWorkspaceSaved(page)
   const afterOrbitAdd = await downloadJson(page, 'Export Jump Cluster JSON')
   const afterOrbitSystem = afterOrbitAdd.cluster?.systems.find(system => system.id === systemId)
@@ -167,6 +187,7 @@ test('continuous Add keeps a definite owner, uses local geometry, and asks befor
   const uniqueEnvelopePoint = await freePointInUniqueEnvelope(map)
   await page.mouse.click(uniqueEnvelopePoint.x, uniqueEnvelopePoint.y)
   await expect(page.getByRole('dialog', { name: 'Choose the owning system', exact: true })).toBeHidden()
+  await expect(mapObjects).toHaveCount(afterPointerCount + 2)
   await waitForWorkspaceSaved(page)
   const afterFreeAdd = await downloadJson(page, 'Export Jump Cluster JSON')
   const freeObject = afterFreeAdd.cluster?.systems.find(system => system.id === systemId)
@@ -190,6 +211,7 @@ test('continuous Add keeps a definite owner, uses local geometry, and asks befor
   const pinnedFreePoint = await freePointInUniqueEnvelope(map)
   await page.mouse.click(pinnedFreePoint.x, pinnedFreePoint.y)
   await expect(page.getByRole('dialog', { name: 'Choose the owning system', exact: true })).toBeHidden()
+  await expect(mapObjects).toHaveCount(afterPointerCount + 3)
   await waitForWorkspaceSaved(page)
   const afterPinnedAdd = await downloadJson(page, 'Export Jump Cluster JSON')
   const pinnedSystem = afterPinnedAdd.cluster?.systems.find(system => system.id === systemId)
