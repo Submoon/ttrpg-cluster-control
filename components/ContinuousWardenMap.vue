@@ -1006,12 +1006,12 @@ function anchorTransform(projection: ContinuousWardenSystemProjection): string {
 const nameLabels = computed<ContinuousMapNameLabel[]>(() => continuousMapNameLabels({
   projections: presentationProjections.value.map(projection => ({
     ...projection,
+    anchor: anchorFor(projection),
     envelope: detailFrameFor(projection),
   })),
   viewport: viewport.value,
   viewportRect: svgViewport.value,
   svgPixelScale: svgPixelScale.value,
-  getAnchor: anchorFor,
 }).map(label => {
   const projection = presentationProjectionById.value.get(label.id)
   if (!projection) return label

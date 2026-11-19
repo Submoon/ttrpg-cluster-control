@@ -22,6 +22,7 @@ export interface ContinuousMapNameLabel {
 export interface ContinuousMapNameProjection {
   id: string
   name: string
+  /** Keep anchor and envelope in the same scene coordinate basis when applying preview offsets. */
   anchor: Point
   envelope: SvgViewportRect
 }

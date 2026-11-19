@@ -97,6 +97,23 @@ test('automatic Cluster names distribute coincident anchors into readable bounds
   }
 })
 
+test('preview name culling uses an already translated anchor and frame only once @pure', { tag: '@pure' }, () => {
+  const labels = continuousMapNameLabels({
+    projections: [{
+      id: 'previewed-system',
+      name: 'Previewed System',
+      anchor: { x: 200, y: 50 },
+      envelope: { x: 150, y: 20, width: 20, height: 20 },
+    }],
+    viewport: { x: 0, y: 0, k: 1 },
+    viewportRect: { x: 0, y: 0, width: 100, height: 100 },
+    svgPixelScale: 1,
+  })
+
+  expect(labels.map(label => label.id)).toEqual(['previewed-system'])
+  expect(labels[0]?.anchorX).toBe(200)
+})
+
 test('continuous system names ease into frame corners and transformed text has a screen-size cap @pure', { tag: '@pure' }, () => {
   const frame = { x: 40, y: 30, width: 100, height: 80 }
   const camera = { x: 10, y: 20, k: 1.7 }
