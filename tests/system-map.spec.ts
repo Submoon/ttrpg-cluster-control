@@ -27,8 +27,13 @@ async function ensureLocalPointsReachable(page: Page, systemId: string, points: 
 async function objectPosition(mark: Locator): Promise<WorldPoint> {
   return mark.evaluate(element => {
     const graphic = element as SVGGraphicsElement
-    const matrix = graphic.transform.baseVal.consolidate()?.matrix
-    if (!matrix) throw new Error('The object has no local SVG position.')
+    const transforms = graphic.transform.baseVal
+    if (!transforms.numberOfItems) throw new Error('The object has no local SVG position.')
+    // Read each matrix without consolidate(), which rewrites the live transform attribute.
+    let matrix = new DOMMatrix()
+    for (let index = 0; index < transforms.numberOfItems; index += 1) {
+      matrix = matrix.multiply(transforms.getItem(index).matrix)
+    }
     return { x: matrix.e, y: matrix.f }
   })
 }
@@ -165,8 +170,11 @@ test('the system map expands beyond its initial bounds and exports the full appl
   const up = coordinates.fromClient(delivered.up)
   const expected = { x: origin.x + up.x - down.x, y: origin.y + up.y - down.y }
   const farPosition = await objectPosition(planet)
-  expect(farPosition.x).toBeCloseTo(expected.x, 5)
-  expect(farPosition.y).toBeCloseTo(expected.y, 5)
+  const rendered = coordinates.toClient(farPosition)
+  const expectedRendered = coordinates.toClient(expected)
+  // SVGMatrix rounds large local coordinates; allow 0.01 CSS pixel only for this rendered observation.
+  expect(Math.abs(rendered.x - expectedRendered.x)).toBeLessThanOrEqual(.01)
+  expect(Math.abs(rendered.y - expectedRendered.y)).toBeLessThanOrEqual(.01)
   expect(farPosition.x).toBeGreaterThan(960)
   expect(farPosition.y).toBeGreaterThan(560)
   const farTransform = await planet.getAttribute('transform')
