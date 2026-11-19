@@ -1,6 +1,6 @@
 ---
 title: "Measure and improve semantic zoom performance"
-status: in-progress
+status: blocked
 assignee: Codex
 type: implementation
 label: wayfinder:implementation
@@ -49,3 +49,18 @@ The [protected device lab](https://ttrpg-cluster-control-4sbv2fkb6-submoon.verce
 The activated product revision `f993c51666bb7be7efcab42f19ef1180e76e87f2` excludes SVG repaint records from the player layout observer while retaining actual wrapper and obstruction changes. Its second 17-sample Chromium rehearsal showed demanding-scene wheel averages of 49.7, 51.4, and 44.6 fps, with 66.7 ms as the longest interval on each surface. One demanding Warden selection had a 183.3 ms frame interval. Repeat selections with the corrected timing probe and qualify on the physical devices.
 
 The refreshed Vercel Preview deploys the activated product revision `6e1a4b1d23305839aa305d18416b6bd3a009f34b` as deployment `4c0f3e6fb7dd554a1ee0abc94d4c9ce84098c443`. The updated recorder reads elapsed time as the selection callback runs, and the measurement page uses the normal product entry points. [Device measurement page](https://ttrpg-cluster-control-pd7escs5f-submoon.vercel.app/__map-qualification/index.html)
+
+### Current qualification candidate
+
+The production build at `042667d55af0cd22626d3273e8d30a66045ee436` was measured on the Dell Latitude 5520 using headless Chrome 158 at 1440 × 900. Automated mouse pan averaged 59.9 fps on each surface in both fixtures. The 17-sample run retained frame intervals, input and settling times, and visible objects, Orbits, routes, and labels in `21-automated-042667d5.json`.
+
+| Scene | Warden wheel | Player Preview wheel | Reader wheel |
+| --- | ---: | ---: | ---: |
+| 5 systems, 50 objects | 59.4 fps | 59.1 fps | 59.9 fps |
+| 10 systems, 200 objects | 53.2 fps | 51.4 fps | 40.9 fps |
+
+The longest frame interval during those wheel gestures was 83.4 ms and the longest detail settling time was 35.4 ms. The Warden selection readings were 116.1 ms in the reference scene and 114.9 ms in the demanding scene. The demanding Player Preview and Reader readings were 80.5 ms and 149.0 ms respectively. The reference Player Preview sequence ended without an exposed unselected mark, so it has no selection sample.
+
+An instrumented cold click on the same Outer Garden mark moved from 268.6 to 185.6 ms with the same 5-to-8-row Hierarchy workload. The trace no longer showed the forced layout during the click. The Inspector now gives its field masking checkboxes the same accessible name as their visible label, which avoids a synchronous DOM text read by the checkbox. The final unprofiled reading for that mark was 116.1 ms, compared with 260.9 ms before the change.
+
+The [current protected measurement page](https://ttrpg-cluster-control-mhzbzsk2j-submoon.vercel.app/__map-qualification/index.html) is Vercel deployment `7914026140` at `301bc4abdfb1710d02648bc58a38af087aa07656`. It serves the measured product tree with seven synthetic lab files. Physical Firefox Android and manual laptop mouse and trackpad measurements are pending. The demanding wheel samples and several selection samples still miss their targets. Keep hardware acceptance open until those measurements are available.

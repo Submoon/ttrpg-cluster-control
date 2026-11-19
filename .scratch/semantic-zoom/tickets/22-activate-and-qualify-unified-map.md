@@ -35,7 +35,15 @@ The refreshed [implementation baseline](../spec.md#source-issue) includes the gr
 
 ## Acceptance criteria
 
-- [ ] The normal product entry points use one continuous D3 canvas per view. Disconnected-map navigation and temporary entry points are retired once their behavior has migrated. No Warden draft or data access leaks into the reader or public image pipeline.
-- [ ] Verify representative overview-to-detail, keyboard and touch input, multi-system edit followed by undo/redo, saved workspace reopen, reviewed standalone import, legacy backup restore, old player file and link admission, and the three PNG/SVG scopes.
-- [ ] Confirm valid retained layouts and route attachments persist, same-system legacy routes are cleaned silently, and migration is scoped to legacy data. Current invalid edits and output still respect normal validation and disclosure.
+- [x] The normal product entry points use one continuous D3 canvas per view. Disconnected-map navigation and temporary entry points are retired once their behavior has migrated. No Warden draft or data access leaks into the reader or public image pipeline.
+- [x] Verify representative overview-to-detail, keyboard and touch input, multi-system edit followed by undo/redo, saved workspace reopen, reviewed standalone import, legacy backup restore, old player file and link admission, and the three PNG/SVG scopes.
+- [x] Confirm valid retained layouts and route attachments persist, same-system legacy routes are cleaned silently, and migration is scoped to legacy data. Current invalid edits and output still respect normal validation and disclosure.
 - [ ] Complete the repository's required qualification against the integrated revision. Bind performance evidence to the activated runtime and repeat affected measurements if activation or final fixes change interaction performance.
+
+## Activation evidence
+
+The production runtime at `042667d55af0cd22626d3273e8d30a66045ee436` activates the Warden editor, player preview and standalone reader. The full linked Chrome sweep and focused reruns together passed all 104 browser scenarios across the integrated revisions, reusing successful coverage for unchanged behavior. The final touched paths passed native Warden creation and focus, guarded deletion, compact touch takeover, minimum-width Hierarchy, and Search preview smoke. All 647 isolated tests passed across the suite and the focused rerun of the Windows junction case. Recovery from an IndexedDB write failure passed on the real Nuxt development server. Generated Vue types, lint, the production build, and Markdown links passed.
+
+The browser sweep identified three product fixes. Starting a Jump Route while inspecting a saved object exposes the admitted route form. The Orbit Add status presents radius corrections and successful placement. The Add Orbit map surface avoids native text dragging while preserving pointer focus and keyboard access.
+
+Activation remains blocked on the [device performance acceptance](21-qualify-semantic-zoom-performance.md). The deployed Preview and local automated evidence use the same runtime. The integration tip can also include test and tracker updates.
