@@ -17,7 +17,7 @@ A named grouping of stars, Orbits, and notable locations within a Jump Cluster, 
 The reference point locating a star system and its local geometry within its Jump Cluster, independent of its stars.
 
 **System envelope**:
-The boundary enclosing a star system's anchor, visible objects, and visible Orbits with a margin. The Warden envelope uses the complete system layout. The player envelope uses the published layout of a Revealed system. A system with no contents in that layout has a minimum envelope around its anchor.
+The frame marking a star system's area on the Cluster map. Its edges stop at adjacent system frames. An object or Orbit can belong to a system while appearing outside its envelope. A player envelope reflects the area and contents available in the published chart.
 
 **Jump Point**:
 A location within a star system that can specify where a Jump Route departs or arrives. A Jump Point may reference a physical Station in the same system.

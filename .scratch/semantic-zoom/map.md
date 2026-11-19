@@ -44,8 +44,8 @@ The framing discussion on 2026-11-13 explicitly includes the Warden editor, play
 
 ## Decisions so far
 
-- [Place star systems on a stable shared canvas](tickets/01-shared-spatial-layout.md) — Systems share one drawing scale. Each has an independent movable anchor and an automatic envelope. Envelopes may overlap.
-- [Define ownership and placement across system boundaries](tickets/02-system-ownership-and-placement.md) — Creation infers a clear owner or asks for one. Explicit transfers carry complete orbital branches at their existing size, resolve conflicting keys and preserve routes while reviewing Station links that cross systems.
+- [Place star systems on a stable shared canvas](tickets/01-shared-spatial-layout.md) — Systems share one drawing scale and each has an independent movable anchor. The [revised specification](spec.md#geometry-reveal-and-ownership-boundaries) defines non-overlapping frames with independently positioned contents.
+- [Define ownership and placement across system boundaries](tickets/02-system-ownership-and-placement.md) — Creation infers a clear owner or asks for one. The [revised specification](spec.md#placement-and-transfer) adds frame resizing and limited stretch. A drop in a neighboring frame initiates an orbital branch transfer and opens a review when keys or links need to change.
 - [Choose representative scenes and interaction budgets](tickets/08-representative-scenes-and-budgets.md) — Evaluate 5 systems with 50 objects and 10 systems with 200 objects on a laptop and smartphone, targeting 60 frames per second, selection feedback under 100 ms and settled detail under 200 ms.
 - [Prototype stable geometry and semantic detail](tickets/03-semantic-zoom-prototype.md) — The user chose System Envelope with large, readable names above the map at distant zoom.
 - [Define editing and navigation across visible systems](tickets/04-cross-system-editing.md) — Camera gestures work across tools. Selection and drafts survive zoom, and a single group move can span systems. Frontmost targets receive direct input, while explicit reveal commands move the camera as needed.
