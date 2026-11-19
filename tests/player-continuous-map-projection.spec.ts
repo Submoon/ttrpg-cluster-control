@@ -295,6 +295,18 @@ test('player route detail membership stays stable between threshold crossings @p
   expect(collapsed).not.toBe(revealed)
 })
 
+test('tiny constrained frames still reveal public interior detail at maximum zoom @pure', () => {
+  const source = projectPlayerContinuousMap(publicDocument()).systems[2]
+  if (!source?.geometry) throw new Error('The public fixture system has no interior.')
+  const system = {
+    ...source,
+    geometry: { ...source.geometry, envelope: { x: 0, y: 0, width: .01, height: .01 } },
+  }
+
+  expect(playerContinuousDetailSystemIds([system], 16, 1, new Set())).toContain(system.id)
+  expect(system.geometry.objects).toEqual(source.geometry.objects)
+})
+
 test('player Center and detail agree at a fractional CSS scale @pure', () => {
   const source = projectPlayerContinuousMap(publicDocument()).systems[2]
   if (!source?.geometry) throw new Error('The public fixture system has no interior.')

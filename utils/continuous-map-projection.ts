@@ -12,6 +12,10 @@ import {
 } from './system-map-geometry'
 import type { SvgViewportRect } from './map-zoom'
 
+export const CONTINUOUS_MAP_DETAIL_REVEAL_PIXELS = 250
+export const CONTINUOUS_MAP_DETAIL_HIDE_PIXELS = 210
+export const CONTINUOUS_MAP_NAME_TRANSITION_START_PIXELS = 90
+
 /** Converts a semantic detail threshold in CSS pixels to a camera scale. */
 export function continuousMapDetailScale(
   envelope: Pick<SvgViewportRect, 'width' | 'height'>,
@@ -19,6 +23,33 @@ export function continuousMapDetailScale(
   threshold: number,
 ): number {
   return threshold / (Math.max(envelope.width, envelope.height) * svgPixelScale)
+}
+
+/** Smoothly moves screen-space system labels toward their frame as its apparent size grows. */
+export function continuousMapNameTransitionProgress(
+  frame: Pick<SvgViewportRect, 'width' | 'height'>,
+  cameraScale: number,
+  svgPixelScale: number,
+  startPixels = CONTINUOUS_MAP_NAME_TRANSITION_START_PIXELS,
+  endPixels = CONTINUOUS_MAP_DETAIL_REVEAL_PIXELS,
+): number {
+  if (![frame.width, frame.height, cameraScale, svgPixelScale, startPixels, endPixels].every(Number.isFinite)
+    || frame.width <= 0 || frame.height <= 0 || cameraScale <= 0 || svgPixelScale <= 0 || endPixels <= startPixels) return 0
+
+  const apparentExtent = Math.max(frame.width, frame.height) * cameraScale * svgPixelScale
+  const linearProgress = Math.max(0, Math.min(1, (apparentExtent - startPixels) / (endPixels - startPixels)))
+  return linearProgress * linearProgress * (3 - 2 * linearProgress)
+}
+
+/** Caps transformed SVG text without changing the world geometry or hit target around it. */
+export function continuousMapTextScale(
+  pixelsPerSceneUnit: number,
+  fontSize: number,
+  maximumScreenSize: number,
+): number {
+  if (![pixelsPerSceneUnit, fontSize, maximumScreenSize].every(Number.isFinite)
+    || pixelsPerSceneUnit <= 0 || fontSize <= 0 || maximumScreenSize <= 0) return 1
+  return Math.min(1, maximumScreenSize / (pixelsPerSceneUnit * fontSize))
 }
 
 /** Fixed local coordinate that is aligned to each system's legacy Cluster anchor. */

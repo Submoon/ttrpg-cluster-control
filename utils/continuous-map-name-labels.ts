@@ -34,7 +34,29 @@ export interface ContinuousMapNameLabelsOptions<T extends ContinuousMapNameProje
   getAnchor?: (projection: T) => Point
 }
 
+/** Interpolates a screen-space name from its overview placement to the top-left of its visible frame. */
+export function continuousMapNameLabelFramePosition(
+  label: Pick<ContinuousMapNameLabel, 'x' | 'y' | 'width'>,
+  frame: SvgViewportRect,
+  viewport: MapViewport,
+  svgPixelScale: number,
+  progress: number,
+  insetPixels = 12,
+): Pick<Point, 'x' | 'y'> {
+  const scale = Number.isFinite(svgPixelScale) && svgPixelScale > 0 ? svgPixelScale : 1
+  const amount = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0
+  const inset = Math.max(0, insetPixels) / scale
+  const targetX = viewport.x + frame.x * viewport.k + inset + label.width / 2
+  const targetY = viewport.y + frame.y * viewport.k + inset
+  return {
+    x: label.x + (targetX - label.x) * amount,
+    y: label.y + (targetY - label.y) * amount,
+  }
+}
+
 let textMeasureContext: CanvasRenderingContext2D | null | undefined
+const systemNameWidthPixelsCache = new Map<string, number>()
+const namePlacementOffsetsCache = new Map<number, readonly Point[]>()
 
 /** Places Warden system names around applied anchors inside the drawable SVG rectangle. */
 export function continuousMapNameLabels<T extends ContinuousMapNameProjection>({
@@ -152,15 +174,21 @@ export function continuousMapNameLabels<T extends ContinuousMapNameProjection>({
 }
 
 function systemNameWidthPixels(name: string): number {
+  const cached = systemNameWidthPixelsCache.get(name)
+  if (cached !== undefined) return cached
   if (textMeasureContext === undefined && typeof document !== 'undefined') {
     textMeasureContext = document.createElement('canvas').getContext('2d')
     if (textMeasureContext) textMeasureContext.font = `600 ${CONTINUOUS_SYSTEM_NAME_FONT_PIXELS}px Georgia, serif`
   }
   const textWidth = textMeasureContext?.measureText(name).width ?? name.length * 9
-  return Math.max(72, Math.ceil(textWidth + 24))
+  const width = Math.max(72, Math.ceil(textWidth + 24))
+  if (typeof document !== 'undefined') rememberCacheEntry(systemNameWidthPixelsCache, name, width)
+  return width
 }
 
-function namePlacementOffsets(widthPixels: number): Point[] {
+function namePlacementOffsets(widthPixels: number): readonly Point[] {
+  const cached = namePlacementOffsetsCache.get(widthPixels)
+  if (cached) return cached
   const side = widthPixels / 2 + 10
   const offsets: Point[] = []
   for (let ring = 0; ring <= CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_COUNT; ring += 1) {
@@ -176,7 +204,16 @@ function namePlacementOffsets(widthPixels: number): Point[] {
       { x: side + distance, y: 8 },
     )
   }
+  rememberCacheEntry(namePlacementOffsetsCache, widthPixels, offsets)
   return offsets
+}
+
+function rememberCacheEntry<TKey, TValue>(cache: Map<TKey, TValue>, key: TKey, value: TValue): void {
+  if (cache.size >= 256 && !cache.has(key)) {
+    const oldest = cache.keys().next()
+    if (!oldest.done) cache.delete(oldest.value)
+  }
+  cache.set(key, value)
 }
 
 function clampToViewport(value: number, minimum: number, maximum: number): number {

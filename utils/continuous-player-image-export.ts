@@ -14,6 +14,7 @@ import { layoutPlayerContinuousNameLabels, type PlayerContinuousNameLabel } from
 import { projectPlayerContinuousMap, type PlayerContinuousSystemProjection } from './player-continuous-map-projection'
 import { projectPlayerContinuousRouteEndpoints, type PlayerContinuousRouteDescriptor } from './player-continuous-route-projection'
 import { buildContinuousMapRouteGeometries, type ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
+import { continuousSystemFrames } from './continuous-system-frames'
 import { CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS, placeContinuousMapRouteLabels } from './continuous-map-route-labels'
 import { CLUSTER_ROUTE_PRESENTATION } from './cluster-route-presentation'
 import { PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS } from './cluster-system-presentation'
@@ -62,6 +63,11 @@ export function serializeContinuousPlayerMapImage(
   const svgPixelScale = snapshot?.svgPixelScale ?? 1
   const scenePixelScale = camera.k * svgPixelScale
   const displayedSystems = selected ? [selected] : systems
+  const displayFrames = continuousSystemFrames(systems.flatMap(system => system.geometry ? [{
+    id: system.id,
+    anchor: system.anchor,
+    envelope: system.geometry.envelope,
+  }] : []))
   const detailIds = new Set(snapshot?.detailSystemIds ?? (selected?.geometry ? [selected.id] : []))
   const descriptors = projectPlayerContinuousRouteEndpoints(document, systems, detailIds)
   const geometries = buildContinuousMapRouteGeometries(descriptors, snapshot ? {
@@ -113,6 +119,7 @@ export function serializeContinuousPlayerMapImage(
       : routeSvg(route, routeLabels?.get(route.id), scenePixelScale, paint)),
     ...displayedSystems.map(system => systemSvg(
       system,
+      displayFrames.get(system.id),
       detailIds.has(system.id),
       publicMarkers.get(system.id),
       scenePixelScale,
@@ -174,16 +181,16 @@ function detailBounds(system: PlayerContinuousSystemProjection, marker: PlayerSy
 
 function systemSvg(
   system: PlayerContinuousSystemProjection,
+  displayFrame: SvgViewportRect | undefined,
   detailed: boolean,
   marker: PlayerSystemMarker | undefined,
   pixelScale: number,
   paint: PlayerMapPaint,
   dimmedObjectIds?: ReadonlySet<string>,
 ): string {
-  const envelope = system.geometry?.envelope
   const color = detailed ? paint.mapSelected : paint.mapOrbit
-  const frame = envelope ? svgElement('rect', {
-    ...envelope,
+  const frame = displayFrame && displayFrame.width > 0 && displayFrame.height > 0 ? svgElement('rect', {
+    ...displayFrame,
     class: 'player-continuous-system-envelope',
     rx: 18,
     fill: color,

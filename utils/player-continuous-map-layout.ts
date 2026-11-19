@@ -38,6 +38,8 @@ const SYSTEM_NAME_FONT_PIXELS = 18
 const SYSTEM_NAME_HEIGHT_PIXELS = 28
 const SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS = 8
 const SYSTEM_NAME_CULL_MARGIN_PIXELS = 96
+const systemNameWidthPixelsCache = new Map<string, number>()
+const namePlacementOffsetsCache = new Map<number, readonly { x: number; y: number }[]>()
 
 /** Places each permitted name in the screen-space viewport, independently of map zoom. */
 export function layoutPlayerContinuousNameLabels(
@@ -73,7 +75,7 @@ export function layoutPlayerContinuousNameLabels(
   const margin = SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS / scale
 
   for (const point of points) {
-    const naturalWidthPixels = Math.max(72, Math.ceil(Array.from(point.name).length * SYSTEM_NAME_FONT_PIXELS * .65 + 24))
+    const naturalWidthPixels = systemNameWidthPixels(point.name)
     const maximumWidthPixels = Math.max(1, viewport.width * scale - SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS * 2)
     const widthPixels = Math.floor(Math.min(naturalWidthPixels, maximumWidthPixels))
     const width = widthPixels / scale
@@ -209,7 +211,17 @@ export function playerContinuousTargetMinimumScale(
   return Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(envelope, pixelScale, threshold))
 }
 
-function namePlacementOffsets(widthPixels: number): Array<{ x: number; y: number }> {
+function systemNameWidthPixels(name: string): number {
+  const cached = systemNameWidthPixelsCache.get(name)
+  if (cached !== undefined) return cached
+  const width = Math.max(72, Math.ceil(Array.from(name).length * SYSTEM_NAME_FONT_PIXELS * .65 + 24))
+  rememberCacheEntry(systemNameWidthPixelsCache, name, width)
+  return width
+}
+
+function namePlacementOffsets(widthPixels: number): readonly { x: number; y: number }[] {
+  const cached = namePlacementOffsetsCache.get(widthPixels)
+  if (cached) return cached
   const side = widthPixels / 2 + 10
   const offsets: Array<{ x: number; y: number }> = []
   for (let ring = 0; ring <= 12; ring += 1) {
@@ -225,7 +237,16 @@ function namePlacementOffsets(widthPixels: number): Array<{ x: number; y: number
       { x: side + distance, y: 8 },
     )
   }
+  rememberCacheEntry(namePlacementOffsetsCache, widthPixels, offsets)
   return offsets
+}
+
+function rememberCacheEntry<TKey, TValue>(cache: Map<TKey, TValue>, key: TKey, value: TValue): void {
+  if (cache.size >= 256 && !cache.has(key)) {
+    const oldest = cache.keys().next()
+    if (!oldest.done) cache.delete(oldest.value)
+  }
+  cache.set(key, value)
 }
 
 function clampToViewport(value: number, minimum: number, maximum: number): number {
