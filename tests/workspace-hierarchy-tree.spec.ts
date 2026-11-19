@@ -474,3 +474,90 @@ freshTest('the default Warden map moves a group across owning systems and restor
   await waitForWorkspaceStartup(page)
   expect(await downloadJsonFromFile(page, 'Export Jump Cluster JSON')).toEqual(clusterAfterGroupMove)
 })
+
+freshTest('a sparse Hierarchy context menu survives replacing its selected sibling and returns focus', async ({ page }) => {
+  freshTest.setTimeout(60_000)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  const fixture = JSON.parse(await readFile(new URL('./fixtures/workspace-data-campaign-baseline.json', import.meta.url), 'utf8')) as ExportedMap
+  const owner = fixture.cluster?.systems[0]
+  const alpha = owner?.objects.find(object => object.name === 'Primary Star')
+  const beta = owner?.objects.find(object => object.name === 'Vesper Departure')
+  if (!fixture.cluster || !owner || !alpha || !beta) throw new Error('The context fixture needs two sibling objects.')
+  alpha.name = 'Context Alpha'
+  beta.name = 'Context Beta'
+  alpha.placement = { kind: 'system', x: .3, y: .7 }
+  beta.placement = { kind: 'system', x: .7, y: .7 }
+  owner.objects = [alpha, beta]
+  owner.orbits = []
+  fixture.cluster.systems = [owner]
+  fixture.cluster.routes = []
+  fixture.layout.systemPositions = { [owner.id]: { x: .5, y: .5 } }
+  fixture.layout.orbitRadii = {}
+  fixture.layout.objectAngles = {}
+  const [picker] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.getByRole('button', { name: 'Open local Jump Cluster backup', exact: true }).click(),
+  ])
+  await picker.setFiles({ name: 'sparse-context-siblings.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(fixture)) })
+  await page.getByRole('dialog', { name: 'Open Jump Cluster', exact: true })
+    .getByRole('button', { name: 'Open Jump Cluster', exact: true }).click()
+  await waitForWorkspaceStartup(page)
+  await setWorkspaceMapMode(page, 'Select')
+  const alphaMark = wardenObjectMark(page, owner.id, alpha.id)
+  const betaMark = wardenObjectMark(page, owner.id, beta.id)
+  const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
+  for (let step = 0; step < 12; step += 1) {
+    if (await alphaMark.count() && await betaMark.count()
+      && await exposedContinuousObjectHitPoint(alphaMark) && await exposedContinuousObjectHitPoint(betaMark)) break
+    await zoomIn.click()
+  }
+  const selectMapObject = async (mark: Locator, modified = false) => {
+    const point = await exposedContinuousObjectHitPoint(mark)
+    if (!point) throw new Error('The context sibling needs an exposed native map target.')
+    if (modified) await page.keyboard.down('Shift')
+    try {
+      await page.mouse.click(point.x, point.y)
+    } finally {
+      if (modified) await page.keyboard.up('Shift')
+    }
+  }
+  await selectMapObject(betaMark)
+  await hideWorkspaceInspector(page)
+  await selectMapObject(alphaMark, true)
+  await selectMapObject(betaMark, true)
+  await expect(alphaMark).toHaveAttribute('aria-pressed', 'true')
+  await expect(betaMark).toHaveAttribute('aria-pressed', 'false')
+  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
+  const inspector = page.locator('#workspace-inspector-panel')
+  await expect(inspector).toContainText(beta.name)
+  const hierarchy = await openWorkspaceHierarchy(page)
+  const alphaRow = hierarchy.getByRole('treeitem', {
+    name: `Select ${alpha.locationKey}, ${alpha.name} in ${owner.name}`, exact: true, includeHidden: true,
+  })
+  const betaRow = hierarchy.getByRole('treeitem', {
+    name: `Select ${beta.locationKey}, ${beta.name} in ${owner.name}`, exact: true,
+  })
+  await expect(alphaRow).toHaveAttribute('aria-selected', 'true')
+  await expect(betaRow).toHaveAttribute('aria-selected', 'false')
+  await expect(hierarchy.getByRole('button', { name: `Show all ${owner.name} records`, exact: true })).toBeVisible()
+  const camera = wardenMap(page).locator('.cluster-map-content')
+  const cameraBeforeContext = await camera.getAttribute('transform')
+  await betaRow.focus()
+  await betaRow.press('Shift+F10')
+  const menu = page.getByRole('menu', { name: 'Player visibility', exact: true })
+  await expect(menu.getByRole('menuitem', { name: 'Move selection', exact: true })).toBeVisible()
+  // Replacing membership prunes Alpha, moving Beta into its preceding sibling's rendered slot.
+  await expect(alphaRow).toHaveCount(0)
+  await expect(betaRow).toHaveAttribute('aria-selected', 'true')
+  await expect(alphaMark).toHaveAttribute('aria-pressed', 'false')
+  await expect(betaMark).toHaveAttribute('aria-pressed', 'true')
+  await expect(inspector).toContainText(beta.name)
+  await expect(inspector).not.toContainText(alpha.name)
+  await expect(camera).toHaveAttribute('transform', cameraBeforeContext!)
+  await page.keyboard.press('Escape')
+  await expect(menu).toBeHidden()
+  await expect(betaRow).toBeFocused()
+  await expect(hierarchy).toBeVisible()
+  await expect(inspector).toBeVisible()
+})
