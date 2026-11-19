@@ -348,12 +348,33 @@
                   @add-object="chooseObjectCreationType"
                   @add-orbit="chooseOrbitCreationType"
                 />
-                <button class="workspace-control tool-button" type="button" aria-label="Add star system" @click="armSystemAddAndClose(close)">
-                  Add star system
-                </button>
-                <button class="workspace-control tool-button" type="button" aria-label="Add Jump Route" @click="beginRouteAndClose(close)">
-                  Add Jump Route
-                </button>
+                <section class="object-palette" aria-label="Cluster creation">
+                  <span class="section-kicker">ADD TO CLUSTER</span>
+                  <div class="object-palette-controls">
+                    <UButton
+                      class="object-palette-button"
+                      type="button"
+                      size="sm"
+                      color="neutral"
+                      variant="outline"
+                      icon="i-lucide-orbit"
+                      @click="armSystemAddAndClose(close)"
+                    >
+                      Add star system
+                    </UButton>
+                    <UButton
+                      class="object-palette-button"
+                      type="button"
+                      size="sm"
+                      color="neutral"
+                      variant="outline"
+                      icon="i-lucide-network"
+                      @click="beginRouteAndClose(close)"
+                    >
+                      Add Jump Route
+                    </UButton>
+                  </div>
+                </section>
               </template>
               <template #placement>
                 <div
