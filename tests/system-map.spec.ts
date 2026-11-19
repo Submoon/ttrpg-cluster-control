@@ -3,8 +3,8 @@ import { createLocalWorkspace, createOrbit, createSystemObject, exportStarSystem
 import {
   captureMapExportBlobs, centerWorkspaceSelection, createSingleSystemWorkspace, downloadImage, downloadJson,
   exposedContinuousObjectHitPoint, hideWorkspaceInspector, inspectImageSvg,
-  measureMouseDrag, openWorkspaceHierarchy, resolveImportReview, reviewStarSystemImport,
-  setWorkspaceMapMode, waitForWorkspaceSaved, waitForWorkspaceStartup, wardenLocalCoordinates,
+  measureMouseDrag, openMapFilesSection, openWorkspaceHierarchy, resolveImportReview, reviewStarSystemImport,
+  setHeaderMapActionsOpen, setWorkspaceMapMode, waitForWorkspaceSaved, waitForWorkspaceStartup, wardenLocalCoordinates,
   wardenMap, wardenObjectMark, workspaceZoomControls, type WorldPoint,
 } from './helpers'
 
@@ -195,7 +195,15 @@ test('the system map expands beyond its initial bounds and exports the full appl
       expect(bounds.y + bounds.height).toBeLessThanOrEqual(containing.y + containing.height + 1)
     }
   }
-  const svg = await downloadImage(page, 'image/svg+xml', 'Selected system')
+  const images = await openMapFilesSection(page, 'Export an image', 'keyboard')
+  const imageScope = images.getByRole('menuitem', { name: /^Warden image scope/ })
+  await imageScope.press('ArrowRight')
+  const selectedSystemScope = page.getByRole('menuitem', { name: 'Selected system', exact: true })
+  await expect(selectedSystemScope).toBeEnabled()
+  await selectedSystemScope.press('Enter')
+  await expect(imageScope).toHaveAccessibleName('Warden image scope · Selected system')
+  await setHeaderMapActionsOpen(page, false)
+  const svg = await downloadImage(page, 'image/svg+xml')
   if (!svg.text) throw new Error('The applied system SVG is missing.')
   const svgInfo = await inspectImageSvg(page, svg.text)
   expect(svgInfo.texts).toContain(fixturePlanet.name)
@@ -211,7 +219,7 @@ test('the system map expands beyond its initial bounds and exports the full appl
   expect(exported.planetTransform).toBe(farTransform)
   expect(exported.orbitRadius).toBe(resizedRadius)
   expect(exported.systemIds).toEqual([system.id])
-  const png = await downloadImage(page, 'image/png', 'Selected system')
+  const png = await downloadImage(page, 'image/png')
   expect(png.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
   expect(png.width).toBe(svgInfo.width)
   expect(png.height).toBe(svgInfo.height)
