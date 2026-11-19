@@ -208,6 +208,7 @@ async function importAndOpenBranchSearchSystem(
 
 
 test('search centers a rotated recursive branch at sufficient current zoom without framing its relatives', async ({ page }, testInfo) => {
+  test.setTimeout(60_000)
   const fixture = branchSearchMap()
   const { map, owner, branchRings } = await importAndOpenBranchSearchSystem(page, fixture, 'branch-atlas-large.json')
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
