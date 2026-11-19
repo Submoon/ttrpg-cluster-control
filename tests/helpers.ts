@@ -259,6 +259,7 @@ export type ExportedObject = {
   id: string
   /** Raw legacy exports omit publication; current complete exports include it. */
   publication?: PublicationMode
+  markerColor?: string
   name: string
   family: string
   subtype: string
