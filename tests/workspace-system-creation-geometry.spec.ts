@@ -194,7 +194,7 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
   await expectPlanetAddArmed(page)
   await expect(map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"][data-orbit-id="${alphaOrbit.id}"]`))
     .toHaveAttribute('transform', 'rotate(30 480 280)')
-  const completedExport = await downloadImage(page, 'image/svg+xml')
+  const completedExport = await downloadImage(page, 'image/svg+xml', 'Selected system')
   if (!completedExport.text) throw new Error('The SVG exported after direct Add has no serialized content.')
   expect(completedExport.text).toContain(alphaPlanet.name)
 
