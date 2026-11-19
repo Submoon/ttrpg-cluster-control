@@ -70,11 +70,13 @@ test('diagonal route endpoints meet the visible rounded frame arc and clamp radi
     { x: 100, y: -100 },
   )
   expect(Math.hypot(narrowFrame.x - 10, narrowFrame.y - 10)).toBeCloseTo(10, 10)
-  expect(continuousMapRoundedRectBoundaryPoint(
+  const clippedAnchor = continuousMapRoundedRectBoundaryPoint(
     { x: 0, y: 0 },
     { x: 0, y: 0, width: 100, height: 100 },
     { x: 100, y: 100 },
-  )).toEqual({ x: 0, y: 0 })
+  )
+  expect(clippedAnchor.x).toBeCloseTo(82 + Math.sqrt(162), 10)
+  expect(clippedAnchor.y).toBeCloseTo(82 + Math.sqrt(162), 10)
 })
 
 test('a rounded corner clipped through a system anchor still resolves a visible route edge @pure', { tag: '@pure' }, () => {
