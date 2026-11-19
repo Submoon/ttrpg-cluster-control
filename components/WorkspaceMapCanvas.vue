@@ -2,6 +2,7 @@
   <div
     ref="canvasRoot"
     class="workspace-map-canvas"
+    :class="{ 'is-orbit-add-armed': hasOrbitAddIntent() }"
     :data-workspace-id="props.workspace.id"
     :data-cluster-id="props.workspace.cluster.id"
     @pointerdown.capture="onPointerDownCapture"
@@ -2170,6 +2171,11 @@ defineExpose({
 .workspace-map-canvas > :deep(.map-view) {
   min-height: 0;
   flex: 1 1 auto;
+}
+
+.workspace-map-canvas.is-orbit-add-armed :deep(svg.continuous-warden-map-svg),
+.workspace-map-canvas.is-orbit-add-armed :deep(svg.system-map-svg) {
+  user-select: none;
 }
 
 .system-transfer-placement-prompt {
