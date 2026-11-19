@@ -562,7 +562,6 @@ test('the default player reader opens shared links and files with one camera and
   await expect(continuousGlyph).toHaveCSS('fill', 'rgb(161, 59, 124)')
   const mapFiles = page.getByRole('button', { name: 'Map files', exact: true })
   await mapFiles.click()
-  const imageFiles = page.getByRole('dialog', { name: 'Map files', exact: true })
   const viewportScope = imageFiles.getByRole('radio', { name: /^current viewport$/i })
   await viewportScope.click()
   await expect(viewportScope).toBeChecked()
