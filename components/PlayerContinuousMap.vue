@@ -57,18 +57,26 @@
 
         <g v-for="system in projection.systems" :key="system.id" class="player-continuous-system" :data-player-system-id="system.id">
           <rect
-            v-if="system.geometry"
+            v-if="system.geometry && hasPositiveFrame(displayFrameFor(system.id))"
             class="player-continuous-system-envelope"
             :class="{ 'is-detailed': detailSystemIds.has(system.id) }"
-            :x="system.geometry.envelope.x"
-            :y="system.geometry.envelope.y"
-            :width="system.geometry.envelope.width"
-            :height="system.geometry.envelope.height"
+            :x="displayFrameFor(system.id).x"
+            :y="displayFrameFor(system.id).y"
+            :width="displayFrameFor(system.id).width"
+            :height="displayFrameFor(system.id).height"
             rx="18"
             aria-hidden="true"
           />
 
-          <g v-if="system.geometry && detailSystemIds.has(system.id)" class="player-continuous-system-detail">
+          <Transition name="player-continuous-detail">
+            <g
+              v-if="system.geometry"
+              v-show="detailSystemIds.has(system.id)"
+              class="player-continuous-system-detail"
+              :class="{ 'is-exiting': !detailSystemIds.has(system.id) }"
+              :aria-hidden="detailSystemIds.has(system.id) ? undefined : 'true'"
+              :inert="!detailSystemIds.has(system.id)"
+            >
             <g class="player-continuous-system-orbits" aria-hidden="true">
               <ellipse
                 v-for="orbit in system.geometry.orbits"
@@ -130,23 +138,25 @@
                   aria-hidden="true"
                 />
                 <circle v-if="objectIsUnknown(system, object.id)" class="player-continuous-object-unknown" r="4" aria-hidden="true" />
-                <text
-                  v-else-if="objectPresentation(system, object.id).glyph"
-                  class="player-continuous-object-glyph"
-                  :style="{ fill: objectMarkerColor(system, object.id) }"
-                  y="5"
-                  text-anchor="middle"
-                  aria-hidden="true"
-                >{{ objectPresentation(system, object.id).glyph }}</text>
                 <circle
                   v-if="objectMarkerColor(system, object.id)"
                   class="player-continuous-object-marker-outline"
                   r="7"
                   aria-hidden="true"
                 />
-                <text class="player-continuous-object-label" x="9" y="4" aria-hidden="true">
-                  {{ objectPresentation(system, object.id).label }}
-                </text>
+                <g class="player-continuous-object-text" :transform="objectTextTransform()">
+                  <text
+                    v-if="!objectIsUnknown(system, object.id) && objectPresentation(system, object.id).glyph"
+                    class="player-continuous-object-glyph"
+                    :style="{ fill: objectMarkerColor(system, object.id) }"
+                    y="5"
+                    text-anchor="middle"
+                    aria-hidden="true"
+                  >{{ objectPresentation(system, object.id).glyph }}</text>
+                  <text class="player-continuous-object-label" x="9" y="4" aria-hidden="true">
+                    {{ objectPresentation(system, object.id).label }}
+                  </text>
+                </g>
               </g>
             </g>
             <circle
@@ -167,7 +177,8 @@
               r="2"
               aria-hidden="true"
             />
-          </g>
+            </g>
+          </Transition>
 
           <g
             class="player-continuous-system-anchor"
@@ -259,6 +270,9 @@ import { getSvgViewportRect, type SvgViewportRect } from '../utils/map-zoom'
 import type { PlayerImageViewportSnapshot } from '../utils/continuous-player-image-export'
 import type { ContinuousMapRouteGeometry } from '../utils/continuous-map-route-geometry'
 import type { PlayerContinuousSystemProjection } from '../utils/player-continuous-map-projection'
+import { continuousMapNameTransitionProgress, continuousMapTextScale } from '../utils/continuous-map-projection'
+import { continuousMapNameLabelFramePosition } from '../utils/continuous-map-name-labels'
+import { continuousSystemFrames } from '../utils/continuous-system-frames'
 import { buildContinuousMapRouteGeometries } from '../utils/continuous-map-route-geometry'
 import {
   playerContinuousDetailSystemIds,
@@ -302,6 +316,22 @@ const VIEWPORT = { x: 0, y: 0, width: 960, height: 560 }
 const mapElement = ref<SVGSVGElement | null>(null)
 const routeLayer = ref<InstanceType<typeof ContinuousMapRouteLayer> | null>(null)
 const projection = computed(() => projectPlayerContinuousMap(props.document))
+const displayFrames = computed(() => continuousSystemFrames(projection.value.systems.flatMap(system =>
+  system.geometry ? [{ id: system.id, anchor: system.anchor, envelope: system.geometry.envelope }] : [],
+)))
+const detailThresholdSystems = computed(() => projection.value.systems.map(system => {
+  if (!system.geometry) return system
+  const frame = displayFrames.value.get(system.id)
+  return {
+    ...system,
+    geometry: {
+      ...system.geometry,
+      envelope: hasPositiveFrame(frame) ? frame : system.geometry.envelope,
+    },
+  }
+}))
+const systemsById = computed(() => new Map(projection.value.systems.map(system => [system.id, system] as const)))
+const thresholdSystemsById = computed(() => new Map(detailThresholdSystems.value.map(system => [system.id, system] as const)))
 const contentBounds = computed(() => projection.value.bounds)
 const usableRectReader = computed(() => props.getUsableClientRect)
 const mapViewport = usePlayerContinuousMapViewport({
@@ -363,11 +393,22 @@ const routeLabelObstacles = computed(() => systemNameLabels.value.map(label => (
 })))
 const hasSelection = computed(() => props.selectedSystemId !== null || props.selectedRouteId != null)
 const systemNameLabels = computed<PlayerContinuousNameLabel[]>(() => layoutPlayerContinuousNameLabels(
-  projection.value.systems,
+  detailThresholdSystems.value,
   camera.value,
   svgPixelScale.value,
   nameViewport.value,
-))
+).map(label => {
+  const system = systemsById.value.get(label.systemId)
+  const frame = system?.geometry ? thresholdSystemsById.value.get(label.systemId)?.geometry?.envelope : undefined
+  if (!frame || !system?.geometry) return label
+  const progress = continuousMapNameTransitionProgress(frame, camera.value.k, svgPixelScale.value)
+  const position = continuousMapNameLabelFramePosition(label, frame, camera.value, svgPixelScale.value, progress)
+  return {
+    ...label,
+    ...position,
+    hasLeader: label.hasLeader && progress < .12,
+  }
+}))
 
 let resizeObserver: ResizeObserver | undefined
 let suppressDetailFocusHandoff = false
@@ -429,10 +470,19 @@ onMounted(() => {
 })
 onBeforeUnmount(() => resizeObserver?.disconnect())
 
+function displayFrameFor(systemId: string): SvgViewportRect {
+  return displayFrames.value.get(systemId) ?? { x: 0, y: 0, width: 0, height: 0 }
+}
+
+function hasPositiveFrame(frame: SvgViewportRect | undefined): frame is SvgViewportRect {
+  return !!frame && Number.isFinite(frame.width) && Number.isFinite(frame.height)
+    && frame.width > 0 && frame.height > 0
+}
+
 function updateDetailReveal(nextCamera: { x: number; y: number; k: number }): void {
   const current = detailSystemIds.value
   detailSystemIds.value = playerContinuousDetailSystemIds(
-    projection.value.systems,
+    detailThresholdSystems.value,
     nextCamera.k,
     svgPixelScale.value,
     current,
@@ -561,6 +611,10 @@ function screenMarkTransform(anchor: { x: number; y: number }): string {
   return `translate(${anchor.x} ${anchor.y}) scale(${inverseScale})`
 }
 
+function objectTextTransform(): string {
+  return `scale(${continuousMapTextScale(scenePixelScale.value, 16, 28)})`
+}
+
 function centerSystem(systemId: string): boolean {
   const system = projection.value.systems.find(candidate => candidate.id === systemId)
   if (!system) return false
@@ -571,7 +625,11 @@ function centerSystem(systemId: string): boolean {
     width: markerMargin * 2,
     height: markerMargin * 2,
   }
-  const minimumScale = playerContinuousTargetMinimumScale(system, svgPixelScale.value, detailSystemIds.value.has(systemId))
+  const minimumScale = playerContinuousTargetMinimumScale(
+    thresholdSystemsById.value.get(systemId) ?? system,
+    svgPixelScale.value,
+    detailSystemIds.value.has(systemId),
+  )
   return frameBounds(bounds, camera.value.k, minimumScale)
 }
 
@@ -586,7 +644,7 @@ function centerSelection(): boolean {
 
 function routeGeometryAt(routeId: string, scale: number): ContinuousMapRouteGeometry | undefined {
   const details = playerContinuousDetailSystemIds(
-    projection.value.systems,
+    detailThresholdSystems.value,
     scale,
     svgPixelScale.value,
     detailSystemIds.value,
@@ -618,7 +676,7 @@ function centerTarget(target: PlayerInspectionTarget, systemId: string): boolean
   const bounds = playerContinuousTargetBounds(system.geometry, target)
   if (!bounds) return false
   const minimumScale = playerContinuousTargetMinimumScale(
-    system,
+    thresholdSystemsById.value.get(systemId) ?? system,
     svgPixelScale.value,
     detailSystemIds.value.has(systemId),
   )
@@ -771,6 +829,17 @@ defineExpose({ captureImageViewport, centerRoute: centerRouteForDocument, center
   stroke: color-mix(in srgb, var(--map-selected) 70%, transparent);
   stroke-dasharray: none;
 }
+.player-continuous-system-detail { pointer-events: none; }
+.player-continuous-system-detail.is-exiting,
+.player-continuous-system-detail.is-exiting * { pointer-events: none !important; }
+.player-continuous-detail-enter-active,
+.player-continuous-detail-leave-active { transition: opacity 150ms ease; }
+.player-continuous-detail-enter-from,
+.player-continuous-detail-leave-to { opacity: 0; }
+.player-continuous-detail-enter-from .player-continuous-object-interactions { opacity: 0; }
+.player-continuous-detail-enter-active .player-continuous-object-interactions { transition: opacity 130ms 70ms ease; }
+.player-continuous-detail-leave-to .player-continuous-object-interactions { opacity: 0; }
+.player-continuous-detail-leave-active .player-continuous-object-interactions { transition: opacity 120ms ease; }
 
 .player-continuous-system-orbits ellipse {
   fill: none;
@@ -816,6 +885,7 @@ defineExpose({ captureImageViewport, centerRoute: centerRouteForDocument, center
   font: 12px Georgia, serif;
   pointer-events: none;
 }
+.player-continuous-object-text { pointer-events: none; }
 .player-continuous-object--dimmed .player-continuous-object-glyph,
 .player-continuous-object--dimmed .player-continuous-object-label,
 .player-continuous-object--dimmed .player-continuous-object-unknown { opacity: .14; }
@@ -887,5 +957,20 @@ defineExpose({ captureImageViewport, centerRoute: centerRouteForDocument, center
 .player-continuous-route-destinations .is-selected .cluster-exit-mark {
   stroke: var(--map-selected);
   stroke-width: 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-continuous-detail-enter-active,
+  .player-continuous-detail-leave-active,
+  .player-continuous-detail-enter-active .player-continuous-object-interactions,
+  .player-continuous-detail-leave-active .player-continuous-object-interactions {
+    transition: none;
+  }
+  .player-continuous-detail-enter-from,
+  .player-continuous-detail-leave-to,
+  .player-continuous-detail-enter-from .player-continuous-object-interactions,
+  .player-continuous-detail-leave-to .player-continuous-object-interactions {
+    opacity: 1;
+  }
 }
 </style>

@@ -8,7 +8,12 @@ import {
   mapImageScopeFrame,
   trimMapImageRoute,
 } from '../utils/map-image-scope'
-import { continuousMapNameLabels, type ContinuousMapNameProjection } from '../utils/continuous-map-name-labels'
+import {
+  continuousMapNameLabelFramePosition,
+  continuousMapNameLabels,
+  type ContinuousMapNameProjection,
+} from '../utils/continuous-map-name-labels'
+import { continuousMapNameTransitionProgress, continuousMapTextScale } from '../utils/continuous-map-projection'
 
 test('selected-system image scopes include both incident directions and leave unrelated routes out @pure', { tag: '@pure' }, () => {
   const routes = [
@@ -90,6 +95,23 @@ test('automatic Cluster names distribute coincident anchors into readable bounds
       expect(overlapWidth * overlapHeight).toBe(0)
     }
   }
+})
+
+test('continuous system names ease into frame corners and transformed text has a screen-size cap @pure', { tag: '@pure' }, () => {
+  const frame = { x: 40, y: 30, width: 100, height: 80 }
+  const camera = { x: 10, y: 20, k: 1.7 }
+  const label = { x: 300, y: 250, width: 100 }
+  const halfway = continuousMapNameTransitionProgress(frame, camera.k, 1)
+  const halfwayPosition = continuousMapNameLabelFramePosition(label, frame, camera, 1, halfway)
+  const finalPosition = continuousMapNameLabelFramePosition(label, frame, camera, 1, 1)
+
+  expect(halfway).toBeCloseTo(.5)
+  expect(halfwayPosition.x).toBeCloseTo(220)
+  expect(halfwayPosition.y).toBeCloseTo(166.5)
+  expect(finalPosition.x).toBeCloseTo(140)
+  expect(finalPosition.y).toBeCloseTo(83)
+  expect(continuousMapTextScale(5.6, 20, 28)).toBeCloseTo(.25)
+  expect(continuousMapTextScale(.2, 20, 28)).toBe(1)
 })
 
 test('Warden image scope falls back without an owner and viewport requests fence their full context @pure', { tag: '@pure' }, () => {

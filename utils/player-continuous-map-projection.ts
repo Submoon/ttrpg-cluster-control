@@ -1,8 +1,14 @@
 /** Continuous public scene projection from the detached, allowlisted player document. */
 import type { PlayerClusterDocument, PlayerSystemMarker } from '../domain/player-projection'
 import type { Point } from '../domain/workspace-model'
-import type { SvgViewportRect } from './map-zoom'
-import { continuousMapDetailScale, projectContinuousSystemGeometry, type ContinuousWardenSystemProjection } from './continuous-map-projection'
+import { MAP_ZOOM_MAX_SCALE, type SvgViewportRect } from './map-zoom'
+import {
+  CONTINUOUS_MAP_DETAIL_HIDE_PIXELS,
+  CONTINUOUS_MAP_DETAIL_REVEAL_PIXELS,
+  continuousMapDetailScale,
+  projectContinuousSystemGeometry,
+  type ContinuousWardenSystemProjection,
+} from './continuous-map-projection'
 import { playerClusterGeometry, type PlayerRouteGeometry } from './player-cluster-geometry'
 import { CLUSTER_ROUTE_PRESENTATION, clusterRoutePresentationLabel, clusterRoutePresentationLabelWidth } from './cluster-route-presentation'
 
@@ -21,8 +27,8 @@ export interface PlayerContinuousMapProjection {
   bounds: SvgViewportRect
 }
 
-export const PLAYER_DETAIL_REVEAL_PIXELS = 250
-export const PLAYER_DETAIL_HIDE_PIXELS = 210
+export const PLAYER_DETAIL_REVEAL_PIXELS = CONTINUOUS_MAP_DETAIL_REVEAL_PIXELS
+export const PLAYER_DETAIL_HIDE_PIXELS = CONTINUOUS_MAP_DETAIL_HIDE_PIXELS
 
 /** Applies each Revealed system's threshold and reuses unchanged membership for route transitions. */
 export function playerContinuousDetailSystemIds(
@@ -42,7 +48,7 @@ export function playerContinuousDetailSystemIds(
     if (!envelope) continue
     const wasDetailed = currentlyDetailed.has(system.id)
     const threshold = wasDetailed ? PLAYER_DETAIL_HIDE_PIXELS : PLAYER_DETAIL_REVEAL_PIXELS
-    if (cameraScale >= continuousMapDetailScale(envelope, svgPixelScale, threshold)) {
+    if (cameraScale >= Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(envelope, svgPixelScale, threshold))) {
       next.add(system.id)
       if (!wasDetailed) addedDetail = true
     }
