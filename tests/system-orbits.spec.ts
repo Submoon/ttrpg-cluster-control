@@ -289,7 +289,8 @@ detachedOrbitJourneyTest('the Warden can detach a hosted Orbit and move its unoc
   await expect(centerHandle).toBeVisible()
   const nixMark = wardenObjectMark(page, systemId, nix.id)
   const objectBeforeMove = await nixMark.getAttribute('transform')
-  const movedCenter = { x: detachedCenter.x + 64, y: detachedCenter.y + 32 }
+  // Make the first native movement clear drag intent instead of lingering inside the Inspector hold area.
+  const movedCenter = { x: detachedCenter.x + 256, y: detachedCenter.y + 128 }
   const deliveredCenter = await dragCenterTo(page, systemId, centerHandle, movedCenter)
   await expect.poll(async () =>
     Math.abs(Number(await detachedRing.getAttribute('cx')) - deliveredCenter.x),
