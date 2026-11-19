@@ -9,6 +9,7 @@ import {
   openMapFilesSection,
   openWorkspaceHierarchy,
   openWorkspaceZoomNavigation,
+  type ScreenPoint,
   setHeaderMapActionsOpen,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
@@ -163,7 +164,7 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   await expect(camera).not.toHaveAttribute('transform', beforeNavigation!)
 
   // Derive both native rectangle corners from the transformed, owner-qualified object anchors.
-  const rectangle = await map.evaluate((svg, target) => {
+  const rectangle = await map.evaluate((svg, target): { start: ScreenPoint; end: ScreenPoint } | null => {
     const anchors = [...svg.querySelectorAll<SVGGraphicsElement>('.continuous-warden-object')].map(mark => {
       const matrix = mark.getScreenCTM()
       if (!matrix) throw new Error('A painted Warden object has no screen transform.')
@@ -173,14 +174,14 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
     const anchor = anchors.find(point => point.systemId === target.systemId && point.objectId === target.objectId)
     if (!anchor) throw new Error('Vesper Departure has no painted anchor after camera navigation.')
     const bounds = svg.getBoundingClientRect()
-    const backgroundAt = (point: { x: number; y: number }) => {
+    const backgroundAt = (point: ScreenPoint) => {
       const hit = document.elementFromPoint(point.x, point.y)
       return hit instanceof Element && svg.contains(hit)
         && !hit.closest('.cluster-system-node, .cluster-route, .continuous-warden-object, .continuous-warden-orbit-target, .continuous-warden-orbit-edit-handle')
     }
     for (const radius of [24, 32, 48, 64, 80, 96]) {
-      const start = { x: Math.round(anchor.x - radius), y: Math.round(anchor.y - radius) }
-      const end = { x: Math.round(anchor.x + radius), y: Math.round(anchor.y + radius) }
+      const start: ScreenPoint = { x: Math.round(anchor.x - radius), y: Math.round(anchor.y - radius) }
+      const end: ScreenPoint = { x: Math.round(anchor.x + radius), y: Math.round(anchor.y + radius) }
       if (start.x <= bounds.left || end.x >= bounds.right || start.y <= bounds.top || end.y >= bounds.bottom) continue
       const enclosed = anchors.filter(point => point.x >= start.x && point.x <= end.x
         && point.y >= start.y && point.y <= end.y)
