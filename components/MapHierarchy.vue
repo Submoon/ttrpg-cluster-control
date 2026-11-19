@@ -126,7 +126,14 @@
         <template #item-wrapper="{ item, expanded, selected, handleToggle, ui }">
           <div
             :key="item.key"
-            :class="ui.link({ selected })"
+            :class="ui.link({
+              class: [
+                'tree-row grid min-h-[2.55rem] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-1 gap-y-0 rounded-[2px] border border-transparent bg-transparent px-0.5 py-1 text-left',
+                item.kind === 'system' ? 'system-row' : item.kind === 'object' ? 'object-row' : 'orbit-row',
+                { active: selected },
+              ],
+              selected,
+            })"
             :data-hierarchy-key="item.key"
             :data-object-id="item.kind === 'object' ? item.row.object.id : undefined"
             :data-orbit-id="item.kind === 'orbit' ? item.row.orbit.id : undefined"
@@ -136,22 +143,24 @@
             @contextmenu="openHierarchyMenu($event, item)"
             @keydown.capture="openHierarchyMenuFromKeyboard($event, item)"
           >
-            <span class="tree-leading" aria-hidden="true">
-              <span v-if="item.kind === 'system'" class="system-seal grid size-[1.5rem] place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
-              <span v-else-if="item.kind === 'object'" class="tree-object-title"><span class="object-mark">{{ objectMark(item.row.object) }}</span></span>
-              <span v-else class="orbit-mark">R</span>
-            </span>
-            <span :class="ui.linkLabel({ class: 'tree-copy min-w-0 flex-1 [overflow-wrap:anywhere]' })">
-              <span class="tree-object-name flex min-w-0 items-center gap-1">
-                <span class="min-w-0 [overflow-wrap:anywhere]">{{ item.label }}</span>
-                <template v-if="item.kind === 'object'">
-                  <UTooltip :text="hierarchyObjectPublicationStatus(item).description">
-                    <UIcon :name="publicationPresentation(item.row.object.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
-                  </UTooltip>
-                  <UTooltip v-if="hierarchyObjectPublicationStatus(item).parentBlocked" text="System map unavailable to players until this system is Revealed.">
-                    <UIcon name="i-lucide-lock-keyhole" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
-                  </UTooltip>
-                </template>
+            <span class="tree-copy col-start-1 row-start-1 block min-w-0 whitespace-normal [overflow-wrap:anywhere]">
+              <span class="tree-object-title flex min-w-0 items-start gap-1">
+                <span class="tree-leading shrink-0" aria-hidden="true">
+                  <span v-if="item.kind === 'system'" class="system-seal grid size-[1.5rem] place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
+                  <span v-else-if="item.kind === 'object'" class="object-mark">{{ objectMark(item.row.object) }}</span>
+                  <span v-else class="orbit-mark">R</span>
+                </span>
+                <span class="tree-object-name flex min-w-0 flex-1 items-start gap-1">
+                  <span class="min-w-0 [overflow-wrap:anywhere]">{{ item.label }}</span>
+                  <template v-if="item.kind === 'object'">
+                    <UTooltip :text="hierarchyObjectPublicationStatus(item).description">
+                      <UIcon :name="publicationPresentation(item.row.object.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
+                    </UTooltip>
+                    <UTooltip v-if="hierarchyObjectPublicationStatus(item).parentBlocked" text="System map unavailable to players until this system is Revealed.">
+                      <UIcon name="i-lucide-lock-keyhole" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
+                    </UTooltip>
+                  </template>
+                </span>
               </span>
               <small v-if="item.kind === 'system'" class="mt-[0.18rem] block">
                 {{ item.system.objects.length }} map objects
@@ -160,27 +169,43 @@
                 {{ catalogueFamilyLabel(item.row.object.family) }} / {{ catalogueSubtypeLabel(item.row.object) }}
               </small>
               <small v-if="item.kind === 'object'" class="mt-[0.18rem] block">
-                <span class="key-tag">{{ item.row.object.locationKey }}</span>
+                <span class="key-tag block min-w-0 [overflow-wrap:anywhere]">{{ item.row.object.locationKey }}</span>
                 <span class="block">{{ item.parentContext }}</span>
               </small>
               <small v-if="item.kind !== 'system'" class="mt-[0.12rem] block">{{ item.ownerSystemName }}</small>
             </span>
-            <UButton
-              v-if="item.kind === 'object'"
-              class="tree-publication-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              :tabindex="-1"
-              :aria-label="`Change visibility for ${item.row.object.name}`"
-              :title="`Change visibility for ${item.row.object.name}`"
-              @click.stop="openObjectMenuFromButton($event, item.row.object.id, item.ownerSystemId)"
-            >
-              <UIcon name="i-lucide-eye" aria-hidden="true" />
-            </UButton>
+            <div class="col-start-2 row-start-1 flex min-w-0 flex-col items-center gap-0.5 self-center">
+              <UButton
+                v-if="item.kind === 'object'"
+                class="tree-publication-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :tabindex="-1"
+                :aria-label="`Change visibility for ${item.row.object.name}`"
+                :title="`Change visibility for ${item.row.object.name}`"
+                @click.stop="openObjectMenuFromButton($event, item.row.object.id, item.ownerSystemId)"
+              >
+                <UIcon name="i-lucide-eye" aria-hidden="true" />
+              </UButton>
+              <UButton
+                v-if="hierarchyItemsByKey.get(item.key)?.children?.length"
+                class="tree-expand-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :tabindex="-1"
+                :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
+                :aria-expanded="expanded"
+                :title="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
+                @click.stop="toggleHierarchyItemAndRestoreFocus($event, handleToggle)"
+              >
+                <UIcon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" aria-hidden="true" />
+              </UButton>
+            </div>
             <UButton
               v-if="item.kind === 'system' && expanded && !seededHierarchyOwners.has(item.key)"
-              class="shrink-0"
+              class="col-span-2 row-start-2 min-w-0 max-w-full justify-center whitespace-normal"
               color="neutral"
               variant="outline"
               size="xs"
@@ -188,20 +213,6 @@
               @keydown.stop
               @click.stop="showAllHierarchyOwner($event, item.key)"
             >Show all records</UButton>
-            <UButton
-              v-if="hierarchyItemsByKey.get(item.key)?.children?.length"
-              class="tree-expand-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              :tabindex="-1"
-              :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
-              :aria-expanded="expanded"
-              :title="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
-              @click.stop="toggleHierarchyItemAndRestoreFocus($event, handleToggle)"
-            >
-              <UIcon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" aria-hidden="true" />
-            </UButton>
           </div>
         </template>
       </UTree>
