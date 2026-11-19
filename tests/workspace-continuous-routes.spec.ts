@@ -108,6 +108,58 @@ test('the player preview inspects the same public route through its shared docum
   expect(afterFreshPan.x).toBeCloseTo(beforeFreshPan.x + up.x - down.x, 5)
   expect(afterFreshPan.y).toBeCloseTo(beforeFreshPan.y + up.y - down.y, 5)
   expect(afterFreshPan.k).toBe(beforeFreshPan.k)
+
+  await reopenedScene.evaluate(() => {
+    const target = window as PreviewPanProbeWindow
+    const record = (event: PointerEvent) => { target.__previewHeldPointer!.point = { x: event.clientX, y: event.clientY } }
+    window.addEventListener('pointermove', record, true)
+    target.__previewHeldPointer = { point: null, cleanup: () => window.removeEventListener('pointermove', record, true) }
+  })
+  const pointer = () => page.evaluate(() => {
+    const point = (window as PreviewPanProbeWindow).__previewHeldPointer?.point
+    if (!point) throw new Error('The held Preview pan has no delivered pointer movement.')
+    return point
+  })
+  const expectNextHeldMove = async (x: number, y: number) => {
+    const before = await camera()
+    const lastPoint = await pointer()
+    const currentCoordinates = await snapshotSvgCoordinates(reopenedScene)
+    await page.mouse.move(x, y, { steps: 3 })
+    const deliveredPoint = await pointer()
+    const previous = currentCoordinates.fromClient(lastPoint)
+    const next = currentCoordinates.fromClient(deliveredPoint)
+    const after = await camera()
+    expect(after.x).toBeCloseTo(before.x + next.x - previous.x, 5)
+    expect(after.y).toBeCloseTo(before.y + next.y - previous.y, 5)
+    expect(after.k).toBe(before.k)
+  }
+  mouseHeld = false
+  try {
+    const heldStart = await previewPanStart(reopenedScene)
+    await page.mouse.move(heldStart.x, heldStart.y)
+    mouseHeld = true
+    await page.mouse.down()
+    await page.mouse.move(heldStart.x + 12, heldStart.y + 6, { steps: 3 })
+    const beforeWheel = await camera()
+    await page.mouse.wheel(0, -100)
+    await expect.poll(async () => (await camera()).k).toBeGreaterThan(beforeWheel.k)
+    await expectNextHeldMove(heldStart.x + 24, heldStart.y + 12)
+
+    const beforeKeyboard = await camera()
+    await reopenedScene.press('+')
+    await expect.poll(async () => (await camera()).k).toBeGreaterThan(beforeKeyboard.k)
+    await expectNextHeldMove(heldStart.x + 36, heldStart.y + 18)
+  } finally {
+    try {
+      if (mouseHeld) await page.mouse.up()
+    } finally {
+      await page.evaluate(() => {
+        const target = window as PreviewPanProbeWindow
+        target.__previewHeldPointer?.cleanup()
+        delete target.__previewHeldPointer
+      })
+    }
+  }
   const reopenedRoute = reopened.locator('.cluster-route[data-route-id="route-1"]')
   const reopenedPoint = await routeStrokePoint(reopenedRoute)
   if (!reopenedPoint) throw new Error('The reopened Preview route needs a native click target.')
@@ -119,6 +171,7 @@ test('the player preview inspects the same public route through its shared docum
 
 type PreviewPanProbeWindow = Window & {
   __previewPanProbe?: { group: Element; moves: number; transform: string | null; cleanup: () => void }
+  __previewHeldPointer?: { point: { x: number; y: number } | null; cleanup: () => void }
 }
 
 async function previewPanStart(scene: Locator): Promise<{ x: number; y: number }> {

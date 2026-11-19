@@ -28,11 +28,10 @@ interface MousePan {
   pointerId: number
   element: SVGSVGElement
   view: Window
-  screenToSvg: DOMMatrix
-  start: DOMPoint
-  clientX: number
-  clientY: number
-  camera: MapViewport
+  startClientX: number
+  startClientY: number
+  lastClientX: number
+  lastClientY: number
   dragging: boolean
 }
 
@@ -126,15 +125,13 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
       || event.button !== 0 || event.ctrlKey) return
     cancelMousePan()
     const element = options.element.value
-    const matrix = element?.getScreenCTM()
     const view = element?.ownerDocument.defaultView
-    if (!element || !element.isConnected || !matrix || !view) return
+    if (!element || !element.isConnected || !element.getScreenCTM() || !view) return
     select(element).interrupt()
-    const screenToSvg = matrix.inverse()
     mousePan = {
-      pointerId: event.pointerId, element, view, screenToSvg,
-      start: new DOMPoint(event.clientX, event.clientY).matrixTransform(screenToSvg),
-      clientX: event.clientX, clientY: event.clientY, camera: { ...camera.value }, dragging: false,
+      pointerId: event.pointerId, element, view,
+      startClientX: event.clientX, startClientY: event.clientY,
+      lastClientX: event.clientX, lastClientY: event.clientY, dragging: false,
     }
     view.addEventListener('pointermove', moveMousePan, true)
     view.addEventListener('pointerup', finishMousePan, true)
@@ -153,7 +150,7 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
       return
     }
     if (!pan.dragging) {
-      if (Math.hypot(event.clientX - pan.clientX, event.clientY - pan.clientY) < 4) return
+      if (Math.hypot(event.clientX - pan.startClientX, event.clientY - pan.startClientY) < 4) return
       pan.dragging = true
       options.onManualCameraInteraction?.()
       if (mousePan !== pan || disposed || !options.active.value) return
@@ -164,8 +161,18 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
       }
     }
     event.preventDefault()
-    const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(pan.screenToSvg)
-    applyCamera({ x: pan.camera.x + point.x - pan.start.x, y: pan.camera.y + point.y - pan.start.y, k: pan.camera.k })
+    const matrix = pan.element.getScreenCTM()
+    if (!matrix) {
+      cancelMousePan()
+      return
+    }
+    // Translate the current camera by only this delivered movement, retaining intervening zoom or keys.
+    const screenToSvg = matrix.inverse()
+    const previous = new DOMPoint(pan.lastClientX, pan.lastClientY).matrixTransform(screenToSvg)
+    const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(screenToSvg)
+    pan.lastClientX = event.clientX
+    pan.lastClientY = event.clientY
+    applyCamera({ x: camera.value.x + point.x - previous.x, y: camera.value.y + point.y - previous.y, k: camera.value.k })
   }
 
   function preventMouseSelection(event: Event): void {
