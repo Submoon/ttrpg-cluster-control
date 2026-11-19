@@ -469,23 +469,38 @@ const hierarchyIdentity = computed(() => JSON.stringify([
 ]))
 const hierarchyBranches = computed(() => flatHierarchyItems.value.filter(item => item.children?.length))
 const expandedHierarchyKeys = ref<string[]>([])
+const seededHierarchyOwners = new Set<string>()
+const manuallyCollapsedHierarchyKeys = new Set<string>()
 const isHierarchyComposing = ref(false)
 
 watch(hierarchyIdentity, () => {
-  expandedHierarchyKeys.value = hierarchyBranches.value.filter(item => item.kind !== 'system').map(item => item.key)
+  seededHierarchyOwners.clear()
+  manuallyCollapsedHierarchyKeys.clear()
+  expandedHierarchyKeys.value = props.continuousMap ? [] : hierarchyBranches.value.map(item => item.key)
 }, { immediate: true })
 
 watch(hierarchyBranches, (branches, previousBranches) => {
   const expanded = new Set(expandedHierarchyKeys.value)
   const previouslyExpandable = new Set(previousBranches?.map(item => item.key))
+  const currentKeys = new Set(branches.map(item => item.key))
+  for (const key of manuallyCollapsedHierarchyKeys) {
+    if (!currentKeys.has(key)) manuallyCollapsedHierarchyKeys.delete(key)
+  }
+  for (const key of seededHierarchyOwners) {
+    if (!currentKeys.has(key)) seededHierarchyOwners.delete(key)
+  }
   expandedHierarchyKeys.value = branches
-    .filter(item => expanded.has(item.key) || (item.kind !== 'system' && !previouslyExpandable.has(item.key)))
+    .filter(item => expanded.has(item.key) || (item.kind !== 'system' && !previouslyExpandable.has(item.key)
+      && (!props.continuousMap || seededHierarchyOwners.has(`system:${item.ownerSystemId}`))))
     .map(item => item.key)
 }, { immediate: true })
 
 watch(
   [hierarchyIdentity, selectedHierarchyKey, selectedHierarchyPath],
   ([, selectedKey, selectedPath]) => {
+    if (props.continuousMap && selectedHierarchyItem.value?.kind === 'system') {
+      seedHierarchyOwner(selectedKey)
+    }
     if (selectedKey && selectedPath) expandHierarchyBranches(selectedPath.split('\u001f'))
   },
   { immediate: true },
@@ -509,6 +524,17 @@ function expandHierarchyBranches(keys: readonly string[]): void {
   if (keys.length === 0) return
   const expanded = new Set([...expandedHierarchyKeys.value, ...keys])
   if (expanded.size > expandedHierarchyKeys.value.length) expandedHierarchyKeys.value = [...expanded]
+}
+
+/** Full default expansion belongs to explicit owner consultation, once per owner and identity. */
+function seedHierarchyOwner(ownerKey: string, expanded = new Set(expandedHierarchyKeys.value)): Set<string> {
+  if (seededHierarchyOwners.has(ownerKey)) return expanded
+  seededHierarchyOwners.add(ownerKey)
+  for (const item of hierarchyBranches.value) {
+    if (item.ancestorKeys.includes(ownerKey) && !manuallyCollapsedHierarchyKeys.has(item.key)) expanded.add(item.key)
+  }
+  expandedHierarchyKeys.value = [...expanded]
+  return expanded
 }
 
 function objectHierarchyKey(objectId: string): string {
@@ -626,7 +652,21 @@ function getHierarchyItemKey(item: HierarchyTreeItem): string {
 }
 
 function updateExpandedHierarchyKeys(keys: string[]): void {
-  expandedHierarchyKeys.value = keys
+  if (!props.continuousMap) {
+    expandedHierarchyKeys.value = keys
+    return
+  }
+  const previous = new Set(expandedHierarchyKeys.value)
+  let expanded = new Set(keys)
+  for (const key of previous) {
+    if (!expanded.has(key)) manuallyCollapsedHierarchyKeys.add(key)
+  }
+  for (const key of keys) {
+    if (previous.has(key)) continue
+    manuallyCollapsedHierarchyKeys.delete(key)
+    if (key.startsWith('system:')) expanded = seedHierarchyOwner(key, expanded)
+  }
+  expandedHierarchyKeys.value = [...expanded]
 }
 
 function selectHierarchyItem(event: TreeItemSelectEvent<HierarchyTreeItem>, item: HierarchyTreeItem): void {
