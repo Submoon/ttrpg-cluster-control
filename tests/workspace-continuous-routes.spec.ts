@@ -4,9 +4,11 @@ import campaignFixture from './fixtures/workspace-data-campaign-baseline.json' w
 import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 import {
   clickDockAction,
+  measureMouseDrag,
   openPlayerPreview,
   selectInspectorOption,
   setWorkspaceMapMode,
+  snapshotSvgCoordinates,
   waitForWorkspaceSaved,
   workspaceZoomControls,
 } from './helpers'
@@ -36,7 +38,105 @@ test('the player preview inspects the same public route through its shared docum
   await expect(details).toContainText('Harrow Arrival (Harrow)')
   await details.getByRole('button', { name: 'Center selected Jump Route', exact: true }).click()
   await expect(route).toHaveAttribute('aria-pressed', 'true')
+
+  const scene = map.locator('svg.player-continuous-map-scene')
+  const content = scene.locator(':scope > g').first()
+  const start = await previewPanStart(scene)
+  await scene.evaluate(element => {
+    const target = window as PreviewPanProbeWindow
+    const group = element.querySelector('g')
+    if (!group) throw new Error('The Preview has no camera content.')
+    const move = () => { if (target.__previewPanProbe) target.__previewPanProbe.moves += 1 }
+    // A normal bubble listener detects a leaked D3 window capture that consumes mousemove.
+    window.addEventListener('mousemove', move)
+    target.__previewPanProbe = { group, moves: 0, transform: null, cleanup: () => window.removeEventListener('mousemove', move) }
+  })
+  let mouseHeld = false
+  try {
+    const beforePan = await content.getAttribute('transform')
+    await page.mouse.move(start.x, start.y)
+    mouseHeld = true
+    await page.mouse.down()
+    await page.mouse.move(start.x + 24, start.y + 12, { steps: 6 })
+    await expect(content).not.toHaveAttribute('transform', beforePan ?? '')
+    await page.evaluate(() => {
+      const probe = (window as PreviewPanProbeWindow).__previewPanProbe!
+      probe.moves = 0
+      probe.transform = probe.group.getAttribute('transform')
+    })
+    await page.keyboard.press('Escape')
+    // Move once during closing, then again after unmount, while the original button stays down.
+    await page.mouse.move(start.x + 36, start.y + 18)
+    await expect.poll(() => page.evaluate(() => (window as PreviewPanProbeWindow).__previewPanProbe!.moves)).toBeGreaterThan(0)
+    await expect(preview).toBeHidden()
+    await expect.poll(() => page.evaluate(() => (window as PreviewPanProbeWindow).__previewPanProbe!.group.isConnected)).toBe(false)
+    const closingMoves = await page.evaluate(() => (window as PreviewPanProbeWindow).__previewPanProbe!.moves)
+    await page.mouse.move(start.x + 48, start.y + 24)
+    await expect.poll(() => page.evaluate(() => (window as PreviewPanProbeWindow).__previewPanProbe!.moves)).toBeGreaterThan(closingMoves)
+    await page.mouse.up()
+    mouseHeld = false
+    expect(await page.evaluate(() => {
+      const probe = (window as PreviewPanProbeWindow).__previewPanProbe!
+      return probe.group.getAttribute('transform') === probe.transform
+    })).toBe(true)
+  } finally {
+    try {
+      if (mouseHeld) await page.mouse.up()
+    } finally {
+      await page.evaluate(() => {
+        const target = window as PreviewPanProbeWindow
+        target.__previewPanProbe?.cleanup()
+        delete target.__previewPanProbe
+      })
+    }
+  }
+
+  const reopened = await openPlayerPreview(page)
+  const reopenedScene = reopened.locator('svg.player-continuous-map-scene')
+  const reopenedContent = reopenedScene.locator(':scope > g').first()
+  const reopenedStart = await previewPanStart(reopenedScene)
+  const camera = () => reopenedContent.evaluate(element => {
+    const matrix = (element as SVGGElement).transform.baseVal.consolidate()!.matrix
+    return { x: matrix.e, y: matrix.f, k: matrix.a }
+  })
+  const beforeFreshPan = await camera()
+  const coordinates = await snapshotSvgCoordinates(reopenedScene)
+  const delivered = await measureMouseDrag(page, reopenedStart, { x: reopenedStart.x + 24, y: reopenedStart.y + 12 }, { eventFamily: 'pointer' })
+  const down = coordinates.fromClient(delivered.down)
+  const up = coordinates.fromClient(delivered.up)
+  const afterFreshPan = await camera()
+  expect(afterFreshPan.x).toBeCloseTo(beforeFreshPan.x + up.x - down.x, 5)
+  expect(afterFreshPan.y).toBeCloseTo(beforeFreshPan.y + up.y - down.y, 5)
+  expect(afterFreshPan.k).toBe(beforeFreshPan.k)
+  const reopenedRoute = reopened.locator('.cluster-route[data-route-id="route-1"]')
+  const reopenedPoint = await routeStrokePoint(reopenedRoute)
+  if (!reopenedPoint) throw new Error('The reopened Preview route needs a native click target.')
+  await page.mouse.click(reopenedPoint.x, reopenedPoint.y)
+  await expect(reopened.getByRole('region', { name: 'Jump Route details', exact: true })
+    .getByRole('heading', { name: 'Jump Level 1', exact: true })).toBeVisible()
+  await reopened.getByRole('button', { name: 'Close player preview', exact: true }).click()
 })
+
+type PreviewPanProbeWindow = Window & {
+  __previewPanProbe?: { group: Element; moves: number; transform: string | null; cleanup: () => void }
+}
+
+async function previewPanStart(scene: Locator): Promise<{ x: number; y: number }> {
+  return scene.evaluate(element => {
+    const bounds = element.getBoundingClientRect()
+    for (const x of [.25, .5, .75]) {
+      for (const y of [.25, .5, .75]) {
+        const point = { x: Math.round(bounds.left + bounds.width * x), y: Math.round(bounds.top + bounds.height * y) }
+        const clear = [0, 12, 24].every(offset => {
+          const hit = document.elementFromPoint(point.x + offset, point.y + offset / 2)
+          return hit && element.contains(hit) && !hit.closest('[role="button"]')
+        })
+        if (clear) return point
+      }
+    }
+    throw new Error('The Preview needs clear map space for a native camera pan.')
+  })
+}
 
 async function routeStrokePoint(mark: Locator, clippedOnly = false) {
   return mark.evaluate((group, requireClipping) => {

@@ -24,6 +24,18 @@ interface PlayerContinuousMapViewportOptions {
   onManualCameraInteraction?: () => void
 }
 
+interface MousePan {
+  pointerId: number
+  element: SVGSVGElement
+  view: Window
+  screenToSvg: DOMMatrix
+  start: DOMPoint
+  clientX: number
+  clientY: number
+  camera: MapViewport
+  dragging: boolean
+}
+
 /**
  * Keeps camera state in the mounted player view. It reads only the public scene bounds supplied by
  * its caller and never writes or derives state from the Warden editor.
@@ -41,6 +53,9 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
   )
   let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
   let resizeObserver: ResizeObserver | undefined
+  let disposed = false
+  let mousePan: MousePan | undefined
+  let draggedClick: { view: Window; pointerId: number; timeout: number } | undefined
 
   onMounted(() => {
     attachZoom()
@@ -57,34 +72,35 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
   })
 
   onBeforeUnmount(() => {
+    disposed = true
     resizeObserver?.disconnect()
-    const element = options.element.value
-    if (element) select(element).on('.zoom', null)
+    detachInput()
   })
 
   watch(options.active, active => {
-    const element = options.element.value
-    if (!element) return
     if (active) {
       attachZoom()
       measureSvg()
       if (!cameraInitialized.value) fitPlayerMap()
     } else {
-      select(element).on('.zoom', null)
+      detachInput()
     }
   }, { flush: 'sync' })
 
   function attachZoom(): void {
     const element = options.element.value
-    if (!element || !options.active.value) return
+    if (disposed || !element || !options.active.value) return
     if (!zoomBehavior) {
       zoomBehavior = zoom<SVGSVGElement, unknown>()
-        .filter(event => options.active.value
+        .filter(event => !disposed && options.active.value
+          // D3's native mouse gesture installs window listeners that outlive a hidden SVG.
+          && event.type !== 'mousedown'
           && (!event.ctrlKey || event.type === 'wheel')
           && !event.button)
         .scaleExtent([minimumScale.value, MAP_ZOOM_MAX_SCALE])
         .touchable(() => true)
-        .on('zoom.player', event => {
+        .on('zoom.player', function (event) {
+          if (disposed || !options.active.value || options.element.value !== this || !this.isConnected) return
           const next = { x: event.transform.x, y: event.transform.y, k: event.transform.k }
           camera.value = next
           options.onCameraChange?.(next)
@@ -93,9 +109,109 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
       zoomBehavior.scaleExtent([minimumScale.value, MAP_ZOOM_MAX_SCALE])
     }
     select(element).call(zoomBehavior)
+      .on('pointerdown.player-camera', startMousePan)
+      .on('lostpointercapture.player-camera', cancelMousePan)
+  }
+
+  function detachInput(): void {
+    cancelMousePan()
+    clearDraggedClick()
+    const element = options.element.value
+    if (element) select(element).interrupt().on('.zoom', null).on('.player-camera', null)
+  }
+
+  function startMousePan(event: PointerEvent): void {
+    clearDraggedClick()
+    if (disposed || !options.active.value || !event.isPrimary || event.pointerType === 'touch'
+      || event.button !== 0 || event.ctrlKey) return
+    cancelMousePan()
+    const element = options.element.value
+    const matrix = element?.getScreenCTM()
+    const view = element?.ownerDocument.defaultView
+    if (!element || !element.isConnected || !matrix || !view) return
+    select(element).interrupt()
+    const screenToSvg = matrix.inverse()
+    mousePan = {
+      pointerId: event.pointerId, element, view, screenToSvg,
+      start: new DOMPoint(event.clientX, event.clientY).matrixTransform(screenToSvg),
+      clientX: event.clientX, clientY: event.clientY, camera: { ...camera.value }, dragging: false,
+    }
+    view.addEventListener('pointermove', moveMousePan, true)
+    view.addEventListener('pointerup', finishMousePan, true)
+    view.addEventListener('pointercancel', cancelMousePan, true)
+    view.addEventListener('blur', cancelMousePan)
+    view.addEventListener('dragstart', preventMouseSelection, true)
+    view.addEventListener('selectstart', preventMouseSelection, true)
+  }
+
+  function moveMousePan(event: PointerEvent): void {
+    const pan = mousePan
+    if (!pan || pan.pointerId !== event.pointerId) return
+    if (disposed || !options.active.value || options.element.value !== pan.element || !pan.element.isConnected
+      || event.buttons !== 1) {
+      cancelMousePan()
+      return
+    }
+    if (!pan.dragging) {
+      if (Math.hypot(event.clientX - pan.clientX, event.clientY - pan.clientY) < 4) return
+      pan.dragging = true
+      options.onManualCameraInteraction?.()
+      if (mousePan !== pan || disposed || !options.active.value) return
+      try {
+        pan.element.setPointerCapture(pan.pointerId)
+      } catch {
+        // The owned window listeners still finish a contact when capture is unavailable.
+      }
+    }
+    event.preventDefault()
+    const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(pan.screenToSvg)
+    applyCamera({ x: pan.camera.x + point.x - pan.start.x, y: pan.camera.y + point.y - pan.start.y, k: pan.camera.k })
+  }
+
+  function preventMouseSelection(event: Event): void {
+    if (mousePan) event.preventDefault()
+  }
+
+  function finishMousePan(event: PointerEvent): void {
+    const pan = mousePan
+    if (!pan || pan.pointerId !== event.pointerId) return
+    cancelMousePan()
+    if (!pan.dragging || disposed || !options.active.value) return
+    // Suppress only this released drag's immediate compatibility click, before map inspection.
+    draggedClick = { view: pan.view, pointerId: pan.pointerId, timeout: pan.view.setTimeout(clearDraggedClick, 0) }
+    pan.view.addEventListener('click', suppressDraggedClick, true)
+  }
+
+  function cancelMousePan(event?: Event): void {
+    const pan = mousePan
+    if (!pan || (event && 'pointerId' in event && event.pointerId !== pan.pointerId)) return
+    mousePan = undefined
+    pan.view.removeEventListener('pointermove', moveMousePan, true)
+    pan.view.removeEventListener('pointerup', finishMousePan, true)
+    pan.view.removeEventListener('pointercancel', cancelMousePan, true)
+    pan.view.removeEventListener('blur', cancelMousePan)
+    pan.view.removeEventListener('dragstart', preventMouseSelection, true)
+    pan.view.removeEventListener('selectstart', preventMouseSelection, true)
+    if (pan.element.hasPointerCapture(pan.pointerId)) pan.element.releasePointerCapture(pan.pointerId)
+  }
+
+  function clearDraggedClick(): void {
+    if (!draggedClick) return
+    draggedClick.view.clearTimeout(draggedClick.timeout)
+    draggedClick.view.removeEventListener('click', suppressDraggedClick, true)
+    draggedClick = undefined
+  }
+
+  function suppressDraggedClick(event: MouseEvent): void {
+    if (!draggedClick || !event.isTrusted || event.detail === 0 || event.button !== 0) return
+    if ('pointerId' in event && event.pointerId !== draggedClick.pointerId) return
+    clearDraggedClick()
+    event.preventDefault()
+    event.stopImmediatePropagation()
   }
 
   function measureSvg(): void {
+    if (disposed) return
     const element = options.element.value
     if (!element) return
     // D3 uses the drawable SVG for input; explicit framing measures the unobstructed area below.
@@ -142,6 +258,7 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
   }
 
   function applyCamera(next: MapViewport): void {
+    if (disposed || !options.active.value) return
     const element = options.element.value
     const bounded = clampMapViewport(next, minimumScale.value)
     if (!element || !bounded) return
@@ -158,7 +275,7 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
     preferredScale?: number,
     requiredScale = minimumScale.value,
   ): boolean {
-    if (!options.active.value) return false
+    if (disposed || !options.active.value) return false
     const viewport = usableViewportRect()
     if (!viewport) return false
     updateMinimumScale(viewport)
@@ -171,7 +288,7 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
 
   /** Applies a camera calculated by a pure viewport solver through the mounted D3 camera. */
   function setViewport(next: MapViewport): boolean {
-    if (!options.active.value) return false
+    if (disposed || !options.active.value) return false
     updateMinimumScale()
     const bounded = clampMapViewport(next, minimumScale.value)
     if (!bounded) return false
@@ -181,7 +298,7 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
   }
 
   function fitPlayerMap(): boolean {
-    if (!options.active.value) return false
+    if (disposed || !options.active.value) return false
     const viewport = usableViewportRect()
     if (!viewport) return false
     updateMinimumScale(viewport, true)
@@ -193,7 +310,7 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
   }
 
   function zoomBy(factor: number): void {
-    if (!options.active.value || !Number.isFinite(factor) || factor <= 0) return
+    if (disposed || !options.active.value || !Number.isFinite(factor) || factor <= 0) return
     const element = options.element.value
     if (!element || !zoomBehavior) return
     options.onManualCameraInteraction?.()
@@ -201,7 +318,7 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
   }
 
   function panBy(horizontal: number, vertical: number): void {
-    if (!options.active.value || !Number.isFinite(horizontal) || !Number.isFinite(vertical)) return
+    if (disposed || !options.active.value || !Number.isFinite(horizontal) || !Number.isFinite(vertical)) return
     options.onManualCameraInteraction?.()
     applyCamera({
       x: camera.value.x + horizontal,
@@ -211,7 +328,7 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
   }
 
   function handleMapKeydown(event: KeyboardEvent): void {
-    if (!options.active.value) return
+    if (disposed || !options.active.value) return
     switch (event.key) {
       case 'ArrowLeft': panBy(40, 0); break
       case 'ArrowRight': panBy(-40, 0); break
@@ -230,6 +347,7 @@ export function usePlayerContinuousMapViewport(options: PlayerContinuousMapViewp
   }
 
   function focusMap(): void {
+    if (disposed || !options.active.value) return
     options.element.value?.focus({ preventScroll: true })
   }
 
