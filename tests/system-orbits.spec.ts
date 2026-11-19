@@ -3,7 +3,7 @@ import {
   captureMapExportBlobs, centerWorkspaceSelection, clickWardenSystemPoint, createSingleSystemWorkspace,
   dockAction, downloadJson, hideWorkspaceInspector, measureMouseDrag, openWorkspaceHierarchy,
   quitSystemAdd, selectInspectorOption, setWorkspaceMapMode, waitForWorkspaceSaved,
-  wardenLocalCoordinates, wardenMap, wardenObjectMark, type WorldPoint,
+  wardenLocalCoordinates, wardenMap, wardenObjectMark, workspaceZoomControls, type WorldPoint,
 } from './helpers'
 
 
@@ -83,8 +83,7 @@ async function inspectSystem(page: Page, name: string): Promise<string> {
 }
 
 async function dragCenterTo(page: Page, systemId: string, handle: Locator, target: WorldPoint): Promise<WorldPoint> {
-  const coordinates = await wardenLocalCoordinates(page, systemId)
-  const start = await handle.evaluate((element) => {
+  const exposedStart = () => handle.evaluate((element) => {
     if (!(element instanceof SVGCircleElement)) throw new Error('The detached center has no circle handle.')
     const matrix = element.getScreenCTM()
     if (!matrix) throw new Error('The detached center handle is not attached.')
@@ -99,8 +98,21 @@ async function dragCenterTo(page: Page, systemId: string, handle: Locator, targe
         if (document.elementFromPoint(hit.x, hit.y) === element) return hit
       }
     }
-    throw new Error('The detached center handle has no frontmost native hit.')
+    return null
   })
+  let start = await exposedStart()
+  if (!start) {
+    // Detachment keeps this center beside its former host, where the overview name badge can cover it.
+    await centerWorkspaceSelection(page)
+    start = await exposedStart()
+    const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
+    for (let step = 0; !start && step < 8; step += 1) {
+      await zoomIn.click()
+      start = await exposedStart()
+    }
+  }
+  if (!start) throw new Error('The detached center handle has no frontmost native hit after framing its detail.')
+  const coordinates = await wardenLocalCoordinates(page, systemId)
   const requested = coordinates.toClient(target)
   const end = { x: Math.round(requested.x), y: Math.round(requested.y) }
   expect(await wardenMap(page).evaluate((map, point) => map.contains(document.elementFromPoint(point.x, point.y)), end))
@@ -115,6 +127,7 @@ async function dragCenterTo(page: Page, systemId: string, handle: Locator, targe
 
 
 test('the Warden can preview and confirm an unoccupied Orbit center move without losing Orbit drafts', async ({ page }) => {
+  test.setTimeout(60_000)
   await captureMapExportBlobs(page)
   const { systemName, systemId } = await createSingleSystemWorkspace(page)
   const map = wardenMap(page)
