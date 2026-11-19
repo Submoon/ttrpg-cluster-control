@@ -285,6 +285,11 @@ test('the default player reader opens shared links and files with one camera and
     if (await systemZoom.isDisabled()) break
     await systemZoom.click()
   }
+  await harborMarker.press('Enter')
+  const inspector = page.getByRole('dialog', { name: 'Player details', exact: true })
+  await inspector.getByRole('button', { name: 'Return to map', exact: true }).click()
+  // Center the actual object so its complete label fits before testing zoom-preserving search.
+  await system.getByRole('button', { name: 'Center selection', exact: true }).click()
   let harborAnchor = await readPlayerMarkerAnchor(harborMarker)
   for (let step = 0; step < 12 && isPlayerAnchorInsideMap(harborAnchor); step += 1) {
     const horizontalOffset = harborAnchor.x - (harborAnchor.left + harborAnchor.right) / 2
@@ -314,7 +319,6 @@ test('the default player reader opens shared links and files with one camera and
   const search = page.getByRole('dialog', { name: 'Search player map', exact: true })
   await search.getByRole('combobox').fill('Harbor World')
   await search.getByRole('option', { name: /Harbor World/ }).click()
-  const inspector = page.getByRole('dialog', { name: 'Player details', exact: true })
   const details = inspector.getByRole('region', { name: 'Player object details', exact: true })
   await expect(details).toContainText('A calm world with a sheltered landing basin.')
   await expect(system.locator('[data-map-search-locator]')).toHaveCount(0)
@@ -346,9 +350,10 @@ test('the default player reader opens shared links and files with one camera and
   await expect(markerOutline).not.toHaveCSS('stroke', 'rgba(0, 0, 0, 0)')
   await expect(searchLocator).toBeVisible()
   await page.getByRole('button', { name: 'Map files', exact: true }).click()
-  await page.getByRole('radio', { name: 'Selected system', exact: true }).click()
+  const imageFiles = page.getByRole('dialog', { name: 'Map files', exact: true })
+  await imageFiles.getByRole('radio', { name: /^selected system$/i }).click()
   const svgDownloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export Selected system SVG', exact: true }).click()
+  await imageFiles.getByRole('button', { name: 'Export Selected system SVG', exact: true }).click()
   const svgDownload = await svgDownloadPromise
   const exportedSvg = await readFile(await svgDownload.path(), 'utf8')
   for (const publicName of ['Public Star', 'Harbor World', 'Quiet Moon', 'Unknown presence']) {
@@ -403,17 +408,17 @@ test('the default player reader opens shared links and files with one camera and
   await expect(remoteMarker).not.toHaveClass(/player-continuous-object--dimmed/)
   await expect(searchLocator).toHaveCount(0)
   await page.getByRole('button', { name: 'Map files', exact: true }).click()
-  await page.getByRole('radio', { name: 'Entire Cluster', exact: true }).click()
+  await imageFiles.getByRole('radio', { name: /^entire cluster$/i }).click()
   const overviewDownload = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export Entire Cluster SVG', exact: true }).click()
+  await imageFiles.getByRole('button', { name: 'Export Entire Cluster SVG', exact: true }).click()
   const overviewSvg = await readFile(await (await overviewDownload).path(), 'utf8')
   expect(overviewSvg).toContain('Public System')
   expect(overviewSvg).toContain('Remote System')
   expect(overviewSvg).toContain('class="cluster-route-line"')
   expect(overviewSvg).not.toContain('Harbor World')
-  await page.getByRole('radio', { name: 'Selected system', exact: true }).click()
+  await imageFiles.getByRole('radio', { name: /^selected system$/i }).click()
   const pendingDownload = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export Selected system PNG', exact: true }).click()
+  await imageFiles.getByRole('button', { name: 'Export Selected system PNG', exact: true }).click()
   const download = await pendingDownload
   expect(download.suggestedFilename()).toMatch(/\.png$/i)
   expect((await readFile(await download.path())).subarray(0, 8))
@@ -557,7 +562,8 @@ test('the default player reader opens shared links and files with one camera and
   await expect(continuousGlyph).toHaveCSS('fill', 'rgb(161, 59, 124)')
   const mapFiles = page.getByRole('button', { name: 'Map files', exact: true })
   await mapFiles.click()
-  const viewportScope = page.getByRole('radio', { name: /^current viewport$/i })
+  const imageFiles = page.getByRole('dialog', { name: 'Map files', exact: true })
+  const viewportScope = imageFiles.getByRole('radio', { name: /^current viewport$/i })
   await viewportScope.click()
   await expect(viewportScope).toBeChecked()
   const paintedViewport = await continuousScene.evaluate(element => {
@@ -571,7 +577,7 @@ test('the default player reader opens shared links and files with one camera and
     return [start.x, start.y, end.x - start.x, end.y - start.y]
   })
   const viewportDownload = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export Current viewport SVG', exact: true }).click()
+  await imageFiles.getByRole('button', { name: 'Export Current viewport SVG', exact: true }).click()
   const viewportSvg = await readFile(await (await viewportDownload).path(), 'utf8')
   expect(viewportSvg).toContain('fill="#A13B7C"')
   const exportedViewport = viewportSvg.match(/viewBox="([^"]+)"/)?.[1]?.split(' ').map(Number)
