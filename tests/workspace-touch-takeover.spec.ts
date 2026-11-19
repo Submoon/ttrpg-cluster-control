@@ -166,6 +166,8 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
   const map = wardenMap(page)
   const star = wardenObjectMark(page, systemId, primaryObjectId)
   const starPoint = async (id: number) => {
+    // Add controls can still cover the map briefly while their closing animation settles.
+    await expect.poll(() => exposedContinuousObjectHitPoint(star)).not.toBeNull()
     const point = await exposedContinuousObjectHitPoint(star)
     if (!point) throw new Error('The primary Star must expose a touch target on the live Warden map.')
     return { id, ...point }
