@@ -18,14 +18,33 @@ async function orbitScreenPoint(
 ): Promise<{ x: number; y: number }> {
   return ring.evaluate((element, angle) => {
     if (!(element instanceof SVGEllipseElement)) throw new Error('The Orbit wheel target is not an ellipse.')
+    const systemId = element.getAttribute('data-system-id')
+    const orbitId = element.getAttribute('data-orbit-id')
+    if (!systemId || !orbitId) throw new Error('The Orbit wheel target has no owner-qualified identity.')
     const transform = element.getScreenCTM()
     if (!transform) throw new Error('Could not measure the Warden Orbit wheel target.')
-    const local = new DOMPoint(
-      element.cx.baseVal.value + element.rx.baseVal.value * Math.cos(angle),
-      element.cy.baseVal.value + element.ry.baseVal.value * Math.sin(angle),
+    const rx = element.rx.baseVal.value
+    const ry = element.ry.baseVal.value
+    const screenRadius = Math.max(
+      Math.hypot(transform.a * rx, transform.b * rx),
+      Math.hypot(transform.c * ry, transform.d * ry),
     )
-    const screen = local.matrixTransform(transform)
-    return { x: Math.round(screen.x), y: Math.round(screen.y) }
+    const sampleCount = Math.max(64, Math.ceil(4 * Math.PI * screenRadius))
+    // A mathematical ellipse point can fall in a dash gap or behind an edit handle.
+    for (let sample = 0; sample < sampleCount; sample += 1) {
+      const offset = Math.ceil(sample / 2) * (sample % 2 ? 1 : -1) * Math.PI * 2 / sampleCount
+      const screen = new DOMPoint(
+        element.cx.baseVal.value + rx * Math.cos(angle + offset),
+        element.cy.baseVal.value + ry * Math.sin(angle + offset),
+      ).matrixTransform(transform)
+      for (const dx of [0, -1, 1]) {
+        for (const dy of [0, -1, 1]) {
+          const point = { x: Math.round(screen.x) + dx, y: Math.round(screen.y) + dy }
+          if (document.elementFromPoint(point.x, point.y) === element) return point
+        }
+      }
+    }
+    throw new Error(`Orbit ${orbitId} in system ${systemId} has no frontmost painted ring pixel for native wheel input.`)
   }, angle)
 }
 
@@ -83,11 +102,13 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
       tag: target?.tagName,
       className: target instanceof Element ? target.getAttribute('class') : null,
       orbitId: target instanceof Element ? target.closest('.continuous-warden-orbit-target')?.getAttribute('data-orbit-id') : null,
+      systemId: target instanceof Element ? target.closest('.continuous-warden-orbit-target')?.getAttribute('data-system-id') : null,
       mapContainsTarget: target instanceof Element && map.contains(target),
     }
   }, wheelPoint)
   expect(wheelHitTarget.mapContainsTarget).toBe(true)
   expect(wheelHitTarget.orbitId).toBe(orbitId)
+  expect(wheelHitTarget.systemId).toBe(systemId)
 
   // Preserve one history-grouping window despite variable real browser-event delivery latency.
   const futurePageEpoch = await page.evaluate(() => Date.now() + 10_000)
@@ -96,6 +117,10 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
     await page.keyboard.down('Control')
     await page.mouse.move(wheelPoint.x, wheelPoint.y)
     await page.mouse.wheel(0, 100)
+    await expect(rotate).toHaveAttribute('aria-valuenow', String((initialRotation + 5) % 360))
+    // The first rotation moves dashed paint; measure the next native hit from that live preview.
+    const nextWheelPoint = await orbitScreenPoint(ring, 0.7)
+    await page.mouse.move(nextWheelPoint.x, nextWheelPoint.y)
     await page.mouse.wheel(0, 100)
     await page.keyboard.up('Control')
     await page.clock.runFor(32)
@@ -103,6 +128,7 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
     await expect(undo).toBeDisabled()
     await expect(workspaceZoomOutput(page)).toHaveText(initialZoom ?? '100%')
   } finally {
+    await page.keyboard.up('Control')
     await page.clock.resume()
   }
   await expect(undo).toBeEnabled()

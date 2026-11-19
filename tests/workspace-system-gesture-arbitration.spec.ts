@@ -182,31 +182,50 @@ async function orbitDragPoints(
   angle: number,
 ): Promise<{ start: ScreenPoint; end: ScreenPoint }> {
   return orbitTarget.evaluate((element, target) => {
-    const ellipse = element as SVGEllipseElement
+    if (!(element instanceof SVGEllipseElement)) throw new Error('The Orbit input target is not an ellipse.')
+    const ellipse = element
+    const systemId = ellipse.getAttribute('data-system-id')
+    const orbitId = ellipse.getAttribute('data-orbit-id')
+    if (!systemId || !orbitId) throw new Error('The Orbit input target has no owner-qualified identity.')
     const transform = ellipse.getScreenCTM()
     if (!transform) throw new Error('The Orbit hit target is not attached to the map.')
     const cx = Number(ellipse.getAttribute('cx'))
     const cy = Number(ellipse.getAttribute('cy'))
     const rx = Number(ellipse.getAttribute('rx'))
     const ry = Number(ellipse.getAttribute('ry'))
-    const screenPoint = (factor: number) => new DOMPoint(
-      cx + rx * factor * Math.cos(target.angle),
-      cy + ry * factor * Math.sin(target.angle),
-    ).matrixTransform(transform)
-    const requestedStart = screenPoint(1)
-    const start = { x: Math.round(requestedStart.x), y: Math.round(requestedStart.y) }
-    const end = screenPoint(target.scale)
-    if (document.elementFromPoint(start.x, start.y) !== element) {
-      throw new Error('The Orbit input point does not hit its visible Warden ring.')
-    }
     const map = element.closest('svg')
-    if (!map?.contains(document.elementFromPoint(end.x, end.y))) {
-      throw new Error('The Orbit drag endpoint is outside the visible Warden map.')
+    const screenRadius = Math.max(
+      Math.hypot(transform.a * rx, transform.b * rx),
+      Math.hypot(transform.c * ry, transform.d * ry),
+    )
+    // Sample at most half a CSS pixel apart, preferring the requested angle over distant paint.
+    // Native hits must land on the dashed ring itself; axis handles would change the drag's meaning.
+    const sampleCount = Math.max(64, Math.ceil(4 * Math.PI * screenRadius))
+    const inverse = transform.inverse()
+    for (let sample = 0; sample < sampleCount; sample += 1) {
+      const offset = Math.ceil(sample / 2) * (sample % 2 ? 1 : -1) * Math.PI * 2 / sampleCount
+      const point = new DOMPoint(cx + rx * Math.cos(target.angle + offset), cy + ry * Math.sin(target.angle + offset))
+        .matrixTransform(transform)
+      for (const dx of [0, -1, 1]) {
+        for (const dy of [0, -1, 1]) {
+          const start = { x: Math.round(point.x) + dx, y: Math.round(point.y) + dy }
+          if (document.elementFromPoint(start.x, start.y) !== ellipse) continue
+          const localStart = new DOMPoint(start.x, start.y).matrixTransform(inverse)
+          const destination = new DOMPoint(
+            cx + (localStart.x - cx) * target.scale,
+            cy + (localStart.y - cy) * target.scale,
+          ).matrixTransform(transform)
+          const end = { x: Math.round(destination.x), y: Math.round(destination.y) }
+          const reachable = Array.from({ length: 7 }, (_, step) => {
+            const x = start.x + (end.x - start.x) * step / 6
+            const y = start.y + (end.y - start.y) * step / 6
+            return map?.contains(document.elementFromPoint(x, y))
+          }).every(Boolean)
+          if (reachable) return { start, end }
+        }
+      }
     }
-    return {
-      start: { x: start.x, y: start.y },
-      end: { x: end.x, y: end.y },
-    }
+    throw new Error(`Orbit ${orbitId} in system ${systemId} has no frontmost painted ring hit with an unobstructed native drag path.`)
   }, { scale, angle })
 }
 
