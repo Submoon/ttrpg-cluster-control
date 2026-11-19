@@ -171,10 +171,16 @@ test('system Add immediately places on repeated clicks and preserves each placem
       geometry: ['cx', 'cy', 'rx', 'ry', 'transform'].map(attribute => ellipse.getAttribute(attribute)),
     })))
     let previous = await readRings()
+    await expect(quitAdd).toBeVisible()
+    await quitAdd.focus()
+    await expect(quitAdd).toBeFocused()
     for (const count of [1, 2, 3]) {
       await expect(quitAdd).toBeVisible()
       const point = await hostPoint()
       await page.mouse.click(point.x, point.y)
+      if (count === 1) {
+        await expect.poll(() => map.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true)
+      }
       await expect(rings).toHaveCount(count)
       const current = await readRings()
       expect(current).toEqual(expect.arrayContaining(previous))
