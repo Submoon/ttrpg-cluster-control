@@ -195,6 +195,7 @@
               :id="controlId(`playerFieldMask:${nativeFieldIds.atmosphere}`)"
               :model-value="isPlayerFieldMasked(nativeFieldIds.atmosphere)"
               label="Hide this value from players"
+              aria-label="Hide this value from players"
               aria-description="For Atmosphere."
               @update:model-value="value => updatePlayerFieldMask(nativeFieldIds.atmosphere, value)"
             />
@@ -212,6 +213,7 @@
               :id="controlId(`playerFieldMask:${nativeFieldIds.portClass}`)"
               :model-value="isPlayerFieldMasked(nativeFieldIds.portClass)"
               label="Hide this value from players"
+              aria-label="Hide this value from players"
               aria-description="For Port class."
               @update:model-value="value => updatePlayerFieldMask(nativeFieldIds.portClass, value)"
             />
@@ -278,6 +280,7 @@
               :id="controlId(`playerFieldMask:${field.id}`)"
               :model-value="isPlayerFieldMasked(field.id)"
               label="Hide this value from players"
+              aria-label="Hide this value from players"
               :aria-description="`For ${field.name}.`"
               @update:model-value="value => updatePlayerFieldMask(field.id, value)"
             />

@@ -362,12 +362,12 @@ test('Warden system images keep applied geometry through drafts and preserve the
 
   const orbitId = 'ticket28-preview-unoccupied-orbit'
   await map.locator(`.continuous-warden-orbit-target[data-orbit-id="${orbitId}"]`).press('Enter')
+  const passenger = wardenObjectMark(page, system.id, 'ticket28-preview-transfer-moon')
+  const passengerBefore = await passenger.getAttribute('transform')
   await inspector.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await selectInspectorOption(inspector.getByLabel('Host', { exact: true }), 'A, Primary Star (Star)')
   await inspector.getByLabel('Horizontal radius', { exact: true }).fill('220')
   await inspector.getByLabel('Vertical radius', { exact: true }).fill('180')
-  const passenger = wardenObjectMark(page, system.id, 'ticket28-preview-transfer-moon')
-  const passengerBefore = await passenger.getAttribute('transform')
   await inspector.getByRole('button', { name: 'Preview placement', exact: true }).click()
   await expect(inspector.getByRole('status').filter({ hasText: /Preview ready/i })).toBeVisible()
   await expect(passenger).not.toHaveAttribute('transform', passengerBefore ?? '')

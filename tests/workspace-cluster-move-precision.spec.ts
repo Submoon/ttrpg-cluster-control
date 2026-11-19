@@ -60,8 +60,14 @@ test('Move System previews map and keyboard destinations, cancels without changi
   await page.mouse.click(selectionPoint.x, selectionPoint.y)
   await expect(sourceNode).toHaveClass(/is-selected/)
   await expect(inspector).toBeHidden()
-  const originalTransform = await sourceNode.getAttribute('transform')
-  expect(originalTransform).toBeTruthy()
+  const anchorPosition = () => sourceNode.evaluate(element => {
+    const transforms = (element as SVGGElement).transform.baseVal
+    if (!transforms.numberOfItems) throw new Error('The system anchor has no scene translation.')
+    // The following badge scale tracks the camera independently of this scene translation.
+    const matrix = transforms.getItem(0).matrix
+    return { x: matrix.e, y: matrix.f }
+  })
+  const originalAnchor = await anchorPosition()
 
   await expect(page.getByRole('textbox', { name: /System position [XY]/ })).toHaveCount(0)
   const moveOnMap = workspaceNavigation(page).getByRole('button', { name: 'Move selected system on map', exact: true })
@@ -71,19 +77,19 @@ test('Move System previews map and keyboard destinations, cancels without changi
   await expect.poll(() => clusterMap.evaluate(map => document.activeElement === map)).toBe(true)
   await clickNormalizedClusterPoint(page, clusterMap, mapTarget)
   await expect(mapContext.locator('.workspace-add-status')).toContainText(/move.*preview/i)
-  await expect(sourceNode).not.toHaveAttribute('transform', originalTransform!)
+  await expect.poll(anchorPosition).not.toEqual(originalAnchor)
   const afterMapPreview = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterMapPreview).toEqual(beforeMove)
 
   await page.getByRole('button', { name: 'Cancel system move', exact: true }).click()
-  await expect(sourceNode).toHaveAttribute('transform', originalTransform!)
+  await expect.poll(anchorPosition).toEqual(originalAnchor)
   const afterMapCancel = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterMapCancel).toEqual(beforeMove)
 
   await moveOnMap.click()
   await page.keyboard.press('ArrowRight')
   await expect(mapContext.locator('.workspace-add-status')).toContainText(/move.*preview/i)
-  await expect(sourceNode).not.toHaveAttribute('transform', originalTransform!)
+  await expect.poll(anchorPosition).not.toEqual(originalAnchor)
   await page.getByRole('button', { name: 'Confirm system move', exact: true }).click()
   const afterConfirm = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterConfirm.cluster?.systems).toHaveLength(beforeMove.cluster?.systems.length ?? 0)
