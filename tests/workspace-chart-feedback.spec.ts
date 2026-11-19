@@ -1,5 +1,21 @@
 import { expect, test } from './fixtures'
-import { abortNextWorkspaceWrite, activeWorkspaceFeedback, addCatalogueObject, hideWorkspaceInspector, openChartDetailsEditor, openWorkspaceHierarchy, waitForWorkspaceSaved } from './helpers'
+import {
+  abortNextWorkspaceWrite,
+  activeWorkspaceFeedback,
+  captureMapExportBlobs,
+  clickWardenSystemPoint,
+  createSingleSystemWorkspace,
+  downloadJson,
+  exposedContinuousObjectHitPoint,
+  hideWorkspaceInspector,
+  openChartDetailsEditor,
+  openWorkspaceHierarchy,
+  quitSystemAdd,
+  selectCatalogueObjectButton,
+  waitForWorkspaceSaved,
+  wardenMap,
+  wardenObjectMark,
+} from './helpers'
 
 async function closeCompactPanels(page: import('@playwright/test').Page): Promise<void> {
   const inspectorClose = page.getByRole('button', { name: 'Close inspector panel', exact: true })
@@ -12,16 +28,25 @@ async function closeCompactPanels(page: import('@playwright/test').Page): Promis
 }
 
 test('explicit Fit keeps a lower-right planet reachable beside failed-save feedback and a hidden chart draft', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 500 })
   await page.emulateMedia({ colorScheme: 'dark' })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster', { exact: true }).fill('Kestrel Reach')
-  await page.getByLabel('First star system', { exact: true }).fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await captureMapExportBlobs(page)
+  const { systemId } = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
   await waitForWorkspaceSaved(page)
 
-  await addCatalogueObject(page, 'planet', { noSelection: true, target: { kind: 'free', x: 0.9, y: 0.9 } })
+  await (await selectCatalogueObjectButton(page, 'planet')).click()
+  const delivered = await clickWardenSystemPoint(page, systemId, { x: 0.9, y: 0.9 })
+  await page.getByRole('dialog', { name: 'Choose the owning system', exact: true })
+    .getByRole('button', { name: 'Add Planet to Vesper', exact: true }).click()
+  await quitSystemAdd(page)
   await waitForWorkspaceSaved(page)
+  const exported = await downloadJson(page, 'Export Jump Cluster JSON')
+  const addedPlanet = exported.cluster?.systems.find(system => system.id === systemId)
+    ?.objects.find(object => object.subtype === 'planet')
+  if (!addedPlanet) throw new Error('The compact feedback check needs its applied lower-right Planet.')
+  if (addedPlanet.placement.kind !== 'system') throw new Error('The lower-right Planet needs a free map position.')
+  expect(addedPlanet.placement.x).toBeCloseTo(delivered.x, 5)
+  expect(addedPlanet.placement.y).toBeCloseTo(delivered.y, 5)
+  await page.setViewportSize({ width: 390, height: 500 })
   await closeCompactPanels(page)
 
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
@@ -32,7 +57,7 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   await waitForWorkspaceSaved(page)
   await closeCompactPanels(page)
 
-  const systemMap = page.locator('.system-map-content')
+  const systemMap = wardenMap(page).locator('.cluster-map-content')
   const cameraBeforeFeedback = await systemMap.getAttribute('transform')
   const appliedEditor = await openChartDetailsEditor(page)
   await appliedEditor.getByLabel('Jump Cluster', { exact: true }).fill('Applied recovery reach')
@@ -51,7 +76,7 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
   await expect(activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft', exact: true })).toBeVisible()
   await expect(systemMap).toHaveAttribute('transform', cameraBeforeFeedback!)
 
-  const systemHierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
+  const systemHierarchy = await openWorkspaceHierarchy(page)
   await systemHierarchy.getByRole('button', { name: 'Open Jump Cluster details', exact: true }).click()
   await expect(page.getByRole('region', { name: 'Jump Cluster details', exact: true })).toBeVisible()
   const compactRecovery = page.getByRole('region', { name: 'Workspace save and recovery' })
@@ -82,16 +107,13 @@ test('explicit Fit keeps a lower-right planet reachable beside failed-save feedb
 
   await page.getByRole('button', { name: 'Select', exact: true }).click()
   await page.getByRole('button', { name: 'Fit map', exact: true }).click()
-  const planet = page.getByRole('button', { name: /^Select PL-01, New planet 1 \(/ })
+  const planet = wardenObjectMark(page, systemId, addedPlanet.id)
   await expect(planet).toBeVisible()
-  const ordinaryHit = await planet.evaluate(element => {
-    const bounds = element.getBoundingClientRect()
-    const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
-    return hit === element || element.contains(hit)
-  })
-  expect(ordinaryHit).toBe(true)
+  const ordinaryHit = await exposedContinuousObjectHitPoint(planet)
+  expect(ordinaryHit).not.toBeNull()
+  if (!ordinaryHit) throw new Error('Fit must leave a real pointer target on the lower-right Planet.')
 
-  await planet.click()
+  await page.mouse.click(ordinaryHit.x, ordinaryHit.y)
   const guard = page.getByRole('dialog', { name: 'Edit Jump Cluster details' })
   await expect(guard.getByRole('button', { name: 'Stay here', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()

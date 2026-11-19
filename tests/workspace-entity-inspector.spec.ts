@@ -83,7 +83,7 @@ test('object Inspectors follow selection and apply, discard, and reset marker co
     if (!glyph) throw new Error('The applied SVG must include the original Star.')
     return glyph.style.fill
   }, { text: image.text, ownerId: systemId, objectId: primaryObjectId })
-  expect(exportedStarFill).toBe('')
+  expect(exportedStarFill).toBe(appliedStarFill)
   const beforeApply = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(beforeApply.cluster?.systems.find(system => system.id === systemId)
     ?.objects.find(object => object.id === primaryObjectId)?.markerColor).toBeUndefined()
