@@ -312,11 +312,13 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
   await expect(previewMap).toBeVisible()
   await expect(previewName).toHaveAccessibleName('Select Unapplied Vesper')
 
-  const exported = await downloadJson(page, 'Export star system JSON')
-  expect(exported.type).toBe('system')
-  expect(exported.system?.name).toBe('Vesper')
-  expect(exported.system?.objects.filter(object => object.subtype === 'jump-point')).toHaveLength(1)
-  expect(exported.system?.objects.some(object => object.name === 'Unapplied Vesper')).toBe(false)
+  const exported = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(exported.type).toBe('cluster')
+  expect(exported.cluster?.name).toBe('Kestrel Reach')
+  const appliedSystem = exported.cluster?.systems.find(system => system.id === systemId)
+  expect(appliedSystem?.name).toBe('Vesper')
+  expect(appliedSystem?.objects.filter(object => object.subtype === 'jump-point')).toHaveLength(1)
+  expect(appliedSystem?.objects.some(object => object.name === 'Unapplied Vesper')).toBe(false)
 })
 
 
@@ -337,7 +339,7 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
     expect(await beforeUnloadIsPrevented(page)).toBe(true)
     await editor.getByRole('button', { name: 'Apply details' }).click()
     await expect(editor).toBeHidden()
-    const inspector = page.getByRole('dialog', { name: 'Jump Route inspector', exact: true })
+    const inspector = page.getByRole('dialog', { name: 'Jump Cluster details', exact: true })
     await expect(inspector).toBeVisible()
     await expect(inspector.getByRole('heading', { name: 'Current Reach' })).toBeVisible()
     const compactRecovery = page.getByRole('region', { name: 'Workspace save and recovery' })
@@ -385,9 +387,12 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
     expect(saved.cluster.systems.map(system => system.name)).toEqual(['Vesper Prime'])
     expect(saved.cluster.systems[0]?.objects.filter(object => object.name.startsWith('New jump point'))).toHaveLength(1)
     await page.reload()
-    await openWorkspaceHierarchy(page)
-    await expect(page.getByRole('complementary', { name: 'Jump Cluster contents' })
-      .getByRole('treeitem', { name: /New jump point/ })).toBeVisible()
+    const restoredHierarchy = await openWorkspaceHierarchy(page)
+    const restoredSystem = restoredHierarchy.getByRole('treeitem', { name: 'Vesper Prime', exact: true })
+    if (await restoredSystem.getAttribute('aria-expanded') !== 'true') {
+      await restoredSystem.getByRole('button', { name: 'Expand Vesper Prime', exact: true }).click()
+    }
+    await expect(restoredHierarchy.getByRole('treeitem', { name: /New jump point/ })).toBeVisible()
   } finally {
     await releaseChartWriteGate(page)
   }

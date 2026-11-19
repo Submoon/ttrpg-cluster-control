@@ -137,7 +137,7 @@ test('a Warden shares applied player text and marker color while keeping drafts 
   await imageFiles.getByRole('button', { name: 'Export Selected system SVG', exact: true }).click()
   const previewSvg = await readFile(await (await previewDownload).path(), 'utf8')
   expect(previewSvg).toContain('Pilgrim World')
-  expect(previewSvg).toContain('fill="#A151BF"')
+  expect(previewSvg).toMatch(/fill="#a151bf"/i)
   expect(previewSvg).not.toContain('Primary Star')
   expect(previewSvg.toLowerCase()).not.toContain('#22664c')
   await preview.getByRole('button', { name: 'Map files', exact: true }).click()

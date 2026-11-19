@@ -16,6 +16,8 @@ import {
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
   wardenObjectMark,
+  wardenLocalCoordinates,
+  wardenMap,
   workspaceNavigation,
   workspaceZoomControls,
 } from './helpers'
@@ -587,6 +589,9 @@ freshTest('the default Warden map moves a group across owning systems and restor
     [otherOwner.id]: { x: .53, y: .5 },
   }
   otherOwnerObject.placement = { kind: 'system', x: .63, y: .59 }
+  const destinationOrbitId = 'group-arrival-destination-orbit'
+  otherOwner.orbits.push({ id: destinationOrbitId, hostId: null, center: { x: .73, y: .7 }, order: 1 })
+  fixture.layout.orbitRadii[destinationOrbitId] = { horizontal: 55, vertical: 40 }
   const [picker] = await Promise.all([
     page.waitForEvent('filechooser'),
     page.getByRole('button', { name: 'Open local Jump Cluster backup', exact: true }).click(),
@@ -676,12 +681,24 @@ freshTest('the default Warden map moves a group across owning systems and restor
 
   await setWorkspaceMapMode(page, 'Move')
   const originalTransform = await sourceMark.getAttribute('transform')
-  const start = await exposedContinuousObjectHitPoint(sourceMark)
+  const start = await exposedContinuousObjectHitPoint(otherMark)
   if (!originalTransform || !start) throw new Error('The selected Warden group anchor has no exposed hit target.')
+  const destinationRing = wardenMap(page).locator(`.continuous-warden-orbit-target[data-orbit-id="${destinationOrbitId}"]`)
+  const destinationCoordinates = await wardenLocalCoordinates(page, otherOwner.id)
+  const memberBeforeMove = destinationCoordinates.toClient(await renderedObjectPosition(otherMark))
+  const destinationPoint = destinationCoordinates.toClient({
+    x: Number(await destinationRing.getAttribute('cx')) + Number(await destinationRing.getAttribute('rx')) + 6,
+    y: Number(await destinationRing.getAttribute('cy')),
+  })
+  // Move the member in the uninspected owner onto its fixed Orbit while keeping the group selected.
+  const dragEnd = {
+    x: Math.round(start.x + destinationPoint.x - memberBeforeMove.x),
+    y: Math.round(start.y + destinationPoint.y - memberBeforeMove.y),
+  }
   const moveSelectedGroup = async () => {
     await page.mouse.move(start.x, start.y)
     await page.mouse.down()
-    await page.mouse.move(start.x + 38, start.y + 26, { steps: 5 })
+    await page.mouse.move(dragEnd.x, dragEnd.y, { steps: 5 })
   }
 
   await moveSelectedGroup()
@@ -691,6 +708,10 @@ freshTest('the default Warden map moves a group across owning systems and restor
   await page.mouse.up()
   await expect(sourceMark).toHaveAttribute('transform', originalTransform)
   expect(await downloadJsonFromFile(page, 'Export Jump Cluster JSON')).toEqual(clusterBeforeGroupMove)
+  await openWorkspaceHierarchy(page)
+  await expect(otherBranch).toHaveAttribute('aria-expanded', 'false')
+  await expect(otherRow).toBeHidden()
+  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
 
   await moveSelectedGroup()
   await expect(page.getByRole('status').filter({ hasText: /Moving 2 selected objects/ })).toBeVisible()
@@ -707,8 +728,17 @@ freshTest('the default Warden map moves a group across owning systems and restor
   expect(groupObjectState(clusterAfterGroupMove, otherOwner.id, otherOwnerObject.id))
     .not.toEqual(groupObjectState(clusterBeforeGroupMove, otherOwner.id, otherOwnerObject.id))
   expect(movedAcrossSystemObject).toBeDefined()
+  expect(movedAcrossSystemObject?.placement).toEqual({ kind: 'orbit', orbitId: destinationOrbitId })
   expect(groupObjectState(clusterAfterGroupMove, sourceOwner.id, sourceObject.id))
     .not.toEqual(groupObjectState(clusterBeforeGroupMove, sourceOwner.id, sourceObject.id))
+  await openWorkspaceHierarchy(page)
+  await expect(otherBranch).toHaveAttribute('aria-expanded', 'true')
+  await expect(hierarchy.getByRole('treeitem', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }))
+    .toHaveAttribute('aria-expanded', 'true')
+  await expect(otherRow).toBeVisible()
+  await expect(otherRow).toHaveAttribute('aria-selected', 'true')
+  await expect(sourceRow).toHaveAttribute('aria-selected', 'true')
+  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
 
   const undo = page.getByRole('button', { name: /^Undo: Move selected objects/ })
   const redo = page.getByRole('button', { name: /^Redo: Move selected objects/ })
