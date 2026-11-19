@@ -1468,7 +1468,9 @@ const creationTypeLabel = computed(() => {
 const clusterAddPresentation = computed(() => orbitAddArmed.value
   ? {
       label: 'Orbit',
-      status: 'ADD Orbit · Choose a host or clear map position.',
+      status: creationSession.value?.type.kind === 'orbit' && creationSession.value.notice
+        ? `ADD Orbit · ${creationSession.value.notice}`
+        : 'ADD Orbit · Choose a host or clear map position.',
       error: editorError.value || undefined,
     }
   : continuousObjectAddType.value !== null
