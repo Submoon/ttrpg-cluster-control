@@ -73,8 +73,6 @@
             <g
               v-if="detailSystemIds.has(projection.id)"
               class="continuous-warden-system-detail"
-              :aria-hidden="detailSystemIds.has(projection.id) ? undefined : 'true'"
-              :inert="!detailSystemIds.has(projection.id)"
               :transform="systemTransform(projection)"
             >
               <g class="system-orbits">

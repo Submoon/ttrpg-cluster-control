@@ -633,9 +633,15 @@ test('the default player reader opens shared links and files with one camera and
 
   await revealHarbor()
   await expect(objectMarker).toBeVisible()
+  const objectLayer = continuousMap.locator(`.player-continuous-system[data-player-system-id="${revealedMarker.id}"] .player-continuous-system-detail`)
+  await expect(objectLayer).not.toHaveAttribute('inert')
   await objectMarker.focus()
-  for (let step = 0; step < 24 && await objectMarker.count() > 0; step += 1) await objectMarker.press('-')
-  await expect(objectMarker).toHaveCount(0)
+  await expect(objectMarker).toBeFocused()
+  for (let step = 0; step < 24 && await objectLayer.getAttribute('aria-hidden') !== 'true'; step += 1) {
+    await page.keyboard.press('-')
+  }
+  await expect(objectLayer).toHaveAttribute('inert', '')
+  await expect(objectMarker).toBeHidden()
   await expect(continuousMap.locator(`.player-continuous-name-target[data-player-system-id="${revealedMarker.id}"]`)).toBeFocused()
   await expect(objectDetails).toContainText('Harbor World')
 

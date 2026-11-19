@@ -75,7 +75,7 @@
               class="player-continuous-system-detail"
               :class="{ 'is-exiting': !detailSystemIds.has(system.id) }"
               :aria-hidden="detailSystemIds.has(system.id) ? undefined : 'true'"
-              :inert="!detailSystemIds.has(system.id)"
+              :inert="detailSystemIds.has(system.id) ? undefined : ''"
             >
             <g class="player-continuous-system-orbits" aria-hidden="true">
               <ellipse
