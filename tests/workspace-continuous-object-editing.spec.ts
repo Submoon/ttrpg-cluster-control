@@ -4,6 +4,7 @@ import {
   createSingleSystemWorkspace,
   dockAction,
   downloadJson,
+  exposedContinuousObjectHitPoint,
   quitSystemAdd,
   selectCatalogueObjectButton,
   selectInspectorOption,
@@ -13,16 +14,6 @@ import {
 } from './helpers'
 
 type ScreenPoint = { x: number; y: number }
-
-async function screenOrigin(locator: import('@playwright/test').Locator): Promise<ScreenPoint> {
-  return locator.evaluate((element) => {
-    if (!(element instanceof SVGGraphicsElement)) throw new Error('The target is not SVG geometry.')
-    const transform = element.getScreenCTM()
-    if (!transform) throw new Error('The target is not attached to an SVG scene.')
-    const point = new DOMPoint(0, 0).matrixTransform(transform)
-    return { x: point.x, y: point.y }
-  })
-}
 
 async function screenOrbitPoint(orbit: import('@playwright/test').Locator): Promise<ScreenPoint> {
   return orbit.evaluate((element) => {
@@ -202,7 +193,10 @@ test('continuous Add keeps a definite owner, uses local geometry, and asks befor
 
   const addedMark = map.locator(`.continuous-warden-object[data-system-id="${systemId}"][data-object-id="${freeObject.id}"]`)
   await expect(addedMark).toBeVisible()
-  const occupiedMarkPoint = await screenOrigin(addedMark)
+  // The type dialog can still intercept the map during its closing animation.
+  await expect.poll(() => exposedContinuousObjectHitPoint(addedMark)).not.toBeNull()
+  const occupiedMarkPoint = await exposedContinuousObjectHitPoint(addedMark)
+  if (!occupiedMarkPoint) throw new Error('The free Moon needs an exposed native hit while Habitat Add stays armed.')
   expect(await page.evaluate(point => document.elementFromPoint(point.x, point.y)
     ?.closest('.continuous-warden-object')?.getAttribute('data-object-id'), occupiedMarkPoint)).toBe(freeObject.id)
   await page.mouse.click(occupiedMarkPoint.x, occupiedMarkPoint.y)
