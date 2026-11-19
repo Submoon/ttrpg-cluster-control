@@ -1,20 +1,13 @@
 import { expect, test } from './fixtures'
 import {
+  createSingleSystemWorkspace,
+  openWorkspaceHierarchy,
   selectInspectorOption,
 } from './helpers'
 test('mobile Fields retains an unsaved native-field draft across Back, hide, theme, and reflow', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-
-  const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
-  await expect(hierarchyToggle).toBeVisible()
-  if (await hierarchyToggle.getAttribute('aria-expanded') !== 'true') await hierarchyToggle.click()
-  const hierarchy = page.getByRole('dialog', { name: 'System hierarchy' })
-  await expect(hierarchy).toBeVisible()
-  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
+  const { systemName } = await createSingleSystemWorkspace(page, { viewport: { width: 390, height: 844 } })
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  await hierarchy.getByRole('treeitem', { name: `Select A, Primary Star in ${systemName}`, exact: true }).click()
   const manageFields = page.getByRole('button', { name: 'Manage field definitions' })
   await expect(manageFields).toBeVisible()
   await manageFields.click()
@@ -65,16 +58,9 @@ test('mobile Fields retains an unsaved native-field draft across Back, hide, the
 
 
 test('a type-change review names exact impacts and refreshes after Inspector resolution', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-
-  const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
-  if (await hierarchyToggle.getAttribute('aria-expanded') !== 'true') await hierarchyToggle.click()
-  const hierarchy = page.getByRole('dialog', { name: 'System hierarchy' })
-  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
+  const { systemName } = await createSingleSystemWorkspace(page, { viewport: { width: 390, height: 844 } })
+  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  await hierarchy.getByRole('treeitem', { name: `Select A, Primary Star in ${systemName}`, exact: true }).click()
   const inspector = page.getByRole('dialog', { name: 'Object inspector' })
   await expect(inspector).toBeVisible()
 

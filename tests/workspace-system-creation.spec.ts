@@ -113,7 +113,7 @@ test('system Add immediately places on repeated clicks and preserves each placem
     return point
   }
   const ownerRings = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"]`)
-  const orbitRings = ownerRings.and(map.getByRole('button', { name: /^Orbit \d+ around Primary Star$/ }))
+  const orbitRings = ownerRings.and(map.getByRole('button', { name: /^Select Orbit \d+$/ }))
   const beforeChoosingPlanet = await downloadJson(page, 'Export star system JSON')
   expect(beforeChoosingPlanet.system?.id).toBe(systemId)
   expect(beforeChoosingPlanet.system?.objects).toHaveLength(1)
@@ -211,7 +211,7 @@ test('system Add immediately places on repeated clicks and preserves each placem
 
   await test.step('An Orbit drag released over Quit Add creates the displayed circle once', async () => {
     const quitAdd = page.getByRole('button', { name: 'Quit Add and return to Select' })
-    const firstRing = orbitRings.and(map.getByRole('button', { name: 'Orbit 1 around Primary Star', exact: true }))
+    const firstRing = orbitRings.and(map.getByRole('button', { name: 'Select Orbit 1', exact: true }))
     const start = await hostPoint()
     const preview = map.locator('.orbit-creation-preview-ring')
     const readPaintedGap = () => preview.evaluate((element) => {
@@ -272,7 +272,7 @@ test('system Add immediately places on repeated clicks and preserves each placem
     await expect(quitAdd).toBeVisible()
     const rings = orbitRings
     await expect(rings).toHaveCount(4)
-    const created = orbitRings.and(map.getByRole('button', { name: 'Orbit 4 around Primary Star', exact: true }))
+    const created = orbitRings.and(map.getByRole('button', { name: 'Select Orbit 4', exact: true }))
     await expect(created).toHaveAttribute('rx', radius)
     await expect(created).toHaveAttribute('ry', radius)
     expect(await created.getAttribute('cx')).toBe(await firstRing.getAttribute('cx'))
