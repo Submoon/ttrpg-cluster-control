@@ -503,9 +503,17 @@ test('the default player reader opens shared links and files with one camera and
     throw new Error('The public player document has no Revealed system anchor.')
   }
   const anchor = continuousMap.locator(`.player-continuous-system-anchor[data-player-system-id="${revealedMarker.id}"]`)
+  const playerHierarchy = page.getByRole('complementary', { name: 'Player hierarchy', exact: true })
+  await playerHierarchy.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
+  await expect(playerHierarchy).toBeHidden()
   const anchorBeforeSelect = await readPlayerMarkerAnchor(anchor)
-  await anchor.click()
+  const cameraBeforeSystemSelect = await camera.getAttribute('transform')
+  if (!cameraBeforeSystemSelect) throw new Error('The route-framed public camera is not ready for system selection.')
+  const revealedName = continuousMap.locator(`.player-continuous-name-target[data-player-system-id="${revealedMarker.id}"]`)
+  await revealedName.locator('.player-continuous-name-background').click()
   await expect(anchor).toHaveAttribute('aria-pressed', 'true')
+  await expect(revealedName).toHaveAttribute('aria-pressed', 'true')
+  await expect(camera).toHaveAttribute('transform', cameraBeforeSystemSelect)
   const anchorAfterSelect = await readPlayerMarkerAnchor(anchor)
   expect(Math.hypot(anchorAfterSelect.x - anchorBeforeSelect.x, anchorAfterSelect.y - anchorBeforeSelect.y)).toBeLessThan(1)
 
