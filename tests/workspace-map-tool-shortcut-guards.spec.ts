@@ -1,25 +1,25 @@
 import { expect, test } from './fixtures'
-import { createSingleSystemWorkspace } from './helpers'
+import { createSingleSystemWorkspace, wardenMap, wardenObjectMark } from './helpers'
 
 test('Dock and Inspector text controls keep their own focus and input', async ({ page }) => {
-  await createSingleSystemWorkspace(page)
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page)
 
   const modes = page.getByRole('group', { name: 'Map interaction mode', exact: true })
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
-  const star = map.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true })
-  await modes.getByRole('button', { name: 'Navigate', exact: true }).focus()
-  await page.keyboard.press('n')
+  const map = wardenMap(page)
+  const star = wardenObjectMark(page, systemId, primaryObjectId)
+  await modes.getByRole('button', { name: 'Move', exact: true }).focus()
+  await page.keyboard.press('m')
   await expect(modes.getByRole('button', { name: 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true')
 
-  await star.click()
-  const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
+  await star.press('Enter')
+  const inspector = page.getByRole('region', { name: 'Object inspector', exact: true })
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   const name = inspector.getByLabel('Name', { exact: true })
   await name.focus()
   await name.press('End')
-  await page.keyboard.press('n')
+  await page.keyboard.press('m')
 
-  await expect(name).toHaveValue('Primary Starn')
+  await expect(name).toHaveValue('Primary Starm')
   await expect(modes.getByRole('button', { name: 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await inspector.getByRole('button', { name: /Discard changes/ }).click()
 
@@ -48,6 +48,6 @@ test('Dock and Inspector text controls keep their own focus and input', async ({
   await star.evaluate(mark => mark.querySelector('[data-shortcut-test-host]')?.remove())
 
   await map.focus()
-  await page.keyboard.press('n')
-  await expect(modes.getByRole('button', { name: 'Navigate', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('m')
+  await expect(modes.getByRole('button', { name: 'Move', exact: true })).toHaveAttribute('aria-pressed', 'true')
 })
