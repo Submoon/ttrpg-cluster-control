@@ -1,6 +1,6 @@
 import type { JumpCluster, Point, StarSystem } from '../domain/workspace'
 import { buildContinuousWardenRouteGeometries } from './continuous-warden-routes'
-import type { ContinuousWardenSystemProjection } from './continuous-map-projection'
+import { continuousMapNameTransitionProgress, type ContinuousWardenSystemProjection } from './continuous-map-projection'
 import type { ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
 import { continuousSystemFrames } from './continuous-system-frames'
 import type { MapViewport, SvgViewportRect } from './map-zoom'
@@ -10,6 +10,7 @@ import {
   CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_COUNT,
   CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_SPACING_PIXELS,
   CONTINUOUS_SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS,
+  continuousMapNameLabelFramePosition,
   continuousMapNameLabels,
 } from './continuous-map-name-labels'
 import {
@@ -133,6 +134,7 @@ export async function exportContinuousWardenMapImage(
     request.scope === 'viewport' ? request.viewport : null,
     request.scope === 'viewport' ? request.svgPixelScale : 1,
     request.scope === 'viewport' ? request.viewportRect : null,
+    displayFrames,
   )
   const viewportRouteLabels = request.scope === 'viewport'
     ? placeContinuousMapRouteLabels({
@@ -327,30 +329,53 @@ function layoutSystemNames(
   viewport: MapViewport | null,
   pixelScale: number,
   viewportRect: SvgViewportRect | null,
+  displayFrames: ReadonlyMap<string, SvgViewportRect>,
 ): ExportLabel[] {
   const placementViewport = viewport ?? { x: 0, y: 0, k: 1 }
   const placementRect = viewportRect ?? automaticNamePlacementViewportRect(projections)
   const scale = pixelScale > 0 ? pixelScale : 1
   const projectionsById = new Map(projections.map(projection => [projection.id, projection]))
+  const labelProjections = viewport
+    ? projections.map(projection => ({
+        ...projection,
+        envelope: positiveFrame(displayFrames.get(projection.id))
+          ? displayFrames.get(projection.id)!
+          : projection.envelope,
+      }))
+    : projections
   return continuousMapNameLabels({
-    projections,
+    projections: labelProjections,
     viewport: placementViewport,
     viewportRect: placementRect,
     svgPixelScale: scale,
   }).flatMap(label => {
     const projection = projectionsById.get(label.id)
-    return projection ? [{
+    if (!projection) return []
+    const frame = displayFrames.get(projection.id)
+    const resolvedFrame = positiveFrame(frame) ? frame : projection.envelope
+    const progress = viewport
+      ? continuousMapNameTransitionProgress(resolvedFrame, viewport.k, scale)
+      : 0
+    const position = viewport
+      ? continuousMapNameLabelFramePosition(label, resolvedFrame, viewport, scale, progress)
+      : { x: label.x, y: label.y }
+    return [{
       projection,
       anchor: { x: label.anchorX, y: label.anchorY },
-      centerX: label.x,
-      top: label.y,
+      centerX: position.x,
+      top: position.y,
       width: label.width,
       height: label.height,
       fontSize: systemNameFontPixels / scale,
-      hasLeader: label.hasLeader,
-      leaderY: label.y + label.height / 2,
-    }] : []
+      hasLeader: label.hasLeader && progress < .12,
+      leaderY: position.y + label.height / 2,
+    }]
   })
+}
+
+function positiveFrame(frame: SvgViewportRect | undefined): frame is SvgViewportRect {
+  return !!frame && Number.isFinite(frame.width) && Number.isFinite(frame.height)
+    && frame.width > 0 && frame.height > 0
 }
 
 function automaticNamePlacementViewportRect(

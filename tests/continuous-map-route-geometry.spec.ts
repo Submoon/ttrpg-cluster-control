@@ -77,6 +77,38 @@ test('diagonal route endpoints meet the visible rounded frame arc and clamp radi
   )).toEqual({ x: 0, y: 0 })
 })
 
+test('a rounded corner clipped through a system anchor still resolves a visible route edge @pure', { tag: '@pure' }, () => {
+  const systems = [
+    { id: 'a', anchor: { x: 0, y: 0 }, envelope: { x: -100, y: -100, width: 200, height: 200 } },
+    { id: 'b', anchor: { x: 2, y: 0 }, envelope: { x: -100, y: -100, width: 200, height: 200 } },
+    { id: 'c', anchor: { x: 0, y: 2 }, envelope: { x: -100, y: -100, width: 200, height: 200 } },
+  ]
+  const frames = continuousSystemFrames(systems)
+  const frame = frames.get('a')!
+  expect(frame).toEqual({ x: -100, y: -100, width: 101, height: 101 })
+
+  const endpoint = continuousMapRoundedRectBoundaryPoint(systems[0]!.anchor, frame, systems[1]!.anchor)
+  expect(endpoint).not.toEqual(systems[0]!.anchor)
+  expect(Math.hypot(endpoint.x + 17, endpoint.y + 17)).toBeCloseTo(18, 8)
+  expect(endpoint.x).toBeGreaterThanOrEqual(-17)
+  expect(endpoint.y).toBeGreaterThanOrEqual(-17)
+
+  const routeGeometry = buildContinuousMapRouteGeometries([{
+    id: 'route-from-clipped-anchor',
+    fromSystemId: 'a',
+    toSystemId: 'b',
+    start: endpoint,
+    end: systems[1]!.anchor,
+  }]).get('route-from-clipped-anchor')
+  expect(routeGeometry?.start).toEqual(endpoint)
+  expect(routeGeometry && [
+    routeGeometry.bounds.x,
+    routeGeometry.bounds.y,
+    routeGeometry.bounds.width,
+    routeGeometry.bounds.height,
+  ].every(Number.isFinite)).toBe(true)
+})
+
 test('edge-touching system frames produce coincident but distinct selectable route paths @pure', { tag: '@pure' }, () => {
   const systems = [
     { id: 'a', anchor: { x: 50, y: 40 }, envelope: { x: 0, y: 0, width: 100, height: 80 } },

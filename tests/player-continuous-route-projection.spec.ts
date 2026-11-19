@@ -199,7 +199,6 @@ test('generic public system markers keep their authorized anchors without frame 
       id: 'anonymous-endpoint',
       jumpLevel: 1,
       fromSystemId: 'system-1',
-      fromPointId: null,
       destination: { kind: 'system', systemId: 'system-2' },
     },
   ]
