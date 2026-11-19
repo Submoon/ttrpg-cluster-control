@@ -11,6 +11,8 @@ import {
 } from './map-image-scope'
 import { playerMapPaint, type PlayerMapPaint } from './player-map-image-export'
 import { layoutPlayerContinuousNameLabels, type PlayerContinuousNameLabel } from './player-continuous-map-layout'
+import { continuousMapNameLabelFramePosition } from './continuous-map-name-labels'
+import { continuousMapNameTransitionProgress } from './continuous-map-projection'
 import { projectPlayerContinuousMap, type PlayerContinuousSystemProjection } from './player-continuous-map-projection'
 import { projectPlayerContinuousRouteEndpoints, type PlayerContinuousRouteDescriptor } from './player-continuous-route-projection'
 import { buildContinuousMapRouteGeometries, type ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
@@ -93,9 +95,32 @@ export function serializeContinuousPlayerMapImage(
     ])),
   ]) ?? fallbackBounds
   const nameViewport = snapshot?.nameViewport ?? automaticNameViewport(displayedSystems, geometryBounds)
+  const nameSystems = snapshot
+    ? displayedSystems.map((system) => {
+        if (!system.geometry) return system
+        const frame = displayFrames.get(system.id)
+        return {
+          ...system,
+          geometry: {
+            ...system.geometry,
+            envelope: positiveFrame(frame) ? frame : system.geometry.envelope,
+          },
+        }
+      })
+    : displayedSystems
+  const nameSystemsById = new Map(nameSystems.map(system => [system.id, system]))
   const names = layoutPlayerContinuousNameLabels(
-    displayedSystems, camera, svgPixelScale, nameViewport,
-  )
+    nameSystems, camera, svgPixelScale, nameViewport,
+  ).map((label) => {
+    const frame = snapshot ? nameSystemsById.get(label.systemId)?.geometry?.envelope : undefined
+    if (!frame) return label
+    const progress = continuousMapNameTransitionProgress(frame, camera.k, svgPixelScale)
+    return {
+      ...label,
+      ...continuousMapNameLabelFramePosition(label, frame, camera, svgPixelScale, progress),
+      hasLeader: label.hasLeader && progress < .12,
+    }
+  })
   const overview = mapImageBounds([geometryBounds, ...names.map(nameBounds)]) ?? geometryBounds
   const frame = mapImageScopeFrame(image.scope, {
     overview,
@@ -213,6 +238,11 @@ function systemSvg(
   }, anchorMark + core)
   const detail = detailed ? systemDetailSvg(system, marker, paint, dimmedObjectIds) : ''
   return svgElement('g', { class: 'player-continuous-system' }, frame + detail + anchor)
+}
+
+function positiveFrame(frame: SvgViewportRect | undefined): frame is SvgViewportRect {
+  return !!frame && Number.isFinite(frame.width) && Number.isFinite(frame.height)
+    && frame.width > 0 && frame.height > 0
 }
 
 function systemDetailSvg(

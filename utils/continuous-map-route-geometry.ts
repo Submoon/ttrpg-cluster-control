@@ -30,7 +30,7 @@ export const CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS = 18
 
 /**
  * Resolves where a ray from a system anchor meets its displayed rounded rectangular frame.
- * Collapsed frames or frames whose trimmed corner excludes the anchor safely resolve to the anchor.
+ * Collapsed frames resolve to the anchor. A clipped corner uses the frame midpoint as the ray origin.
  */
 export function continuousMapRoundedRectBoundaryPoint(
   anchor: Point,
@@ -48,10 +48,12 @@ export function continuousMapRoundedRectBoundaryPoint(
     frame.width / 2,
     frame.height / 2,
   )
-  if (!roundedRectContains(anchor, left, top, right, bottom, radius)) return { ...anchor }
+  const rayOrigin = roundedRectContains(anchor, left, top, right, bottom, radius)
+    ? anchor
+    : { x: (left + right) / 2, y: (top + bottom) / 2 }
 
-  let dx = toward.x - anchor.x
-  let dy = toward.y - anchor.y
+  let dx = toward.x - rayOrigin.x
+  let dy = toward.y - rayOrigin.y
   if (dx === 0 && dy === 0) {
     dx = coincidentDirection.x
     dy = coincidentDirection.y
@@ -59,16 +61,16 @@ export function continuousMapRoundedRectBoundaryPoint(
   }
 
   const boundsDistance = Math.min(
-    dx > 0 ? (right - anchor.x) / dx : dx < 0 ? (left - anchor.x) / dx : Number.POSITIVE_INFINITY,
-    dy > 0 ? (bottom - anchor.y) / dy : dy < 0 ? (top - anchor.y) / dy : Number.POSITIVE_INFINITY,
+    dx > 0 ? (right - rayOrigin.x) / dx : dx < 0 ? (left - rayOrigin.x) / dx : Number.POSITIVE_INFINITY,
+    dy > 0 ? (bottom - rayOrigin.y) / dy : dy < 0 ? (top - rayOrigin.y) / dy : Number.POSITIVE_INFINITY,
   )
-  if (radius === 0) return pointAt(anchor, dx, dy, boundsDistance)
+  if (radius === 0) return pointAt(rayOrigin, dx, dy, boundsDistance)
 
   const candidates: number[] = []
-  addStraightBoundaryCandidates(anchor, dx, dy, left, top, right, bottom, radius, candidates)
-  addRoundedCornerCandidates(anchor, dx, dy, left, top, right, bottom, radius, boundsDistance, candidates)
+  addStraightBoundaryCandidates(rayOrigin, dx, dy, left, top, right, bottom, radius, candidates)
+  addRoundedCornerCandidates(rayOrigin, dx, dy, left, top, right, bottom, radius, boundsDistance, candidates)
   const distance = Math.min(...candidates)
-  return Number.isFinite(distance) ? pointAt(anchor, dx, dy, distance) : { ...anchor }
+  return Number.isFinite(distance) ? pointAt(rayOrigin, dx, dy, distance) : { ...rayOrigin }
 }
 
 function roundedRectContains(
