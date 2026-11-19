@@ -638,6 +638,17 @@ freshTest('the default Warden map moves a group across owning systems and restor
   })
   await expect(sourceRow).toBeVisible()
   await expect(otherRow).toBeVisible()
+  const unrelatedSource = sourceOwner.objects.find(object => object.name === 'Vesper Departure')
+  const unrelatedOther = otherOwner.objects.find(object => object.name === 'Primary Star')
+  if (!unrelatedSource || !unrelatedOther) throw new Error('The group fixture needs unrelated records in both owners.')
+  const unrelatedSourceRow = hierarchy.getByRole('treeitem', {
+    name: `Select ${unrelatedSource.locationKey}, ${unrelatedSource.name} in ${sourceOwner.name}`, exact: true, includeHidden: true,
+  })
+  const unrelatedOtherRow = hierarchy.getByRole('treeitem', {
+    name: `Select ${unrelatedOther.locationKey}, ${unrelatedOther.name} in ${otherOwner.name}`, exact: true, includeHidden: true,
+  })
+  await expect(unrelatedSourceRow).toHaveCount(0)
+  await expect(unrelatedOtherRow).toHaveCount(0)
   // Selecting Iria reveals its ancestors without mounting its unrelated Orbit and Moon subtree.
   await expect(sourceRow).toHaveAttribute('aria-expanded', 'false')
   const moon = sourceOwner.objects.find(object => object.name === 'Nix')
@@ -658,10 +669,24 @@ freshTest('the default Warden map moves a group across owning systems and restor
   await expect(moonRow).toHaveCount(0)
 
   const sourceBranch = hierarchy.getByRole('treeitem', { name: sourceOwner.name, exact: true })
+  const sourceAllRecords = sourceBranch.getByRole('button', { name: `Show all ${sourceOwner.name} records`, exact: true })
+  const camera = wardenMap(page).locator('.cluster-map-content')
+  const cameraBeforeBrowsing = await camera.getAttribute('transform')
+  await sourceAllRecords.focus()
+  await page.keyboard.press('Enter')
+  await expect(sourceAllRecords).toHaveCount(0)
+  await expect(sourceBranch).toBeFocused()
+  await expect(unrelatedSourceRow).toBeVisible()
+  await expect(camera).toHaveAttribute('transform', cameraBeforeBrowsing!)
+  await expect(sourceRow).toHaveAttribute('aria-selected', 'true')
+  await expect(otherRow).toHaveAttribute('aria-selected', 'true')
+  await sourceRow.focus()
+  await sourceRow.press('ArrowRight')
+  await expect(moonOrbit).toBeFocused()
   await sourceBranch.getByRole('button', { name: `Collapse ${sourceOwner.name}`, exact: true }).click()
   await sourceBranch.getByRole('button', { name: `Expand ${sourceOwner.name}`, exact: true }).click()
   await expect(sourceBranch).toBeFocused()
-  // The first explicit owner expansion fills its defaults without undoing an earlier manual child collapse.
+  // Full browsing and subsequent owner expansion retain an earlier manual child collapse.
   await expect(sourceRow).toHaveAttribute('aria-expanded', 'true')
   await expect(moonOrbit).toHaveAttribute('aria-expanded', 'false')
   await expect(moonRow).toHaveCount(0)
@@ -738,6 +763,10 @@ freshTest('the default Warden map moves a group across owning systems and restor
   await expect(otherRow).toBeVisible()
   await expect(otherRow).toHaveAttribute('aria-selected', 'true')
   await expect(sourceRow).toHaveAttribute('aria-selected', 'true')
+  await expect(unrelatedOtherRow).toHaveCount(0)
+  await otherBranch.getByRole('button', { name: `Show all ${otherOwner.name} records`, exact: true }).click()
+  await expect(unrelatedOtherRow).toBeVisible()
+  await expect(otherBranch).toBeFocused()
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
 
   const undo = page.getByRole('button', { name: /^Undo: Move selected objects/ })
