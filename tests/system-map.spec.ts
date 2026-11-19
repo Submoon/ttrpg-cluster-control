@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from './fixtures'
 import { createLocalWorkspace, createOrbit, createSystemObject, exportStarSystem } from '../domain/workspace'
 import {
   captureMapExportBlobs, centerWorkspaceSelection, createSingleSystemWorkspace, downloadImage, downloadJson,
-  dragOrbitToWorldPoint, exposedContinuousObjectHitPoint, hideWorkspaceInspector, inspectImageSvg,
+  exposedContinuousObjectHitPoint, hideWorkspaceInspector, inspectImageSvg,
   measureMouseDrag, openWorkspaceHierarchy, resolveImportReview, reviewStarSystemImport,
   setWorkspaceMapMode, waitForWorkspaceSaved, waitForWorkspaceStartup, wardenLocalCoordinates,
   wardenMap, wardenObjectMark, workspaceZoomControls, type WorldPoint,
@@ -31,6 +31,40 @@ async function objectPosition(mark: Locator): Promise<WorldPoint> {
     if (!matrix) throw new Error('The object has no local SVG position.')
     return { x: matrix.e, y: matrix.f }
   })
+}
+
+async function resizePaintedOrbit(page: Page, ring: Locator, factor: number): Promise<void> {
+  const points = await ring.evaluate((element, factor) => {
+    if (!(element instanceof SVGEllipseElement)) throw new Error('The Orbit target is not an ellipse.')
+    const matrix = element.getScreenCTM()
+    if (!matrix) throw new Error('The Orbit target is not attached to the map.')
+    const cx = element.cx.baseVal.value
+    const cy = element.cy.baseVal.value
+    const rx = element.rx.baseVal.value
+    const ry = element.ry.baseVal.value
+    const center = new DOMPoint(cx, cy).matrixTransform(matrix)
+    const screenRadius = Math.max(Math.hypot(matrix.a * rx, matrix.b * rx), Math.hypot(matrix.c * ry, matrix.d * ry))
+    const samples = Math.max(64, Math.ceil(4 * Math.PI * screenRadius))
+    const map = element.closest('svg')
+    // Dashed paint and edit handles move with the live camera. Sample the exact rounded native hit.
+    for (let sample = 0; sample < samples; sample += 1) {
+      const offset = Math.ceil(sample / 2) * (sample % 2 ? 1 : -1) * Math.PI * 2 / samples
+      const point = new DOMPoint(cx + rx * Math.cos(.5 + offset), cy + ry * Math.sin(.5 + offset)).matrixTransform(matrix)
+      for (const dx of [0, -1, 1]) {
+        for (const dy of [0, -1, 1]) {
+          const start = { x: Math.round(point.x) + dx, y: Math.round(point.y) + dy }
+          if (document.elementFromPoint(start.x, start.y) !== element) continue
+          const end = { x: Math.round(center.x + (start.x - center.x) * factor), y: Math.round(center.y + (start.y - center.y) * factor) }
+          const reachable = Array.from({ length: 7 }, (_, step) => map?.contains(document.elementFromPoint(
+            start.x + (end.x - start.x) * step / 6, start.y + (end.y - start.y) * step / 6,
+          ))).every(Boolean)
+          if (reachable) return { start, end }
+        }
+      }
+    }
+    throw new Error('The Orbit has no frontmost painted ring hit with a reachable native resize path.')
+  }, factor)
+  await measureMouseDrag(page, points.start, points.end, { eventFamily: 'pointer' })
 }
 
 async function expectExportedSystemSceneInsideViewBox(page: Page, text: string, viewBox: number[]): Promise<void> {
@@ -115,7 +149,7 @@ test('the system map expands beyond its initial bounds and exports the full appl
   await ensureLocalPointsReachable(page, system.id, [
     { x: 480 + radius * Math.cos(resizeAngle), y: 280 + radius * Math.sin(resizeAngle) }, resizeTarget,
   ])
-  await dragOrbitToWorldPoint(page, ring, resizeTarget, resizeAngle)
+  await resizePaintedOrbit(page, ring, 1070 / radius)
   await expect.poll(async () => Number(await ring.getAttribute('rx'))).toBeGreaterThan(960)
   const resizedRadius = await ring.getAttribute('rx')
   if (!resizedRadius) throw new Error('The resized Orbit has no radius.')
@@ -126,7 +160,7 @@ test('the system map expands beyond its initial bounds and exports the full appl
   if (!start) throw new Error('The Planet needs an exposed native Move target.')
   const originClient = coordinates.toClient(origin)
   const targetClient = coordinates.toClient({ x: 1750, y: 800 })
-  const delivered = await measureMouseDrag(page, start, { x: start.x + targetClient.x - originClient.x, y: start.y + targetClient.y - originClient.y })
+  const delivered = await measureMouseDrag(page, start, { x: start.x + targetClient.x - originClient.x, y: start.y + targetClient.y - originClient.y }, { eventFamily: 'pointer' })
   const down = coordinates.fromClient(delivered.down)
   const up = coordinates.fromClient(delivered.up)
   const expected = { x: origin.x + up.x - down.x, y: origin.y + up.y - down.y }

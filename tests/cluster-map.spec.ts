@@ -1,6 +1,6 @@
 import { expect, preparedCampaignTest as campaignTest, type Locator, type Page } from './fixtures'
 import {
-  captureMapExportBlobs, centerWorkspaceSelection, dockAction, downloadJson, dragOrbitToWorldPoint,
+  captureMapExportBlobs, centerWorkspaceSelection, dockAction, downloadJson,
   exposedContinuousObjectHitPoint, hideWorkspaceInspector, measureMouseDrag, openWorkspaceHierarchy,
   openWorkspaceZoomNavigation, quitSystemAdd, setWorkspaceMapMode, snapshotSvgCoordinates,
   waitForWorkspaceSaved, waitForWorkspaceStartup, wardenMap, wardenObjectMark, wardenSystemMark,
@@ -44,6 +44,40 @@ async function orbitalAngle(host: Locator, planet: Locator): Promise<number> {
   })
   const [a, b] = await Promise.all([center(host), center(planet)])
   return Math.atan2(b.y - a.y, b.x - a.x)
+}
+
+async function resizePaintedOrbit(page: Page, ring: Locator, factor: number): Promise<void> {
+  const points = await ring.evaluate((element, factor) => {
+    if (!(element instanceof SVGEllipseElement)) throw new Error('The Orbit target is not an ellipse.')
+    const matrix = element.getScreenCTM()
+    if (!matrix) throw new Error('The Orbit target is not attached to the map.')
+    const cx = element.cx.baseVal.value
+    const cy = element.cy.baseVal.value
+    const rx = element.rx.baseVal.value
+    const ry = element.ry.baseVal.value
+    const center = new DOMPoint(cx, cy).matrixTransform(matrix)
+    const screenRadius = Math.max(Math.hypot(matrix.a * rx, matrix.b * rx), Math.hypot(matrix.c * ry, matrix.d * ry))
+    const samples = Math.max(64, Math.ceil(4 * Math.PI * screenRadius))
+    const map = element.closest('svg')
+    // Dashed paint and edit handles move with the live camera. Sample the exact rounded native hit.
+    for (let sample = 0; sample < samples; sample += 1) {
+      const offset = Math.ceil(sample / 2) * (sample % 2 ? 1 : -1) * Math.PI * 2 / samples
+      const point = new DOMPoint(cx + rx * Math.cos(.5 + offset), cy + ry * Math.sin(.5 + offset)).matrixTransform(matrix)
+      for (const dx of [0, -1, 1]) {
+        for (const dy of [0, -1, 1]) {
+          const start = { x: Math.round(point.x) + dx, y: Math.round(point.y) + dy }
+          if (document.elementFromPoint(start.x, start.y) !== element) continue
+          const end = { x: Math.round(center.x + (start.x - center.x) * factor), y: Math.round(center.y + (start.y - center.y) * factor) }
+          const reachable = Array.from({ length: 7 }, (_, step) => map?.contains(document.elementFromPoint(
+            start.x + (end.x - start.x) * step / 6, start.y + (end.y - start.y) * step / 6,
+          ))).every(Boolean)
+          if (reachable) return { start, end }
+        }
+      }
+    }
+    throw new Error('The Orbit has no frontmost painted ring hit with a reachable native resize path.')
+  }, factor)
+  await measureMouseDrag(page, points.start, points.end, { eventFamily: 'pointer' })
 }
 
 function radii(snapshot: ExportedMap, orbitId: string): { horizontal: number; vertical: number } {
@@ -96,11 +130,12 @@ campaignTest.describe('prepared campaign map layout', () => {
     const anchor = wardenSystemMark(page, system.id)
     const beforeTransform = await anchor.getAttribute('transform')
     const name = map.locator(`.continuous-warden-name-target[data-system-id="${system.id}"]`)
-    const nameBounds = await name.boundingBox()
+    const nameBounds = await name.locator('.continuous-warden-name-background').boundingBox()
     if (!nameBounds) throw new Error('Vesper Prime needs a visible name target for its system-anchor Move.')
     const start = { x: nameBounds.x + nameBounds.width / 2, y: nameBounds.y + nameBounds.height / 2 }
+    expect(await name.evaluate((element, point) => element.contains(document.elementFromPoint(Math.round(point.x), Math.round(point.y))), start)).toBe(true)
     const coordinates = await snapshotSvgCoordinates(content)
-    const delivered = await measureMouseDrag(page, start, { x: start.x + 48, y: start.y + 24 })
+    const delivered = await measureMouseDrag(page, start, { x: start.x + 48, y: start.y + 24 }, { eventFamily: 'pointer' })
     await expect(anchor).not.toHaveAttribute('transform', beforeTransform ?? '')
     await waitForWorkspaceSaved(page)
     const after = await downloadJson(page, 'Export Jump Cluster JSON')
@@ -137,7 +172,7 @@ campaignTest.describe('prepared campaign map layout', () => {
     const angle = await orbitalAngle(host, orbiting)
     const initialRadius = Number(await orbit.getAttribute('rx'))
     expect(initialRadius).toBe(112)
-    await dragOrbitToWorldPoint(page, orbit, { x: 480 + 153 * Math.cos(.5), y: 280 + 153 * Math.sin(.5) }, .5)
+    await resizePaintedOrbit(page, orbit, 153 / initialRadius)
     await expect.poll(async () => Number(await orbit.getAttribute('rx'))).toBeGreaterThan(initialRadius)
     const resizedRadius = Number(await orbit.getAttribute('rx'))
     await expect(orbit).toHaveAttribute('ry', String(resizedRadius))
