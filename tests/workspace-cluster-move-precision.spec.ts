@@ -51,7 +51,13 @@ test('Move System previews map and keyboard destinations, cancels without changi
     .getByRole('group', { name: 'Map interaction mode', exact: true })
     .getByRole('button', { name: 'Move', exact: true })
   await moveMode.click()
-  await sourceNode.click()
+  const sourceName = clusterMap.locator(`.continuous-warden-name-target[data-system-id="${source.id}"]`)
+  const nameBounds = await sourceName.locator('.continuous-warden-name-background').boundingBox()
+  if (!nameBounds) throw new Error('Vesper needs a visible painted system name for native selection.')
+  const selectionPoint = { x: Math.round(nameBounds.x + nameBounds.width / 2), y: Math.round(nameBounds.y + nameBounds.height / 2) }
+  // A revealed Primary Star can cover the anchor center; the painted name remains the system target.
+  expect(await sourceName.evaluate((element, point) => element.contains(document.elementFromPoint(point.x, point.y)), selectionPoint)).toBe(true)
+  await page.mouse.click(selectionPoint.x, selectionPoint.y)
   await expect(sourceNode).toHaveClass(/is-selected/)
   await expect(inspector).toBeHidden()
   const originalTransform = await sourceNode.getAttribute('transform')
