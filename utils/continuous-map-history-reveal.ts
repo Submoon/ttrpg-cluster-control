@@ -13,6 +13,8 @@ interface MinimumHistoryRevealViewportOptions {
 interface CenterMapTargetViewportOptions extends MinimumHistoryRevealViewportOptions {
   /** Allow an oversized target when its semantic detail requires a higher zoom. */
   prioritizeMinimumScale?: boolean
+  /** Visible target anchor to center when the required detail scale cannot fit the bounds. */
+  oversizedTargetAnchor?: Point
 }
 
 /** Keeps the current camera unless a target needs minimum pan or detail-reveal zoom. */
@@ -47,14 +49,16 @@ export function centerMapTargetViewport(options: CenterMapTargetViewportOptions)
   if (!Number.isFinite(maximumScale) && maximumScale !== Number.POSITIVE_INFINITY) return null
   const minimumScale = options.minimumScale ?? current.k
   if (!Number.isFinite(minimumScale) || minimumScale <= 0 || maximumScale <= 0) return null
+  const oversizedAnchor = options.oversizedTargetAnchor
+  if (oversizedAnchor && ![oversizedAnchor.x, oversizedAnchor.y].every(Number.isFinite)) return null
   const horizontalFitScale = targetBounds.width > 0 ? usableRect.width / targetBounds.width : Number.POSITIVE_INFINITY
   const verticalFitScale = targetBounds.height > 0 ? usableRect.height / targetBounds.height : Number.POSITIVE_INFINITY
   const fitCeiling = Math.min(maximumScale, horizontalFitScale, verticalFitScale)
   if (!Number.isFinite(fitCeiling) || fitCeiling <= 0) return null
   const minimumScaleCeiling = options.prioritizeMinimumScale ? maximumScale : fitCeiling
   const k = Math.max(Math.min(current.k, fitCeiling), Math.min(minimumScale, minimumScaleCeiling))
-  const targetCenterX = targetBounds.x + targetBounds.width / 2
-  const targetCenterY = targetBounds.y + targetBounds.height / 2
+  const targetCenterX = k > fitCeiling && oversizedAnchor ? oversizedAnchor.x : targetBounds.x + targetBounds.width / 2
+  const targetCenterY = k > fitCeiling && oversizedAnchor ? oversizedAnchor.y : targetBounds.y + targetBounds.height / 2
   return {
     x: usableRect.x + usableRect.width / 2 - targetCenterX * k,
     y: usableRect.y + usableRect.height / 2 - targetCenterY * k,

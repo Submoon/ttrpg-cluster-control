@@ -1245,6 +1245,7 @@ function frameSystem(systemId: string, usableRect?: SvgViewportRect, centerTarge
     minimumScale: detailScaleFloor,
     maximumScale: MAP_ZOOM_MAX_SCALE,
     prioritizeMinimumScale: true,
+    oversizedTargetAnchor: { x: projection.anchor.x + delta.x, y: projection.anchor.y + delta.y },
   })
   if (!next) return false
   if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
@@ -1443,8 +1444,8 @@ function frameSearchObjectBranch(systemId: string, objectId: string, usableRect?
     targetBounds,
     usableRect: rect,
     minimumScale,
-    // Relax Fit padding only when it would prevent semantic detail.
-    maximumScale: Math.max(fitted.k, minimumScale),
+    // Preserve current zoom when the branch fits without Fit padding.
+    maximumScale: Math.max(current.k, fitted.k, minimumScale),
   })
   if (!branchFrame) return false
   let next: MapViewport | null = branchFrame
