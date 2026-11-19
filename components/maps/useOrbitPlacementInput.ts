@@ -329,8 +329,6 @@ export function useOrbitPlacementInput(options: OrbitPlacementInputOptions) {
       && options.map()?.isOrbitDragPointOnMap(event.clientX, event.clientY)) {
       const projection = options.begin(event)
       if (projection) {
-        // Prevent SVG text selection from becoming a native drag that cancels this owned pointer.
-        event.preventDefault()
         orbitPointer = {
           pointerId: event.pointerId,
           pointerType: event.pointerType,
