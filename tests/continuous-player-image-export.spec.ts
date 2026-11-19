@@ -84,7 +84,7 @@ function publicDocument(): PlayerClusterDocument {
   }
 }
 
-test('the entire player image shows published system names and anchor routes, including the anonymous exit @pure', () => {
+test('the entire player image shows published names, attached routes and the anonymous exit @pure', () => {
   const image = serializeContinuousPlayerMapImage(publicDocument(), { scope: 'cluster' }, 'print-light')
 
   expect(image.svg).toContain('Public &lt;Reach&gt;')
@@ -95,7 +95,8 @@ test('the entire player image shows published system names and anchor routes, in
   expect(image.svg).not.toContain('Local &lt;Gate&gt;')
   expect(image.svg).not.toContain('Inspector text')
   expect(image.svg).toMatch(/d="M 400 200 C [^"]+ 2600 500"/)
-  expect(image.svg).toMatch(/d="M 400 200 C [^"]+ 3000 -170"/)
+  // The anonymous route has no local point and starts at the public frame's east edge (x = 479.2).
+  expect(image.svg).toMatch(/d="M 479\.2\d* [^"]+ 3000 -170"/)
   expect(image.width).toBeGreaterThan(2950)
 })
 
@@ -118,7 +119,7 @@ test('an anonymous exit remains above a coincident public anchor in overview and
 
   for (const scope of scopes) {
     const { svg } = serializeContinuousPlayerMapImage(document, scope, 'print-light')
-    const routeIndex = svg.search(/d="M 400 200 C [^"]+ 2600 500"/)
+    const routeIndex = svg.search(/d="M 479\.2\d* [^"]+ 2600 500"/)
     const anchorIndex = svg.lastIndexOf('class="player-continuous-system"')
     const captionIndex = svg.indexOf('Unknown destination')
     expect(routeIndex).toBeGreaterThanOrEqual(0)
@@ -204,7 +205,7 @@ test('a legacy share exports only the retained route and never infers an attachm
   const currentImage = serializeContinuousPlayerMapImage(current, scope, 'print-light')
 
   expect(legacyImage.svg).toContain('Local &lt;Gate&gt;')
-  expect(legacyImage.svg).toMatch(/d="M 400 200 C [^"]+"/)
+  expect(legacyImage.svg).toMatch(/d="M 479\.2\d* [^"]+"/)
   expect(legacyImage.svg.match(/player-image-route-stub/g)).toHaveLength(1)
   expect(legacyImage.svg).not.toContain('d="M 416 240')
   expect(currentImage.svg).toContain('d="M 416 240')
