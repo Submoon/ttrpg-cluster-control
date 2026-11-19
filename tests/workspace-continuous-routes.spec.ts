@@ -96,17 +96,21 @@ test('the player preview inspects the same public route through its shared docum
   const reopenedContent = reopenedScene.locator(':scope > g').first()
   const reopenedStart = await previewPanStart(reopenedScene)
   const camera = () => reopenedContent.evaluate(element => {
-    const matrix = (element as SVGGElement).transform.baseVal.consolidate()!.matrix
-    return { x: matrix.e, y: matrix.f, k: matrix.a }
+    const transforms = (element as SVGGElement).transform.baseVal
+    const translation = transforms.getItem(0).matrix
+    const scale = transforms.getItem(1).matrix
+    return { x: translation.e, y: translation.f, k: scale.a }
   })
+  // Browser SVGMatrix rounds translation, so compare well below one rendered pixel.
+  const translationPrecision = 3
   const beforeFreshPan = await camera()
   const coordinates = await snapshotSvgCoordinates(reopenedScene)
   const delivered = await measureMouseDrag(page, reopenedStart, { x: reopenedStart.x + 24, y: reopenedStart.y + 12 }, { eventFamily: 'pointer' })
   const down = coordinates.fromClient(delivered.down)
   const up = coordinates.fromClient(delivered.up)
   const afterFreshPan = await camera()
-  expect(afterFreshPan.x).toBeCloseTo(beforeFreshPan.x + up.x - down.x, 5)
-  expect(afterFreshPan.y).toBeCloseTo(beforeFreshPan.y + up.y - down.y, 5)
+  expect(afterFreshPan.x).toBeCloseTo(beforeFreshPan.x + up.x - down.x, translationPrecision)
+  expect(afterFreshPan.y).toBeCloseTo(beforeFreshPan.y + up.y - down.y, translationPrecision)
   expect(afterFreshPan.k).toBe(beforeFreshPan.k)
 
   await reopenedScene.evaluate(() => {
@@ -129,8 +133,8 @@ test('the player preview inspects the same public route through its shared docum
     const previous = currentCoordinates.fromClient(lastPoint)
     const next = currentCoordinates.fromClient(deliveredPoint)
     const after = await camera()
-    expect(after.x).toBeCloseTo(before.x + next.x - previous.x, 5)
-    expect(after.y).toBeCloseTo(before.y + next.y - previous.y, 5)
+    expect(after.x).toBeCloseTo(before.x + next.x - previous.x, translationPrecision)
+    expect(after.y).toBeCloseTo(before.y + next.y - previous.y, translationPrecision)
     expect(after.k).toBe(before.k)
   }
   mouseHeld = false
