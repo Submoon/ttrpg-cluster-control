@@ -15,8 +15,8 @@ import {
   selectInspectorOption,
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
+  wardenMap,
   wardenObjectMark,
-  wardenSystemMark,
   workspaceNavigation,
 } from './helpers'
 
@@ -119,16 +119,10 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
   const fromPoint = inspector.getByLabel('From Jump Point')
   await selectInspectorOption(inspector.getByLabel('Route destination'), 'Known system')
 
-  const overlappingAnchorMark = wardenSystemMark(page, anchorSystemIdAfterImport)
-  await expect(overlappingAnchorMark).toBeVisible()
-  // An empty point shared by the overlapping envelopes offers both owners.
-  await clickWardenSystemPoint(page, originSystemId, { x: 0.35, y: 0.68 })
-  await fromSystem.click()
-  const originChoice = page.getByRole('option', { name: 'Vesper Prime', exact: true })
-  await expect(originChoice).toBeVisible()
-  await expect(page.getByRole('option', { name: 'Anchor Only', exact: true })).toBeVisible()
-  await expect(page.getByRole('option', { name: 'Harrow', exact: true })).toHaveCount(0)
-  await originChoice.click()
+  const map = wardenMap(page)
+  // Coincident anchors have separate frames and names, each offering one definite endpoint owner.
+  const originName = map.locator(`.continuous-warden-name-target[data-system-id="${originSystemId}"]`)
+  await originName.locator('.continuous-warden-name-background').click()
   await expect.poll(() => readInspectorSelection(fromSystem)).toBe('Vesper Prime')
   await expect.poll(() => readInspectorSelection(fromPoint)).toBe('No local Jump Point')
   await expect(inspector.getByRole('heading', { name: 'Connect Systems', exact: true })).toBeVisible()
@@ -136,6 +130,7 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
   await fromPoint.click()
   const originPointChoice = page.getByRole('option', { name: 'Vesper Alternate (Vesper Prime)', exact: true })
   await expect(originPointChoice).toBeVisible()
+  await expect(page.getByRole('option', { name: 'Vesper Departure (Vesper Prime)', exact: true })).toBeVisible()
   await expect(page.getByRole('option', { name: 'Harrow Arrival (Harrow)', exact: true })).toHaveCount(0)
   await originPointChoice.click()
   await expect.poll(() => readInspectorSelection(fromPoint)).toBe('Vesper Alternate (Vesper Prime)')
@@ -147,7 +142,8 @@ test('Add Jump Route uses scoped From and To controls for map-picked systems wit
   await expect(addButton).toHaveAttribute('aria-pressed', 'true')
   await expect.poll(() => readInspectorSelection(fromPoint)).toBe('Vesper Alternate (Vesper Prime)')
 
-  await overlappingAnchorMark.click()
+  const destinationName = map.locator(`.continuous-warden-name-target[data-system-id="${anchorSystemIdAfterImport}"]`)
+  await destinationName.locator('.continuous-warden-name-background').click()
   const toPoint = inspector.getByLabel('To Jump Point')
   await expect.poll(() => readInspectorSelection(toSystem)).toBe('Anchor Only')
   await expect.poll(() => readInspectorSelection(fromPoint)).toBe('Vesper Alternate (Vesper Prime)')
