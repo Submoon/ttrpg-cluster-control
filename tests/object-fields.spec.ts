@@ -15,7 +15,6 @@ import {
   openWorkspaceHierarchy,
   readInspectorSelection,
   resolveJumpClusterRestoreReview,
-  returnToClusterMap,
   reviewJumpClusterBackup,
   saveMapObject,
   selectInspectorOption,
@@ -45,10 +44,9 @@ function objectFieldsCampaign() {
 }
 
 async function openSystemHierarchy(page: Page, systemName: string) {
-  await returnToClusterMap(page)
-  const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await clusterHierarchy.getByRole('button', { name: `Open ${systemName} system map`, exact: true }).click()
-  return openWorkspaceHierarchy(page)
+  const hierarchy = await openWorkspaceHierarchy(page)
+  await hierarchy.getByRole('button', { name: `Inspect ${systemName}`, exact: true }).click()
+  return hierarchy
 }
 
 test('the Warden can configure native and reusable custom object fields', async ({ page }) => {
@@ -63,7 +61,7 @@ test('the Warden can configure native and reusable custom object fields', async 
   await waitForWorkspaceSaved(page)
 
   const vesper = await openSystemHierarchy(page, 'Vesper')
-  await vesper.getByRole('treeitem', { name: /Iria/ }).click()
+  await vesper.getByRole('treeitem', { name: 'Select PL-01, Iria in Vesper', exact: true }).click()
   const definitions = await openFieldDefinitionDialog(page)
   await definitions.getByRole('button', { name: /Atmosphere/ }).click()
   await editFieldDefinition(definitions)
@@ -84,13 +82,13 @@ test('the Warden can configure native and reusable custom object fields', async 
   await selectInspectorOption(page.getByLabel('Signal class', { exact: true }), 'Red')
   await saveMapObject(page)
 
-  await vesper.getByRole('treeitem', { name: /Survey Station/ }).click()
+  await vesper.getByRole('treeitem', { name: /Select .*Survey Station in Vesper$/ }).click()
   await expect(page.getByLabel('Port class', { exact: true })).toBeVisible()
   await expect(page.getByLabel('Atmosphere', { exact: true })).toHaveCount(0)
   await expect(page.getByLabel('Campaign notes', { exact: true })).toHaveValue('')
 
   const deneb = await openSystemHierarchy(page, 'Deneb')
-  await deneb.getByRole('treeitem', { name: /Nivalis/ }).click()
+  await deneb.getByRole('treeitem', { name: 'Select PL-01, Nivalis in Deneb', exact: true }).click()
   await editMapObject(page)
   await page.getByLabel('Campaign notes', { exact: true }).fill('Reusable in the next system.')
   await saveMapObject(page)
@@ -99,7 +97,7 @@ test('the Warden can configure native and reusable custom object fields', async 
   await page.reload()
   await waitForWorkspaceStartup(page)
   const restoredVesper = await openSystemHierarchy(page, 'Vesper')
-  await restoredVesper.getByRole('treeitem', { name: /Iria/ }).click()
+  await restoredVesper.getByRole('treeitem', { name: 'Select PL-01, Iria in Vesper', exact: true }).click()
   await expect(page.getByLabel('Campaign notes', { exact: true })).toHaveValue('Relay station under the ice.')
   await expect(page.getByLabel('Threat level', { exact: true })).toHaveValue('4')
   expect(await readInspectorSelection(page.getByLabel('Atmosphere', { exact: true }))).toBe('Chlorine')
@@ -107,6 +105,6 @@ test('the Warden can configure native and reusable custom object fields', async 
   expect(await readInspectorSelection(page.getByLabel('Signal class', { exact: true }))).toBe('Red')
 
   const restoredDeneb = await openSystemHierarchy(page, 'Deneb')
-  await restoredDeneb.getByRole('treeitem', { name: /Nivalis/ }).click()
+  await restoredDeneb.getByRole('treeitem', { name: 'Select PL-01, Nivalis in Deneb', exact: true }).click()
   await expect(page.getByLabel('Campaign notes', { exact: true })).toHaveValue('Reusable in the next system.')
 })

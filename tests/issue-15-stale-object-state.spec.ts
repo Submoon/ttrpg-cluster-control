@@ -1,15 +1,17 @@
 import { expect, test } from './fixtures'
 import {
   captureMapExportBlobs,
-  clickNormalizedSystemPoint,
+  clickWardenSystemPoint,
   createSingleSystemWorkspace,
   deletionReviewDialog,
   downloadJson,
+  editMapObject,
   openWorkspaceHierarchy,
+  quitSystemAdd,
   resolveDeletionReview,
   selectCatalogueObjectButton,
-  selectInspectorOption,
   setWorkspaceMapMode,
+  wardenMap,
 } from './helpers'
 import {
   createLocalWorkspace,
@@ -77,36 +79,43 @@ test('default object names skip occupied names after a deletion @pure', () => {
 
 async function beginPlanetAdd(page: import('@playwright/test').Page): Promise<void> {
   await (await selectCatalogueObjectButton(page, 'planet')).click()
-  await expect(page.getByRole('group', { name: 'Planet creation controls', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Add to map', exact: true })).toHaveAttribute('aria-pressed', 'true')
 }
 
-async function addPlanetAt(page: import('@playwright/test').Page, point: Point): Promise<Point> {
-  const controls = page.getByRole('group', { name: 'Planet creation controls', exact: true })
-  const placement = controls.getByRole('button', { name: 'Placement', exact: true })
-  if (await placement.getAttribute('aria-expanded') !== 'true') await placement.click()
-  await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), 'Free map position')
-  await placement.click()
-  return clickNormalizedSystemPoint(page, page.getByRole('group', { name: /star system map$/ }), point)
+async function addPlanetAt(
+  page: import('@playwright/test').Page,
+  systemId: string,
+  point: Point,
+  expectedName: string,
+): Promise<Point> {
+  const delivered = await clickWardenSystemPoint(page, systemId, point)
+  const created = wardenMap(page).locator(`.continuous-warden-system[data-system-id="${systemId}"]`)
+    .getByRole('button', { name: new RegExp(`^Select PL-\\d+, ${expectedName}$`) })
+  await expect(created).toBeVisible()
+  await quitSystemAdd(page)
+  await created.press('Enter')
+  await editMapObject(page)
+  return delivered
 }
 
 test('deleting and quickly recreating an object starts with fresh selection, session, name, and position', async ({ page }) => {
   test.slow()
   await captureMapExportBlobs(page)
-  await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
+  const { systemId } = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
 
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
-  const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
+  const map = wardenMap(page)
+  const inspector = page.getByRole('region', { name: 'Object inspector', exact: true })
   const originalPoint = { x: 0.82, y: 0.74 }
 
   await beginPlanetAdd(page)
-  const deliveredOriginalPoint = await addPlanetAt(page, originalPoint)
+  const deliveredOriginalPoint = await addPlanetAt(page, systemId, originalPoint, 'New planet 1')
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('New planet 1')
   await inspector.getByLabel('Name', { exact: true }).fill('Foo')
   await inspector.getByLabel('GM notes', { exact: true }).fill('Old object draft')
   await inspector.getByRole('button', { name: /^Apply changes/ }).click()
 
   await beginPlanetAdd(page)
-  await addPlanetAt(page, { x: 0.21, y: 0.31 })
+  await addPlanetAt(page, systemId, { x: 0.21, y: 0.31 }, 'New planet 2')
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('New planet 2')
   const originalExport = await downloadJson(page, 'Export star system JSON')
   const survivingObject = originalExport.system?.objects
@@ -123,19 +132,19 @@ test('deleting and quickly recreating an object starts with fresh selection, ses
 
   await setWorkspaceMapMode(page, 'Select')
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('treeitem', { name: /^Select PL-\d+, Foo$/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /^Select PL-\d+, Foo in Vesper$/ }).click()
   await inspector.getByRole('button', { name: 'Delete Foo', exact: true }).click()
   const review = deletionReviewDialog(page)
   await expect(review).toContainText('Foo')
   await resolveDeletionReview(review, 'confirm')
-  await expect(map.locator('.system-object')).toHaveCount(2)
-  await expect(page.locator('.entity-inspector')).toHaveCount(0)
+  await expect(map.locator('.continuous-warden-object')).toHaveCount(2)
+  await expect(inspector).toHaveCount(0)
 
   // Recreate immediately at a new user-specified point. The generated name must also avoid the
   // surviving New planet 2, whose numeric suffix used to collide after deleting Foo.
   await beginPlanetAdd(page)
   const newPoint = { x: 0.63, y: 0.67 }
-  const deliveredNewPoint = await addPlanetAt(page, newPoint)
+  const deliveredNewPoint = await addPlanetAt(page, systemId, newPoint, 'New planet 3')
 
   await expect(inspector.getByLabel('Name', { exact: true })).not.toHaveValue('Foo')
   await expect(inspector.getByLabel('GM notes', { exact: true })).toHaveValue('')
@@ -154,5 +163,5 @@ test('deleting and quickly recreating an object starts with fresh selection, ses
   expect(recreatedObject?.placement).not.toEqual({ kind: 'system', ...originalPoint })
   expect(recreatedExport.system?.objects.filter(object => object.subtype === 'planet'
     && object.name === recreatedObject?.name)).toHaveLength(1)
-  await expect(map.locator('.system-object')).toHaveCount(3)
+  await expect(map.locator('.continuous-warden-object')).toHaveCount(3)
 })

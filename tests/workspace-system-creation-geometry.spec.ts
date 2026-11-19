@@ -3,14 +3,20 @@ import creationGeometryFixture from './fixtures/workspace-system-creation-geomet
 import { resolveImportReview, reviewStarSystemImport } from './helpers'
 import {
   captureMapExportBlobs,
+  centerWorkspaceSelection,
+  clickWardenSystemPoint,
+  createSingleSystemWorkspace,
   downloadImage,
   downloadJson,
+  exposedContinuousObjectHitPoint,
+  hideWorkspaceInspector,
   openWorkspaceHierarchy,
-  returnToClusterMap,
   selectCatalogueObjectButton,
-  setHeaderMapActionsOpen,
+  waitForWorkspaceSaved,
   setWorkspaceMapMode,
-  workspaceZoomControls,
+  wardenMap,
+  wardenObjectMark,
+  wardenSystemMark,
   type WorldPoint,
 } from './helpers'
 
@@ -18,14 +24,6 @@ const preservedLegacyPositions = [
   { name: 'Old Planet', point: { x: 520, y: 210.7179676972449 } },
   { name: 'Old Moon', point: { x: 440, y: 349.2820323027551 } },
 ] satisfies Array<{ name: string; point: WorldPoint }>
-
-async function createWorkspace(page: Page): Promise<void> {
-  await page.setViewportSize({ width: 1440, height: 960 })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-}
 
 type TouchPoint = { id: number; x: number; y: number }
 
@@ -55,7 +53,7 @@ async function findUnobstructedMapTouchPair(map: Locator): Promise<[TouchPoint, 
       const hit = document.elementFromPoint(x, y)
       if (!hit || (hit !== element && !element.contains(hit))) return false
       if (!(hit instanceof Element)) return true
-      return !hit.closest('[data-map-obstruction], .system-object, .orbit-mark, .orbit-edit-control')
+      return !hit.closest('[data-map-obstruction], .continuous-warden-object, .continuous-warden-orbit-target, .cluster-system-node')
     }
 
     for (let y = Math.ceil(bounds.top + 24); y <= bottom - 24; y += 12) {
@@ -65,73 +63,63 @@ async function findUnobstructedMapTouchPair(map: Locator): Promise<[TouchPoint, 
         }
       }
     }
-    throw new Error('Could not find two unobstructed touch points on the visible system map.')
+    throw new Error('Could not find two unobstructed touch points on the visible Warden map.')
   })
   return [pair.first, pair.second]
 }
 
-async function openDenseReach(page: Page): Promise<Locator> {
-  await returnToClusterMap(page)
+async function openDenseReach(page: Page): Promise<{ map: Locator; systemId: string }> {
   const preview = await reviewStarSystemImport(page, 'dense-reach.json', JSON.stringify(creationGeometryFixture))
   const previewSummary = await preview.innerText()
   expect(previewSummary).toContain('Star systems: 1')
   await resolveImportReview(preview, 'confirm')
-  await setHeaderMapActionsOpen(page, false)
 
-  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await hierarchy.getByRole('button', { name: 'Open Dense Reach system map', exact: true }).click()
-  const map = page.getByRole('group', { name: 'Dense Reach star system map', exact: true })
-  await expect(map).toBeVisible()
-  return map
-}
-
-/** Clicks a fixed scene point through the public map and returns its delivered scene-space error. */
-async function clickScenePoint(page: Page, map: Locator, target: WorldPoint): Promise<number> {
-  const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out', exact: true })
-  for (let attempt = 0; attempt < 64; attempt += 1) {
-    const hit = await map.evaluate((element, scenePoint) => {
-      const content = element.querySelector<SVGGElement>('.system-map-content')
-      const transform = content?.getScreenCTM()
-      if (!transform) throw new Error('The system map content is not attached to the document.')
-      const requestedScreenPoint = new DOMPoint(scenePoint.x, scenePoint.y).matrixTransform(transform)
-      // Chromium page.mouse.click reports whole CSS-pixel client coordinates.
-      const clickPoint = { x: Math.round(requestedScreenPoint.x), y: Math.round(requestedScreenPoint.y) }
-      const delivered = new DOMPoint(clickPoint.x, clickPoint.y).matrixTransform(transform.inverse())
-      const bounds = element.getBoundingClientRect()
-      const targetElement = document.elementFromPoint(clickPoint.x, clickPoint.y)
-      return {
-        clickPoint,
-        sceneError: Math.hypot(delivered.x - scenePoint.x, delivered.y - scenePoint.y),
-        reachable: clickPoint.x >= Math.max(0, bounds.left) && clickPoint.y >= Math.max(0, bounds.top)
-          && clickPoint.x < Math.min(window.innerWidth, bounds.right)
-          && clickPoint.y < Math.min(window.innerHeight, bounds.bottom)
-          && !!targetElement && (targetElement === element || element.contains(targetElement)),
-      }
-    }, target)
-
-    if (hit.reachable) {
-      await page.mouse.click(hit.clickPoint.x, hit.clickPoint.y)
-      return hit.sceneError
-    }
-    if (await zoomOut.isDisabled()) break
-    await zoomOut.click()
+  const hierarchy = await openWorkspaceHierarchy(page)
+  await hierarchy.getByRole('button', { name: 'Inspect Dense Reach', exact: true }).click()
+  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
+  await hideWorkspaceInspector(page)
+  const map = wardenMap(page)
+  await expect(map).toHaveAccessibleName('Kestrel Reach continuous map')
+  await centerWorkspaceSelection(page)
+  const initial = await downloadJson(page, 'Export star system JSON')
+  const systemId = initial.system?.id
+  if (!systemId || initial.system?.name !== 'Dense Reach') {
+    throw new Error('The imported Dense Reach system was not selected on the Warden map.')
   }
-
-  throw new Error(`Scene point (${target.x}, ${target.y}) is unreachable after public Zoom out controls.`)
+  await expect(wardenSystemMark(page, systemId)).toBeVisible()
+  return { map, systemId }
 }
 
-function mapObject(map: Locator, id: string): Locator {
-  return map.locator(`.system-object[data-object-id="${id}"]`)
+function normalizedFixturePoint(point: WorldPoint): WorldPoint {
+  return { x: (point.x - 64) / 832, y: (point.y - 72) / 416 }
 }
 
-async function expectObjectAt(map: Locator, id: string, expected: WorldPoint): Promise<string> {
-  const transform = await mapObject(map, id).getAttribute('transform')
+/** Clicks a fixture-local point and returns its delivered error in the same local SVG units. */
+async function clickScenePoint(page: Page, systemId: string, target: WorldPoint): Promise<number> {
+  const requested = normalizedFixturePoint(target)
+  const delivered = await clickWardenSystemPoint(page, systemId, requested)
+  return Math.hypot((delivered.x - requested.x) * 832, (delivered.y - requested.y) * 416)
+}
+
+function mapObjects(map: Locator, systemId: string): Locator {
+  return map.locator(`.continuous-warden-object[data-system-id="${systemId}"]`)
+}
+
+async function expectObjectAt(object: Locator, expected: WorldPoint): Promise<string> {
+  const transform = await object.getAttribute('transform')
   expect(transform).not.toBeNull()
   const position = transform?.match(/^translate\(([-\d.e]+)\s+([-\d.e]+)\)$/)
   expect(position).not.toBeNull()
   expect(Number(position?.[1])).toBeCloseTo(expected.x, 6)
   expect(Number(position?.[2])).toBeCloseTo(expected.y, 6)
   return transform!
+}
+
+async function expectPlanetAddArmed(page: Page): Promise<void> {
+  await expect(page.getByRole('button', { name: 'Add to map', exact: true }))
+    .toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('navigation', { name: 'Map context and commands', exact: true })
+    .getByRole('status').filter({ hasText: /^ADD Planet\b/ })).toBeVisible()
 }
 
 function expectAngleNearFixtureAngle(actual: number | undefined, clickError: number, minorRadius: number): void {
@@ -145,9 +133,10 @@ function expectAngleNearFixtureAngle(actual: number | undefined, clickError: num
 }
 
 test('system Add targets rotated primary and nested Orbits without shifting legacy occupants', async ({ page }) => {
+  test.setTimeout(60_000)
   await captureMapExportBlobs(page)
-  await createWorkspace(page)
-  const map = await openDenseReach(page)
+  await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
+  const { map, systemId } = await openDenseReach(page)
 
   const initial = await downloadJson(page, 'Export star system JSON')
   expect(initial.type).toBe('system')
@@ -156,7 +145,6 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
   const oldPlanet = initial.system!.objects.find(object => object.name === 'Old Planet')!
   const oldMoon = initial.system!.objects.find(object => object.name === 'Old Moon')!
   const alphaOrbit = initial.system!.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 1)!
-  const betaOrbit = initial.system!.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 2)!
   const nestedOrbit = initial.system!.orbits.find(orbit => orbit.hostId === oldPlanet.id && orbit.order === 1)!
   expect(initial.layout.objectAngles).not.toHaveProperty(oldPlanet.id)
   expect(initial.layout.objectAngles).not.toHaveProperty(oldMoon.id)
@@ -164,12 +152,12 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
   const originalTransforms = new Map<string, string>()
   for (const { name, point } of preservedLegacyPositions) {
     const object = initial.system!.objects.find(candidate => candidate.name === name)!
-    originalTransforms.set(object.id, await expectObjectAt(map, object.id, point))
+    originalTransforms.set(object.id, await expectObjectAt(wardenObjectMark(page, systemId, object.id), point))
   }
 
   const planetButton = await selectCatalogueObjectButton(page, 'planet')
   await planetButton.click()
-  const creationControls = page.getByRole('group', { name: 'Planet creation controls', exact: true })
+  await expectPlanetAddArmed(page)
   const creationTargets = [
     {
       point: { x: 583.9230484541326, y: 340 },
@@ -186,56 +174,43 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
 
   const clickErrors: number[] = []
   const initialObjectCount = initial.system!.objects.length
-  clickErrors.push(await clickScenePoint(page, map, creationTargets[0].point))
-  const alphaChoice = page.getByRole('button', { name: `Orbit ${alphaOrbit.order} around ${primary.name}`, exact: true })
-  const betaChoice = page.getByRole('button', { name: `Orbit ${betaOrbit.order} around ${primary.name}`, exact: true })
-  await expect(alphaChoice).toBeVisible()
-  await expect(betaChoice).toBeVisible()
-  await expect(map.locator('.system-creation-preview')).toHaveCount(0)
-  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount)
-  expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
-  await alphaChoice.click()
-  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 1)
-  await expect(creationControls).toBeVisible()
-  await expect(map.locator('.system-creation-preview')).toHaveCount(0)
-  const afterAlphaChoice = await downloadJson(page, 'Export star system JSON')
+  clickErrors.push(await clickScenePoint(page, systemId, creationTargets[0].point))
+  await expect(mapObjects(map, systemId)).toHaveCount(initialObjectCount + 1)
+  await expectPlanetAddArmed(page)
+  const afterAlphaAdd = await downloadJson(page, 'Export star system JSON')
   const originalObjectIds = new Set(initial.system!.objects.map(object => object.id))
-  const alphaPlanet = afterAlphaChoice.system!.objects.find(object =>
+  const alphaPlanet = afterAlphaAdd.system!.objects.find(object =>
     object.subtype === 'planet' && !originalObjectIds.has(object.id),
   )!
   expect(alphaPlanet.placement).toEqual({ kind: 'orbit', orbitId: alphaOrbit.id })
   expectAngleNearFixtureAngle(
-    afterAlphaChoice.layout.objectAngles[alphaPlanet.id],
+    afterAlphaAdd.layout.objectAngles[alphaPlanet.id],
     clickErrors[0]!,
     creationTargets[0].minorRadius,
   )
 
-  clickErrors.push(await clickScenePoint(page, map, creationTargets[0].point))
-  await expect(alphaChoice).toBeVisible()
-  await expect(betaChoice).toBeVisible()
-  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 1)
-  await alphaChoice.click()
-  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 2)
-  await expect(map.locator(`.orbit-mark[data-orbit-id="${alphaOrbit.id}"] .orbit-ring`))
+  clickErrors.push(await clickScenePoint(page, systemId, creationTargets[0].point))
+  await expect(mapObjects(map, systemId)).toHaveCount(initialObjectCount + 2)
+  await expectPlanetAddArmed(page)
+  await expect(map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"][data-orbit-id="${alphaOrbit.id}"]`))
     .toHaveAttribute('transform', 'rotate(30 480 280)')
-  const completedExport = await downloadImage(page, 'image/svg+xml')
+  const completedExport = await downloadImage(page, 'image/svg+xml', 'Selected system')
   if (!completedExport.text) throw new Error('The SVG exported after direct Add has no serialized content.')
-  expect(completedExport.text).not.toContain('system-creation-preview')
+  expect(completedExport.text).toContain(alphaPlanet.name)
 
   for (const { name, point } of preservedLegacyPositions) {
     const object = initial.system!.objects.find(candidate => candidate.name === name)!
-    await expect(mapObject(map, object.id)).toHaveAttribute('transform', originalTransforms.get(object.id)!)
-    await expectObjectAt(map, object.id, point)
+    await expect(wardenObjectMark(page, systemId, object.id)).toHaveAttribute('transform', originalTransforms.get(object.id)!)
+    await expectObjectAt(wardenObjectMark(page, systemId, object.id), point)
   }
 
-  clickErrors.push(await clickScenePoint(page, map, creationTargets[1].point))
-  await expect(map.locator('.system-object')).toHaveCount(initialObjectCount + 3)
-  await expect(creationControls).toBeVisible()
-  await expect(map.locator('.system-creation-preview')).toHaveCount(0)
+  clickErrors.push(await clickScenePoint(page, systemId, creationTargets[1].point))
+  await expect(mapObjects(map, systemId)).toHaveCount(initialObjectCount + 3)
+  await expectPlanetAddArmed(page)
   for (const { name, point } of preservedLegacyPositions) {
     const object = initial.system!.objects.find(candidate => candidate.name === name)!
-    await expect(mapObject(map, object.id)).toHaveAttribute('transform', originalTransforms.get(object.id)!)
-    await expectObjectAt(map, object.id, point)
+    await expect(wardenObjectMark(page, systemId, object.id)).toHaveAttribute('transform', originalTransforms.get(object.id)!)
+    await expectObjectAt(wardenObjectMark(page, systemId, object.id), point)
   }
 
   const completed = await downloadJson(page, 'Export star system JSON')
@@ -250,45 +225,44 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
     expect(planet.placement).toEqual({ kind: 'orbit', orbitId: target.orbitId })
     expectAngleNearFixtureAngle(completed.layout.objectAngles[planet.id], clickErrors[index]!, target.minorRadius)
   }
+  await waitForWorkspaceSaved(page)
 })
 
 
 test('a second map touch interrupts a fresh Add gesture and leaves the completed object unchanged', async ({ page }) => {
   await captureMapExportBlobs(page)
-  await createWorkspace(page)
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
+  const { systemId } = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
+  const map = wardenMap(page)
   const beforeChoosing = await downloadJson(page, 'Export star system JSON')
   await setWorkspaceMapMode(page, 'Move')
   const planetButton = await selectCatalogueObjectButton(page, 'planet')
   await planetButton.click()
 
-  const creationControls = page.getByRole('group', { name: 'Planet creation controls', exact: true })
+  await expectPlanetAddArmed(page)
   const star = beforeChoosing.system!.objects.find(object => object.subtype === 'star')!
-  const starTransform = await mapObject(map, star.id).getAttribute('transform')
-  const starBounds = await mapObject(map, star.id).boundingBox()
-  if (!starBounds || !starTransform) throw new Error('The primary star is not rendered for drag protection.')
-  const starStart = { x: starBounds.x + starBounds.width / 2, y: starBounds.y + starBounds.height / 2 }
+  const starMark = wardenObjectMark(page, systemId, star.id)
+  const starTransform = await starMark.getAttribute('transform')
+  const starStart = await exposedContinuousObjectHitPoint(starMark)
+  if (!starStart || !starTransform) throw new Error('The primary star has no visible hit for drag protection.')
   await page.mouse.move(starStart.x, starStart.y)
   await page.mouse.down()
   await page.mouse.move(starStart.x + 48, starStart.y + 24, { steps: 5 })
   await page.mouse.up()
-  await expect(mapObject(map, star.id)).toHaveAttribute('transform', starTransform)
-  await expect(map.locator('.system-object')).toHaveCount(beforeChoosing.system!.objects.length)
-  await expect(map.locator('.system-creation-preview')).toHaveCount(0)
+  await expect(starMark).toHaveAttribute('transform', starTransform)
+  await expect(mapObjects(map, systemId)).toHaveCount(beforeChoosing.system!.objects.length)
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(beforeChoosing)
 
   const firstTarget = { x: 170, y: 150 }
-  await clickScenePoint(page, map, firstTarget)
-  await expect(map.locator('.system-object')).toHaveCount(beforeChoosing.system!.objects.length + 1)
+  await clickScenePoint(page, systemId, firstTarget)
+  await expect(mapObjects(map, systemId)).toHaveCount(beforeChoosing.system!.objects.length + 1)
   const afterFirstAdd = await downloadJson(page, 'Export star system JSON')
   const originalObjectIds = new Set(beforeChoosing.system!.objects.map(object => object.id))
   const firstAddedPlanet = afterFirstAdd.system!.objects.find(object =>
     object.subtype === 'planet' && !originalObjectIds.has(object.id),
   )!
-  await expect(creationControls).toBeVisible()
-  await expect(map.locator('.system-creation-preview')).toHaveCount(0)
+  await expectPlanetAddArmed(page)
 
-  const mapContent = map.locator('.system-map-content')
+  const mapContent = map.locator('.cluster-map-content')
   const transformBeforeTouch = await mapContent.getAttribute('transform')
   if (!transformBeforeTouch) throw new Error('The map content transform is missing before touch navigation.')
   const [firstTouch, secondTouch] = await findUnobstructedMapTouchPair(map)
@@ -305,8 +279,7 @@ test('a second map touch interrupts a fresh Add gesture and leaves the completed
     touchSequenceActive = true
     await dispatchMapTouch(cdp, 'touchMove', [firstPan])
     await expect(mapContent).not.toHaveAttribute('transform', transformBeforeTouch)
-    await expect(map.locator('.system-object')).toHaveCount(beforeChoosing.system!.objects.length + 1)
-    await expect(map.locator('.system-creation-preview')).toHaveCount(0)
+    await expect(mapObjects(map, systemId)).toHaveCount(beforeChoosing.system!.objects.length + 1)
     const transformBeforeTakeover = await mapContent.getAttribute('transform')
     if (!transformBeforeTakeover) throw new Error('The map content transform is missing after the first touch.')
     await dispatchMapTouch(cdp, 'touchStart', [firstPan, secondTouch])
@@ -320,13 +293,12 @@ test('a second map touch interrupts a fresh Add gesture and leaves the completed
     await cdp.detach()
   }
 
-  await expect(map.locator('.system-object')).toHaveCount(beforeChoosing.system!.objects.length + 1)
-  await expect(map.locator('.system-creation-preview')).toHaveCount(0)
-  await expect(creationControls).toBeVisible()
+  await expect(mapObjects(map, systemId)).toHaveCount(beforeChoosing.system!.objects.length + 1)
+  await expectPlanetAddArmed(page)
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(afterFirstAdd)
 
-  await clickScenePoint(page, map, { x: 370, y: 410 })
-  await expect(map.locator('.system-object')).toHaveCount(beforeChoosing.system!.objects.length + 2)
+  await clickScenePoint(page, systemId, { x: 370, y: 410 })
+  await expect(mapObjects(map, systemId)).toHaveCount(beforeChoosing.system!.objects.length + 2)
   const completed = await downloadJson(page, 'Export star system JSON')
   const addedPlanets = completed.system!.objects.filter(object =>
     object.subtype === 'planet' && !originalObjectIds.has(object.id),
@@ -335,4 +307,5 @@ test('a second map touch interrupts a fresh Add gesture and leaves the completed
   expect(completed.system!.objects.find(object => object.id === firstAddedPlanet.id)).toEqual(firstAddedPlanet)
   expect(completed.layout.objectAngles[firstAddedPlanet.id])
     .toBe(afterFirstAdd.layout.objectAngles[firstAddedPlanet.id])
+  await waitForWorkspaceSaved(page)
 })

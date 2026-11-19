@@ -1,11 +1,18 @@
 import { expect, test } from './fixtures'
-import { waitForWorkspaceSaved, activeWorkspaceFeedback, hideWorkspaceInspector, openWorkspaceHierarchy, openChartDetailsEditor } from './helpers'
-
-
 import {
-  addCatalogueObject,
+  activeWorkspaceFeedback,
   captureMapExportBlobs,
+  clickWardenSystemPoint,
+  createSingleSystemWorkspace,
   downloadJson,
+  hideWorkspaceInspector,
+  openChartDetailsEditor,
+  openWorkspaceHierarchy,
+  quitSystemAdd,
+  selectCatalogueObjectButton,
+  waitForWorkspaceSaved,
+  wardenMap,
+  wardenObjectMark,
 } from './helpers'
 
 type ChartWriteGate = {
@@ -243,10 +250,7 @@ async function readCurrentWorkspace(page: import('@playwright/test').Page): Prom
 
 
 test('dismissing Chromium beforeunload keeps a modified hidden chart draft', async ({ page }) => {
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await createSingleSystemWorkspace(page)
   await waitForWorkspaceSaved(page)
 
   const editor = await openChartDetailsEditor(page)
@@ -269,17 +273,15 @@ test('dismissing Chromium beforeunload keeps a modified hidden chart draft', asy
 
 test('a hidden invalid chart draft survives an unrelated object placement and stays out of export', async ({ page }) => {
   await captureMapExportBlobs(page)
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page)
   await waitForWorkspaceSaved(page)
 
   const editor = await openChartDetailsEditor(page)
   await editor.getByLabel('Jump Cluster').fill('')
   await editor.getByLabel('Star system').fill('Unapplied Vesper')
-  const previewMap = page.getByRole('group', { name: 'Unapplied Vesper star system map', exact: true })
-  await expect(previewMap).toBeVisible()
+  const previewMap = wardenMap(page)
+  const previewName = previewMap.locator(`.continuous-warden-name-target[data-system-id="${systemId}"]`)
+  await expect(previewName).toHaveAccessibleName('Select Unapplied Vesper')
   await editor.getByRole('button', { name: 'Apply details' }).click()
   const validation = editor.getByRole('alert')
   await expect(validation).toHaveText('Jump Cluster name is required.')
@@ -287,7 +289,10 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
   await hideWorkspaceInspector(page)
   await expect(editor).toBeHidden()
 
-  await addCatalogueObject(page, 'jump-point', { preserveDraft: true, noSelection: true })
+  await (await selectCatalogueObjectButton(page, 'jump-point')).click()
+  await clickWardenSystemPoint(page, systemId, { x: 0.33, y: 0.67 })
+  await expect(previewMap.locator('.continuous-warden-object')).toHaveCount(2)
+  await quitSystemAdd(page)
   await waitForWorkspaceSaved(page)
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft' }).click()
   await expect(editor.getByLabel('Jump Cluster')).toHaveValue('')
@@ -295,8 +300,7 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
   await hideWorkspaceInspector(page)
   await expect(editor).toBeHidden()
 
-  await (await openWorkspaceHierarchy(page))
-    .getByRole('button', { name: 'Cluster map' }).click()
+  await wardenObjectMark(page, systemId, primaryObjectId).press('Enter')
   const guard = page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })
   await expect(guard.getByRole('button', { name: 'Apply and continue' })).toBeVisible()
   await guard.getByRole('button', { name: 'Apply and continue' }).click()
@@ -306,11 +310,15 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
   await hideWorkspaceInspector(page)
   await expect(editor).toBeHidden()
   await expect(previewMap).toBeVisible()
+  await expect(previewName).toHaveAccessibleName('Select Unapplied Vesper')
 
-  const exported = await downloadJson(page, 'Export star system JSON')
-  expect(exported.type).toBe('system')
-  expect(exported.system?.name).toBe('Vesper')
-  expect(exported.system?.objects.some(object => object.name === 'Unapplied Vesper')).toBe(false)
+  const exported = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(exported.type).toBe('cluster')
+  expect(exported.cluster?.name).toBe('Kestrel Reach')
+  const appliedSystem = exported.cluster?.systems.find(system => system.id === systemId)
+  expect(appliedSystem?.name).toBe('Vesper')
+  expect(appliedSystem?.objects.filter(object => object.subtype === 'jump-point')).toHaveLength(1)
+  expect(appliedSystem?.objects.some(object => object.name === 'Unapplied Vesper')).toBe(false)
 })
 
 
@@ -319,11 +327,7 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
 
 
 test('failed chart writes keep applied memory and Retry saves the latest workspace without replaying placement', async ({ page }) => {
-  await page.setViewportSize({ width: 844, height: 390 })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  const { systemId } = await createSingleSystemWorkspace(page, { viewport: { width: 844, height: 390 } })
   await waitForWorkspaceSaved(page)
   await installChartWriteGate(page)
 
@@ -335,9 +339,9 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
     expect(await beforeUnloadIsPrevented(page)).toBe(true)
     await editor.getByRole('button', { name: 'Apply details' }).click()
     await expect(editor).toBeHidden()
-    const inspector = page.getByRole('dialog', { name: 'Object inspector', exact: true })
+    const inspector = page.getByRole('dialog', { name: 'Jump Cluster details', exact: true })
     await expect(inspector).toBeVisible()
-    await expect(inspector.getByRole('heading', { name: 'Vesper Prime' })).toBeVisible()
+    await expect(inspector.getByRole('heading', { name: 'Current Reach' })).toBeVisible()
     const compactRecovery = page.getByRole('region', { name: 'Workspace save and recovery' })
     await expect(compactRecovery.getByRole('alert')).toContainText('Not saved.')
     await expect(compactRecovery.getByRole('button', { name: 'Retry save' })).toBeVisible()
@@ -353,15 +357,17 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
     expect(await beforeUnloadIsPrevented(page)).toBe(false)
 
     await page.getByRole('button', { name: 'Close inspector panel' }).click()
-    await expect(page.getByRole('navigation', { name: 'Map context and commands' }).getByRole('heading', { name: 'Vesper Prime' })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Map context and commands' }).getByRole('heading', { name: 'Current Reach' })).toBeVisible()
     await page.setViewportSize({ width: 1440, height: 960 })
-    const desktopHierarchy = page.getByRole('complementary', { name: 'System hierarchy', exact: true })
+    const desktopHierarchy = await openWorkspaceHierarchy(page)
     await expect(desktopHierarchy).toBeVisible()
     await desktopHierarchy.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
     await expect(desktopHierarchy).toBeHidden()
 
     await setChartWriteGate(page, { abortCurrentWrites: 1 })
-    await addCatalogueObject(page, 'jump-point')
+    await (await selectCatalogueObjectButton(page, 'jump-point')).click()
+    await clickWardenSystemPoint(page, systemId, { x: 0.33, y: 0.67 })
+    await quitSystemAdd(page)
     await expect(activeWorkspaceFeedback(page).locator('.save-feedback')).toContainText('Not saved.')
     await expect.poll(async () => (await readChartWriteGate(page)).writeCount).toBeGreaterThanOrEqual(4)
     await expect.poll(async () => (await readCurrentWorkspace(page)).cluster.name).toBe('Current Reach')
@@ -381,19 +387,19 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
     expect(saved.cluster.systems.map(system => system.name)).toEqual(['Vesper Prime'])
     expect(saved.cluster.systems[0]?.objects.filter(object => object.name.startsWith('New jump point'))).toHaveLength(1)
     await page.reload()
-    await openWorkspaceHierarchy(page)
-    await expect(page.getByRole('complementary', { name: 'System hierarchy' })
-      .getByRole('treeitem', { name: /New jump point/ })).toBeVisible()
+    const restoredHierarchy = await openWorkspaceHierarchy(page)
+    const restoredSystem = restoredHierarchy.getByRole('treeitem', { name: 'Vesper Prime', exact: true })
+    if (await restoredSystem.getAttribute('aria-expanded') !== 'true') {
+      await restoredSystem.getByRole('button', { name: 'Expand Vesper Prime', exact: true }).click()
+    }
+    await expect(restoredHierarchy.getByRole('treeitem', { name: /New jump point/ })).toBeVisible()
   } finally {
     await releaseChartWriteGate(page)
   }
 })
 
 test('an older failed write cannot replace newer saving feedback or clear a draft', async ({ page }) => {
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await createSingleSystemWorkspace(page)
   await waitForWorkspaceSaved(page)
   await installChartWriteGate(page)
 

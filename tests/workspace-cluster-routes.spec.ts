@@ -1,24 +1,22 @@
 import { expect, preparedCampaignTest as campaignTest } from './fixtures'
-
-
-
 import {
   captureMapExportBlobs,
   clickDockAction,
   downloadImage,
   setWorkspaceMapMode,
+  wardenMap,
 } from './helpers'
-
 
 campaignTest('invalid route edits focus the validation summary and Stay preserves the edit context', async ({ campaignWorkspacePage: page }) => {
   await setWorkspaceMapMode(page, 'Select')
 
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
+  const clusterMap = wardenMap(page)
+  await expect(clusterMap).toHaveAccessibleName('Kestrel Reach Prime continuous map')
   const initialRoute = clusterMap.getByRole('button', { name: /Jump Level 1.*Vesper Departure.*Harrow Arrival/ })
   const routeId = await initialRoute.getAttribute('data-route-id')
   if (!routeId) throw new Error('The selected route mark has no route identity.')
   const routeMark = clusterMap.locator(`.cluster-route[data-route-id="${routeId}"]`)
-  await routeMark.click()
+  await routeMark.press('Enter')
 
   const inspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
   await inspector.getByRole('button', { name: 'Edit Jump Route', exact: true }).click()
@@ -61,7 +59,7 @@ campaignTest('invalid route edits focus the validation summary and Stay preserve
   await expect(routeMark.locator('.cluster-exit-mark')).toBeVisible()
 
   await captureMapExportBlobs(page)
-  const exported = await downloadImage(page, 'image/svg+xml')
+  const exported = await downloadImage(page, 'image/svg+xml', 'Entire Cluster')
   if (!exported.text) throw new Error('The Warden SVG did not contain a map.')
   const exportedRoute = await page.evaluate(({ text, id }) => {
     const svg = new DOMParser().parseFromString(text, 'image/svg+xml')

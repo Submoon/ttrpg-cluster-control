@@ -4,6 +4,7 @@ import {
   createSingleSystemWorkspace,
   resolveImportReview,
   reviewStarSystemImport,
+  wardenMap,
 } from './helpers'
 import { expectPaletteOptionActive } from './scenarios/search-palette'
 
@@ -105,7 +106,8 @@ test('Search result marks stay decorative and readable, then activate an existin
   await query.fill(clusterName)
   await expect(clusterResult).toBeVisible()
   await clusterResult.click()
-  const clusterMap = page.getByRole('group', { name: `${clusterName} Jump Cluster map`, exact: true })
+  const clusterMap = wardenMap(page)
+  await expect(clusterMap).toHaveAccessibleName(`${clusterName} continuous map`)
   await expect(clusterMap).toBeVisible()
   await expect(searchDialog).toHaveCount(0)
   await expect(clusterMap).toBeFocused()

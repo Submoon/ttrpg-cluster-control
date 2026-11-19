@@ -4,7 +4,10 @@ import {
   captureMapExportBlobs,
   abortNextWorkspaceWrite,
   activeWorkspaceFeedback,
+  centerWorkspaceSelection,
   clickDockAction,
+  clickWardenSystemPoint,
+  createSingleSystemWorkspace,
   downloadJson,
   editMapObject,
   fitWorkspaceMap,
@@ -15,16 +18,17 @@ import {
   openWorkspaceHierarchy,
   resolveJumpClusterRestoreReview,
   reviewJumpClusterBackup,
-  returnToClusterMap,
+  quitSystemAdd,
   saveMapObject,
   selectInspectorOption,
+  selectCatalogueObjectButton,
   setHeaderMapActionsOpen,
   setJsonFile,
   addCustomFieldThroughDialog,
-  addCatalogueObject,
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
   wardenMap,
+  wardenObjectMark,
 } from './helpers'
 import { addStarSystem, createLocalWorkspace, createSystemObject, restoreLocalWorkspace } from '../domain/workspace'
 import { createWorkspaceSnapshot } from '../utils/workspace-storage'
@@ -546,10 +550,7 @@ test('the default Warden map restores a legacy backup with retained layout and v
 test('public campaign creation persists a custom value and unresolved route through reload', async ({ page }) => {
   test.setTimeout(60_000)
   await captureMapExportBlobs(page)
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  const { systemId } = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
 
   const chartNames = await openChartDetailsEditor(page)
   await chartNames.getByLabel('Jump Cluster').fill('Kestrel Reach Prime')
@@ -557,15 +558,30 @@ test('public campaign creation persists a custom value and unresolved route thro
   await chartNames.getByRole('button', { name: 'Apply details' }).click()
   await addCustomFieldThroughDialog(page, 'Warden notes', 'text')
 
-  await addCatalogueObject(page, 'jump-point')
+  const hierarchy = await openWorkspaceHierarchy(page)
+  await hierarchy.getByRole('button', { name: 'Inspect Vesper Prime', exact: true }).click()
+  await centerWorkspaceSelection(page)
+  await hideWorkspaceInspector(page)
+  const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
+  if (await hierarchyToggle.getAttribute('aria-expanded') === 'true') await hierarchyToggle.click()
+  await (await selectCatalogueObjectButton(page, 'jump-point')).click()
+  await clickWardenSystemPoint(page, systemId, { x: .9, y: .9 })
+  await page.getByRole('dialog', { name: 'Choose the owning system', exact: true })
+    .getByRole('button', { name: 'Add Jump Point to Vesper Prime', exact: true }).click()
+  await quitSystemAdd(page)
+  const added = await downloadJson(page, 'Export Jump Cluster JSON')
+  const jumpPoint = added.cluster?.systems.find(system => system.id === systemId)?.objects.find(object => object.subtype === 'jump-point')
+  if (!jumpPoint) throw new Error('The public Add flow did not create the campaign Jump Point.')
+  await wardenObjectMark(page, systemId, jumpPoint.id).press('Enter')
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Vesper Departure')
   await page.getByLabel('Warden notes').fill('A durable campaign note.')
   await saveMapObject(page)
 
-  await returnToClusterMap(page)
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })
+  const clusterMap = wardenMap(page)
+  await expect(clusterMap).toHaveAccessibleName('Kestrel Reach Prime continuous map')
   await clickDockAction(page, 'Add Jump Route')
+  await page.getByRole('button', { name: 'Resume Jump Route', exact: true }).click()
   const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
   await routeInspector.getByRole('spinbutton', { name: 'Jump level' }).fill('12')
   await selectInspectorOption(routeInspector.getByLabel('From system'), 'Vesper Prime')
@@ -573,6 +589,7 @@ test('public campaign creation persists a custom value and unresolved route thro
   await selectInspectorOption(routeInspector.getByLabel('Route destination'), 'Unresolved external exit')
   await routeInspector.getByLabel('Unknown destination label').fill('The Quiet Expanse')
   await routeInspector.getByRole('button', { name: 'Create Jump Route', exact: true }).click()
+  await fitWorkspaceMap(page)
   await expect(clusterMap.getByRole('button', {
     name: /Select Jump Level 12 route from Vesper Departure \(Vesper Prime\) to unknown destination: The Quiet Expanse/,
   })).toBeVisible()
@@ -591,10 +608,11 @@ test('public campaign creation persists a custom value and unresolved route thro
   })])
 
   await page.reload()
-  await returnToClusterMap(page)
+  await waitForWorkspaceStartup(page)
+  await fitWorkspaceMap(page)
   const afterReload = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterReload).toEqual(beforeReload)
-  await expect(page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })
+  await expect(wardenMap(page)
     .getByRole('button', {
       name: /Select Jump Level 12 route from Vesper Departure \(Vesper Prime\) to unknown destination: The Quiet Expanse/,
     }))

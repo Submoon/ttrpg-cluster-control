@@ -287,6 +287,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const publicationMenu = usePublicationMenu({
     workspace,
     store,
+    continuousMap: options.continuousMap,
     canRestoreFocus: options.canRestorePublicationFocus,
     prepareContextObjectSelection: navigation.selectContextObject,
   })

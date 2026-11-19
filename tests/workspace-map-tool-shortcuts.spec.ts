@@ -1,30 +1,51 @@
-import { expect, test } from './fixtures'
+import { expect, test, type Page } from './fixtures'
 import {
   createSingleSystemWorkspace,
   selectCatalogueObjectButton,
+  waitForWorkspaceSaved,
+  wardenMap,
 } from './helpers'
+
+async function readSavedWorkspace(page: Page): Promise<unknown> {
+  return page.evaluate(async () => {
+    const open = indexedDB.open('ttrpg-cluster-control')
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      open.onsuccess = () => resolve(open.result)
+      open.onerror = () => reject(open.error ?? new Error('Could not open the saved workspace.'))
+    })
+    try {
+      return await new Promise<unknown>((resolve, reject) => {
+        const record = database.transaction('workspace', 'readonly').objectStore('workspace').get('current')
+        record.onsuccess = () => resolve(record.result)
+        record.onerror = () => reject(record.error ?? new Error('Could not read the saved workspace.'))
+      })
+    } finally {
+      database.close()
+    }
+  })
+}
 
 test('map tool shortcuts follow the produced letter instead of physical key code', async ({ page }) => {
   await createSingleSystemWorkspace(page)
 
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
+  const map = wardenMap(page)
   const modes = page.getByRole('group', { name: 'Map interaction mode', exact: true })
-  const navigate = modes.getByRole('button', { name: 'Navigate', exact: true })
+  const move = modes.getByRole('button', { name: 'Move', exact: true })
   const select = modes.getByRole('button', { name: 'Select', exact: true })
-  const navigateKey = page.locator('kbd').filter({ hasText: /^n$/i })
-  await expect(navigate).toHaveText('')
-  await navigate.hover()
-  await expect(navigateKey).toBeVisible()
+  const moveKey = page.locator('kbd').filter({ hasText: /^m$/i })
+  await expect(move).toHaveText('')
+  await move.hover()
+  await expect(moveKey).toBeVisible()
   await page.mouse.move(0, 0)
-  await expect(navigateKey).toBeHidden()
+  await expect(moveKey).toBeHidden()
   await select.focus()
   await page.keyboard.press('Tab')
-  await expect(navigate).toBeFocused()
-  await expect(navigateKey).toBeVisible()
+  await expect(move).toBeFocused()
+  await expect(moveKey).toBeVisible()
 
   await map.focus()
-  await page.keyboard.press('n')
-  await expect(navigate).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('m')
+  await expect(move).toHaveAttribute('aria-pressed', 'true')
 
   await map.evaluate((element) => element.dispatchEvent(new KeyboardEvent('keydown', {
     key: 's', code: 'KeyQ', bubbles: true, cancelable: true,
@@ -43,16 +64,19 @@ test('map tool shortcuts follow the produced letter instead of physical key code
   await expect(modes.getByRole('button', { name: 'Move', exact: true })).toHaveAttribute('aria-pressed', 'true')
 
   await map.evaluate((element) => element.dispatchEvent(new KeyboardEvent('keydown', {
-    key: 'N', code: 'KeyN', bubbles: true, cancelable: true,
+    key: 'S', code: 'KeyS', bubbles: true, cancelable: true,
   })))
-  await expect(modes.getByRole('button', { name: 'Navigate', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(select).toHaveAttribute('aria-pressed', 'true')
 })
 
 
 test('Escape closes the Add chooser and map Help while preserving the armed type @ui-smoke', async ({ page }) => {
   await createSingleSystemWorkspace(page, { viewport: { width: 1280, height: 800 } })
+  await waitForWorkspaceSaved(page)
+  const initial = await readSavedWorkspace(page)
+  expect(initial).toBeDefined()
 
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
+  const map = wardenMap(page)
   const toolbar = page.getByRole('navigation', { name: 'Map context and commands' })
   const header = page.locator('header').filter({ has: page.getByRole('region', { name: 'Current Jump Cluster' }) })
   const fields = header.getByRole('button', { name: 'Open field definitions', exact: true })
@@ -62,7 +86,7 @@ test('Escape closes the Add chooser and map Help while preserving the armed type
   const shortcuts = guide.getByRole('heading', { name: /shortcuts/i })
   const add = page.getByRole('button', { name: 'Add to map', exact: true, includeHidden: true })
   const quitAdd = toolbar.getByRole('button', { name: 'Quit Add and return to Select' })
-  const objects = map.locator('.system-object')
+  const objects = map.locator('.continuous-warden-object')
 
   await fields.focus()
   await page.keyboard.press('Tab')
@@ -110,11 +134,12 @@ test('Escape closes the Add chooser and map Help while preserving the armed type
   await page.keyboard.press('Escape')
   await expect(add).toHaveAttribute('aria-pressed', 'false')
   await expect(quitAdd).toHaveCount(0)
-  await expect(objects).toHaveCount(1)
+  await waitForWorkspaceSaved(page)
+  expect(await readSavedWorkspace(page)).toEqual(initial)
 
   await page.setViewportSize({ width: 1280, height: 800 })
   await toolbar.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-  await expect(page.getByRole('complementary', { name: 'System hierarchy' })).toBeVisible()
+  await expect(page.getByRole('complementary', { name: 'Jump Cluster contents' })).toBeVisible()
   await help.press('Enter')
   await expect(closeGuide).toBeFocused()
 
@@ -123,7 +148,7 @@ test('Escape closes the Add chooser and map Help while preserving the armed type
   await expect(closeGuide).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(guide).toBeHidden()
-  const compactHierarchy = page.getByRole('dialog', { name: 'System hierarchy' })
+  const compactHierarchy = page.getByRole('dialog', { name: 'Jump Cluster contents' })
   const closeHierarchy = compactHierarchy.getByRole('button', { name: 'Close hierarchy panel' })
   await expect(closeHierarchy).toBeFocused()
   await page.keyboard.press('Enter')

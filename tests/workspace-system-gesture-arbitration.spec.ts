@@ -2,14 +2,21 @@ import { expect, test, type Locator, type Page } from './fixtures'
 import {
   waitForWorkspaceSaved,
   activeWorkspaceFeedback,
-  addCatalogueObject,
-  beginDragToWorldPoint,
   captureMapExportBlobs,
-  clickDockAction,
+  centerWorkspaceSelection,
+  clickWardenSystemPoint,
+  createSingleSystemWorkspace,
+  dockAction,
   downloadJson,
-  ensureMapDragPointsReachable,
-  openWorkspaceHierarchy,
+  exposedContinuousObjectHitPoint,
+  quitSystemAdd,
+  selectCatalogueObjectButton,
+  selectInspectorOption,
   setWorkspaceMapMode,
+  wardenLocalCoordinates,
+  wardenMap,
+  wardenObjectMark,
+  wardenSystemMark,
   workspaceNavigation,
 } from './helpers'
 
@@ -22,61 +29,63 @@ type WorkspaceWriteGate = {
   currentWriteAttempts?: number
 }
 type WorkspaceWriteGateWindow = Window & { __gestureWriteGate?: WorkspaceWriteGate }
+const activeTouchSessions = new WeakSet<Awaited<ReturnType<typeof enableTouch>>>()
 
-async function createWorkspace(page: Page): Promise<void> {
+async function createWorkspace(page: Page) {
   await captureMapExportBlobs(page)
-  await page.setViewportSize({ width: 1440, height: 960 })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  const identity = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
   await waitForWorkspaceSaved(page)
+  return identity
 }
 
 async function createHostedOrbit(page: Page): Promise<{
   map: Locator
-  orbit: Locator
   ring: Locator
-  orbitTarget: Locator
+  systemId: string
+  primaryObjectId: string
 }> {
-  await createWorkspace(page)
-  const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
-  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
-  const orbit = map.getByRole('group', { name: 'Orbit 1 around Primary Star', exact: true })
-  await expect(orbit).toBeVisible()
-  await hierarchy.getByRole('treeitem', { name: /Orbit 1 around Primary Star/ }).click()
+  const { systemId, primaryObjectId } = await createWorkspace(page)
+  await (await dockAction(page, 'Add orbit')).click()
+  const controls = page.getByRole('group', { name: 'Orbit creation controls', exact: true })
+  const placement = controls.getByRole('button', { name: 'Placement', exact: true })
+  if (await placement.getAttribute('aria-expanded') !== 'true') await placement.click()
+  await selectInspectorOption(page.getByLabel('Orbit center or host', { exact: true }), {
+    identity: { attribute: 'data-object-id', id: primaryObjectId },
+  })
+  await page.getByRole('form', { name: 'Placement', exact: true })
+    .getByRole('button', { name: 'Add', exact: true }).click()
+  await quitSystemAdd(page)
+  const map = wardenMap(page)
+  const ring = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"]`)
+  await expect(ring).toHaveCount(1)
+  const { start } = await orbitDragPoints(ring, 1, .5)
+  await page.mouse.click(start.x, start.y)
   await closeVisiblePanels(page)
-  await page.getByRole('button', { name: 'Fit map', exact: true }).click()
-  return {
-    map,
-    orbit,
-    ring: orbit.locator('.orbit-ring'),
-    orbitTarget: orbit.locator('.orbit-hit-target'),
-  }
+  await centerWorkspaceSelection(page)
+  await waitForWorkspaceSaved(page)
+  return { map, ring, systemId, primaryObjectId }
 }
 
 async function createFreeOrbitWithPassenger(page: Page): Promise<{
   map: Locator
-  orbit: Locator
   ring: Locator
   centerHandle: Locator
   passenger: Locator
+  systemId: string
+  primaryObjectId: string
 }> {
-  await createWorkspace(page)
-  const hierarchy = await openWorkspaceHierarchy(page)
-  await clickDockAction(page, 'Add orbit', { target: { kind: 'center', x: 0.2, y: 0.3 } })
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
-  const orbit = map.getByRole('group', { name: 'Orbit 1 around unoccupied center', exact: true })
-  await addCatalogueObject(page, 'planet', {
-    target: { kind: 'orbit', label: 'Orbit 1 around unoccupied center', angleDegrees: 90 },
-  })
-  const passenger = map.getByRole('button', { name: /New planet 1/ })
+  const { systemId, primaryObjectId } = await createWorkspace(page)
+  await (await dockAction(page, 'Add orbit')).click()
+  await clickWardenSystemPoint(page, systemId, { x: .2, y: .3 })
+  await quitSystemAdd(page)
+  const map = wardenMap(page)
+  const ring = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"]`)
+  await expect(ring).toHaveCount(1)
+  const passenger = await addPlanetOnOrbit(page, systemId, ring, Math.PI / 2)
   await expect(passenger).toBeVisible()
-  const ring = orbit.locator('.orbit-ring')
   await expect(ring).toHaveAttribute('ry', '112')
-  await hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center/ }).click()
+  const { start } = await orbitDragPoints(ring, 1, .5)
+  await page.mouse.click(start.x, start.y)
   await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('16')
   await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('60')
@@ -84,8 +93,27 @@ async function createFreeOrbitWithPassenger(page: Page): Promise<{
   await expect(ring).toHaveAttribute('rx', '16')
   await expect(ring).toHaveAttribute('ry', '60')
   await closeVisiblePanels(page)
-  await page.getByRole('button', { name: 'Fit map', exact: true }).click()
-  return { map, orbit, ring, centerHandle: orbit.locator('.orbit-center-handle'), passenger }
+  await wardenSystemMark(page, systemId).focus()
+  await page.keyboard.press('Enter')
+  await closeVisiblePanels(page)
+  await centerWorkspaceSelection(page)
+  await waitForWorkspaceSaved(page)
+  return {
+    map, ring, systemId, primaryObjectId, passenger,
+    centerHandle: map.locator(`.continuous-warden-orbit-center-handle[data-system-id="${systemId}"]`),
+  }
+}
+
+async function addPlanetOnOrbit(page: Page, systemId: string, ring: Locator, angle = 0): Promise<Locator> {
+  await (await selectCatalogueObjectButton(page, 'planet')).click()
+  const { start } = await orbitDragPoints(ring, 1, angle)
+  await page.mouse.click(start.x, start.y)
+  await quitSystemAdd(page)
+  await waitForWorkspaceSaved(page)
+  const exported = await downloadJson(page, 'Export star system JSON')
+  const planet = exported.system?.objects.find(object => object.subtype === 'planet')
+  if (!planet) throw new Error('The Orbit Add did not create its passenger.')
+  return wardenObjectMark(page, systemId, planet.id)
 }
 
 async function closeVisiblePanels(page: Page): Promise<void> {
@@ -124,12 +152,28 @@ async function dispatchTouch(
       force: 1,
     })),
   })
+  if (type === 'touchStart') activeTouchSessions.add(cdp)
+  else if (type === 'touchEnd' || type === 'touchCancel') activeTouchSessions.delete(cdp)
 }
 
 async function pointAtCenter(locator: Locator): Promise<TouchPoint> {
-  const bounds = await locator.boundingBox()
-  if (!bounds) throw new Error('The touch target has no visible bounds.')
-  return { id: 1, x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+  const point = await locator.evaluate((element) => {
+    if (!(element instanceof SVGCircleElement)) throw new Error('The touch handle is not a circle.')
+    const matrix = element.getScreenCTM()
+    if (!matrix) throw new Error('The touch handle is not attached to the map.')
+    for (const fraction of [0, .5, .85]) {
+      for (let index = 0; index < 16; index += 1) {
+        const angle = index * Math.PI / 8
+        const point = new DOMPoint(
+          element.cx.baseVal.value + Math.cos(angle) * element.r.baseVal.value * fraction,
+          element.cy.baseVal.value + Math.sin(angle) * element.r.baseVal.value * fraction,
+        ).matrixTransform(matrix)
+        if (document.elementFromPoint(point.x, point.y) === element) return { x: point.x, y: point.y }
+      }
+    }
+    throw new Error('The touch handle has no unobstructed hit in the visible viewport.')
+  })
+  return { id: 1, ...point }
 }
 
 async function orbitDragPoints(
@@ -138,23 +182,50 @@ async function orbitDragPoints(
   angle: number,
 ): Promise<{ start: ScreenPoint; end: ScreenPoint }> {
   return orbitTarget.evaluate((element, target) => {
-    const ellipse = element as SVGEllipseElement
+    if (!(element instanceof SVGEllipseElement)) throw new Error('The Orbit input target is not an ellipse.')
+    const ellipse = element
+    const systemId = ellipse.getAttribute('data-system-id')
+    const orbitId = ellipse.getAttribute('data-orbit-id')
+    if (!systemId || !orbitId) throw new Error('The Orbit input target has no owner-qualified identity.')
     const transform = ellipse.getScreenCTM()
     if (!transform) throw new Error('The Orbit hit target is not attached to the map.')
     const cx = Number(ellipse.getAttribute('cx'))
     const cy = Number(ellipse.getAttribute('cy'))
     const rx = Number(ellipse.getAttribute('rx'))
     const ry = Number(ellipse.getAttribute('ry'))
-    const screenPoint = (factor: number) => new DOMPoint(
-      cx + rx * factor * Math.cos(target.angle),
-      cy + ry * factor * Math.sin(target.angle),
-    ).matrixTransform(transform)
-    const start = screenPoint(1)
-    const end = screenPoint(target.scale)
-    return {
-      start: { x: start.x, y: start.y },
-      end: { x: end.x, y: end.y },
+    const map = element.closest('svg')
+    const screenRadius = Math.max(
+      Math.hypot(transform.a * rx, transform.b * rx),
+      Math.hypot(transform.c * ry, transform.d * ry),
+    )
+    // Sample at most half a CSS pixel apart, preferring the requested angle over distant paint.
+    // Native hits must land on the dashed ring itself; axis handles would change the drag's meaning.
+    const sampleCount = Math.max(64, Math.ceil(4 * Math.PI * screenRadius))
+    const inverse = transform.inverse()
+    for (let sample = 0; sample < sampleCount; sample += 1) {
+      const offset = Math.ceil(sample / 2) * (sample % 2 ? 1 : -1) * Math.PI * 2 / sampleCount
+      const point = new DOMPoint(cx + rx * Math.cos(target.angle + offset), cy + ry * Math.sin(target.angle + offset))
+        .matrixTransform(transform)
+      for (const dx of [0, -1, 1]) {
+        for (const dy of [0, -1, 1]) {
+          const start = { x: Math.round(point.x) + dx, y: Math.round(point.y) + dy }
+          if (document.elementFromPoint(start.x, start.y) !== ellipse) continue
+          const localStart = new DOMPoint(start.x, start.y).matrixTransform(inverse)
+          const destination = new DOMPoint(
+            cx + (localStart.x - cx) * target.scale,
+            cy + (localStart.y - cy) * target.scale,
+          ).matrixTransform(transform)
+          const end = { x: Math.round(destination.x), y: Math.round(destination.y) }
+          const reachable = Array.from({ length: 7 }, (_, step) => {
+            const x = start.x + (end.x - start.x) * step / 6
+            const y = start.y + (end.y - start.y) * step / 6
+            return map?.contains(document.elementFromPoint(x, y))
+          }).every(Boolean)
+          if (reachable) return { start, end }
+        }
+      }
     }
+    throw new Error(`Orbit ${orbitId} in system ${systemId} has no frontmost painted ring hit with an unobstructed native drag path.`)
   }, { scale, angle })
 }
 
@@ -229,11 +300,12 @@ async function expectWorkspaceMode(page: Page, mode: 'Navigate' | 'Select' | 'Mo
 async function visibleMapBackgroundPair(map: Locator): Promise<[ScreenPoint, ScreenPoint]> {
   return map.evaluate((element) => {
     const svg = element instanceof SVGSVGElement ? element : element.querySelector('svg')
-    if (!(svg instanceof SVGSVGElement)) throw new Error('The system map SVG is not available.')
+    if (!(svg instanceof SVGSVGElement)) throw new Error('The Warden map SVG is not available.')
     const bounds = svg.getBoundingClientRect()
     const isBackground = (x: number, y: number): boolean => {
       const hit = document.elementFromPoint(x, y)
-      return hit === svg || (hit instanceof Element && hit.matches('.map-background, .map-grid'))
+      return !!hit && (hit === svg || svg.contains(hit))
+        && !(hit instanceof Element && hit.closest('[role="button"], [role="slider"], [data-map-obstruction]'))
     }
     for (let y = Math.max(12, Math.ceil(bounds.top + 24)); y < Math.min(window.innerHeight, bounds.bottom) - 24; y += 12) {
       for (let x = Math.max(12, Math.ceil(bounds.left + 24)); x + 56 < Math.min(window.innerWidth, bounds.right) - 24; x += 12) {
@@ -242,7 +314,7 @@ async function visibleMapBackgroundPair(map: Locator): Promise<[ScreenPoint, Scr
         }
       }
     }
-    throw new Error('Could not find two unobstructed system-map background points.')
+    throw new Error('Could not find two unobstructed Warden background points.')
   })
 }
 
@@ -251,9 +323,9 @@ async function cameraOnlyRightPanAndSecondTouch(
   map: Locator,
   cdp: Awaited<ReturnType<typeof enableTouch>>,
 ): Promise<void> {
-  const scene = map.locator('.system-map-content')
+  const scene = map.locator('.cluster-map-content')
   const transformBefore = await scene.getAttribute('transform')
-  if (transformBefore === null) throw new Error('The system map has no view transform.')
+  if (transformBefore === null) throw new Error('The Warden map has no view transform.')
   const [panStart] = await visibleMapBackgroundPair(map)
   await page.mouse.move(panStart.x, panStart.y)
   await page.mouse.down({ button: 'right' })
@@ -276,21 +348,9 @@ async function cameraOnlyRightPanAndSecondTouch(
 }
 
 test('Escape restores an Orbit ring drag before its late mouse release', async ({ page }) => {
-  await createWorkspace(page)
-  const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star' }).click()
-  await clickDockAction(page, 'Add orbit', { target: { kind: 'host', name: 'Primary Star' } })
-
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
-  const orbit = map.getByRole('group', { name: 'Orbit 1 around Primary Star', exact: true })
-  const ring = orbit.locator('.orbit-ring')
-  const orbitTarget = orbit.locator('.orbit-hit-target')
-  await expect(orbit).toBeVisible()
-  await hierarchy.getByRole('treeitem', { name: /Orbit 1 around Primary Star/ }).click()
-  await closeVisiblePanels(page)
-  await page.getByRole('button', { name: 'Fit map', exact: true }).click()
+  const { ring } = await createHostedOrbit(page)
   await setWorkspaceMapMode(page, 'Move')
-  await expect(orbitTarget).toHaveAttribute('role', 'slider')
+  await expect(ring).toHaveAttribute('role', 'button')
 
   const before = await exportSystemJson(page)
   const system = before.system
@@ -299,7 +359,8 @@ test('Escape restores an Orbit ring drag before its late mouse release', async (
   if (!orbitId) throw new Error('The exported star system does not contain an Orbit.')
   const radiusXBefore = Number(await ring.getAttribute('rx'))
   const radiusYBefore = Number(await ring.getAttribute('ry'))
-  const points = await orbitDragPoints(orbitTarget, 1.3, 0.5)
+  const recordsBefore = await readWorkspaceRecords(page)
+  const points = await orbitDragPoints(ring, 1.3, 0.5)
 
   await page.mouse.move(points.start.x, points.start.y)
   await page.mouse.down()
@@ -312,12 +373,14 @@ test('Escape restores an Orbit ring drag before its late mouse release', async (
   await page.keyboard.press('Escape')
   await expect(ring).toHaveAttribute('rx', String(radiusXBefore))
   await expect(ring).toHaveAttribute('ry', String(radiusYBefore))
+  // Release after the old click-suppression window so cancellation must survive the late pointerup.
   await page.waitForTimeout(1700)
   await page.mouse.up()
 
   expect(await exportSystemJson(page)).toEqual(before)
+  expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
 
-  const freshPoints = await orbitDragPoints(orbitTarget, 1.3, 0.5)
+  const freshPoints = await orbitDragPoints(ring, 1.3, 0.5)
   await page.mouse.move(freshPoints.start.x, freshPoints.start.y)
   await page.mouse.down()
   await page.mouse.move(freshPoints.end.x, freshPoints.end.y, { steps: 6 })
@@ -337,9 +400,10 @@ test('Escape restores an Orbit ring drag before its late mouse release', async (
 
 
 test('touchcancel restores an unoccupied Orbit center and failed host attachment can be retried', async ({ page }) => {
+  test.setTimeout(60_000)
   const cdp = await enableTouch(page)
   try {
-    const { map, orbit, ring, centerHandle, passenger } = await createFreeOrbitWithPassenger(page)
+    const { map, ring, centerHandle, passenger, systemId, primaryObjectId } = await createFreeOrbitWithPassenger(page)
     await setWorkspaceMapMode(page, 'Move')
     const beforeCancel = await exportSystemJson(page)
     const recordsBeforeCancel = await readWorkspaceRecords(page)
@@ -349,7 +413,6 @@ test('touchcancel restores an unoccupied Orbit center and failed host attachment
     const start = await pointAtCenter(centerHandle)
     await dispatchTouch(cdp, 'touchStart', [start])
     await dispatchTouch(cdp, 'touchMove', [{ ...start, x: start.x + 28, y: start.y + 20 }])
-    await expect(centerHandle).toHaveClass(/is-moving/)
     await expect(ring).not.toHaveAttribute('cx', centerXBefore!)
     await expect(passenger).not.toHaveAttribute('transform', passengerBefore!)
     await expect(ring).toHaveAttribute('ry', '60')
@@ -357,7 +420,6 @@ test('touchcancel restores an unoccupied Orbit center and failed host attachment
     await expect(ring).toHaveAttribute('cx', centerXBefore!)
     await expect(ring).toHaveAttribute('cy', centerYBefore!)
     await expect(passenger).toHaveAttribute('transform', passengerBefore!)
-    await expect(centerHandle).not.toHaveClass(/is-moving/)
     await expectWorkspaceMode(page, 'Move')
     expect(await readWorkspaceRecords(page)).toEqual(recordsBeforeCancel)
     expect(await exportSystemJson(page)).toEqual(beforeCancel)
@@ -365,7 +427,7 @@ test('touchcancel restores an unoccupied Orbit center and failed host attachment
     const beforeMove = await exportSystemJson(page)
     const systemBeforeMove = beforeMove.system
     if (!systemBeforeMove) throw new Error('The exported file does not contain a star system.')
-    const originalOrbitId = await orbit.getAttribute('data-orbit-id')
+    const originalOrbitId = await ring.getAttribute('data-orbit-id')
     if (!originalOrbitId) throw new Error('The selected free Orbit has no identity.')
     const originalOrbit = systemBeforeMove.orbits.find(candidate => candidate.id === originalOrbitId)
     if (!originalOrbit) throw new Error('The selected free Orbit is missing from the exported system.')
@@ -373,40 +435,34 @@ test('touchcancel restores an unoccupied Orbit center and failed host attachment
     expect(beforeMove.layout.orbitRadii[originalOrbit.id]).toEqual({ horizontal: 16, vertical: 60 })
     const primaryStar = systemBeforeMove.objects.find(object => object.name === 'Primary Star')
     if (!primaryStar) throw new Error('The exported system has no Primary Star.')
-    const host = map.getByRole('button', { name: /Primary Star/ })
+    const host = wardenObjectMark(page, systemId, primaryObjectId)
     const hostPoint = await host.evaluate(element => {
       const transform = element.getAttribute('transform')?.match(/^translate\(([^ ]+) ([^)]+)\)$/)
       if (!transform) throw new Error('Could not locate Primary Star on the map.')
       return { x: Number(transform[1]), y: Number(transform[2]) }
     })
     const recordsBeforeWrite = await readWorkspaceRecords(page)
-    await ensureMapDragPointsReachable(page, map, centerHandle, hostPoint)
+    const coordinates = await wardenLocalCoordinates(page, systemId)
+    const retryDestination = coordinates.toClient(hostPoint)
+    expect(await map.evaluate((element, point) =>
+      element.contains(document.elementFromPoint(point.x, point.y)), retryDestination)).toBe(true)
     await installOneCurrentWriteFailure(page)
     let appliedMemory: Awaited<ReturnType<typeof exportSystemJson>> | undefined
     try {
       const retryStart = await pointAtCenter(centerHandle)
-      const retryDestination = await map.evaluate((element, worldPoint) => {
-        const content = element.querySelector<SVGGElement>('.system-map-content')
-        const transform = content?.getScreenCTM()
-        if (!transform) throw new Error('The system map content is not attached to the document.')
-        const screenPoint = new DOMPoint(worldPoint.x, worldPoint.y).matrixTransform(transform)
-        return { x: screenPoint.x, y: screenPoint.y }
-      }, hostPoint)
       await dispatchTouch(cdp, 'touchStart', [retryStart])
       await dispatchTouch(cdp, 'touchMove', [{
         ...retryStart,
         x: retryDestination.x,
         y: retryDestination.y,
       }])
-      await expect(centerHandle).toHaveClass(/is-moving/)
       await expect.poll(async () => Number(await ring.getAttribute('cx')))
         .toBeCloseTo(hostPoint.x, 0)
       await expect(ring).toHaveAttribute('rx', '39')
       await expect(ring).toHaveAttribute('ry', '60')
       await dispatchTouch(cdp, 'touchEnd', [])
 
-      const attachedOrbitMark = map.locator(`.orbit-mark[data-orbit-id="${originalOrbitId}"]`)
-      const hostedRing = attachedOrbitMark.locator('.orbit-ring')
+      const hostedRing = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"][data-orbit-id="${originalOrbitId}"]`)
       await expect(hostedRing).toHaveAttribute('rx', '39')
       await expect(hostedRing).toHaveAttribute('ry', '60')
       await expect(activeWorkspaceFeedback(page).getByRole('alert')).toContainText('Not saved.')
@@ -434,11 +490,16 @@ test('touchcancel restores an unoccupied Orbit center and failed host attachment
     const recordsAfterRetry = await readWorkspaceRecords(page)
     expect(recordsAfterRetry).not.toEqual(recordsBeforeWrite)
     await page.reload()
+    await expect(wardenMap(page)).toBeVisible()
+    await wardenSystemMark(page, systemId).focus()
+    await page.keyboard.press('Enter')
     const afterReload = await exportSystemJson(page)
     if (!appliedMemory) throw new Error('The failed save did not preserve applied memory for reload verification.')
     expect(afterReload).toEqual(appliedMemory)
     expect(afterReload.system?.orbits).toHaveLength(systemBeforeMove.orbits.length)
   } finally {
+    if (activeTouchSessions.has(cdp)) await dispatchTouch(cdp, 'touchCancel', [])
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false })
     await cdp.detach()
   }
 })
@@ -448,38 +509,44 @@ test('touchcancel restores an unoccupied Orbit center and failed host attachment
 test('blur restores an attached host drag and Move camera takeover changes only the view', async ({ page }) => {
   const cdp = await enableTouch(page)
   try {
-    const { map, ring } = await createHostedOrbit(page)
-    await addCatalogueObject(page, 'planet', {
-      target: { kind: 'orbit', label: 'Orbit 1 around Primary Star' },
-    })
+    const { map, ring, systemId, primaryObjectId } = await createHostedOrbit(page)
+    const passenger = await addPlanetOnOrbit(page, systemId, ring)
     await closeVisiblePanels(page)
     await setWorkspaceMapMode(page, 'Move')
     const before = await exportSystemJson(page)
     const recordsBefore = await readWorkspaceRecords(page)
-    const host = map.getByRole('button', { name: /Primary Star/ })
-    const hostTarget = host.locator('.object-hit-target')
+    const host = wardenObjectMark(page, systemId, primaryObjectId)
     const hostTransformBefore = await host.getAttribute('transform')
     const ringCenterBefore = await ring.getAttribute('cx')
-    const passenger = map.getByRole('button', { name: /New planet 1/ })
     const passengerTransformBefore = await passenger.getAttribute('transform')
     const position = await host.evaluate(element => {
       const transform = element.getAttribute('transform')?.match(/^translate\(([^ ]+) ([^)]+)\)$/)
       if (!transform) throw new Error('Could not locate the attached host.')
       return { x: Number(transform[1]), y: Number(transform[2]) }
     })
-    const destination = { x: position.x + 350, y: position.y + 220 }
-    await ensureMapDragPointsReachable(page, map, hostTarget, destination)
-    await beginDragToWorldPoint(page, map, hostTarget, destination)
-    await expect(host).toHaveClass(/is-dragging/)
+    const coordinates = await wardenLocalCoordinates(page, systemId)
+    const hostClient = coordinates.toClient(position)
+    const destinationClient = { x: hostClient.x + 64, y: hostClient.y + 40 }
+    expect(await map.evaluate((element, point) =>
+      element.contains(document.elementFromPoint(point.x, point.y)), destinationClient)).toBe(true)
+    const start = await exposedContinuousObjectHitPoint(host)
+    if (!start) throw new Error('The attached host has no exposed pointer hit.')
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    await page.mouse.move(destinationClient.x, destinationClient.y, { steps: 6 })
+    await expect(host).toHaveClass(/is-move-preview/)
     await expect(host).not.toHaveAttribute('transform', hostTransformBefore!)
     await expect(ring).not.toHaveAttribute('cx', ringCenterBefore!)
     await expect(passenger).not.toHaveAttribute('transform', passengerTransformBefore!)
     await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+    await expect(host).toHaveAttribute('transform', hostTransformBefore!)
+    await expect(ring).toHaveAttribute('cx', ringCenterBefore!)
+    await expect(passenger).toHaveAttribute('transform', passengerTransformBefore!)
     await page.mouse.up()
     await expect(host).toHaveAttribute('transform', hostTransformBefore!)
     await expect(ring).toHaveAttribute('cx', ringCenterBefore!)
     await expect(passenger).toHaveAttribute('transform', passengerTransformBefore!)
-    await expect(host).not.toHaveClass(/is-dragging/)
+    await expect(host).not.toHaveClass(/is-move-preview/)
     await expectWorkspaceMode(page, 'Move')
     expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
     expect(await exportSystemJson(page)).toEqual(before)
@@ -489,6 +556,9 @@ test('blur restores an attached host drag and Move camera takeover changes only 
     expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
     expect(await exportSystemJson(page)).toEqual(before)
   } finally {
+    await page.mouse.up()
+    if (activeTouchSessions.has(cdp)) await dispatchTouch(cdp, 'touchCancel', [])
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false })
     await cdp.detach()
   }
 })

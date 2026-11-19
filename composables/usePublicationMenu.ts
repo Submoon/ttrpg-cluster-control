@@ -17,6 +17,7 @@ interface OwnedMenu extends PublicationMenuView {
   clusterId: string
   context: string
   mapCanvas: Element | null
+  hierarchyOrigin: { tree: Element; rowKey: string } | null
   selectionPending: boolean
 }
 
@@ -32,16 +33,32 @@ function isVisible(element: Element): boolean {
   return true
 }
 
+function captureHierarchyOrigin(request: PublicationMenuRequest): OwnedMenu['hierarchyOrigin'] {
+  const item = request.opener.closest('[role="treeitem"]')
+  const row = item?.matches('[data-hierarchy-key]')
+    ? item
+    : [...(item?.querySelectorAll('[data-hierarchy-key]') ?? [])]
+        .find(candidate => candidate.closest('[role="treeitem"]') === item)
+  const tree = row?.closest('[role="tree"]')
+  const rowKey = row?.getAttribute('data-hierarchy-key')
+  return tree && rowKey && row?.getAttribute('data-system-id') === request.target.systemId
+    && row.getAttribute('data-object-id') === request.target.id
+    ? { tree, rowKey }
+    : null
+}
+
 /** Owns one transient context menu and its originating target/focus lifetime for a page. */
 export function usePublicationMenu(options: {
   workspace: Ref<LocalWorkspace | null>
   store: PublicationUiStore
+  continuousMap?: Readonly<Ref<boolean>>
   canRestoreFocus?: (request: PublicationMenuRequest) => boolean
   prepareContextObjectSelection?: (objectId: string, isCurrent: () => boolean) => Promise<boolean>
 }) {
   const {
     workspace,
     store,
+    continuousMap,
     canRestoreFocus = () => true,
     prepareContextObjectSelection,
   } = options
@@ -53,6 +70,7 @@ export function usePublicationMenu(options: {
   function contextSignature(): string {
     return JSON.stringify([
       store.workspaceId,
+      continuousMap?.value === true,
       store.activeView,
       store.selectedSystemId,
       store.clusterSelectedSystemId,
@@ -135,6 +153,18 @@ export function usePublicationMenu(options: {
   }
 
   function focusTarget(menu: OwnedMenu): HTMLElement | SVGElement | null {
+    const origin = menu.hierarchyOrigin
+    if (origin) {
+      if (!isVisible(origin.tree)) return null
+      // Sparse sibling changes can replace a row; recover only within the same mounted Hierarchy tree.
+      const row = [...origin.tree.querySelectorAll<HTMLElement>('[data-hierarchy-key]')].find(candidate =>
+        candidate.getAttribute('data-hierarchy-key') === origin.rowKey
+        && candidate.getAttribute('data-system-id') === menu.target.systemId
+        && candidate.getAttribute('data-object-id') === menu.target.id
+        && candidate.closest('[role="tree"]') === origin.tree)
+      if (!row || !isVisible(row)) return null
+      return row.closest<HTMLElement>('[role="treeitem"]') ?? row
+    }
     if (menu.source !== 'map') return isVisible(menu.opener) ? menu.opener : null
 
     const canvas = menu.mapCanvas
@@ -179,8 +209,8 @@ export function usePublicationMenu(options: {
       && menuContextIsCurrent(menu)
       && menu.target.kind === 'object'
       && (menu.source === 'map' || menu.source === 'hierarchy')
-      && store.activeView === 'system'
-      && store.selectedSystemId === menu.target.systemId
+      && ((continuousMap?.value === true && store.activeView === 'cluster')
+        || (store.activeView === 'system' && store.selectedSystemId === menu.target.systemId))
   }
 
   const currentRequest = computed<PublicationMenuView | null>(() => {
@@ -234,7 +264,7 @@ export function usePublicationMenu(options: {
     const shouldPrepareSelection = !!menuOptions?.selectObjectForContext
       && request.target.kind === 'object'
       && (request.source === 'map' || request.source === 'hierarchy')
-      && store.activeView === 'system'
+      && (store.activeView === 'system' || (continuousMap?.value === true && store.activeView === 'cluster'))
     if (pending) pending.selectionPending = false
     const menu: OwnedMenu = {
       ...request,
@@ -245,6 +275,10 @@ export function usePublicationMenu(options: {
       clusterId: current.cluster.id,
       context: contextSignature(),
       mapCanvas: request.source === 'map' ? request.opener.closest('.workspace-map-canvas') : null,
+      hierarchyOrigin: shouldPrepareSelection && request.source === 'hierarchy'
+        && continuousMap?.value === true && store.activeView === 'cluster'
+        ? captureHierarchyOrigin(request)
+        : null,
       selectionPending: shouldPrepareSelection,
       restoreFocus: closingContent => restoreFocus(menu, closingContent),
     }

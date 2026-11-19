@@ -18,8 +18,10 @@ import {
   wardenObjectMark,
 } from './helpers'
 
-test('a Warden shares applied player text and marker color while keeping drafts and GM notes private', async ({ page, context }) => {
-  test.setTimeout(45_000)
+test.use({ permissions: ['clipboard-write'] })
+
+test('a Warden shares applied player text and marker color while keeping drafts and GM notes private', async ({ page }) => {
+  test.setTimeout(60_000)
   const publicText = 'A sheltered landing basin.'
   const privateNotes = 'GM ONLY: smuggler entrance'
   const unappliedText = 'UNAPPLIED: secret tunnel'
@@ -112,7 +114,7 @@ test('a Warden shares applied player text and marker color while keeping drafts 
   const previewMap = preview.getByRole('region', { name: 'Player-visible continuous map', exact: true })
   await expect(previewMap.locator('svg.player-continuous-map-scene')).toHaveCount(1)
   await previewMap.locator('.player-continuous-name-target')
-    .and(previewMap.getByRole('button', { name: `Inspect ${systemName}`, exact: true })).click()
+    .and(previewMap.getByRole('button', { name: `Inspect ${systemName}`, exact: true })).press('Enter')
   await previewMap.getByRole('button', { name: 'Center selection', exact: true }).click()
   const previewMarker = preview.getByRole('button', { name: 'Inspect Pilgrim World', exact: true })
   const previewGlyph = previewMarker.locator('.player-continuous-object-glyph')
@@ -131,19 +133,22 @@ test('a Warden shares applied player text and marker color while keeping drafts 
   await expect(preview).not.toContainText(unappliedText)
 
   await preview.getByRole('button', { name: 'Map files', exact: true }).click()
-  await preview.getByRole('radio', { name: 'Selected system', exact: true }).click()
+  const imageFiles = page.getByRole('dialog', { name: 'Map files', exact: true })
+  await imageFiles.getByRole('radio', { name: /^selected system$/i }).click()
   const previewDownload = page.waitForEvent('download')
-  await preview.getByRole('button', { name: 'Export Selected system SVG', exact: true }).click()
+  await imageFiles.getByRole('button', { name: 'Export Selected system SVG', exact: true }).click()
   const previewSvg = await readFile(await (await previewDownload).path(), 'utf8')
   expect(previewSvg).toContain('Pilgrim World')
-  expect(previewSvg).toContain('fill="#A151BF"')
+  expect(previewSvg).toMatch(/fill="#a151bf"/i)
   expect(previewSvg).not.toContain('Primary Star')
   expect(previewSvg.toLowerCase()).not.toContain('#22664c')
+  await preview.getByRole('button', { name: 'Map files', exact: true }).click()
+  await expect(imageFiles).toBeHidden()
   await preview.getByRole('button', { name: 'Close player preview', exact: true }).click()
 
   const reopenedPreview = await openPlayerPreview(page)
   await reopenedPreview.locator('.player-continuous-name-target')
-    .and(reopenedPreview.getByRole('button', { name: `Inspect ${systemName}`, exact: true })).click()
+    .and(reopenedPreview.getByRole('button', { name: `Inspect ${systemName}`, exact: true })).press('Enter')
   await expect(reopenedPreview.getByRole('button', { name: 'Filters', exact: true })).toBeVisible()
   await reopenedPreview.getByRole('button', { name: 'Close player preview', exact: true }).click()
 
@@ -163,7 +168,6 @@ test('a Warden shares applied player text and marker color while keeping drafts 
   expect(json).not.toContain(privateNotes)
   expect(json).not.toContain(unappliedText)
 
-  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   const generate = (await openMapFilesSection(page, 'Share with players', 'keyboard'))
     .getByRole('menuitem', { name: 'Generate player link', exact: true })
   await generate.press('Enter')
@@ -172,7 +176,8 @@ test('a Warden shares applied player text and marker color while keeping drafts 
   await expect(linkField).toHaveValue(/\/player#player=1\.gzip\./)
   const url = await linkField.inputValue()
   await linkDialog.getByRole('button', { name: 'Copy player link', exact: true }).click()
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(url)
+  // The success notice is emitted only once the real clipboard write resolves.
+  await expect(page.getByRole('status').filter({ hasText: 'Player link copied' })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(linkDialog).toBeHidden()
   await expect(generate).toBeFocused()

@@ -363,7 +363,7 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
       await expect(preview).toHaveCount(0)
       await expect(quitAdd).toBeVisible()
       await expect(rings).toHaveCount(1)
-      const created = rings.and(map.getByRole('button', { name: 'Orbit 1 around Primary Star', exact: true }))
+      const created = rings.and(map.getByRole('button', { name: 'Select Orbit 1', exact: true }))
       await expect(created).toHaveAttribute('cx', finalPreview.cx)
       await expect(created).toHaveAttribute('cy', finalPreview.cy)
       await expect(created).toHaveAttribute('rx', finalPreview.rx)
@@ -383,5 +383,9 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
 
   await waitForWorkspaceSaved(page)
   const savedAfterTouch = await downloadJson(page, 'Export star system JSON')
-  expect(savedAfterTouch.system?.orbits).toHaveLength(2)
+  expect(savedAfterTouch.system?.id).toBe(systemId)
+  expect(savedAfterTouch.system?.orbits.map(orbit => ({ hostId: orbit.hostId, order: orbit.order }))).toEqual([
+    { hostId: primaryObjectId, order: 1 },
+    { hostId: primaryObjectId, order: 2 },
+  ])
 })

@@ -88,7 +88,13 @@
       </button>
     </nav>
 
-    <section v-if="props.continuousMap" class="mt-5 border-t border-[var(--line-soft)] pt-[0.65rem]">
+    <section
+      v-if="props.continuousMap"
+      ref="continuousHierarchyRoot"
+      class="mt-5 border-t border-[var(--line-soft)] pt-[0.65rem]"
+      @focusin="trackHierarchyFocus"
+      @focusout="releaseHierarchyFocus"
+    >
       <div class="tree-heading flex justify-between gap-[0.4rem] pb-[0.45rem]">
         <span class="subsection-label">OBJECTS / ORBITS · ALL SYSTEMS</span>
         <span class="tree-count whitespace-nowrap">{{ continuousHierarchyRecordCount }} records</span>
@@ -97,7 +103,7 @@
       <!-- @vue-generic {HierarchyTreeItem[], true} -->
       <UTree
         v-else
-        :items="hierarchyItems"
+        :items="renderedHierarchyItems"
         :model-value="selectedHierarchyItems"
         multiple
         :expanded="expandedHierarchyKeys"
@@ -119,28 +125,42 @@
       >
         <template #item-wrapper="{ item, expanded, selected, handleToggle, ui }">
           <div
-            :class="ui.link({ selected })"
+            :key="item.key"
+            :class="ui.link({
+              class: [
+                'tree-row grid min-h-[2.55rem] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-1 gap-y-0 rounded-[2px] border border-transparent bg-transparent px-0.5 py-1 text-left',
+                item.kind === 'system' ? 'system-row' : item.kind === 'object' ? 'object-row' : 'orbit-row',
+                { active: selected },
+              ],
+              selected,
+            })"
+            :data-hierarchy-key="item.key"
+            :data-object-id="item.kind === 'object' ? item.row.object.id : undefined"
+            :data-orbit-id="item.kind === 'orbit' ? item.row.orbit.id : undefined"
+            :data-system-id="item.kind === 'system' ? item.system.id : item.ownerSystemId"
             :aria-label="item.kind === 'object' ? item.ariaLabel : item.label"
             :aria-description="item.kind === 'orbit' ? item.ownerSystemName : item.ariaDescription"
             @contextmenu="openHierarchyMenu($event, item)"
             @keydown.capture="openHierarchyMenuFromKeyboard($event, item)"
           >
-            <span class="tree-leading" aria-hidden="true">
-              <span v-if="item.kind === 'system'" class="system-seal grid size-[1.5rem] place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
-              <span v-else-if="item.kind === 'object'" class="tree-object-title"><span class="object-mark">{{ objectMark(item.row.object) }}</span></span>
-              <span v-else class="orbit-mark">R</span>
-            </span>
-            <span :class="ui.linkLabel({ class: 'tree-copy min-w-0 flex-1 [overflow-wrap:anywhere]' })">
-              <span class="tree-object-name flex min-w-0 items-center gap-1">
-                <span class="min-w-0 [overflow-wrap:anywhere]">{{ item.label }}</span>
-                <template v-if="item.kind === 'object'">
-                  <UTooltip :text="hierarchyObjectPublicationStatus(item).description">
-                    <UIcon :name="publicationPresentation(item.row.object.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
-                  </UTooltip>
-                  <UTooltip v-if="hierarchyObjectPublicationStatus(item).parentBlocked" text="System map unavailable to players until this system is Revealed.">
-                    <UIcon name="i-lucide-lock-keyhole" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
-                  </UTooltip>
-                </template>
+            <span class="tree-copy col-start-1 row-start-1 block min-w-0 whitespace-normal [overflow-wrap:anywhere]">
+              <span class="tree-object-title flex min-w-0 items-start gap-1">
+                <span class="tree-leading shrink-0" aria-hidden="true">
+                  <span v-if="item.kind === 'system'" class="system-seal grid size-[1.5rem] place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
+                  <span v-else-if="item.kind === 'object'" class="object-mark">{{ objectMark(item.row.object) }}</span>
+                  <span v-else class="orbit-mark">R</span>
+                </span>
+                <span class="tree-object-name flex min-w-0 flex-1 items-start gap-1">
+                  <span class="min-w-0 [overflow-wrap:anywhere]">{{ item.label }}</span>
+                  <template v-if="item.kind === 'object'">
+                    <UTooltip :text="hierarchyObjectPublicationStatus(item).description">
+                      <UIcon :name="publicationPresentation(item.row.object.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
+                    </UTooltip>
+                    <UTooltip v-if="hierarchyObjectPublicationStatus(item).parentBlocked" text="System map unavailable to players until this system is Revealed.">
+                      <UIcon name="i-lucide-lock-keyhole" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
+                    </UTooltip>
+                  </template>
+                </span>
               </span>
               <small v-if="item.kind === 'system'" class="mt-[0.18rem] block">
                 {{ item.system.objects.length }} map objects
@@ -149,38 +169,50 @@
                 {{ catalogueFamilyLabel(item.row.object.family) }} / {{ catalogueSubtypeLabel(item.row.object) }}
               </small>
               <small v-if="item.kind === 'object'" class="mt-[0.18rem] block">
-                <span class="key-tag">{{ item.row.object.locationKey }}</span>
+                <span class="key-tag block min-w-0 [overflow-wrap:anywhere]">{{ item.row.object.locationKey }}</span>
                 <span class="block">{{ item.parentContext }}</span>
               </small>
               <small v-if="item.kind !== 'system'" class="mt-[0.12rem] block">{{ item.ownerSystemName }}</small>
             </span>
+            <div class="col-start-2 row-start-1 flex min-w-0 flex-col items-center gap-0.5 self-center">
+              <UButton
+                v-if="item.kind === 'object'"
+                class="tree-publication-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :tabindex="-1"
+                :aria-label="`Change visibility for ${item.row.object.name}`"
+                :title="`Change visibility for ${item.row.object.name}`"
+                @click.stop="openObjectMenuFromButton($event, item.row.object.id, item.ownerSystemId)"
+              >
+                <UIcon name="i-lucide-eye" aria-hidden="true" />
+              </UButton>
+              <UButton
+                v-if="hierarchyItemsByKey.get(item.key)?.children?.length"
+                class="tree-expand-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :tabindex="-1"
+                :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
+                :aria-expanded="expanded"
+                :title="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
+                @click.stop="toggleHierarchyItemAndRestoreFocus($event, handleToggle)"
+              >
+                <UIcon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" aria-hidden="true" />
+              </UButton>
+            </div>
             <UButton
-              v-if="item.kind === 'object'"
-              class="tree-publication-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+              v-if="item.kind === 'system' && expanded && !seededHierarchyOwners.has(item.key)"
+              class="col-span-2 row-start-2 min-w-0 max-w-full justify-center whitespace-normal"
               color="neutral"
-              variant="ghost"
+              variant="outline"
               size="xs"
-              :tabindex="-1"
-              :aria-label="`Change visibility for ${item.row.object.name}`"
-              :title="`Change visibility for ${item.row.object.name}`"
-              @click.stop="openObjectMenuFromButton($event, item.row.object.id, item.ownerSystemId)"
-            >
-              <UIcon name="i-lucide-eye" aria-hidden="true" />
-            </UButton>
-            <UButton
-              v-if="item.children?.length"
-              class="tree-expand-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              :tabindex="-1"
-              :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
-              :aria-expanded="expanded"
-              :title="`${expanded ? 'Collapse' : 'Expand'} ${item.label}`"
-              @click.stop="toggleHierarchyItemAndRestoreFocus($event, handleToggle)"
-            >
-              <UIcon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" aria-hidden="true" />
-            </UButton>
+              :aria-label="`Show all ${item.system.name} records`"
+              @keydown.stop
+              @click.stop="showAllHierarchyOwner($event, item.key)"
+            >Show all records</UButton>
           </div>
         </template>
       </UTree>
@@ -353,7 +385,7 @@
 /**
  * Owns cluster navigation and projects nested objects/Orbits into a selectable hierarchy.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import {
   type LocalWorkspace,
   type StarSystem,
@@ -422,6 +454,7 @@ const hierarchyItems = computed(() => props.continuousMap
   ? props.workspace.cluster.systems.flatMap(system => buildHierarchyTreeItems(buildMapHierarchy(system), system, true))
   : buildHierarchyTreeItems(hierarchyRows.value, selectedSystem.value))
 const flatHierarchyItems = computed(() => flattenHierarchyTreeItems(hierarchyItems.value))
+const hierarchyItemsByKey = computed(() => new Map(flatHierarchyItems.value.map(item => [item.key, item])))
 const maximumHierarchyLevel = computed(() => props.continuousMap
   ? flatHierarchyItems.value.reduce((maximum, item) => Math.max(maximum, item.ancestorKeys.length + 1), 1)
   : hierarchyRows.value.reduce((maximum, row) => Math.max(maximum, row.depth + 1), 1))
@@ -469,23 +502,113 @@ const hierarchyIdentity = computed(() => JSON.stringify([
 ]))
 const hierarchyBranches = computed(() => flatHierarchyItems.value.filter(item => item.children?.length))
 const expandedHierarchyKeys = ref<string[]>([])
+const seededHierarchyOwners = reactive(new Set<string>())
+const browsedHierarchyBranches = reactive(new Set<string>())
+const manuallyCollapsedHierarchyKeys = new Set<string>()
+const continuousHierarchyRoot = ref<HTMLElement | null>(null)
+const focusedHierarchyTarget = ref<{ key: string; objectId?: string; orbitId?: string } | null>(null)
 const isHierarchyComposing = ref(false)
+const focusedHierarchyItem = computed(() => {
+  const target = focusedHierarchyTarget.value
+  if (!target) return undefined
+  return flatHierarchyItems.value.find(item => target.objectId
+    ? item.kind === 'object' && item.row.object.id === target.objectId
+    : target.orbitId ? item.kind === 'orbit' && item.row.orbit.id === target.orbitId : item.key === target.key)
+})
+const revealedHierarchyItems = computed(() => [
+  ...selectedHierarchyItems.value,
+  selectedHierarchyItem.value,
+  focusedHierarchyItem.value,
+  ...[...browsedHierarchyBranches].map(key => hierarchyItemsByKey.value.get(key)),
+].filter((item): item is HierarchyTreeItem => item !== undefined))
+const revealedHierarchyAncestors = computed(() => new Set(revealedHierarchyItems.value.flatMap(item => item.ancestorKeys)))
+
+/** Keep the complete model for selection; only automatically opened paths limit mounted siblings. */
+const renderedHierarchyItems = computed(() => {
+  if (!props.continuousMap) return hierarchyItems.value
+  const revealedKeys = new Set([...revealedHierarchyAncestors.value, ...revealedHierarchyItems.value.map(item => item.key)])
+  const expanded = new Set(expandedHierarchyKeys.value)
+  const project = (item: HierarchyTreeItem): HierarchyTreeItem => {
+    if (!item.children?.length || !expanded.has(item.key) || browsedHierarchyBranches.has(item.key)) return item
+    const ownerKey = item.kind === 'system' ? item.key : `system:${item.ownerSystemId}`
+    if (seededHierarchyOwners.has(ownerKey)) return item
+    // An empty children array retains Reka's disclosure semantics for a formerly revealed branch.
+    return { ...item, children: item.children.filter(child => revealedKeys.has(child.key)).map(project) }
+  }
+  return hierarchyItems.value.map(project)
+})
+
+watch(revealedHierarchyAncestors, ancestors => {
+  if (!props.continuousMap) return
+  // Automatic paths expire with their target; deliberately browsed branches keep their own expansion.
+  expandedHierarchyKeys.value = expandedHierarchyKeys.value.filter(key => {
+    const item = hierarchyItemsByKey.value.get(key)
+    const ownerKey = item?.kind === 'system' ? item.key : `system:${item?.ownerSystemId}`
+    return ancestors.has(key) || browsedHierarchyBranches.has(key) || seededHierarchyOwners.has(ownerKey)
+  })
+})
+
+watch(renderedHierarchyItems, () => {
+  const root = continuousHierarchyRoot.value
+  const focused = root?.ownerDocument.activeElement
+  if (!root || !(focused instanceof HTMLElement) || !root.contains(focused)) return
+  const row = hierarchyRowData(focused)
+  const key = row?.dataset.hierarchyKey
+  const objectId = row?.dataset.objectId
+  const orbitId = row?.dataset.orbitId
+  const ownerKey = row?.dataset.systemId ? `system:${row.dataset.systemId}` : key
+  if (!key) return
+  void nextTick(() => {
+    const active = root.ownerDocument.activeElement
+    if (active !== focused && active !== root.ownerDocument.body) return
+    if (focused.isConnected && hierarchyRowData(focused)?.dataset.hierarchyKey === key) return
+    const currentKey = flatHierarchyItems.value.find(item => objectId
+      ? item.kind === 'object' && item.row.object.id === objectId
+      : orbitId ? item.kind === 'orbit' && item.row.orbit.id === orbitId : item.key === key)?.key
+    const target = (currentKey ? findHierarchyRow(currentKey) : undefined)
+      ?? (ownerKey ? findHierarchyRow(ownerKey) : undefined)
+      ?? root.closest('[data-workspace-dashboard]')?.querySelector<SVGSVGElement>('svg.continuous-warden-map-svg')
+    target?.focus({ preventScroll: true })
+  })
+})
+
+watch(() => focusedHierarchyItem.value?.ancestorKeys.join('\u001f'), path => {
+  if (props.continuousMap && path) expandHierarchyBranches(path.split('\u001f'))
+})
 
 watch(hierarchyIdentity, () => {
-  expandedHierarchyKeys.value = hierarchyBranches.value.filter(item => item.kind !== 'system').map(item => item.key)
+  seededHierarchyOwners.clear()
+  browsedHierarchyBranches.clear()
+  focusedHierarchyTarget.value = null
+  manuallyCollapsedHierarchyKeys.clear()
+  expandedHierarchyKeys.value = props.continuousMap ? [] : hierarchyBranches.value.map(item => item.key)
 }, { immediate: true })
 
 watch(hierarchyBranches, (branches, previousBranches) => {
   const expanded = new Set(expandedHierarchyKeys.value)
   const previouslyExpandable = new Set(previousBranches?.map(item => item.key))
+  const currentKeys = new Set(branches.map(item => item.key))
+  for (const key of manuallyCollapsedHierarchyKeys) {
+    if (!currentKeys.has(key)) manuallyCollapsedHierarchyKeys.delete(key)
+  }
+  for (const key of seededHierarchyOwners) {
+    if (!currentKeys.has(key)) seededHierarchyOwners.delete(key)
+  }
+  for (const key of browsedHierarchyBranches) {
+    if (!currentKeys.has(key)) browsedHierarchyBranches.delete(key)
+  }
   expandedHierarchyKeys.value = branches
-    .filter(item => expanded.has(item.key) || (item.kind !== 'system' && !previouslyExpandable.has(item.key)))
+    .filter(item => expanded.has(item.key) || (item.kind !== 'system' && !previouslyExpandable.has(item.key)
+      && (!props.continuousMap || seededHierarchyOwners.has(`system:${item.ownerSystemId}`))))
     .map(item => item.key)
 }, { immediate: true })
 
 watch(
   [hierarchyIdentity, selectedHierarchyKey, selectedHierarchyPath],
   ([, selectedKey, selectedPath]) => {
+    if (props.continuousMap && selectedHierarchyItem.value?.kind === 'system') {
+      seedHierarchyOwner(selectedKey)
+    }
     if (selectedKey && selectedPath) expandHierarchyBranches(selectedPath.split('\u001f'))
   },
   { immediate: true },
@@ -495,10 +618,17 @@ watch(
   [hierarchyIdentity, selectedHierarchyItems],
   ([identity, selectedItems], [previousIdentity, previousItems]) => {
     if (!props.continuousMap) return
-    const previousKeys = new Set(identity === previousIdentity ? previousItems?.map(item => item.key) : [])
-    // Group selection can change while the Inspector retains its previous target.
+    const previousPaths = new Map<string, readonly string[]>(identity === previousIdentity
+      ? previousItems?.map(item => [item.key, item.ancestorKeys])
+      : [])
+    // Group members can be added or reparented while the Inspector retains its previous target.
     const newAncestors = selectedItems
-      .filter(item => item.kind === 'object' && !previousKeys.has(item.key))
+      .filter(item => {
+        if (item.kind !== 'object') return false
+        const previousPath = previousPaths.get(item.key)
+        return !previousPath || previousPath.length !== item.ancestorKeys.length
+          || previousPath.some((key, index) => key !== item.ancestorKeys[index])
+      })
       .flatMap(item => item.ancestorKeys)
     expandHierarchyBranches(newAncestors)
   },
@@ -509,6 +639,66 @@ function expandHierarchyBranches(keys: readonly string[]): void {
   if (keys.length === 0) return
   const expanded = new Set([...expandedHierarchyKeys.value, ...keys])
   if (expanded.size > expandedHierarchyKeys.value.length) expandedHierarchyKeys.value = [...expanded]
+}
+
+/** Full default expansion belongs to explicit owner consultation, once per owner and identity. */
+function seedHierarchyOwner(ownerKey: string, expanded = new Set(expandedHierarchyKeys.value)): Set<string> {
+  if (seededHierarchyOwners.has(ownerKey)) return expanded
+  seededHierarchyOwners.add(ownerKey)
+  for (const item of hierarchyBranches.value) {
+    if (item.ancestorKeys.includes(ownerKey) && !manuallyCollapsedHierarchyKeys.has(item.key)) expanded.add(item.key)
+  }
+  expandedHierarchyKeys.value = [...expanded]
+  return expanded
+}
+
+function hierarchyRowData(element: Element): HTMLElement | undefined {
+  const treeitem = element.closest<HTMLElement>('[role="treeitem"]')
+  if (!treeitem) return undefined
+  if (treeitem.matches('[data-hierarchy-key]')) return treeitem
+  return [...treeitem.querySelectorAll<HTMLElement>('[data-hierarchy-key]')]
+    .find(row => row.closest('[role="treeitem"]') === treeitem)
+}
+
+function trackHierarchyFocus(event: FocusEvent): void {
+  if (!(event.target instanceof Element)) return
+  // Inline actions must not prune the path they are about to browse, collapse, or publish.
+  if (event.target.closest('[role="treeitem"]') !== event.target) return
+  const row = hierarchyRowData(event.target)
+  if (!row) return
+  const key = row.dataset.hierarchyKey
+  if (key) focusedHierarchyTarget.value = { key, objectId: row.dataset.objectId, orbitId: row.dataset.orbitId }
+}
+
+function releaseHierarchyFocus(event: FocusEvent): void {
+  const root = continuousHierarchyRoot.value
+  if (!root || (event.relatedTarget instanceof Node && root.contains(event.relatedTarget))) return
+  if (event.relatedTarget) {
+    focusedHierarchyTarget.value = null
+    return
+  }
+  // A model redraw can temporarily send focus to body; let the keyed-row restoration settle first.
+  void nextTick(() => {
+    const active = root.ownerDocument.activeElement
+    if (active && active !== root.ownerDocument.body && !root.contains(active)) focusedHierarchyTarget.value = null
+  })
+}
+
+function findHierarchyRow(key: string): HTMLElement | undefined {
+  const row = [...(continuousHierarchyRoot.value?.querySelectorAll<HTMLElement>('[data-hierarchy-key]') ?? [])]
+    .find(row => row.dataset.hierarchyKey === key)
+  return row?.closest<HTMLElement>('[role="treeitem"]') ?? row
+}
+
+function showAllHierarchyOwner(event: MouseEvent, ownerKey: string): void {
+  const opener = event.currentTarget
+  const restoreFocus = opener instanceof HTMLElement && opener.ownerDocument.activeElement === opener
+  seedHierarchyOwner(ownerKey)
+  void nextTick(() => {
+    if (!restoreFocus || !(opener instanceof HTMLElement) || opener.isConnected) return
+    if (opener.ownerDocument.activeElement !== opener.ownerDocument.body) return
+    findHierarchyRow(ownerKey)?.focus({ preventScroll: true })
+  })
 }
 
 function objectHierarchyKey(objectId: string): string {
@@ -626,7 +816,22 @@ function getHierarchyItemKey(item: HierarchyTreeItem): string {
 }
 
 function updateExpandedHierarchyKeys(keys: string[]): void {
-  expandedHierarchyKeys.value = keys
+  if (!props.continuousMap) {
+    expandedHierarchyKeys.value = keys
+    return
+  }
+  const previous = new Set(expandedHierarchyKeys.value)
+  let expanded = new Set(keys)
+  for (const key of previous) {
+    if (!expanded.has(key)) manuallyCollapsedHierarchyKeys.add(key)
+  }
+  for (const key of keys) {
+    if (previous.has(key)) continue
+    manuallyCollapsedHierarchyKeys.delete(key)
+    if (key.startsWith('system:')) expanded = seedHierarchyOwner(key, expanded)
+    else browsedHierarchyBranches.add(key)
+  }
+  expandedHierarchyKeys.value = [...expanded]
 }
 
 function selectHierarchyItem(event: TreeItemSelectEvent<HierarchyTreeItem>, item: HierarchyTreeItem): void {
