@@ -510,10 +510,17 @@ watch(
   [hierarchyIdentity, selectedHierarchyItems],
   ([identity, selectedItems], [previousIdentity, previousItems]) => {
     if (!props.continuousMap) return
-    const previousKeys = new Set(identity === previousIdentity ? previousItems?.map(item => item.key) : [])
-    // Group selection can change while the Inspector retains its previous target.
+    const previousPaths = new Map<string, readonly string[]>(identity === previousIdentity
+      ? previousItems?.map(item => [item.key, item.ancestorKeys])
+      : [])
+    // Group members can be added or reparented while the Inspector retains its previous target.
     const newAncestors = selectedItems
-      .filter(item => item.kind === 'object' && !previousKeys.has(item.key))
+      .filter(item => {
+        if (item.kind !== 'object') return false
+        const previousPath = previousPaths.get(item.key)
+        return !previousPath || previousPath.length !== item.ancestorKeys.length
+          || previousPath.some((key, index) => key !== item.ancestorKeys[index])
+      })
       .flatMap(item => item.ancestorKeys)
     expandHierarchyBranches(newAncestors)
   },
