@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { expect, type Locator } from '@playwright/test'
 import type { JumpRoute, PublicationMode } from '../domain/workspace'
 import { CONTINUOUS_MAP_LOCAL_ORIGIN, CONTINUOUS_MAP_SYSTEM_SCALE } from '../utils/continuous-map-projection'
@@ -1323,11 +1324,8 @@ export async function downloadJson(
     else await action.click()
     const download = await downloadPromise
     if (input === 'keyboard') expect(download.suggestedFilename()).toMatch(/\.json$/i)
-    const json = await page.evaluate(async () => {
-      const blob = (window as DownloadWindow).__mapExportBlobs?.shift()
-      if (!blob) throw new Error('Could not read the downloaded JSON file.')
-      return blob.text()
-    })
+    const json = await readFile(await download.path(), 'utf8')
+    await page.evaluate(() => { (window as DownloadWindow).__mapExportBlobs?.shift() })
     return JSON.parse(json) as ExportedMap
   } finally {
     if (input === 'pointer') await setHeaderMapActionsOpen(page, false)

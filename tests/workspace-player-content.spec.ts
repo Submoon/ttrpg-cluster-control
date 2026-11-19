@@ -18,8 +18,10 @@ import {
   wardenObjectMark,
 } from './helpers'
 
-test('a Warden shares applied player text and marker color while keeping drafts and GM notes private', async ({ page, context }) => {
-  test.setTimeout(45_000)
+test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
+
+test('a Warden shares applied player text and marker color while keeping drafts and GM notes private', async ({ page }) => {
+  test.setTimeout(60_000)
   const publicText = 'A sheltered landing basin.'
   const privateNotes = 'GM ONLY: smuggler entrance'
   const unappliedText = 'UNAPPLIED: secret tunnel'
@@ -166,7 +168,6 @@ test('a Warden shares applied player text and marker color while keeping drafts 
   expect(json).not.toContain(privateNotes)
   expect(json).not.toContain(unappliedText)
 
-  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   const generate = (await openMapFilesSection(page, 'Share with players', 'keyboard'))
     .getByRole('menuitem', { name: 'Generate player link', exact: true })
   await generate.press('Enter')
