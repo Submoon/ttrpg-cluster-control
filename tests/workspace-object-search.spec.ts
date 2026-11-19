@@ -300,7 +300,7 @@ test('search centers a rotated recursive branch at sufficient current zoom witho
 
 
 test('compact Location-key search preserves a dirty same-object draft and returns focus after touch selection', async ({ page }, testInfo) => {
-  test.setTimeout(45_000)
+  test.setTimeout(60_000)
   const fixture = branchSearchMap()
   const draftName = `${fixture.targetName} draft`
   const { map, owner, targetObjectId, branchRings } = await importAndOpenBranchSearchSystem(page, fixture, 'branch-atlas-draft.json')

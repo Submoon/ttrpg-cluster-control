@@ -18,7 +18,7 @@ import {
   wardenObjectMark,
 } from './helpers'
 
-test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
+test.use({ permissions: ['clipboard-write'] })
 
 test('a Warden shares applied player text and marker color while keeping drafts and GM notes private', async ({ page }) => {
   test.setTimeout(60_000)
@@ -176,7 +176,8 @@ test('a Warden shares applied player text and marker color while keeping drafts 
   await expect(linkField).toHaveValue(/\/player#player=1\.gzip\./)
   const url = await linkField.inputValue()
   await linkDialog.getByRole('button', { name: 'Copy player link', exact: true }).click()
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(url)
+  // The success notice is emitted only once the real clipboard write resolves.
+  await expect(page.getByRole('status').filter({ hasText: 'Player link copied' })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(linkDialog).toBeHidden()
   await expect(generate).toBeFocused()

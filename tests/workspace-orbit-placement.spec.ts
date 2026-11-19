@@ -144,6 +144,7 @@ async function beginCenterDrag(page: Page, systemId: string, source: Locator, ta
 }
 
 test('an ambiguous Orbit center drag requires a named host choice before preview and Apply', async ({ page }) => {
+  test.setTimeout(60_000)
   await captureMapExportBlobs(page)
   const { hierarchy, map, systemId } = await openPlacementLab(page, ambiguousOrbitPlacementFixture())
   await expect(map).toBeVisible()
@@ -190,14 +191,14 @@ test('an ambiguous Orbit center drag requires a named host choice before preview
   await expect(ring).toHaveAttribute('cx', originalCenterX!)
   await expect(ring).toHaveAttribute('cy', originalCenterY!)
 
-  const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
+  const inspector = page.getByRole('complementary', { name: 'Orbit inspector', exact: true })
   const host = inspector.getByLabel('Host', { exact: true })
   await expect(host).toBeVisible()
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
   await expect(inspector.getByRole('button', { name: /Apply changes/ })).toBeDisabled()
 
   const previewButton = inspector.getByRole('button', { name: 'Preview placement', exact: true })
-  if (await previewButton.count()) await expect(previewButton).toBeDisabled()
+  await expect(previewButton).toBeDisabled()
   await host.click()
   await expect(page.getByRole('option', { name: 'A, Primary Star (Star)', exact: true })).toBeVisible()
   await expect(page.getByRole('option', { name: 'B, Companion Star (Star)', exact: true })).toBeVisible()

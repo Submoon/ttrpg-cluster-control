@@ -1463,32 +1463,27 @@ export async function downloadImage(
   try {
     const downloadPromise = page.waitForEvent('download')
     await images.getByRole('menuitem', { name: action, exact: true }).click()
-    await downloadPromise
-    return page.evaluate(async (expectedType) => {
+    const file = await readFile(await (await downloadPromise).path())
+    const sourceSvgText = await page.evaluate(async (expectedType) => {
       const blobs = (window as DownloadWindow).__mapExportBlobs ?? []
       const index = blobs.findIndex(blob => blob.type.startsWith(expectedType))
-      if (index < 0) throw new Error(`Could not read the downloaded ${expectedType} file.`)
-      const blob = blobs[index]
-      if (!blob) throw new Error(`Could not read the downloaded ${expectedType} file.`)
-      blobs.splice(index, 1)
-
-      if (expectedType === 'image/svg+xml') {
-        return { type: blob.type, size: blob.size, text: await blob.text() }
-      }
-
-      const bytes = new Uint8Array(await blob.slice(0, 24).arrayBuffer())
-      const dimensions = new DataView(bytes.buffer)
+      if (index >= 0) blobs.splice(index, 1)
+      if (expectedType === 'image/svg+xml') return undefined
       const intermediateSvg = blobs.findIndex(item => item.type.startsWith('image/svg+xml'))
       const sourceSvg = intermediateSvg >= 0 ? blobs.splice(intermediateSvg, 1)[0] : undefined
-      return {
-        type: blob.type,
-        size: blob.size,
-        sourceSvgText: sourceSvg ? await sourceSvg.text() : undefined,
-        signature: Array.from(bytes.slice(0, 8)),
-        width: dimensions.getUint32(16),
-        height: dimensions.getUint32(20),
-      }
+      return sourceSvg?.text()
     }, mimeType)
+    if (mimeType === 'image/svg+xml') {
+      return { type: mimeType, size: file.length, text: file.toString('utf8') }
+    }
+    return {
+      type: mimeType,
+      size: file.length,
+      sourceSvgText,
+      signature: Array.from(file.subarray(0, 8)),
+      width: file.readUInt32BE(16),
+      height: file.readUInt32BE(20),
+    }
   } finally {
     await setHeaderMapActionsOpen(page, false)
   }

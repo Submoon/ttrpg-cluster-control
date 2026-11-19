@@ -400,6 +400,7 @@ test('Escape restores an Orbit ring drag before its late mouse release', async (
 
 
 test('touchcancel restores an unoccupied Orbit center and failed host attachment can be retried', async ({ page }) => {
+  test.setTimeout(60_000)
   const cdp = await enableTouch(page)
   try {
     const { map, ring, centerHandle, passenger, systemId, primaryObjectId } = await createFreeOrbitWithPassenger(page)

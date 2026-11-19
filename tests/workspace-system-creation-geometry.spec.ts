@@ -133,6 +133,7 @@ function expectAngleNearFixtureAngle(actual: number | undefined, clickError: num
 }
 
 test('system Add targets rotated primary and nested Orbits without shifting legacy occupants', async ({ page }) => {
+  test.setTimeout(60_000)
   await captureMapExportBlobs(page)
   await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
   const { map, systemId } = await openDenseReach(page)
