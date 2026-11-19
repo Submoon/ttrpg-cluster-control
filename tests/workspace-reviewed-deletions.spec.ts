@@ -1,22 +1,29 @@
 import { expect, test } from './fixtures'
 import {
-  clickDockAction,
+  dockAction,
   createSingleSystemWorkspace,
   editMapObject,
   openWorkspaceHierarchy,
+  quitSystemAdd,
+  selectInspectorOption,
+  waitForWorkspaceSaved,
+  wardenMap,
 } from './helpers'
 
 test('object deletion reviews the current cascade before resolving its inspector draft', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 960 })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster', { exact: true }).fill('Kestrel Reach')
-  await page.getByLabel('First star system', { exact: true }).fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
-
-  await clickDockAction(page, 'Add orbit', {
-    target: { kind: 'host', name: 'Primary Star' },
-    noSelection: true,
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
+  await (await dockAction(page, 'Add orbit')).click()
+  const controls = page.getByRole('group', { name: 'Orbit creation controls', exact: true })
+  const placement = controls.getByRole('button', { name: 'Placement', exact: true })
+  if (await placement.getAttribute('aria-expanded') !== 'true') await placement.click()
+  await selectInspectorOption(page.getByLabel('Orbit center or host', { exact: true }), {
+    identity: { attribute: 'data-object-id', id: primaryObjectId },
   })
+  await page.getByRole('form', { name: 'Placement', exact: true })
+    .getByRole('button', { name: 'Add', exact: true }).click()
+  await quitSystemAdd(page)
+  await expect(wardenMap(page).locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"]`)).toHaveCount(1)
+  await waitForWorkspaceSaved(page)
 
   const hierarchy = await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
