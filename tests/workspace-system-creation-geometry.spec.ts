@@ -8,6 +8,7 @@ import {
   createSingleSystemWorkspace,
   downloadImage,
   downloadJson,
+  exposedContinuousObjectHitPoint,
   hideWorkspaceInspector,
   openWorkspaceHierarchy,
   selectCatalogueObjectButton,
@@ -114,6 +115,13 @@ async function expectObjectAt(object: Locator, expected: WorldPoint): Promise<st
   return transform!
 }
 
+async function expectPlanetAddArmed(page: Page): Promise<void> {
+  await expect(page.getByRole('button', { name: 'Add to map', exact: true }))
+    .toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('navigation', { name: 'Map context and commands', exact: true })
+    .getByRole('status').filter({ hasText: /^ADD Planet\b/ })).toBeVisible()
+}
+
 function expectAngleNearFixtureAngle(actual: number | undefined, clickError: number, minorRadius: number): void {
   expect(actual).toBeDefined()
   if (actual === undefined) return
@@ -136,7 +144,6 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
   const oldPlanet = initial.system!.objects.find(object => object.name === 'Old Planet')!
   const oldMoon = initial.system!.objects.find(object => object.name === 'Old Moon')!
   const alphaOrbit = initial.system!.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 1)!
-  const betaOrbit = initial.system!.orbits.find(orbit => orbit.hostId === primary.id && orbit.order === 2)!
   const nestedOrbit = initial.system!.orbits.find(orbit => orbit.hostId === oldPlanet.id && orbit.order === 1)!
   expect(initial.layout.objectAngles).not.toHaveProperty(oldPlanet.id)
   expect(initial.layout.objectAngles).not.toHaveProperty(oldMoon.id)
@@ -149,7 +156,7 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
 
   const planetButton = await selectCatalogueObjectButton(page, 'planet')
   await planetButton.click()
-  const creationControls = page.getByRole('group', { name: 'Planet creation controls', exact: true })
+  await expectPlanetAddArmed(page)
   const creationTargets = [
     {
       point: { x: 583.9230484541326, y: 340 },
@@ -167,33 +174,23 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
   const clickErrors: number[] = []
   const initialObjectCount = initial.system!.objects.length
   clickErrors.push(await clickScenePoint(page, systemId, creationTargets[0].point))
-  const alphaChoice = page.getByRole('button', { name: `Orbit ${alphaOrbit.order} around ${primary.name}`, exact: true })
-  const betaChoice = page.getByRole('button', { name: `Orbit ${betaOrbit.order} around ${primary.name}`, exact: true })
-  await expect(alphaChoice).toBeVisible()
-  await expect(betaChoice).toBeVisible()
-  await expect(mapObjects(map, systemId)).toHaveCount(initialObjectCount)
-  expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
-  await alphaChoice.click()
   await expect(mapObjects(map, systemId)).toHaveCount(initialObjectCount + 1)
-  await expect(creationControls).toBeVisible()
-  const afterAlphaChoice = await downloadJson(page, 'Export star system JSON')
+  await expectPlanetAddArmed(page)
+  const afterAlphaAdd = await downloadJson(page, 'Export star system JSON')
   const originalObjectIds = new Set(initial.system!.objects.map(object => object.id))
-  const alphaPlanet = afterAlphaChoice.system!.objects.find(object =>
+  const alphaPlanet = afterAlphaAdd.system!.objects.find(object =>
     object.subtype === 'planet' && !originalObjectIds.has(object.id),
   )!
   expect(alphaPlanet.placement).toEqual({ kind: 'orbit', orbitId: alphaOrbit.id })
   expectAngleNearFixtureAngle(
-    afterAlphaChoice.layout.objectAngles[alphaPlanet.id],
+    afterAlphaAdd.layout.objectAngles[alphaPlanet.id],
     clickErrors[0]!,
     creationTargets[0].minorRadius,
   )
 
   clickErrors.push(await clickScenePoint(page, systemId, creationTargets[0].point))
-  await expect(alphaChoice).toBeVisible()
-  await expect(betaChoice).toBeVisible()
-  await expect(mapObjects(map, systemId)).toHaveCount(initialObjectCount + 1)
-  await alphaChoice.click()
   await expect(mapObjects(map, systemId)).toHaveCount(initialObjectCount + 2)
+  await expectPlanetAddArmed(page)
   await expect(map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"][data-orbit-id="${alphaOrbit.id}"]`))
     .toHaveAttribute('transform', 'rotate(30 480 280)')
   const completedExport = await downloadImage(page, 'image/svg+xml')
@@ -208,7 +205,7 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
 
   clickErrors.push(await clickScenePoint(page, systemId, creationTargets[1].point))
   await expect(mapObjects(map, systemId)).toHaveCount(initialObjectCount + 3)
-  await expect(creationControls).toBeVisible()
+  await expectPlanetAddArmed(page)
   for (const { name, point } of preservedLegacyPositions) {
     const object = initial.system!.objects.find(candidate => candidate.name === name)!
     await expect(wardenObjectMark(page, systemId, object.id)).toHaveAttribute('transform', originalTransforms.get(object.id)!)
@@ -240,13 +237,12 @@ test('a second map touch interrupts a fresh Add gesture and leaves the completed
   const planetButton = await selectCatalogueObjectButton(page, 'planet')
   await planetButton.click()
 
-  const creationControls = page.getByRole('group', { name: 'Planet creation controls', exact: true })
+  await expectPlanetAddArmed(page)
   const star = beforeChoosing.system!.objects.find(object => object.subtype === 'star')!
   const starMark = wardenObjectMark(page, systemId, star.id)
   const starTransform = await starMark.getAttribute('transform')
-  const starBounds = await starMark.boundingBox()
-  if (!starBounds || !starTransform) throw new Error('The primary star is not rendered for drag protection.')
-  const starStart = { x: starBounds.x + starBounds.width / 2, y: starBounds.y + starBounds.height / 2 }
+  const starStart = await exposedContinuousObjectHitPoint(starMark)
+  if (!starStart || !starTransform) throw new Error('The primary star has no visible hit for drag protection.')
   await page.mouse.move(starStart.x, starStart.y)
   await page.mouse.down()
   await page.mouse.move(starStart.x + 48, starStart.y + 24, { steps: 5 })
@@ -263,7 +259,7 @@ test('a second map touch interrupts a fresh Add gesture and leaves the completed
   const firstAddedPlanet = afterFirstAdd.system!.objects.find(object =>
     object.subtype === 'planet' && !originalObjectIds.has(object.id),
   )!
-  await expect(creationControls).toBeVisible()
+  await expectPlanetAddArmed(page)
 
   const mapContent = map.locator('.cluster-map-content')
   const transformBeforeTouch = await mapContent.getAttribute('transform')
@@ -297,7 +293,7 @@ test('a second map touch interrupts a fresh Add gesture and leaves the completed
   }
 
   await expect(mapObjects(map, systemId)).toHaveCount(beforeChoosing.system!.objects.length + 1)
-  await expect(creationControls).toBeVisible()
+  await expectPlanetAddArmed(page)
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(afterFirstAdd)
 
   await clickScenePoint(page, systemId, { x: 370, y: 410 })
