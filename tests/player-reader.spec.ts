@@ -5,6 +5,7 @@ import { createPlayerShareUrl } from '../utils/player-share-link'
 import { expect, test, type Locator } from './fixtures'
 import { createPlayerInterfaceFixture } from './fixtures/player-interface-fixture'
 import { parseMapCameraTransform } from './helpers'
+import { largestUnobstructedClientRect } from '../utils/map-usable-area'
 
 type PlayerReadProbe = Window & {
   releaseOlderPlayerRead?: () => void
@@ -545,11 +546,39 @@ test('the default player reader opens shared links and files with one camera and
   await expect(objectDetails.getByRole('heading', { name: 'Harbor World', exact: true })).toBeVisible()
   const objectAfterInspect = await readPlayerMarkerAnchor(objectMarker)
   expect(Math.hypot(objectAfterInspect.x - objectBeforeInspect.x, objectAfterInspect.y - objectBeforeInspect.y)).toBeLessThan(1)
+  const scaleBeforeCenter = parseMapCameraTransform(await camera.getAttribute('transform')).k
   await centerSelection.click()
   const objectAfterCenter = await readPlayerMarkerAnchor(objectMarker)
-  const mapBounds = await continuousScene.boundingBox()
-  if (!mapBounds) throw new Error('The continuous public map has no visible viewport.')
-  expect(Math.abs(objectAfterCenter.x - (mapBounds.x + mapBounds.width / 2))).toBeLessThan(mapBounds.width * .12)
+  const { drawable, obstructions, target } = await objectMarker.evaluate((element) => {
+    const scene = (element as SVGGraphicsElement).ownerSVGElement
+    const root = scene?.closest('.player-document-view')
+    if (!scene || !root) throw new Error('The selected public object needs its rendered map and panel owner.')
+    const rect = (node: Element) => {
+      const bounds = node.getBoundingClientRect()
+      return { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom }
+    }
+    return {
+      drawable: rect(scene),
+      target: rect(element),
+      obstructions: [...root.querySelectorAll('[data-map-obstruction], [data-player-map-obstruction]')]
+        .filter(node => node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden'
+          && !node.closest('[inert], [aria-hidden="true"]'))
+        .map(rect),
+    }
+  })
+  const usable = largestUnobstructedClientRect(drawable, obstructions)
+  if (!usable) throw new Error('The selected public object needs unobstructed map space.')
+  // Center frames the marker and its right-hand label in the space left by the visible panels.
+  expect(isPlayerAnchorInsideMap({ ...objectAfterCenter, ...usable })).toBe(true)
+  expect(target.left).toBeGreaterThanOrEqual(usable.left)
+  expect(target.right).toBeLessThanOrEqual(usable.right)
+  expect(target.top).toBeGreaterThanOrEqual(usable.top)
+  expect(target.bottom).toBeLessThanOrEqual(usable.bottom)
+  const centeredCamera = await camera.getAttribute('transform')
+  if (!centeredCamera) throw new Error('The public camera is missing after Center.')
+  expect(parseMapCameraTransform(centeredCamera).k).toBe(scaleBeforeCenter)
+  await centerSelection.click()
+  await expect(camera).toHaveAttribute('transform', centeredCamera)
 
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
   const continuousFilters = page.getByRole('dialog', { name: /^Filters(?: \(\d+ active criteri(?:on|a)\))?$/ })
