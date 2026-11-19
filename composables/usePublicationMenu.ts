@@ -36,12 +36,14 @@ function isVisible(element: Element): boolean {
 export function usePublicationMenu(options: {
   workspace: Ref<LocalWorkspace | null>
   store: PublicationUiStore
+  continuousMap?: Readonly<Ref<boolean>>
   canRestoreFocus?: (request: PublicationMenuRequest) => boolean
   prepareContextObjectSelection?: (objectId: string, isCurrent: () => boolean) => Promise<boolean>
 }) {
   const {
     workspace,
     store,
+    continuousMap,
     canRestoreFocus = () => true,
     prepareContextObjectSelection,
   } = options
@@ -53,6 +55,7 @@ export function usePublicationMenu(options: {
   function contextSignature(): string {
     return JSON.stringify([
       store.workspaceId,
+      continuousMap?.value === true,
       store.activeView,
       store.selectedSystemId,
       store.clusterSelectedSystemId,
@@ -179,8 +182,8 @@ export function usePublicationMenu(options: {
       && menuContextIsCurrent(menu)
       && menu.target.kind === 'object'
       && (menu.source === 'map' || menu.source === 'hierarchy')
-      && store.activeView === 'system'
-      && store.selectedSystemId === menu.target.systemId
+      && ((continuousMap?.value === true && store.activeView === 'cluster')
+        || (store.activeView === 'system' && store.selectedSystemId === menu.target.systemId))
   }
 
   const currentRequest = computed<PublicationMenuView | null>(() => {
@@ -234,7 +237,7 @@ export function usePublicationMenu(options: {
     const shouldPrepareSelection = !!menuOptions?.selectObjectForContext
       && request.target.kind === 'object'
       && (request.source === 'map' || request.source === 'hierarchy')
-      && store.activeView === 'system'
+      && (store.activeView === 'system' || (continuousMap?.value === true && store.activeView === 'cluster'))
     if (pending) pending.selectionPending = false
     const menu: OwnedMenu = {
       ...request,
