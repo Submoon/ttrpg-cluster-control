@@ -1,8 +1,13 @@
 import { expect, test } from '@playwright/test'
 import type { JumpRoute, Point } from '../domain/workspace'
 import { previewWardenSystemObjects, projectContinuousSystemGeometry } from '../utils/continuous-map-projection'
-import { buildContinuousMapRouteGeometries, continuousMapRouteCurve } from '../utils/continuous-map-route-geometry'
+import {
+  buildContinuousMapRouteGeometries,
+  continuousMapRoundedRectBoundaryPoint,
+  continuousMapRouteCurve,
+} from '../utils/continuous-map-route-geometry'
 import { buildContinuousWardenRouteGeometries } from '../utils/continuous-warden-routes'
+import { continuousSystemFrames } from '../utils/continuous-system-frames'
 
 const from = projectContinuousSystemGeometry({
   id: 'from',
@@ -29,20 +34,110 @@ const route: JumpRoute = {
   playerShared: false,
 }
 
+test('route endpoints meet the facing edges of an asymmetric rounded system frame @pure', { tag: '@pure' }, () => {
+  const anchor = { x: 20, y: 25 }
+  const frame = { x: -20, y: -10, width: 140, height: 80 }
+
+  expect(continuousMapRoundedRectBoundaryPoint(anchor, frame, { x: 500, y: 25 })).toEqual({ x: 120, y: 25 })
+  expect(continuousMapRoundedRectBoundaryPoint(anchor, frame, { x: 20, y: 500 })).toEqual({ x: 20, y: 70 })
+  expect(continuousMapRoundedRectBoundaryPoint(anchor, frame, { x: 500, y: 500 })).toEqual({
+    x: 20 + 480 * (45 / 475),
+    y: 70,
+  })
+})
+
+test('coincident system anchors can choose opposite facing frame edges @pure', { tag: '@pure' }, () => {
+  const anchor = { x: 20, y: 25 }
+  const frame = { x: -20, y: -10, width: 140, height: 80 }
+
+  expect(continuousMapRoundedRectBoundaryPoint(anchor, frame, anchor, { x: 1, y: 0 })).toEqual({ x: 120, y: 25 })
+  expect(continuousMapRoundedRectBoundaryPoint(anchor, frame, anchor, { x: -1, y: 0 })).toEqual({ x: -20, y: 25 })
+  expect(continuousMapRoundedRectBoundaryPoint(anchor, { ...frame, width: 0 }, { x: 200, y: 25 })).toEqual(anchor)
+})
+
+test('diagonal route endpoints meet the visible rounded frame arc and clamp radius to its dimensions @pure', { tag: '@pure' }, () => {
+  const diagonal = continuousMapRoundedRectBoundaryPoint(
+    { x: 50, y: 50 },
+    { x: 0, y: 0, width: 100, height: 100 },
+    { x: 100, y: 0 },
+  )
+  expect(diagonal.x).toBeCloseTo(82 + Math.sqrt(162), 10)
+  expect(diagonal.y).toBeCloseTo(18 - Math.sqrt(162), 10)
+
+  const narrowFrame = continuousMapRoundedRectBoundaryPoint(
+    { x: 10, y: 15 },
+    { x: 0, y: 0, width: 20, height: 80 },
+    { x: 100, y: -100 },
+  )
+  expect(Math.hypot(narrowFrame.x - 10, narrowFrame.y - 10)).toBeCloseTo(10, 10)
+  expect(continuousMapRoundedRectBoundaryPoint(
+    { x: 0, y: 0 },
+    { x: 0, y: 0, width: 100, height: 100 },
+    { x: 100, y: 100 },
+  )).toEqual({ x: 0, y: 0 })
+})
+
+test('edge-touching system frames produce coincident but distinct selectable route paths @pure', { tag: '@pure' }, () => {
+  const systems = [
+    { id: 'a', anchor: { x: 50, y: 40 }, envelope: { x: 0, y: 0, width: 100, height: 80 } },
+    { id: 'b', anchor: { x: 150, y: 40 }, envelope: { x: 100, y: 0, width: 100, height: 80 } },
+  ]
+  const frames = continuousSystemFrames(systems)
+  const touchingPoint = continuousMapRoundedRectBoundaryPoint(
+    systems[0]!.anchor,
+    frames.get('a')!,
+    systems[1]!.anchor,
+  )
+  const reverseTouchingPoint = continuousMapRoundedRectBoundaryPoint(
+    systems[1]!.anchor,
+    frames.get('b')!,
+    systems[0]!.anchor,
+  )
+  expect(touchingPoint).toEqual({ x: 100, y: 40 })
+  expect(reverseTouchingPoint).toEqual(touchingPoint)
+
+  const geometries = buildContinuousMapRouteGeometries([
+    { id: 'forward', fromSystemId: 'a', toSystemId: 'b', start: touchingPoint, end: reverseTouchingPoint },
+    { id: 'reverse', fromSystemId: 'b', toSystemId: 'a', start: reverseTouchingPoint, end: touchingPoint },
+  ])
+  const forward = geometries.get('forward')!
+  const reverse = geometries.get('reverse')!
+  expect(forward.start).toEqual(forward.end)
+  expect(reverse.start).toEqual(reverse.end)
+  expect(forward.path).not.toBe(reverse.path)
+  expect(forward.bounds.width).toBeGreaterThan(10)
+  expect(reverse.bounds.width).toBeGreaterThan(10)
+})
+
 test('a continuous route follows each attached Jump Point only at that end’s detail level', { tag: '@pure' }, () => {
+  const frames = continuousSystemFrames([from, to].map(projection => ({
+    id: projection.id,
+    anchor: projection.anchor,
+    envelope: projection.envelope,
+  })))
+  const fromFrame = frames.get(from.id)!
+  const toFrame = frames.get(to.id)!
+  const fromPoint = from.objects[0]!.scenePosition
+  const toPoint = to.objects[0]!.scenePosition
+  const facingFromEdge = (toward: Point) => continuousMapRoundedRectBoundaryPoint(from.anchor, fromFrame, toward)
+  const facingToEdge = (toward: Point) => continuousMapRoundedRectBoundaryPoint(to.anchor, toFrame, toward)
   const geometry = (detailSystemIds: string[], connection = route) => buildContinuousWardenRouteGeometries({
     routes: [connection],
     projections: [from, to],
     detailSystemIds: new Set(detailSystemIds),
   }).get(connection.id)
 
-  expect(geometry([])).toMatchObject({ start: { x: 100, y: 50 }, end: { x: 500, y: 100 } })
-  expect(geometry(['from'])).toMatchObject({ start: { x: 140, y: 30 }, end: { x: 500, y: 100 } })
-  expect(geometry(['to'])).toMatchObject({ start: { x: 100, y: 50 }, end: { x: 520, y: 160 } })
-  expect(geometry(['from', 'to'])).toMatchObject({ start: { x: 140, y: 30 }, end: { x: 520, y: 160 } })
+  expect(geometry([])).toMatchObject({ start: from.anchor, end: to.anchor })
+  expect(geometry(['from'])).toMatchObject({ start: fromPoint, end: to.anchor })
+  expect(geometry(['to'])).toMatchObject({ start: from.anchor, end: toPoint })
+  expect(geometry(['from', 'to'])).toMatchObject({ start: fromPoint, end: toPoint })
   expect(geometry(['from', 'to'], { ...route, fromPointId: null })).toMatchObject({
-    start: { x: 100, y: 50 },
-    end: { x: 520, y: 160 },
+    start: facingFromEdge(toPoint),
+    end: toPoint,
+  })
+  expect(geometry([], { ...route, fromPointId: null, toPointId: null })).toMatchObject({
+    start: facingFromEdge(to.anchor),
+    end: facingToEdge(from.anchor),
   })
 })
 

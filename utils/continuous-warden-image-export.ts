@@ -2,6 +2,7 @@ import type { JumpCluster, Point, StarSystem } from '../domain/workspace'
 import { buildContinuousWardenRouteGeometries } from './continuous-warden-routes'
 import type { ContinuousWardenSystemProjection } from './continuous-map-projection'
 import type { ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
+import { continuousSystemFrames } from './continuous-system-frames'
 import type { MapViewport, SvgViewportRect } from './map-zoom'
 import { CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS, placeContinuousMapRouteLabels } from './continuous-map-route-labels'
 import {
@@ -102,6 +103,11 @@ export async function exportContinuousWardenMapImage(
     : request.scope === 'system'
       ? new Set([selected!.id])
       : request.detailSystemIds
+  const displayFrames = continuousSystemFrames(request.projections.map(projection => ({
+    id: projection.id,
+    anchor: projection.anchor,
+    envelope: projection.envelope,
+  })))
   const useViewportRouteScale = request.scope === 'viewport'
   const routes = buildContinuousWardenRouteGeometries({
     routes: request.cluster.routes,
@@ -231,7 +237,17 @@ export async function exportContinuousWardenMapImage(
       for (const projection of request.projections) {
         if (systemIds && !systemIds.has(projection.id)) continue
         const detailed = detailSystemIds.has(projection.id)
-        appendSystem(items, projection, request.cluster.systems, detailed, request.scope, sceneViewport, request.svgPixelScale, dimmedObjectIds)
+        appendSystem(
+          items,
+          projection,
+          displayFrames.get(projection.id) ?? projection.envelope,
+          request.cluster.systems,
+          detailed,
+          request.scope,
+          sceneViewport,
+          request.svgPixelScale,
+          dimmedObjectIds,
+        )
       }
       content.append(items)
 
@@ -359,6 +375,7 @@ function automaticNamePlacementViewportRect(
 function appendSystem(
   parent: SVGElement,
   projection: ContinuousWardenSystemProjection,
+  displayFrame: SvgViewportRect,
   systems: readonly StarSystem[],
   detailed: boolean,
   scope: MapImageScope,
@@ -368,13 +385,15 @@ function appendSystem(
 ): void {
   const group = createScopedElement(parent, 'g', 'continuous-warden-system')
   group.setAttribute('data-system-id', projection.id)
-  const envelope = createScopedElement(parent, 'rect', `continuous-warden-system-envelope${detailed ? ' is-detailed' : ''}`)
-  envelope.setAttribute('x', String(projection.envelope.x))
-  envelope.setAttribute('y', String(projection.envelope.y))
-  envelope.setAttribute('width', String(projection.envelope.width))
-  envelope.setAttribute('height', String(projection.envelope.height))
-  envelope.setAttribute('rx', '18')
-  group.append(envelope)
+  if (displayFrame.width > 0 && displayFrame.height > 0) {
+    const envelope = createScopedElement(parent, 'rect', `continuous-warden-system-envelope${detailed ? ' is-detailed' : ''}`)
+    envelope.setAttribute('x', String(displayFrame.x))
+    envelope.setAttribute('y', String(displayFrame.y))
+    envelope.setAttribute('width', String(displayFrame.width))
+    envelope.setAttribute('height', String(displayFrame.height))
+    envelope.setAttribute('rx', '18')
+    group.append(envelope)
+  }
 
   if (detailed) appendSystemDetail(group, projection, systems, dimmedObjectIds)
 

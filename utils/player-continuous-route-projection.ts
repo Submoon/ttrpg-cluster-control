@@ -2,6 +2,8 @@
 import type { PlayerClusterDocument, PlayerObjectMarker, PlayerRoute, PlayerSystemMarker } from '../domain/player-projection'
 import type { Point } from '../domain/workspace-model'
 import type { ContinuousMapRouteEndpoints } from './continuous-map-route-geometry'
+import { continuousMapRoundedRectBoundaryPoint } from './continuous-map-route-geometry'
+import { continuousSystemFrames } from './continuous-system-frames'
 import type { PlayerContinuousSystemProjection } from './player-continuous-map-projection'
 
 export interface PlayerContinuousRouteDescriptor extends ContinuousMapRouteEndpoints {
@@ -14,9 +16,9 @@ export interface PlayerContinuousRouteDescriptor extends ContinuousMapRouteEndpo
 }
 
 /**
- * Resolves only the public anchors and optional, independently Revealed Jump Point attachments.
- * Each attached endpoint follows its own system's semantic detail state; anonymous destination
- * coordinates remain the exact authorized coordinates from the public document.
+ * Resolves only public frame edges and optional, independently Revealed Jump Point attachments.
+ * Generic markers retain their authorized anchors; anonymous destinations retain their exact
+ * public coordinates. Each attached Jump Point follows its own system's detail state.
  */
 export function projectPlayerContinuousRouteEndpoints(
   document: PlayerClusterDocument,
@@ -25,6 +27,37 @@ export function projectPlayerContinuousRouteEndpoints(
 ): PlayerContinuousRouteDescriptor[] {
   const publicSystems = new Map(document.systems.map(system => [system.id, system]))
   const projectedSystems = new Map(systems.map(system => [system.id, system]))
+  const frames = continuousSystemFrames(systems.flatMap(system => system.geometry ? [{
+    id: system.id,
+    anchor: system.anchor,
+    envelope: system.geometry.envelope,
+  }] : []))
+
+  function fallbackEnd(
+    system: PlayerContinuousSystemProjection,
+    toward: Point,
+    coincidentDirection?: Point,
+  ): Point {
+    const frame = frames.get(system.id)
+    return frame
+      ? continuousMapRoundedRectBoundaryPoint(system.anchor, frame, toward, coincidentDirection)
+      : { ...system.anchor }
+  }
+
+  function routeSystemEnd(
+    system: PlayerContinuousSystemProjection,
+    attachment: { position?: Point } | undefined,
+    toward: Point,
+    coincidentDirection?: Point,
+  ): Point {
+    if (attachment?.position) return attachment.position
+    if (attachment) return { ...system.anchor }
+    return fallbackEnd(system, toward, coincidentDirection)
+  }
+
+  function coincidentDirection(systemId: string, otherSystemId: string): Point {
+    return systemId < otherSystemId ? { x: 1, y: 0 } : { x: -1, y: 0 }
+  }
 
   return document.routes.flatMap((route): PlayerContinuousRouteDescriptor[] => {
     const origin = publicSystems.get(route.fromSystemId)
@@ -37,7 +70,8 @@ export function projectPlayerContinuousRouteEndpoints(
 
     if (route.destination.kind === 'unknown') {
       const destination = route.destination
-      return [descriptor(route, originPoint?.position ?? originProjection.anchor, destination.position, null, originLabel,
+      const start = routeSystemEnd(originProjection, originPoint, destination.position)
+      return [descriptor(route, start, destination.position, null, originLabel,
         'Unknown destination', true)]
     }
 
@@ -48,11 +82,23 @@ export function projectPlayerContinuousRouteEndpoints(
     const destinationLabel = destinationPoint?.label
       ? `${destinationPoint.label} (${destination.label})`
       : destination.label
+    const start = routeSystemEnd(
+      originProjection,
+      originPoint,
+      destinationPoint?.position ?? destinationProjection.anchor,
+      coincidentDirection(origin.id, destination.id),
+    )
+    const end = routeSystemEnd(
+      destinationProjection,
+      destinationPoint,
+      originPoint?.position ?? originProjection.anchor,
+      coincidentDirection(destination.id, origin.id),
+    )
 
     return [descriptor(
       route,
-      originPoint?.position ?? originProjection.anchor,
-      destinationPoint?.position ?? destinationProjection.anchor,
+      start,
+      end,
       destination.id,
       originLabel,
       destinationLabel,
@@ -91,14 +137,14 @@ function attachedPoint(
   publicPointId: string | undefined,
   projection: PlayerContinuousSystemProjection,
   detailSystemIds: ReadonlySet<string>,
-): { label: string; position: Point } | undefined {
+): { label: string; position?: Point } | undefined {
   if (!publicPointId || system.disclosure !== 'revealed') return undefined
   const marker = system.map.objects.find(object => object.id === publicPointId)
   if (!isPublicJumpPoint(marker)) return undefined
   const geometry = projection.geometry?.objects.find(object => object.id === publicPointId)
   return {
     label: marker.label,
-    position: detailSystemIds.has(system.id) && geometry ? geometry.scenePosition : projection.anchor,
+    ...(detailSystemIds.has(system.id) && geometry ? { position: geometry.scenePosition } : {}),
   }
 }
 

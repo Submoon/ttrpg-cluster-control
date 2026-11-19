@@ -26,6 +26,142 @@ export interface ContinuousMapRouteDisplayScale {
   fanOutLimitPixels: number
 }
 
+export const CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS = 18
+
+/**
+ * Resolves where a ray from a system anchor meets its displayed rounded rectangular frame.
+ * Collapsed frames or frames whose trimmed corner excludes the anchor safely resolve to the anchor.
+ */
+export function continuousMapRoundedRectBoundaryPoint(
+  anchor: Point,
+  frame: SvgViewportRect,
+  toward: Point,
+  coincidentDirection: Point = { x: 1, y: 0 },
+): Point {
+  if (!(frame.width > 0 && frame.height > 0)) return { ...anchor }
+  const left = frame.x
+  const top = frame.y
+  const right = frame.x + frame.width
+  const bottom = frame.y + frame.height
+  const radius = Math.min(
+    CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS,
+    frame.width / 2,
+    frame.height / 2,
+  )
+  if (!roundedRectContains(anchor, left, top, right, bottom, radius)) return { ...anchor }
+
+  let dx = toward.x - anchor.x
+  let dy = toward.y - anchor.y
+  if (dx === 0 && dy === 0) {
+    dx = coincidentDirection.x
+    dy = coincidentDirection.y
+    if (dx === 0 && dy === 0) dx = 1
+  }
+
+  const boundsDistance = Math.min(
+    dx > 0 ? (right - anchor.x) / dx : dx < 0 ? (left - anchor.x) / dx : Number.POSITIVE_INFINITY,
+    dy > 0 ? (bottom - anchor.y) / dy : dy < 0 ? (top - anchor.y) / dy : Number.POSITIVE_INFINITY,
+  )
+  if (radius === 0) return pointAt(anchor, dx, dy, boundsDistance)
+
+  const candidates: number[] = []
+  addStraightBoundaryCandidates(anchor, dx, dy, left, top, right, bottom, radius, candidates)
+  addRoundedCornerCandidates(anchor, dx, dy, left, top, right, bottom, radius, boundsDistance, candidates)
+  const distance = Math.min(...candidates)
+  return Number.isFinite(distance) ? pointAt(anchor, dx, dy, distance) : { ...anchor }
+}
+
+function roundedRectContains(
+  point: Point,
+  left: number,
+  top: number,
+  right: number,
+  bottom: number,
+  radius: number,
+): boolean {
+  if (point.x < left || point.x > right || point.y < top || point.y > bottom) return false
+  if (radius === 0) return true
+  const centerX = Math.max(left + radius, Math.min(right - radius, point.x))
+  const centerY = Math.max(top + radius, Math.min(bottom - radius, point.y))
+  const dx = point.x - centerX
+  const dy = point.y - centerY
+  return dx * dx + dy * dy <= radius * radius + Number.EPSILON * radius * radius * 16
+}
+
+function addStraightBoundaryCandidates(
+  anchor: Point,
+  dx: number,
+  dy: number,
+  left: number,
+  top: number,
+  right: number,
+  bottom: number,
+  radius: number,
+  candidates: number[],
+): void {
+  const epsilon = 1e-9
+  if (dx < 0) {
+    const distance = (left - anchor.x) / dx
+    const y = anchor.y + dy * distance
+    if (y >= top + radius - epsilon && y <= bottom - radius + epsilon) candidates.push(distance)
+  } else if (dx > 0) {
+    const distance = (right - anchor.x) / dx
+    const y = anchor.y + dy * distance
+    if (y >= top + radius - epsilon && y <= bottom - radius + epsilon) candidates.push(distance)
+  }
+  if (dy < 0) {
+    const distance = (top - anchor.y) / dy
+    const x = anchor.x + dx * distance
+    if (x >= left + radius - epsilon && x <= right - radius + epsilon) candidates.push(distance)
+  } else if (dy > 0) {
+    const distance = (bottom - anchor.y) / dy
+    const x = anchor.x + dx * distance
+    if (x >= left + radius - epsilon && x <= right - radius + epsilon) candidates.push(distance)
+  }
+}
+
+function addRoundedCornerCandidates(
+  anchor: Point,
+  dx: number,
+  dy: number,
+  left: number,
+  top: number,
+  right: number,
+  bottom: number,
+  radius: number,
+  boundsDistance: number,
+  candidates: number[],
+): void {
+  const corners = [
+    { x: left + radius, y: top + radius, isOnArc: (point: Point) => point.x <= left + radius && point.y <= top + radius },
+    { x: right - radius, y: top + radius, isOnArc: (point: Point) => point.x >= right - radius && point.y <= top + radius },
+    { x: left + radius, y: bottom - radius, isOnArc: (point: Point) => point.x <= left + radius && point.y >= bottom - radius },
+    { x: right - radius, y: bottom - radius, isOnArc: (point: Point) => point.x >= right - radius && point.y >= bottom - radius },
+  ]
+  const a = dx * dx + dy * dy
+  if (a === 0) return
+  const epsilon = 1e-8
+
+  for (const corner of corners) {
+    const offsetX = anchor.x - corner.x
+    const offsetY = anchor.y - corner.y
+    const b = 2 * (offsetX * dx + offsetY * dy)
+    const c = offsetX * offsetX + offsetY * offsetY - radius * radius
+    const discriminant = b * b - 4 * a * c
+    if (discriminant < -epsilon) continue
+    const root = Math.sqrt(Math.max(0, discriminant))
+    for (const distance of [(-b - root) / (2 * a), (-b + root) / (2 * a)]) {
+      if (distance < 0 || distance > boundsDistance + epsilon) continue
+      const point = pointAt(anchor, dx, dy, distance)
+      if (corner.isOnArc(point)) candidates.push(distance)
+    }
+  }
+}
+
+function pointAt(anchor: Point, dx: number, dy: number, distance: number): Point {
+  return { x: anchor.x + dx * distance, y: anchor.y + dy * distance }
+}
+
 const LANE_SPACING = 32
 const MINIMUM_LOOP_RADIUS = 24
 const LANE_SPACING_PIXELS = 32

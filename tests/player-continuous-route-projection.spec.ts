@@ -1,5 +1,7 @@
 import { expect, test } from './fixtures'
 import type { PlayerClusterDocument } from '../domain/player-projection'
+import { continuousMapRoundedRectBoundaryPoint } from '../utils/continuous-map-route-geometry'
+import { continuousSystemFrames } from '../utils/continuous-system-frames'
 import { projectPlayerContinuousMap } from '../utils/player-continuous-map-projection'
 import { projectPlayerContinuousRouteEndpoints } from '../utils/player-continuous-route-projection'
 
@@ -74,30 +76,60 @@ function publicDocument(): PlayerClusterDocument {
 test('public route endpoints attach only to independently Revealed Jump Points at detail @pure', () => {
   const document = publicDocument()
   const systems = projectPlayerContinuousMap(document).systems
+  const frames = continuousSystemFrames(systems.flatMap(system => system.geometry ? [{
+    id: system.id,
+    anchor: system.anchor,
+    envelope: system.geometry.envelope,
+  }] : []))
+  const origin = systems[0]!
+  const destination = systems[1]!
+  const originMarker = document.systems[0]!
+  const destinationMarker = document.systems[1]!
+  const originPoint = origin.geometry!.objects[0]!.scenePosition
+  const destinationPoint = destination.geometry!.objects[0]!.scenePosition
+  const originEdge = (toward: { x: number; y: number }) =>
+    continuousMapRoundedRectBoundaryPoint(origin.anchor, frames.get(origin.id)!, toward)
+  const destinationEdge = (toward: { x: number; y: number }) =>
+    continuousMapRoundedRectBoundaryPoint(destination.anchor, frames.get(destination.id)!, toward)
   const overview = projectPlayerContinuousRouteEndpoints(document, systems, new Set())
   const originDetailed = projectPlayerContinuousRouteEndpoints(document, systems, new Set(['system-1']))
   const bothDetailed = projectPlayerContinuousRouteEndpoints(document, systems, new Set(['system-1', 'system-2']))
 
   expect(overview[0]).toMatchObject({
-    start: { x: 100, y: 200 },
-    end: { x: 700, y: 420 },
+    start: originMarker.position,
+    end: destinationMarker.position,
     originLabel: 'North Aperture (Vesper)',
     destinationLabel: 'Sable Mouth (Morrow)',
   })
-  expect(originDetailed[0]?.start).toEqual({ x: 60, y: 184 })
-  expect(originDetailed[0]?.end).toEqual({ x: 700, y: 420 })
+  expect(originDetailed[0]?.start).toEqual(originPoint)
+  expect(originDetailed[0]?.end).toEqual(destinationMarker.position)
   expect(bothDetailed[0]).toMatchObject({
-    start: { x: 60, y: 184 },
-    end: { x: 740, y: 406 },
+    start: originPoint,
+    end: destinationPoint,
     originLabel: 'North Aperture (Vesper)',
     destinationLabel: 'Sable Mouth (Morrow)',
     accessibleLabel: 'Jump Level 3 from North Aperture (Vesper) to Sable Mouth (Morrow)',
   })
+
+  const unassociatedDocument = publicDocument()
+  unassociatedDocument.routes = [{
+    id: 'unassociated',
+    jumpLevel: 1,
+    fromSystemId: 'system-1',
+    destination: { kind: 'system', systemId: 'system-2' },
+  }]
+  const unassociated = projectPlayerContinuousRouteEndpoints(unassociatedDocument, systems, new Set())[0]
+  expect(unassociated?.start).toEqual(originEdge(destination.anchor))
+  expect(unassociated?.end).toEqual(destinationEdge(origin.anchor))
 })
 
 test('anonymous public destinations retain exact authorized geometry and generic labels @pure', () => {
   const document = publicDocument()
   const systems = projectPlayerContinuousMap(document).systems
+  const origin = systems[0]!
+  const originPoint = origin.geometry!.objects[0]!.scenePosition
+  const unknownExit = document.routes[1]!.destination
+  if (unknownExit.kind !== 'unknown') throw new Error('Fixture route must use an anonymous destination.')
   const overview = projectPlayerContinuousRouteEndpoints(
     document,
     systems,
@@ -106,7 +138,7 @@ test('anonymous public destinations retain exact authorized geometry and generic
   const originDetailed = projectPlayerContinuousRouteEndpoints(document, systems, new Set(['system-1']))
 
   expect(overview[1]).toMatchObject({
-    start: { x: 100, y: 200 },
+    start: document.systems[0]!.position,
     end: { x: 340, y: 120 },
     originLabel: 'North Aperture (Vesper)',
     destinationLabel: 'Unknown destination',
@@ -115,14 +147,14 @@ test('anonymous public destinations retain exact authorized geometry and generic
     unresolved: true,
   })
   expect(originDetailed[1]).toMatchObject({
-    start: { x: 60, y: 184 },
+    start: originPoint,
     end: { x: 340, y: 120 },
     unresolved: true,
   })
   expect(JSON.stringify(originDetailed[1])).not.toContain('stationId')
 })
 
-test('invalid public endpoint references fail closed to the revealed system anchor @pure', () => {
+test('invalid public endpoint references fall back to the revealed system frame edge @pure', () => {
   const document = publicDocument()
   const origin = document.systems[0]
   if (origin?.disclosure !== 'revealed') throw new Error('Fixture origin must be Revealed.')
@@ -134,7 +166,58 @@ test('invalid public endpoint references fail closed to the revealed system anch
     projectPlayerContinuousMap(document).systems,
     new Set(['system-1', 'system-2']),
   )
+  const systems = projectPlayerContinuousMap(document).systems
+  const routeOrigin = document.systems[0]!
+  const frames = continuousSystemFrames(systems.flatMap(system => system.geometry ? [{
+    id: system.id,
+    anchor: system.anchor,
+    envelope: system.geometry.envelope,
+  }] : []))
+  const destinationPoint = systems[1]!.geometry!.objects[0]!.scenePosition
 
-  expect(descriptors[0]?.start).toEqual(origin.position)
+  expect(descriptors[0]?.start).toEqual(continuousMapRoundedRectBoundaryPoint(
+    routeOrigin.position,
+    frames.get(routeOrigin.id)!,
+    destinationPoint,
+  ))
   expect(descriptors[0]?.originLabel).toBe('Vesper')
+})
+
+test('generic public system markers keep their authorized anchors without frame geometry @pure', () => {
+  const document = publicDocument()
+  const genericSystem = document.systems[1]
+  if (!genericSystem) throw new Error('Fixture destination must exist.')
+  document.systems[1] = {
+    id: genericSystem.id,
+    position: { ...genericSystem.position },
+    disclosure: 'known-type',
+    type: 'star-system',
+    label: 'Star system',
+  }
+  document.routes = [
+    {
+      id: 'anonymous-endpoint',
+      jumpLevel: 1,
+      fromSystemId: 'system-1',
+      fromPointId: null,
+      destination: { kind: 'system', systemId: 'system-2' },
+    },
+  ]
+
+  const systems = projectPlayerContinuousMap(document).systems
+  const descriptor = projectPlayerContinuousRouteEndpoints(document, systems, new Set())[0]
+  const marker = systems[1]!
+
+  expect(marker).not.toHaveProperty('geometry')
+  expect(descriptor?.end).toEqual(marker.anchor)
+  const origin = systems[0]!
+  expect(descriptor?.start).toEqual(continuousMapRoundedRectBoundaryPoint(
+    origin.anchor,
+    continuousSystemFrames(systems.flatMap(system => system.geometry ? [{
+      id: system.id,
+      anchor: system.anchor,
+      envelope: system.geometry.envelope,
+    }] : [])).get(origin.id)!,
+    marker.anchor,
+  ))
 })
