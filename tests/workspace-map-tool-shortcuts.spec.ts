@@ -1,9 +1,29 @@
-import { expect, test } from './fixtures'
+import { expect, test, type Page } from './fixtures'
 import {
   createSingleSystemWorkspace,
   selectCatalogueObjectButton,
+  waitForWorkspaceSaved,
   wardenMap,
 } from './helpers'
+
+async function readSavedWorkspace(page: Page): Promise<unknown> {
+  return page.evaluate(async () => {
+    const open = indexedDB.open('ttrpg-cluster-control')
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      open.onsuccess = () => resolve(open.result)
+      open.onerror = () => reject(open.error ?? new Error('Could not open the saved workspace.'))
+    })
+    try {
+      return await new Promise<unknown>((resolve, reject) => {
+        const record = database.transaction('workspace', 'readonly').objectStore('workspace').get('current')
+        record.onsuccess = () => resolve(record.result)
+        record.onerror = () => reject(record.error ?? new Error('Could not read the saved workspace.'))
+      })
+    } finally {
+      database.close()
+    }
+  })
+}
 
 test('map tool shortcuts follow the produced letter instead of physical key code', async ({ page }) => {
   await createSingleSystemWorkspace(page)
@@ -52,6 +72,9 @@ test('map tool shortcuts follow the produced letter instead of physical key code
 
 test('Escape closes the Add chooser and map Help while preserving the armed type @ui-smoke', async ({ page }) => {
   await createSingleSystemWorkspace(page, { viewport: { width: 1280, height: 800 } })
+  await waitForWorkspaceSaved(page)
+  const initial = await readSavedWorkspace(page)
+  expect(initial).toBeDefined()
 
   const map = wardenMap(page)
   const toolbar = page.getByRole('navigation', { name: 'Map context and commands' })
@@ -111,7 +134,8 @@ test('Escape closes the Add chooser and map Help while preserving the armed type
   await page.keyboard.press('Escape')
   await expect(add).toHaveAttribute('aria-pressed', 'false')
   await expect(quitAdd).toHaveCount(0)
-  await expect(objects).toHaveCount(1)
+  await waitForWorkspaceSaved(page)
+  expect(await readSavedWorkspace(page)).toEqual(initial)
 
   await page.setViewportSize({ width: 1280, height: 800 })
   await toolbar.getByRole('button', { name: 'Hierarchy', exact: true }).click()
