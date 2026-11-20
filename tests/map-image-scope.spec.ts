@@ -97,6 +97,27 @@ test('automatic Cluster names distribute coincident anchors into readable bounds
   }
 })
 
+test('overview system names are centered on the displayed frame @pure', { tag: '@pure' }, () => {
+  const frame = { x: 120, y: 70, width: 260, height: 180 }
+  const label = continuousMapNameLabels({
+    projections: [{
+      id: 'system',
+      name: 'Vesper',
+      anchor: { x: 200, y: 160 },
+      envelope: frame,
+    }],
+    viewport: { x: 20, y: 40, k: 1.2 },
+    viewportRect: { x: 0, y: 0, width: 960, height: 560 },
+    svgPixelScale: 1,
+  })[0]
+
+  expect(label).toBeDefined()
+  expect(label?.x).toBeCloseTo(20 + (frame.x + frame.width / 2) * 1.2)
+  expect(label?.y).toBeCloseTo(40 + (frame.y + frame.height / 2) * 1.2 - label!.height / 2)
+  expect(label?.height).toBe(36)
+  expect(label?.hasLeader).toBe(true)
+})
+
 test('preview name culling uses an already translated anchor and frame only once @pure', { tag: '@pure' }, () => {
   const labels = continuousMapNameLabels({
     projections: [{

@@ -162,7 +162,9 @@ test('overview Fit and explicit navigation reach a lower-right planet beside fai
   await expect(anchor).toBeInViewport({ ratio: 1 })
   const anchorCoordinates = await snapshotSvgCoordinates(anchor)
   expect(await anchor.evaluate((element, point) =>
-    document.elementFromPoint(point.x, point.y)?.closest('.continuous-warden-system-anchor') === element,
+    document.elementFromPoint(point.x, point.y)
+      ?.closest<SVGGElement>('.continuous-warden-system-anchor, .continuous-warden-name-target')
+      ?.getAttribute('data-system-id') === element.getAttribute('data-system-id'),
   anchorCoordinates.toClient({ x: 0, y: 0 }))).toBe(true)
   const planet = wardenObjectMark(page, systemId, addedPlanet.id)
   await navigateToPlanet(page, map, planet)

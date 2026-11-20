@@ -2,8 +2,12 @@
 import type { PlayerClusterDocument, PlayerObjectMarker, PlayerRoute, PlayerSystemMarker } from '../domain/player-projection'
 import type { Point } from '../domain/workspace-model'
 import type { ContinuousMapRouteEndpoints } from './continuous-map-route-geometry'
-import { continuousMapRoundedRectBoundaryPoint } from './continuous-map-route-geometry'
+import {
+  continuousMapRoundedRectBoundaryPoint,
+  separateCoincidentRoundedFrameRouteEndpoints,
+} from './continuous-map-route-geometry'
 import { continuousSystemFrames } from './continuous-system-frames'
+import { PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS } from './cluster-system-presentation'
 import type { PlayerContinuousSystemProjection } from './player-continuous-map-projection'
 
 export interface PlayerContinuousRouteDescriptor extends ContinuousMapRouteEndpoints {
@@ -15,16 +19,23 @@ export interface PlayerContinuousRouteDescriptor extends ContinuousMapRouteEndpo
   destinationCaption?: string
 }
 
+const playerKnownSystemMarkerRadius = 12
+const playerRevealedSystemMarkerRadius = 9
+
 /**
- * Resolves only public frame edges and optional, independently Revealed Jump Point attachments.
- * Generic markers retain their authorized anchors; anonymous destinations retain their exact
- * public coordinates. Each attached Jump Point follows its own system's detail state.
+ * Resolves only public frame or marker edges and independently Revealed Jump Point attachments.
+ * Anonymous destinations retain their exact public coordinates. Each attached Jump Point follows
+ * its own system's detail state.
  */
 export function projectPlayerContinuousRouteEndpoints(
   document: PlayerClusterDocument,
   systems: readonly PlayerContinuousSystemProjection[],
   detailSystemIds: ReadonlySet<string>,
+  pixelsPerSceneUnit = 1,
 ): PlayerContinuousRouteDescriptor[] {
+  const safePixelsPerSceneUnit = Number.isFinite(pixelsPerSceneUnit) && pixelsPerSceneUnit > 0
+    ? pixelsPerSceneUnit
+    : 1
   const publicSystems = new Map(document.systems.map(system => [system.id, system]))
   const projectedSystems = new Map(systems.map(system => [system.id, system]))
   const frames = continuousSystemFrames(systems.flatMap(system => system.geometry ? [{
@@ -51,8 +62,31 @@ export function projectPlayerContinuousRouteEndpoints(
     coincidentDirection?: Point,
   ): Point {
     if (attachment?.position) return attachment.position
-    if (attachment) return { ...system.anchor }
-    return fallbackEnd(system, toward, coincidentDirection)
+    const frameEdge = fallbackEnd(system, toward, coincidentDirection)
+    if (system.geometry) return frameEdge
+    return circleBoundaryPoint(system, toward, safePixelsPerSceneUnit)
+  }
+
+  function circleBoundaryPoint(
+    system: PlayerContinuousSystemProjection,
+    toward: Point,
+    sceneToScreenScale: number,
+  ): Point {
+    const radius = (system.disclosure === 'unknown'
+      ? PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS
+      : system.disclosure === 'known-type'
+        ? playerKnownSystemMarkerRadius
+        : playerRevealedSystemMarkerRadius) / sceneToScreenScale
+    const dx = toward.x - system.anchor.x
+    const dy = toward.y - system.anchor.y
+    const distance = Math.hypot(dx, dy)
+    if (!Number.isFinite(distance) || distance === 0) {
+      return { x: system.anchor.x + radius, y: system.anchor.y }
+    }
+    return {
+      x: system.anchor.x + dx / distance * radius,
+      y: system.anchor.y + dy / distance * radius,
+    }
   }
 
   function coincidentDirection(systemId: string, otherSystemId: string): Point {
@@ -82,18 +116,35 @@ export function projectPlayerContinuousRouteEndpoints(
     const destinationLabel = destinationPoint?.label
       ? `${destinationPoint.label} (${destination.label})`
       : destination.label
-    const start = routeSystemEnd(
+    let start = routeSystemEnd(
       originProjection,
       originPoint,
       destinationPoint?.position ?? destinationProjection.anchor,
       coincidentDirection(origin.id, destination.id),
     )
-    const end = routeSystemEnd(
+    let end = routeSystemEnd(
       destinationProjection,
       destinationPoint,
       originPoint?.position ?? originProjection.anchor,
       coincidentDirection(destination.id, origin.id),
     )
+    const originFrame = frames.get(origin.id)
+    const destinationFrame = frames.get(destination.id)
+    if (!originPoint?.position && !destinationPoint?.position
+      && originProjection.geometry && destinationProjection.geometry
+      && originFrame && destinationFrame) {
+      const separated = separateCoincidentRoundedFrameRouteEndpoints(
+        originProjection.anchor,
+        originFrame,
+        start,
+        destinationProjection.anchor,
+        destinationFrame,
+        end,
+        safePixelsPerSceneUnit,
+      )
+      start = separated.start
+      end = separated.end
+    }
 
     return [descriptor(
       route,

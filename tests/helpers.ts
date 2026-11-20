@@ -370,6 +370,20 @@ export type MouseDragDelivery = Readonly<{
   up: ScreenPoint
 }>
 
+/** Reads a painted circle in Cluster coordinates, regardless of its rendering layer. */
+export async function clusterCircleScenePosition(circle: Locator): Promise<ScreenPoint> {
+  return circle.evaluate(element => {
+    if (!(element instanceof SVGCircleElement)) throw new Error('The Cluster marker is missing its circle.')
+    const markerMatrix = element.getScreenCTM()
+    const sceneMatrix = element.ownerSVGElement?.querySelector<SVGGElement>('.cluster-map-content')?.getScreenCTM()
+    if (!markerMatrix || !sceneMatrix) throw new Error('The Cluster marker coordinate spaces are unavailable.')
+    const point = new DOMPoint(Number(element.getAttribute('cx')), Number(element.getAttribute('cy')))
+      .matrixTransform(markerMatrix)
+      .matrixTransform(sceneMatrix.inverse())
+    return { x: point.x, y: point.y }
+  })
+}
+
 /** Captures an SVG element's current screen transform as portable affine values. */
 export async function snapshotSvgCoordinates(
   space: import('@playwright/test').Locator,

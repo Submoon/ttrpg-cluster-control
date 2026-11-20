@@ -1,5 +1,6 @@
 import { expect, preparedCampaignTest as test } from './fixtures'
 import {
+  clusterCircleScenePosition,
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
   clickDockAction,
@@ -37,13 +38,12 @@ async function clickClusterScenePoint(
   await page.mouse.click(screen.x, screen.y)
 }
 
-async function targetPosition(
-  target: import('@playwright/test').Locator,
-): Promise<Point> {
-  return target.evaluate((element) => ({
-    x: Number(element.getAttribute('cx')),
-    y: Number(element.getAttribute('cy')),
-  }))
+async function targetPosition(target: import('@playwright/test').Locator): Promise<Point> {
+  return clusterCircleScenePosition(target)
+}
+
+function positionDistance(point: Point | undefined, expected: Point): number {
+  return point ? Math.hypot(point.x - expected.x, point.y - expected.y) : Infinity
 }
 
 async function targetOverflowOfMap(
@@ -98,10 +98,10 @@ async function pinchDuringExitDrag(
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [first] })
     touchContactsActive = true
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [dragged] })
-    await expect.poll(() => targetPosition(target)).not.toEqual(initialPosition)
+    await expect.poll(async () => positionDistance(await targetPosition(target), initialPosition)).toBeGreaterThan(.01)
 
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [dragged, second] })
-    await expect.poll(() => targetPosition(target)).toEqual(initialPosition)
+    await expect.poll(async () => positionDistance(await targetPosition(target), initialPosition)).toBeLessThan(.01)
     await cdp.send('Input.dispatchTouchEvent', {
       type: 'touchMove',
       touchPoints: [dragged, { ...second, x: second.x + 36 * towardCenter }],
@@ -109,7 +109,7 @@ async function pinchDuringExitDrag(
     await expect.poll(() => scene.getAttribute('transform')).not.toBe(initialCamera)
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
     touchContactsActive = false
-    await expect.poll(() => targetPosition(target)).toEqual(initialPosition)
+    await expect.poll(async () => positionDistance(await targetPosition(target), initialPosition)).toBeLessThan(.01)
   } finally {
     try {
       if (touchContactsActive) await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })
@@ -178,12 +178,21 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   await waitForWorkspaceSaved(page)
   const draggedPosition = await targetPosition(target)
   const routeLine = routeMark.locator('.cluster-route-line')
-  await expect.poll(async () => (await routeLine.getAttribute('d'))?.endsWith(`${draggedPosition.x} ${draggedPosition.y}`)).toBe(true)
+  await expect.poll(() => routeLine.evaluate(element => {
+    if (!(element instanceof SVGPathElement)) return Infinity
+    const marker = element.parentElement?.querySelector<SVGCircleElement>('.cluster-exit-mark')
+    const pathMatrix = element.getScreenCTM()
+    const markerMatrix = marker?.getScreenCTM()
+    if (!marker || !pathMatrix || !markerMatrix) return Infinity
+    const end = element.getPointAtLength(element.getTotalLength()).matrixTransform(pathMatrix)
+    const center = new DOMPoint(marker.cx.baseVal.value, marker.cy.baseVal.value).matrixTransform(markerMatrix)
+    return Math.hypot(end.x - center.x, end.y - center.y)
+  })).toBeLessThan(.1)
   await expect(routeMark.locator('.cluster-route-destination-caption')).toHaveText('The Rim')
 
   await page.getByRole('button', { name: 'Move on map', exact: true }).click()
   await clickClusterScenePoint(page, clusterMap, { x: 760, y: 350 })
-  await expect.poll(() => targetPosition(target)).not.toEqual(draggedPosition)
+  await expect.poll(async () => positionDistance(await targetPosition(target), draggedPosition)).toBeGreaterThan(.01)
   const pointerPreview = await targetPosition(target)
   await page.keyboard.press('Shift+ArrowLeft')
   await expect.poll(async () => (await targetPosition(target)).x).toBeLessThan(pointerPreview.x)
@@ -195,10 +204,10 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
     if (!marker) throw new Error('The Warden SVG download is missing the route marker.')
     return { x: Number(marker.getAttribute('cx')), y: Number(marker.getAttribute('cy')) }
   }, { source: previewSvg.text, routeId: unresolvedRoute.id })
-  expect(exportedPosition).toEqual(draggedPosition)
+  expect(positionDistance(exportedPosition, draggedPosition)).toBeLessThan(.01)
 
   await page.getByRole('button', { name: 'Cancel move', exact: true }).click()
-  await expect.poll(() => targetPosition(target)).toEqual(draggedPosition)
+  await expect.poll(async () => positionDistance(await targetPosition(target), draggedPosition)).toBeLessThan(.01)
   await waitForWorkspaceSaved(page)
 
   await page.getByRole('button', { name: 'Move on map', exact: true }).click()
@@ -228,13 +237,13 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   await expect(clusterMap).toBeVisible()
   await waitForWorkspaceSaved(page)
   await expect(routeMark).toHaveClass(/is-selected/)
-  await expect.poll(() => targetPosition(target)).toEqual(draggedPosition)
+  await expect.poll(async () => positionDistance(await targetPosition(target), draggedPosition)).toBeLessThan(.01)
   await expect.poll(() => targetOverflowOfMap(clusterMap, target)).toBeLessThanOrEqual(0)
   await expect(zoomControls.getByRole('status')).toHaveText(clusterZoomBeforeReveal)
 
   await expect(redo).toBeEnabled()
   await redo.click()
-  await expect.poll(() => targetPosition(target)).toEqual(confirmedPosition)
+  await expect.poll(async () => positionDistance(await targetPosition(target), confirmedPosition)).toBeLessThan(.01)
   await waitForWorkspaceSaved(page)
 
   await page.reload()
@@ -245,7 +254,7 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   await fit.click()
   await waitForWorkspaceSaved(page)
   const reloadedExport = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(reloadedExport.layout.unresolvedExitPositions?.[unresolvedRoute.id]).toEqual(confirmedPosition)
+  expect(positionDistance(reloadedExport.layout.unresolvedExitPositions?.[unresolvedRoute.id], confirmedPosition)).toBeLessThan(.01)
   expect(reloadedExport.cluster?.routes.find(route => route.id === unresolvedRoute.id)).toEqual(unresolvedRoute)
 
   await setWorkspaceMapMode(page, 'Select')
@@ -267,7 +276,7 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   await reloadedInspector.getByRole('button', { name: 'Apply Jump Route', exact: true }).click()
   const appliedDraftExport = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(appliedDraftExport.cluster?.routes.find(route => route.id === unresolvedRoute.id)?.jumpLevel).toBe(4)
-  expect(appliedDraftExport.layout.unresolvedExitPositions?.[unresolvedRoute.id]).toEqual(movedWithAppliedDraft)
+  expect(positionDistance(appliedDraftExport.layout.unresolvedExitPositions?.[unresolvedRoute.id], movedWithAppliedDraft)).toBeLessThan(.01)
 
   await setWorkspaceMapMode(page, 'Select')
   await target.click()

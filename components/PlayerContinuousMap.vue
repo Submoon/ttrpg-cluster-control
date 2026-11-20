@@ -41,20 +41,19 @@
       @wheel.capture="emit('map-interaction')"
       @touchstart.capture="emit('map-interaction')"
     >
+      <ContinuousMapRouteLayer
+        ref="routeLayer"
+        :routes="routeMarks"
+        :geometries="routeGeometries"
+        :detail-system-ids="detailSystemIds"
+        :selected-route-id="props.selectedRouteId ?? null"
+        :viewport="camera"
+        :viewport-rect="nameViewport"
+        :svg-pixel-scale="svgPixelScale"
+        :label-obstacles="routeLabelObstacles"
+        destinations-in-foreground
+      />
       <g :transform="sceneTransform">
-        <ContinuousMapRouteLayer
-          ref="routeLayer"
-          :routes="routeMarks"
-          :geometries="routeGeometries"
-          :detail-system-ids="detailSystemIds"
-          :selected-route-id="props.selectedRouteId ?? null"
-          :viewport="camera"
-          :viewport-rect="nameViewport"
-          :svg-pixel-scale="svgPixelScale"
-          :label-obstacles="routeLabelObstacles"
-          destinations-in-foreground
-        />
-
         <g v-for="system in projection.systems" :key="system.id" class="player-continuous-system" :data-player-system-id="system.id">
           <rect
             v-if="system.geometry && hasPositiveFrame(displayFrameFor(system.id))"
@@ -144,16 +143,16 @@
                   r="7"
                   aria-hidden="true"
                 />
-                <g class="player-continuous-object-text" :transform="objectTextTransform()">
+                <g class="player-continuous-object-text" :style="{ '--map-object-text-scale': objectTextScale }">
                   <text
                     v-if="!objectIsUnknown(system, object.id) && objectPresentation(system, object.id).glyph"
                     class="player-continuous-object-glyph"
                     :style="{ fill: objectMarkerColor(system, object.id) }"
-                    y="5"
+                    :y="5 * objectTextScale"
                     text-anchor="middle"
                     aria-hidden="true"
                   >{{ objectPresentation(system, object.id).glyph }}</text>
-                  <text class="player-continuous-object-label" x="9" y="4" aria-hidden="true">
+                  <text class="player-continuous-object-label" :x="9 * objectTextScale" :y="4 * objectTextScale" aria-hidden="true">
                     {{ objectPresentation(system, object.id).label }}
                   </text>
                 </g>
@@ -271,7 +270,7 @@ import type { PlayerImageViewportSnapshot } from '../utils/continuous-player-ima
 import type { ContinuousMapRouteGeometry } from '../utils/continuous-map-route-geometry'
 import type { PlayerContinuousSystemProjection } from '../utils/player-continuous-map-projection'
 import { continuousMapTextScale } from '../utils/continuous-map-projection'
-import { continuousMapNameLabelFramePosition } from '../utils/continuous-map-name-labels'
+import { CONTINUOUS_SYSTEM_NAME_FONT_PIXELS as SYSTEM_NAME_FONT_PIXELS, continuousMapNameLabelFramePosition } from '../utils/continuous-map-name-labels'
 import { continuousSystemFrames } from '../utils/continuous-system-frames'
 import { buildContinuousMapRouteGeometries } from '../utils/continuous-map-route-geometry'
 import {
@@ -311,7 +310,6 @@ const emit = defineEmits<{
   'map-interaction': []
 }>()
 
-const SYSTEM_NAME_FONT_PIXELS = 18
 const VIEWPORT = { x: 0, y: 0, width: 960, height: 560 }
 const mapElement = ref<SVGSVGElement | null>(null)
 const routeLayer = ref<InstanceType<typeof ContinuousMapRouteLayer> | null>(null)
@@ -360,10 +358,12 @@ const detailSystemIds = shallowRef<ReadonlySet<string>>(new Set())
 const detailMotion = useContinuousMapDetailMotion(detailSystemIds)
 const nameViewport = shallowRef<SvgViewportRect>(VIEWPORT)
 const scenePixelScale = computed(() => camera.value.k * svgPixelScale.value)
+const objectTextScale = computed(() => continuousMapTextScale(scenePixelScale.value, 16, 28))
 const routeDescriptors = computed(() => projectPlayerContinuousRouteEndpoints(
   props.document,
   projection.value.systems,
   detailSystemIds.value,
+  scenePixelScale.value,
 ))
 const anonymousRoutes = computed(() => routeDescriptors.value.filter(route => route.unresolved))
 const routeMarks = computed(() => routeDescriptors.value.map(route => ({
@@ -616,10 +616,6 @@ function screenMarkTransform(anchor: { x: number; y: number }): string {
   return `translate(${anchor.x} ${anchor.y}) scale(${inverseScale})`
 }
 
-function objectTextTransform(): string {
-  return `scale(${continuousMapTextScale(scenePixelScale.value, 16, 28)})`
-}
-
 function centerSystem(systemId: string): boolean {
   const system = projection.value.systems.find(candidate => candidate.id === systemId)
   if (!system) return false
@@ -654,7 +650,9 @@ function routeGeometryAt(routeId: string, scale: number): ContinuousMapRouteGeom
     svgPixelScale.value,
     detailSystemIds.value,
   )
-  const endpoints = projectPlayerContinuousRouteEndpoints(props.document, projection.value.systems, details)
+  const endpoints = projectPlayerContinuousRouteEndpoints(
+    props.document, projection.value.systems, details, scale * svgPixelScale.value,
+  )
   return buildContinuousMapRouteGeometries(endpoints, {
     pixelsPerSceneUnit: scale * svgPixelScale.value,
     fanOutLimitPixels: routeFanOutLimitPixels.value,
@@ -874,12 +872,12 @@ defineExpose({ captureImageViewport, centerRoute: centerRouteForDocument, center
 }
 .player-continuous-object-glyph {
   fill: var(--text-secondary);
-  font: 16px Consolas, monospace;
+  font: calc(16px * var(--map-object-text-scale, 1)) Consolas, monospace;
   pointer-events: none;
 }
 .player-continuous-object-label {
   fill: var(--text-primary);
-  font: 12px Georgia, serif;
+  font: calc(12px * var(--map-object-text-scale, 1)) Georgia, serif;
   pointer-events: none;
 }
 .player-continuous-object-text { pointer-events: none; }

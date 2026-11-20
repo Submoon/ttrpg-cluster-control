@@ -11,7 +11,7 @@ import {
 } from './map-image-scope'
 import { playerMapPaint, type PlayerMapPaint } from './player-map-image-export'
 import { layoutPlayerContinuousNameLabels, type PlayerContinuousNameLabel } from './player-continuous-map-layout'
-import { continuousMapNameLabelFramePosition } from './continuous-map-name-labels'
+import { CONTINUOUS_SYSTEM_NAME_FONT_PIXELS as fontPixels, continuousMapNameLabelFramePosition } from './continuous-map-name-labels'
 import { projectPlayerContinuousMap, type PlayerContinuousSystemProjection } from './player-continuous-map-projection'
 import { projectPlayerContinuousRouteEndpoints, type PlayerContinuousRouteDescriptor } from './player-continuous-route-projection'
 import { buildContinuousMapRouteGeometries, type ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
@@ -25,7 +25,6 @@ const exportPadding = 24
 const routeStubLength = 60
 const identityCamera = { x: 0, y: 0, k: 1 }
 const fallbackBounds = { x: 0, y: 0, width: 960, height: 560 }
-const fontPixels = 18
 const anonymousCaption = 'Unknown destination'
 const anonymousBounds = { x: -9, y: -10, width: 151, height: 22 }
 const fixedStroke = { 'vector-effect': 'non-scaling-stroke' }
@@ -70,7 +69,7 @@ export function serializeContinuousPlayerMapImage(
     envelope: system.geometry.envelope,
   }] : []))
   const detailIds = new Set(snapshot?.detailSystemIds ?? (selected?.geometry ? [selected.id] : []))
-  const descriptors = projectPlayerContinuousRouteEndpoints(document, systems, detailIds)
+  const descriptors = projectPlayerContinuousRouteEndpoints(document, systems, detailIds, scenePixelScale)
   const geometries = buildContinuousMapRouteGeometries(descriptors, snapshot ? {
     pixelsPerSceneUnit: scenePixelScale,
     fanOutLimitPixels: Math.min(96, Math.min(snapshot.nameViewport.width, snapshot.nameViewport.height) * svgPixelScale / 4),

@@ -421,7 +421,7 @@ test('the default Warden map exports all three scopes from applied layout and ca
   await setWorkspaceMapMode(page, 'Select')
   const zoom = workspaceZoomControls(page)
   await zoom.getByRole('button', { name: 'Fit map', exact: true }).click()
-  await continuousMap.locator('.continuous-warden-system-anchor[data-system-id="campaign-baseline-vesper"]').click()
+  await continuousMap.locator('.continuous-warden-name-target[data-system-id="campaign-baseline-vesper"]').click()
   await zoom.getByRole('button', { name: 'Center selected target', exact: true }).click()
   const vesperObjects = continuousMap.locator('.continuous-warden-object[data-system-id="campaign-baseline-vesper"]')
   for (let step = 0; await vesperObjects.count() === 0 && step < 12; step++) {

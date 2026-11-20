@@ -32,19 +32,19 @@
           <stop offset="100%" stop-color="var(--map-text)" stop-opacity="0" />
         </radialGradient>
       </defs>
+      <ContinuousMapRouteLayer
+        ref="routeLayer"
+        :routes="routeMarks"
+        :geometries="routeGeometries"
+        :detail-system-ids="ready ? detailSystemIds : undefined"
+        :selected-route-id="selectedRouteId"
+        :viewport="viewport"
+        :viewport-rect="svgViewport"
+        :svg-pixel-scale="svgPixelScale"
+        :label-obstacles="routeLabelObstacles"
+        :move-enabled="mode === 'move' && !moveTargeting && !clusterMoveTargeting && !creationType && clusterAddType === null"
+      />
       <g class="cluster-map-content" :transform="cameraTransform">
-        <ContinuousMapRouteLayer
-          ref="routeLayer"
-          :routes="routeMarks"
-          :geometries="routeGeometries"
-          :detail-system-ids="ready ? detailSystemIds : undefined"
-          :selected-route-id="selectedRouteId"
-          :viewport="viewport"
-          :viewport-rect="svgViewport"
-          :svg-pixel-scale="svgPixelScale"
-          :label-obstacles="routeLabelObstacles"
-          :move-enabled="mode === 'move' && !moveTargeting && !clusterMoveTargeting && !creationType && clusterAddType === null"
-        />
         <g class="cluster-map-items">
           <g
             v-for="projection in renderedProjections"
@@ -252,19 +252,19 @@
                     class="continuous-warden-star-halo"
                     :r="starHaloRadius(projection)"
                   />
-                  <g class="continuous-warden-object-text" :transform="detailTextTransform(projection)">
+                  <g class="continuous-warden-object-text" :style="{ '--map-object-text-scale': detailTextScale(projection) }">
                     <text
                       class="continuous-warden-object-glyph"
                       :style="{ fill: localObject(projection.id, object.id)?.markerColor }"
-                      y="8"
+                      :y="8 * detailTextScale(projection)"
                       text-anchor="middle"
                     >
                       {{ objectGlyph(projection.id, object.id) }}
                     </text>
-                    <text class="continuous-warden-object-key" y="31" text-anchor="middle">
+                    <text class="continuous-warden-object-key" :y="31 * detailTextScale(projection)" text-anchor="middle">
                       {{ object.locationKey }}
                     </text>
-                    <text class="continuous-warden-object-name" y="46" text-anchor="middle">
+                    <text class="continuous-warden-object-name" :y="46 * detailTextScale(projection)" text-anchor="middle">
                       {{ object.name }}
                     </text>
                   </g>
@@ -1483,8 +1483,8 @@ function systemScreenScale(projection: ContinuousWardenSystemProjection): number
   return projection.scale * viewport.value.k * svgPixelScale.value
 }
 
-function detailTextTransform(projection: ContinuousWardenSystemProjection): string {
-  return `scale(${continuousMapTextScale(systemScreenScale(projection), 20, 28)})`
+function detailTextScale(projection: ContinuousWardenSystemProjection): number {
+  return continuousMapTextScale(systemScreenScale(projection), 20, 28)
 }
 
 function starHaloRadius(projection: ContinuousWardenSystemProjection): number {
@@ -4328,17 +4328,17 @@ defineExpose({
 
 .continuous-warden-object-glyph {
   fill: var(--map-text);
-  font: 20px Consolas, monospace;
+  font: calc(20px * var(--map-object-text-scale, 1)) Consolas, monospace;
 }
 
 .continuous-warden-object-key {
   fill: var(--map-unresolved);
-  font: 9px Consolas, monospace;
+  font: calc(9px * var(--map-object-text-scale, 1)) Consolas, monospace;
 }
 
 .continuous-warden-object-name {
   fill: var(--map-text);
-  font: 12px Georgia, serif;
+  font: calc(12px * var(--map-object-text-scale, 1)) Georgia, serif;
 }
 .continuous-warden-object-text { pointer-events: none; }
 

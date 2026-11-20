@@ -24,6 +24,7 @@ interface ScreenPoint {
   name: string
   x: number
   y: number
+  frameCenter?: { x: number; y: number }
 }
 
 interface LabelRect {
@@ -33,8 +34,8 @@ interface LabelRect {
   bottom: number
 }
 
-const SYSTEM_NAME_FONT_PIXELS = 18
-const SYSTEM_NAME_HEIGHT_PIXELS = 28
+const SYSTEM_NAME_FONT_PIXELS = 24
+const SYSTEM_NAME_HEIGHT_PIXELS = 36
 const SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS = 8
 const SYSTEM_NAME_CULL_MARGIN_PIXELS = 96
 const systemNameWidthPixelsCache = new Map<string, number>()
@@ -59,13 +60,21 @@ export function layoutPlayerContinuousNameLabels(
     const x = camera.x + system.anchor.x * camera.k
     const y = camera.y + system.anchor.y * camera.k
     const envelope = system.geometry?.envelope
+    const hasFrame = envelope !== undefined && Number.isFinite(envelope.width) && envelope.width > 0
+      && Number.isFinite(envelope.height) && envelope.height > 0
+    const frameCenter = hasFrame ? {
+      x: camera.x + (envelope.x + envelope.width / 2) * camera.k,
+      y: camera.y + (envelope.y + envelope.height / 2) * camera.k,
+    } : undefined
     const anchorNear = x >= expanded.left && x <= expanded.right && y >= expanded.top && y <= expanded.bottom
     const envelopeNear = envelope !== undefined
       && camera.x + (envelope.x + envelope.width) * camera.k >= expanded.left
       && camera.x + envelope.x * camera.k <= expanded.right
       && camera.y + (envelope.y + envelope.height) * camera.k >= expanded.top
       && camera.y + envelope.y * camera.k <= expanded.bottom
-    return anchorNear || envelopeNear ? [{ id: system.id, name: system.label, x, y }] : []
+    return anchorNear || envelopeNear
+      ? [{ id: system.id, name: system.label, x, y, frameCenter }]
+      : []
   })
 
   const occupied: LabelRect[] = []
@@ -85,7 +94,13 @@ export function layoutPlayerContinuousNameLabels(
       : point.name
     const textWidth = Math.max(1, Math.min(widthPixels - 24,
       Array.from(displayName).length * SYSTEM_NAME_FONT_PIXELS * .65)) / scale
-    const candidates = namePlacementOffsets(widthPixels).map(offset => ({ x: offset.x / scale, y: offset.y / scale }))
+    const candidates = [
+      ...(point.frameCenter ? [{
+        x: (point.frameCenter.x - point.x) * scale,
+        y: (point.frameCenter.y - point.y) * scale - SYSTEM_NAME_HEIGHT_PIXELS / 2,
+      }] : []),
+      ...namePlacementOffsets(widthPixels).map(offset => ({ x: offset.x, y: offset.y })),
+    ].map(offset => ({ x: offset.x / scale, y: offset.y / scale }))
     let chosen = candidates[0]!
     let chosenScore = Number.POSITIVE_INFINITY
     for (const offset of candidates) {
@@ -109,6 +124,7 @@ export function layoutPlayerContinuousNameLabels(
         + Math.max(0, Math.min(bounds.right + 6 / scale, prior.right) - Math.max(bounds.left - 6 / scale, prior.left))
           * Math.max(0, Math.min(bounds.bottom + 4 / scale, prior.bottom) - Math.max(bounds.top - 4 / scale, prior.top)), 0)
       const anchorOverlapArea = points.reduce((total, other) => {
+        if (other.id === point.id && point.frameCenter) return total
         const radius = 18 / scale
         const overlapWidth = Math.max(0, Math.min(bounds.right, other.x + radius) - Math.max(bounds.left, other.x - radius))
         const overlapHeight = Math.max(0, Math.min(bounds.bottom, other.y + radius) - Math.max(bounds.top, other.y - radius))

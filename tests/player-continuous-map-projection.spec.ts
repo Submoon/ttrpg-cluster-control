@@ -195,7 +195,7 @@ test('player continuous names use screen coordinates and independently fit the u
     expect(label.anchorX).toBeCloseTo(80 + projection.systems.find(system => system.id === label.systemId)!.anchor.x * .2)
     expect(label.anchorY).toBeCloseTo(20 + projection.systems.find(system => system.id === label.systemId)!.anchor.y * .2)
     expect(label.width * 2).toBeGreaterThanOrEqual(72)
-    expect(label.height * 2).toBeCloseTo(28)
+    expect(label.height * 2).toBeCloseTo(36)
     expect(label.x - label.width / 2).toBeGreaterThanOrEqual(24)
     expect(label.x + label.width / 2).toBeLessThanOrEqual(316)
     expect(label.y).toBeGreaterThanOrEqual(14)
@@ -203,7 +203,26 @@ test('player continuous names use screen coordinates and independently fit the u
   }
 })
 
-test('player continuous long names stay inside compact viewports and clear their own anchor @pure', () => {
+test('revealed player system names are centered on public frame geometry in overview @pure', () => {
+  const [system] = projectPlayerContinuousMap(publicDocument()).systems.filter(candidate => candidate.geometry)
+  if (!system?.geometry) throw new Error('The public fixture has no revealed system.')
+  const frame = system.geometry.envelope
+  const viewport = { x: 0, y: 0, width: 960, height: 560 }
+  const cameraScale = .4
+  const camera = {
+    x: viewport.width / 2 - (frame.x + frame.width / 2) * cameraScale,
+    y: viewport.height / 2 - (frame.y + frame.height / 2) * cameraScale,
+    k: cameraScale,
+  }
+  const [label] = layoutPlayerContinuousNameLabels([system], camera, 1, viewport)
+
+  if (!label) throw new Error('The overview name is missing.')
+  expect(label.x).toBeCloseTo(viewport.width / 2)
+  expect(label.y + label.height / 2).toBeCloseTo(viewport.height / 2)
+  expect(label.height).toBe(36)
+})
+
+test('player continuous long names stay inside compact viewports when truncated @pure', () => {
   const projection = projectPlayerContinuousMap(publicDocument())
   const source = projection.systems[1]!
   const longSystem = { ...source, label: 'L'.repeat(80) }
@@ -221,7 +240,6 @@ test('player continuous long names stay inside compact viewports and clear their
   expect(label.displayName.length).toBeLessThan(80)
   expect(label.width).toBeLessThanOrEqual(viewport.width - 16)
   expect(label.textWidth).toBeLessThanOrEqual(label.width - 24)
-  expect(label.y).toBeGreaterThanOrEqual(label.anchorY + 18)
 })
 
 test('player continuous target framing includes long labels, rotated orbits, and detail scale @pure', () => {

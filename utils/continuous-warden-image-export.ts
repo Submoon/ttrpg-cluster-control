@@ -196,6 +196,7 @@ export async function exportContinuousWardenMapImage(
       if (!content) throw new Error('The continuous map is not ready to export.')
       const routeStyleSource = clone.querySelector<SVGPathElement>('.continuous-warden-route-layer .cluster-route-line')
       content.replaceChildren()
+      clone.querySelector(':scope > .continuous-map-route-layer')?.remove()
       clone.querySelector(':scope > .continuous-warden-name-layer')?.remove()
       if (request.scope === 'viewport') {
         content.setAttribute('transform', `translate(${request.viewport.x} ${request.viewport.y}) scale(${request.viewport.k})`)

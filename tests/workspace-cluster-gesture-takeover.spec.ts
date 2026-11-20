@@ -90,8 +90,9 @@ test('cluster two-contact takeover cancels an active anchor drag without selecti
     const sourceId = before.cluster?.systems[0]?.id
     if (!sourceId) throw new Error('The saved Cluster is missing its source anchor.')
     const sourceNode = wardenSystemMark(page, sourceId)
+    const sourceName = map.locator(`.continuous-warden-name-target[data-system-id="${sourceId}"]`)
     const originalTransform = await sourceNode.getAttribute('transform')
-    await sourceNode.click()
+    await sourceName.click()
     await expect(inspector).toBeHidden()
     const mapBounds = await map.boundingBox()
     const sourceBounds = await sourceNode.boundingBox()

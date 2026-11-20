@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from './fixtures'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import { importCampaignWorkspace, type CampaignFixture } from './scenarios/campaign-workspace'
 import {
-  downloadImage, downloadJson, hideWorkspaceInspector, inspectImageSvg, openWorkspaceHierarchy, openWorkspaceZoomNavigation,
+  clusterCircleScenePosition, downloadImage, downloadJson, hideWorkspaceInspector, inspectImageSvg, openWorkspaceHierarchy, openWorkspaceZoomNavigation,
   setWorkspaceMapMode, snapshotSvgCoordinates, waitForWorkspaceSaved, waitForWorkspaceStartup,
   wardenMap, workspaceZoomControls, workspaceZoomOutput,
 } from './helpers'
@@ -46,10 +46,6 @@ async function panScenePointToViewportCenter(page: Page, map: Locator, point: Po
     })
   }
   throw new Error('Could not pan the authored scene point into the visible canvas.')
-}
-
-async function markerPosition(marker: Locator): Promise<Point> {
-  return marker.evaluate(element => ({ x: Number(element.getAttribute('cx')), y: Number(element.getAttribute('cy')) }))
 }
 
 async function expectFittedFeatures(map: Locator): Promise<void> {
@@ -97,7 +93,7 @@ test('far unresolved exits stay reachable after Fit and export as a complete bou
     await page.mouse.click(delivered.x, delivered.y)
     await page.getByRole('button', { name: 'Confirm move', exact: true }).click()
     await waitForWorkspaceSaved(page)
-    const applied = await markerPosition(target)
+    const applied = await clusterCircleScenePosition(target)
     const painted = coordinates.toClient(applied)
     expect(Math.abs(painted.x - delivered.x)).toBeLessThanOrEqual(1)
     expect(Math.abs(painted.y - delivered.y)).toBeLessThanOrEqual(1)
@@ -119,7 +115,9 @@ test('far unresolved exits stay reachable after Fit and export as a complete bou
   await route.press('Enter')
   await hideWorkspaceInspector(page)
   await setWorkspaceMapMode(page, 'Move')
-  expect(await markerPosition(target)).toEqual(distant)
+  const fittedMarker = await clusterCircleScenePosition(target)
+  expect(fittedMarker.x).toBeCloseTo(distant.x, 2)
+  expect(fittedMarker.y).toBeCloseTo(distant.y, 2)
   const committed = await authorPosition({ x: -1400, y: 6500 })
   await zoom.getByRole('button', { name: 'Fit map', exact: true }).click()
   await expectFittedFeatures(map)
@@ -133,7 +131,9 @@ test('far unresolved exits stay reachable after Fit and export as a complete bou
   await rightPan(page, map, { x: 48, y: -36 })
   await expect(map.locator('.cluster-map-content')).not.toHaveAttribute('transform', beforePan ?? '')
   await zoom.getByRole('button', { name: 'Zoom in', exact: true }).click()
-  expect(await markerPosition(target)).toEqual(committed)
+  const zoomedMarker = await clusterCircleScenePosition(target)
+  expect(zoomedMarker.x).toBeCloseTo(committed.x, 2)
+  expect(zoomedMarker.y).toBeCloseTo(committed.y, 2)
   const exportCamera = await map.locator('.cluster-map-content').getAttribute('transform')
   const svg = await downloadImage(page, 'image/svg+xml', 'Entire Cluster')
   if (!svg.text) throw new Error('The distant Cluster SVG is empty.')
@@ -155,10 +155,11 @@ test('far unresolved exits stay reachable after Fit and export as a complete bou
   expect((await inspectImageSvg(page, png.sourceSvgText)).viewBox).toEqual(svgInfo.viewBox)
   await expect(map.locator('.cluster-map-content')).toHaveAttribute('transform', exportCamera ?? '')
   const saved = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(saved.layout.unresolvedExitPositions?.[routeId]).toEqual(committed)
+  expect(saved.layout.unresolvedExitPositions?.[routeId]?.x).toBeCloseTo(committed.x, 2)
+  expect(saved.layout.unresolvedExitPositions?.[routeId]?.y).toBeCloseTo(committed.y, 2)
   await page.reload()
   await waitForWorkspaceStartup(page)
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(saved)
-  await expect(target).toHaveAttribute('cx', String(committed.x))
-  await expect(target).toHaveAttribute('cy', String(committed.y))
+  await expect.poll(async () => (await clusterCircleScenePosition(target)).x).toBeCloseTo(committed.x, 2)
+  await expect.poll(async () => (await clusterCircleScenePosition(target)).y).toBeCloseTo(committed.y, 2)
 })

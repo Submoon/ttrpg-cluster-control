@@ -28,6 +28,10 @@ export interface ContinuousMapRouteDisplayScale {
 
 export const CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS = 18
 
+const COINCIDENT_FRAME_ENDPOINT_TOLERANCE_SCENE_UNITS = 1e-7
+const FRAME_ROUTE_ENDPOINT_SEPARATION_PIXELS = 16
+const MAX_FRAME_ROUTE_AIM_OFFSET_PIXELS = 64
+
 /**
  * Resolves where a ray from a system anchor meets its displayed rounded rectangular frame.
  * Collapsed frames resolve to the anchor. A clipped corner uses the frame midpoint as the ray origin.
@@ -71,6 +75,93 @@ export function continuousMapRoundedRectBoundaryPoint(
   addRoundedCornerCandidates(rayOrigin, dx, dy, left, top, right, bottom, radius, boundsDistance, candidates)
   const distance = Math.min(...candidates)
   return Number.isFinite(distance) ? pointAt(rayOrigin, dx, dy, distance) : { ...rayOrigin }
+}
+
+/**
+ * Separates a coincident pair of rounded-frame fallbacks by aiming their rays to opposite sides
+ * of the anchor axis. Callers must use this only when both route ends are frame fallbacks.
+ */
+export function separateCoincidentRoundedFrameRouteEndpoints(
+  startAnchor: Point,
+  startFrame: SvgViewportRect,
+  startPoint: Point,
+  endAnchor: Point,
+  endFrame: SvgViewportRect,
+  endPoint: Point,
+  pixelsPerSceneUnit = 1,
+): { start: Point; end: Point } {
+  const values = [
+    startAnchor.x, startAnchor.y, endAnchor.x, endAnchor.y,
+    startFrame.x, startFrame.y, startFrame.width, startFrame.height,
+    endFrame.x, endFrame.y, endFrame.width, endFrame.height,
+    startPoint.x, startPoint.y, endPoint.x, endPoint.y,
+  ]
+  if (!values.every(Number.isFinite) || !(startFrame.width > 0 && startFrame.height > 0)
+    || !(endFrame.width > 0 && endFrame.height > 0)) {
+    return { start: startPoint, end: endPoint }
+  }
+
+  const scale = Number.isFinite(pixelsPerSceneUnit) && pixelsPerSceneUnit > 0
+    ? pixelsPerSceneUnit
+    : 1
+  if (Math.hypot(startPoint.x - endPoint.x, startPoint.y - endPoint.y)
+    > COINCIDENT_FRAME_ENDPOINT_TOLERANCE_SCENE_UNITS) {
+    return { start: startPoint, end: endPoint }
+  }
+
+  const axisX = endAnchor.x - startAnchor.x
+  const axisY = endAnchor.y - startAnchor.y
+  const anchorDistance = Math.hypot(axisX, axisY)
+  if (!(anchorDistance > 0)) return { start: startPoint, end: endPoint }
+
+  const normalX = -axisY / anchorDistance
+  const normalY = axisX / anchorDistance
+  const desiredSeparation = FRAME_ROUTE_ENDPOINT_SEPARATION_PIXELS / scale
+  const maxAimOffset = Math.max(
+    MAX_FRAME_ROUTE_AIM_OFFSET_PIXELS / scale,
+    anchorDistance * 0.25,
+  )
+  const aim = (offset: number) => ({
+    start: continuousMapRoundedRectBoundaryPoint(startAnchor, startFrame, {
+      x: endAnchor.x + normalX * offset,
+      y: endAnchor.y + normalY * offset,
+    }),
+    end: continuousMapRoundedRectBoundaryPoint(endAnchor, endFrame, {
+      x: startAnchor.x - normalX * offset,
+      y: startAnchor.y - normalY * offset,
+    }),
+  })
+  const separationOf = (candidate: { start: Point; end: Point }) =>
+    Math.hypot(candidate.start.x - candidate.end.x, candidate.start.y - candidate.end.y)
+
+  let lower = 0
+  let upper = Math.min(1 / scale, maxAimOffset)
+  let best = { start: startPoint, end: endPoint }
+  let bestSeparation = 0
+  let bracketed = false
+  for (let attempt = 0; attempt < 64; attempt += 1) {
+    const candidate = aim(upper)
+    const separation = separationOf(candidate)
+    if (separation > bestSeparation) {
+      best = candidate
+      bestSeparation = separation
+    }
+    if (separation >= desiredSeparation) {
+      bracketed = true
+      break
+    }
+    if (upper >= maxAimOffset) break
+    lower = upper
+    upper = Math.min(upper * 2, maxAimOffset)
+  }
+
+  if (!bracketed) return best
+  for (let iteration = 0; iteration < 28; iteration += 1) {
+    const middle = (lower + upper) / 2
+    if (separationOf(aim(middle)) >= desiredSeparation) upper = middle
+    else lower = middle
+  }
+  return aim(upper)
 }
 
 function roundedRectContains(

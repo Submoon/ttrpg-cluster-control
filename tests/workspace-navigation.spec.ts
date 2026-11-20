@@ -33,13 +33,16 @@ test('the unified Warden map pans on a right drag and opens the visibility menu 
     const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
     await page.mouse.move(point.x, point.y)
     await page.mouse.down({ button: 'right' })
-    await page.evaluate(({ x, y }) => {
+    await page.evaluate(({ x, y, systemId }) => {
       const target = document.elementFromPoint(x, y)
-      if (!target?.closest('.continuous-warden-system-anchor')) throw new Error('The right press did not hit the system anchor.')
-      target.dispatchEvent(new MouseEvent('contextmenu', {
+      const systemTarget = target?.closest<SVGGElement>('.continuous-warden-system-anchor, .continuous-warden-name-target')
+      if (systemTarget?.getAttribute('data-system-id') !== systemId) {
+        throw new Error('The right press did not hit the expected system mark.')
+      }
+      systemTarget.dispatchEvent(new MouseEvent('contextmenu', {
         bubbles: true, cancelable: true, button: 2, buttons: 2, clientX: x, clientY: y,
       }))
-    }, point)
+    }, { ...point, systemId })
     return point
   }
 

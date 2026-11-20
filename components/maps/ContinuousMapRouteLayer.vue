@@ -11,11 +11,11 @@
       role="button"
       tabindex="0"
     >
-      <path class="cluster-route-line" :d="mark.geometry.path" aria-hidden="true" />
-      <path class="cluster-route-hit-target" :d="mark.geometry.path" aria-hidden="true" />
+      <path class="cluster-route-line" :d="mark.paintedGeometry.path" aria-hidden="true" />
+      <path class="cluster-route-hit-target" :d="mark.paintedGeometry.path" aria-hidden="true" />
       <g
         v-if="mark.label"
-        :transform="`translate(${mark.geometry.midpoint.x} ${mark.geometry.midpoint.y}) scale(${1 / scenePixelScale})`"
+        :transform="`translate(${mark.paintedGeometry.midpoint.x} ${mark.paintedGeometry.midpoint.y}) scale(${1 / svgPixelScale})`"
         aria-hidden="true"
       >
         <rect
@@ -31,7 +31,7 @@
       <text
         v-if="mark.destinationCaption && !destinationsInForeground"
         class="cluster-route-destination-caption"
-        :transform="`translate(${mark.geometry.end.x} ${mark.geometry.end.y}) scale(${1 / scenePixelScale})`"
+        :transform="`translate(${mark.paintedGeometry.end.x} ${mark.paintedGeometry.end.y}) scale(${1 / svgPixelScale})`"
         x="8"
         y="4"
         aria-hidden="true"
@@ -39,16 +39,16 @@
       <template v-if="mark.unresolved && !destinationsInForeground">
         <circle
           class="cluster-exit-hit-target"
-          :cx="mark.geometry.end.x"
-          :cy="mark.geometry.end.y"
-          :r="12 / scenePixelScale"
+          :cx="mark.paintedGeometry.end.x"
+          :cy="mark.paintedGeometry.end.y"
+          :r="12 / svgPixelScale"
           aria-hidden="true"
         />
         <circle
           class="cluster-exit-mark"
-          :cx="mark.geometry.end.x"
-          :cy="mark.geometry.end.y"
-          :r="7 / scenePixelScale"
+          :cx="mark.paintedGeometry.end.x"
+          :cy="mark.paintedGeometry.end.y"
+          :r="7 / svgPixelScale"
           aria-hidden="true"
         />
       </template>
@@ -103,9 +103,29 @@ const paintedMarks = computed(() => {
     svgPixelScale: props.svgPixelScale,
     obstacles: props.labelObstacles,
   })
-  return marks.value.map(mark => ({ ...mark, label: labels.get(mark.id) }))
+  return marks.value.map(mark => ({
+    ...mark,
+    paintedGeometry: projectGeometry(mark.geometry),
+    label: labels.get(mark.id),
+  }))
 })
-const scenePixelScale = computed(() => props.viewport.k * props.svgPixelScale)
+const svgPixelScale = computed(() => props.svgPixelScale > 0 ? props.svgPixelScale : 1)
+
+function toViewport(point: Point): Point {
+  return {
+    x: props.viewport.x + point.x * props.viewport.k,
+    y: props.viewport.y + point.y * props.viewport.k,
+  }
+}
+
+function projectGeometry(geometry: ContinuousMapRouteGeometry): ContinuousMapRouteGeometry {
+  return continuousMapRouteCurve(
+    toViewport(geometry.start),
+    toViewport(geometry.control1),
+    toViewport(geometry.control2),
+    toViewport(geometry.end),
+  )
+}
 
 function interpolatePoint(from: Point, to: Point, progress: number): Point {
   return { x: from.x + (to.x - from.x) * progress, y: from.y + (to.y - from.y) * progress }
@@ -131,7 +151,7 @@ function routeIdAtStroke(event: MouseEvent): string | undefined {
     const id = path.closest('.cluster-route')?.getAttribute('data-route-id')
     if (!id) return []
     const geometry = animated.value.get(id) ?? props.geometries.get(id)
-    return geometry ? [{ id, geometry }] : []
+    return geometry ? [{ id, geometry: projectGeometry(geometry) }] : []
   })
   return nearestContinuousMapRouteHit(point, candidates, Math.hypot(matrix.a, matrix.b))
 }

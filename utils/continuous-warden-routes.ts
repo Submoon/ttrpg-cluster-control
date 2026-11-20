@@ -5,6 +5,7 @@ import { continuousSystemFrames } from './continuous-system-frames'
 import {
   buildContinuousMapRouteGeometries,
   continuousMapRoundedRectBoundaryPoint,
+  separateCoincidentRoundedFrameRouteEndpoints,
   type ContinuousMapRouteDisplayScale,
   type ContinuousMapRouteEndpoints,
   type ContinuousMapRouteGeometry,
@@ -61,7 +62,7 @@ export function buildContinuousWardenRouteGeometries(
     const object = projection.objects.find(candidate => candidate.id === pointId)
     if (!object) return undefined
     const anchor = anchorFor(projection)
-    if (!detailSystemIds.has(projection.id)) return anchor
+    if (!detailSystemIds.has(projection.id)) return undefined
     return {
       x: object.scenePosition.x + (anchor.x - projection.anchor.x),
       y: object.scenePosition.y + (anchor.y - projection.anchor.y),
@@ -101,16 +102,31 @@ export function buildContinuousWardenRouteGeometries(
     const destination = projectionsById.get(toSystemId)
     if (!destination) continue
     const destinationEnd = attachedEnd(destination, toPointId)
-    const start = sourceEnd ?? fallbackEnd(
+    let start = sourceEnd ?? fallbackEnd(
       source,
       destinationEnd ?? anchorFor(destination),
       coincidentDirection(fromSystemId, toSystemId),
     )
-    const end = destinationEnd ?? fallbackEnd(
+    let end = destinationEnd ?? fallbackEnd(
       destination,
       sourceEnd ?? anchorFor(source),
       coincidentDirection(toSystemId, fromSystemId),
     )
+    const sourceFrame = frames.get(fromSystemId)
+    const destinationFrame = frames.get(toSystemId)
+    if (!sourceEnd && !destinationEnd && sourceFrame && destinationFrame) {
+      const separated = separateCoincidentRoundedFrameRouteEndpoints(
+        anchorFor(source),
+        sourceFrame,
+        start,
+        anchorFor(destination),
+        destinationFrame,
+        end,
+        display?.pixelsPerSceneUnit,
+      )
+      start = separated.start
+      end = separated.end
+    }
     endpoints.push({ id, fromSystemId, toSystemId, start, end })
   }
   return buildContinuousMapRouteGeometries(endpoints, display)

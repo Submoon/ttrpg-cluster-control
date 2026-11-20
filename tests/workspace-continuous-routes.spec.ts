@@ -3,6 +3,7 @@ import { exportJumpCluster, restoreJumpClusterBackup } from '../domain/workspace
 import campaignFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 import {
+  clusterCircleScenePosition,
   clickDockAction,
   measureMouseDrag,
   openPlayerPreview,
@@ -241,14 +242,21 @@ async function usesIndependentlyRevealedEnds(mark: Locator): Promise<boolean> {
     if (!(element instanceof SVGPathElement)) return false
     const map = element.ownerSVGElement!
     const departure = map.querySelector<SVGGElement>('.continuous-warden-object[aria-label$="Vesper Departure"]')
-    const destination = map.querySelector<SVGGElement>('.continuous-warden-system-anchor[aria-label="Select Harrow"]')
-    if (!departure || !destination || destination.closest('.continuous-warden-system')?.querySelector('.continuous-warden-system-detail')) return false
+    const destination = map.querySelector('.continuous-warden-system-anchor[aria-label="Select Harrow"]')?.closest('.continuous-warden-system')
+    const frame = destination?.querySelector<SVGRectElement>('.continuous-warden-system-envelope')
+    if (!departure || !frame || destination?.querySelector('.continuous-warden-system-detail')) return false
     const start = element.getPointAtLength(0).matrixTransform(element.getScreenCTM()!)
     const end = element.getPointAtLength(element.getTotalLength()).matrixTransform(element.getScreenCTM()!)
     const jumpPoint = new DOMPoint().matrixTransform(departure.getScreenCTM()!)
-    const anchor = new DOMPoint().matrixTransform(destination.getScreenCTM()!)
+    const frameMatrix = frame.getScreenCTM()!
+    const point = end.matrixTransform(frameMatrix.inverse())
+    const { x, y, width, height } = frame.getBBox()
+    const radius = Math.min(frame.rx.baseVal.value, width / 2, height / 2)
+    const centerX = Math.max(x + radius, Math.min(x + width - radius, point.x))
+    const centerY = Math.max(y + radius, Math.min(y + height - radius, point.y))
+    const edgeDistance = Math.abs(Math.hypot(point.x - centerX, point.y - centerY) - radius)
     return Math.hypot(start.x - jumpPoint.x, start.y - jumpPoint.y) < 1
-      && Math.hypot(end.x - anchor.x, end.y - anchor.y) < 1
+      && edgeDistance * Math.hypot(frameMatrix.a, frameMatrix.b) < 1
   })
 }
 
@@ -339,13 +347,13 @@ test('continuous routes support clipped selection, guarded inspection and author
   await exit.press('Enter')
   await expect(exit).toHaveAttribute('aria-pressed', 'true')
   const marker = exit.locator('.cluster-exit-mark')
-  const originalX = Number(await marker.getAttribute('cx'))
+  const originalX = (await clusterCircleScenePosition(marker)).x
   await page.getByRole('button', { name: 'Move on map', exact: true }).click()
   await page.keyboard.press('Shift+ArrowRight')
-  await expect(marker).toHaveAttribute('cx', String(originalX + 10))
+  await expect.poll(async () => (await clusterCircleScenePosition(marker)).x).toBeCloseTo(originalX + 10, 2)
   await page.getByRole('button', { name: 'Confirm move', exact: true }).click()
   await waitForWorkspaceSaved(page)
-  await expect(marker).toHaveAttribute('cx', String(originalX + 10))
+  await expect.poll(async () => (await clusterCircleScenePosition(marker)).x).toBeCloseTo(originalX + 10, 2)
 })
 
 test('the nearest continuous route wins even when later routes cover its distant stroke', async ({ page }) => {
@@ -372,12 +380,12 @@ test('the nearest continuous route wins even when later routes cover its distant
 
   const map = page.getByRole('group', { name: /continuous map$/ })
   const routes = [12, 11, 13].map(level => map.getByRole('button', { name: new RegExp(`Select Jump Level ${level} route`) }))
-  const scale = await routes[0]!.locator('.cluster-route-hit-target').evaluate(element => {
-    if (!(element instanceof SVGPathElement)) throw new Error('The route stroke is unavailable.')
-    const matrix = element.getScreenCTM()!
-    return Math.hypot(matrix.a, matrix.b)
-  })
+  const matrix = (await snapshotSvgCoordinates(map.locator('.cluster-map-content'))).matrix
+  const scale = Math.hypot(matrix.a, matrix.b)
   expect(scale).toBeLessThan(0.12)
+  const routeMatrix = (await snapshotSvgCoordinates(routes[0]!.locator('.cluster-route-hit-target'))).matrix
+  const mapMatrix = (await snapshotSvgCoordinates(map)).matrix
+  expect(Math.hypot(routeMatrix.a, routeMatrix.b)).toBeCloseTo(Math.hypot(mapMatrix.a, mapMatrix.b), 8)
   for (const [index, route] of routes.entries()) {
     const point = await coveredRouteStrokePoint(route, index === 0 ? 2 : 1)
     if (!point) throw new Error('The tested centerline must be covered by another route’s hit stroke.')

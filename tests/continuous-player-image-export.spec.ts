@@ -94,7 +94,8 @@ test('the entire player image shows published names, attached routes and the ano
   expect(image.svg).not.toContain('Unknown presence')
   expect(image.svg).not.toContain('Local &lt;Gate&gt;')
   expect(image.svg).not.toContain('Inspector text')
-  expect(image.svg).toMatch(/d="M 400 200 C [^"]+ 2600 500"/)
+  // Overview routes meet the public frames' east and west edges.
+  expect(image.svg).toMatch(/d="M 479\.2\d* 210\.8 C [^"]+ 2562 494\.818\d*"/)
   // The anonymous route has no local point and starts at the public frame's east edge (x = 479.2).
   expect(image.svg).toMatch(/d="M 479\.2\d* [^"]+ 3000 -170"/)
   expect(image.width).toBeGreaterThan(2950)

@@ -1,11 +1,11 @@
 import type { Point } from '../domain/workspace'
 import type { MapViewport, SvgViewportRect } from './map-zoom'
 
-export const CONTINUOUS_SYSTEM_NAME_FONT_PIXELS = 18
-export const CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS = 28
+export const CONTINUOUS_SYSTEM_NAME_FONT_PIXELS = 24
+export const CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS = 36
 export const CONTINUOUS_SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS = 8
 export const CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_COUNT = 12
-export const CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_SPACING_PIXELS = 38
+export const CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_SPACING_PIXELS = 42
 
 export interface ContinuousMapNameLabel {
   id: string
@@ -108,20 +108,30 @@ export function continuousMapNameLabels<T extends ContinuousMapNameProjection>({
       right: viewport.x + (envelope.x + delta.x + envelope.width) * viewport.k,
       bottom: viewport.y + (envelope.y + delta.y + envelope.height) * viewport.k,
     }
+    const hasFrame = Number.isFinite(envelope.width) && envelope.width > 0
+      && Number.isFinite(envelope.height) && envelope.height > 0
+    const preferredOffset = hasFrame ? {
+      x: (envelope.x + delta.x + envelope.width / 2 - anchor.x) * viewport.k * scale,
+      y: (envelope.y + delta.y + envelope.height / 2 - anchor.y) * viewport.k * scale
+        - CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / 2,
+    } : { x: 0, y: 0 }
     const anchorNearViewport = point.x >= expandedViewport.left && point.x <= expandedViewport.right
       && point.y >= expandedViewport.top && point.y <= expandedViewport.bottom
     const envelopeNearViewport = envelopeBounds.right >= expandedViewport.left
       && envelopeBounds.left <= expandedViewport.right
       && envelopeBounds.bottom >= expandedViewport.top
       && envelopeBounds.top <= expandedViewport.bottom
-    return anchorNearViewport || envelopeNearViewport ? [point] : []
+    return anchorNearViewport || envelopeNearViewport ? [{ ...point, preferredOffset }] : []
   })
 
   for (const anchor of anchorPoints) {
     const widthPixels = systemNameWidthPixels(anchor.name)
     const width = widthPixels / scale
     const height = CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / scale
-    const candidates = namePlacementOffsets(widthPixels).map(offset => ({ x: offset.x / scale, y: offset.y / scale }))
+    const candidates = [
+      { x: anchor.preferredOffset.x / scale, y: anchor.preferredOffset.y / scale },
+      ...namePlacementOffsets(widthPixels).map(offset => ({ x: offset.x / scale, y: offset.y / scale })),
+    ]
     let chosen = candidates[0]!
     let chosenScore = Number.POSITIVE_INFINITY
     for (const offset of candidates) {
@@ -182,8 +192,7 @@ export function continuousMapNameLabels<T extends ContinuousMapNameProjection>({
       height,
       anchorX: anchor.x,
       anchorY: anchor.y,
-      hasLeader: Math.abs(chosen.x * scale) > 0
-        || Math.abs(chosen.y * scale + CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS + 8) > 6,
+      hasLeader: Math.hypot(chosen.x, chosen.y + height / 2) * scale > 24,
     })
   }
   return labels

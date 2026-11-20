@@ -96,13 +96,13 @@ test('public route endpoints attach only to independently Revealed Jump Points a
   const bothDetailed = projectPlayerContinuousRouteEndpoints(document, systems, new Set(['system-1', 'system-2']))
 
   expect(overview[0]).toMatchObject({
-    start: originMarker.position,
-    end: destinationMarker.position,
+    start: originEdge(destinationMarker.position),
+    end: destinationEdge(originMarker.position),
     originLabel: 'North Aperture (Vesper)',
     destinationLabel: 'Sable Mouth (Morrow)',
   })
   expect(originDetailed[0]?.start).toEqual(originPoint)
-  expect(originDetailed[0]?.end).toEqual(destinationMarker.position)
+  expect(originDetailed[0]?.end).toEqual(destinationEdge(originPoint))
   expect(bothDetailed[0]).toMatchObject({
     start: originPoint,
     end: destinationPoint,
@@ -138,7 +138,15 @@ test('anonymous public destinations retain exact authorized geometry and generic
   const originDetailed = projectPlayerContinuousRouteEndpoints(document, systems, new Set(['system-1']))
 
   expect(overview[1]).toMatchObject({
-    start: document.systems[0]!.position,
+    start: continuousMapRoundedRectBoundaryPoint(
+      origin.anchor,
+      continuousSystemFrames([{
+        id: origin.id,
+        anchor: origin.anchor,
+        envelope: origin.geometry!.envelope,
+      }]).get(origin.id)!,
+      { x: 340, y: 120 },
+    ),
     end: { x: 340, y: 120 },
     originLabel: 'North Aperture (Vesper)',
     destinationLabel: 'Unknown destination',
@@ -183,7 +191,7 @@ test('invalid public endpoint references fall back to the revealed system frame 
   expect(descriptors[0]?.originLabel).toBe('Vesper')
 })
 
-test('generic public system markers keep their authorized anchors without frame geometry @pure', () => {
+test('generic public route endpoints meet the published marker edge without frame geometry @pure', () => {
   const document = publicDocument()
   const genericSystem = document.systems[1]
   if (!genericSystem) throw new Error('Fixture destination must exist.')
@@ -208,7 +216,8 @@ test('generic public system markers keep their authorized anchors without frame 
   const marker = systems[1]!
 
   expect(marker).not.toHaveProperty('geometry')
-  expect(descriptor?.end).toEqual(marker.anchor)
+  if (!descriptor) throw new Error('The public route needs a projected endpoint.')
+  expect(Math.hypot(descriptor.end.x - marker.anchor.x, descriptor.end.y - marker.anchor.y)).toBeCloseTo(12)
   const origin = systems[0]!
   expect(descriptor?.start).toEqual(continuousMapRoundedRectBoundaryPoint(
     origin.anchor,
@@ -219,4 +228,97 @@ test('generic public system markers keep their authorized anchors without frame 
     }] : [])).get(origin.id)!,
     marker.anchor,
   ))
+})
+
+test('unknown public markers keep the route endpoint on the visible marker edge @pure', () => {
+  const document = publicDocument()
+  const source = document.systems[1]!
+  document.systems[1] = {
+    id: source.id,
+    position: { ...source.position },
+    disclosure: 'unknown',
+    label: 'Unknown presence',
+  }
+  document.routes = [{
+    id: 'unknown-marker-edge',
+    jumpLevel: 1,
+    fromSystemId: 'system-1',
+    destination: { kind: 'system', systemId: 'system-2' },
+  }]
+
+  const systems = projectPlayerContinuousMap(document).systems
+  const descriptor = projectPlayerContinuousRouteEndpoints(document, systems, new Set())[0]
+  const marker = systems[1]!
+
+  expect(marker).not.toHaveProperty('geometry')
+  if (!descriptor) throw new Error('The public route needs a projected endpoint.')
+  expect(Math.hypot(descriptor.end.x - marker.anchor.x, descriptor.end.y - marker.anchor.y)).toBeCloseTo(18)
+})
+
+test('public opposite-direction routes split coincident overview frame fallbacks at screen scale @pure', () => {
+  const document = publicDocument()
+  const systemTemplate = document.systems[0]
+  if (!systemTemplate || systemTemplate.disclosure !== 'revealed') {
+    throw new Error('Fixture system must be revealed.')
+  }
+  document.systems = [
+    {
+      ...systemTemplate,
+      id: 'west',
+      position: { x: 50, y: 40 },
+      label: 'West',
+      map: { objects: [], orbits: [] },
+    },
+    {
+      ...systemTemplate,
+      id: 'east',
+      position: { x: 170, y: 40 },
+      label: 'East',
+      map: { objects: [], orbits: [] },
+    },
+  ]
+  document.routes = [
+    { id: 'west-east', jumpLevel: 1, fromSystemId: 'west', destination: { kind: 'system', systemId: 'east' } },
+    { id: 'east-west', jumpLevel: 1, fromSystemId: 'east', destination: { kind: 'system', systemId: 'west' } },
+  ]
+
+  const systems = projectPlayerContinuousMap(document).systems
+  const [forward, reverse] = projectPlayerContinuousRouteEndpoints(document, systems, new Set(), 2)
+  if (!forward || !reverse) throw new Error('Both public routes need projected endpoints.')
+
+  expect(forward.start.x).toBe(110)
+  expect(forward.end.x).toBe(110)
+  expect(forward.start.y).toBeGreaterThanOrEqual(14)
+  expect(forward.start.y).toBeLessThanOrEqual(66)
+  expect(forward.end.y).toBeGreaterThanOrEqual(14)
+  expect(forward.end.y).toBeLessThanOrEqual(66)
+  expect(Math.hypot(forward.start.x - forward.end.x, forward.start.y - forward.end.y) * 2).toBeGreaterThanOrEqual(16)
+  expect(reverse.start).toEqual(forward.end)
+  expect(reverse.end).toEqual(forward.start)
+})
+
+test('generic public marker edge offsets scale with the scene-to-screen transform @pure', () => {
+  const document = publicDocument()
+  const system = document.systems[1]!
+  document.systems[1] = {
+    id: system.id,
+    position: { ...system.position },
+    disclosure: 'known-type',
+    type: 'star-system',
+    label: 'Star system',
+  }
+  document.routes = [{
+    id: 'scaled-marker-edge',
+    jumpLevel: 1,
+    fromSystemId: 'system-1',
+    destination: { kind: 'system', systemId: 'system-2' },
+  }]
+
+  const systems = projectPlayerContinuousMap(document).systems
+  const descriptor = projectPlayerContinuousRouteEndpoints(document, systems, new Set(), 4)[0]
+  const marker = systems[1]!
+
+  expect(marker).not.toHaveProperty('geometry')
+  if (!descriptor) throw new Error('The public route needs a projected endpoint.')
+  expect(Math.hypot(descriptor.end.x - marker.anchor.x, descriptor.end.y - marker.anchor.y)).toBeCloseTo(3)
 })
