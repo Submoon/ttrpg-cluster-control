@@ -1,6 +1,8 @@
 import { expect, test, type Locator, type Page } from './fixtures'
 import creationGeometryFixture from './fixtures/workspace-system-creation-geometry.json' with { type: 'json' }
 import { resolveImportReview, reviewStarSystemImport } from './helpers'
+import { restoreJumpClusterBackup } from '../domain/workspace'
+import { orbitRadii } from '../utils/system-map-geometry'
 import {
   captureMapExportBlobs,
   centerWorkspaceSelection,
@@ -298,8 +300,22 @@ test('attaching an implicit-radius free Orbit preserves both free Orbit geometri
 
   const sourceRing = map.locator(`.continuous-warden-orbit-target[data-orbit-id="${orbit.id}"]`)
   const siblingRing = map.locator(`.continuous-warden-orbit-target[data-orbit-id="${sibling.id}"]`)
-  const sourceRadii = (await wardenOrbitLocalGeometry(sourceRing, systemId)).radii
-  const siblingRadii = (await wardenOrbitLocalGeometry(siblingRing, systemId)).radii
+  const sourcePaintRadii = (await wardenOrbitLocalGeometry(sourceRing, systemId)).radii
+  const siblingPaintRadii = (await wardenOrbitLocalGeometry(siblingRing, systemId)).radii
+  const canonicalWorkspace = restoreJumpClusterBackup(await downloadJson(page, 'Export Jump Cluster JSON'))
+  const canonicalSystem = canonicalWorkspace.cluster.systems.find(candidate => candidate.id === systemId)
+  const canonicalOrbit = canonicalSystem?.orbits.find(candidate => candidate.id === orbit.id)
+  const canonicalSibling = canonicalSystem?.orbits.find(candidate => candidate.id === sibling.id)
+  if (!canonicalSystem || !canonicalOrbit || !canonicalSibling) {
+    throw new Error('The validated Cluster backup is missing the expected system Orbits.')
+  }
+  const sourceRadii = orbitRadii(canonicalSystem, canonicalOrbit, canonicalWorkspace.layout)
+  const siblingRadii = orbitRadii(canonicalSystem, canonicalSibling, canonicalWorkspace.layout)
+  // Owner-local geometry inversion can vary by less than 0.01 map units across browser CTM matrices.
+  expect(sourcePaintRadii.horizontal).toBeCloseTo(sourceRadii.horizontal, 2)
+  expect(sourcePaintRadii.vertical).toBeCloseTo(sourceRadii.vertical, 2)
+  expect(siblingPaintRadii.horizontal).toBeCloseTo(siblingRadii.horizontal, 2)
+  expect(siblingPaintRadii.vertical).toBeCloseTo(siblingRadii.vertical, 2)
   const hostPosition = await objectPosition(map, oldPlanet.id)
   const neighborPosition = await objectPosition(map, neighbor.id)
 
@@ -313,9 +329,9 @@ test('attaching an implicit-radius free Orbit preserves both free Orbit geometri
   await expect.poll(async () => (await wardenOrbitLocalGeometry(sourceRing, systemId)).center.x).toBeCloseTo(hostPosition.x, 2)
   await expect.poll(async () => (await wardenOrbitLocalGeometry(sourceRing, systemId)).center.y).toBeCloseTo(hostPosition.y, 2)
   await expect.poll(async () => (await wardenOrbitLocalGeometry(sourceRing, systemId)).radii.horizontal)
-    .toBeCloseTo(sourceRadii.horizontal, 2)
+    .toBeCloseTo(sourcePaintRadii.horizontal, 2)
   await expect.poll(async () => (await wardenOrbitLocalGeometry(sourceRing, systemId)).radii.vertical)
-    .toBeCloseTo(sourceRadii.vertical, 2)
+    .toBeCloseTo(sourcePaintRadii.vertical, 2)
   await expectObjectPosition(map, passenger.id, { x: hostPosition.x, y: hostPosition.y + sourceRadii.vertical })
   await expectObjectPosition(map, nestedObject.id, { x: hostPosition.x + 46, y: hostPosition.y + sourceRadii.vertical })
   await expectObjectPosition(map, neighbor.id, neighborPosition)

@@ -15,6 +15,7 @@ import {
   selectInspectorOption,
   wardenMap,
   wardenObjectMark,
+  wardenOrbitLocalGeometry,
   workspaceZoomControls,
   workspaceZoomOutput,
   type WorldPoint,
@@ -188,8 +189,17 @@ test('system Add immediately places on repeated clicks and preserves each placem
     }
     await expect(quitAdd).toBeVisible()
     expect(new Set(previous.map(ring => JSON.stringify(ring.geometry))).size, 'distinct rings').toBe(3)
-    expect(previous.map(ring => ring.geometry.slice(2, 4).map(Number)), 'compact hosted radii')
-      .toEqual([[56, 56], [72, 72], [88, 88]])
+    const compactHostedRadii = await Promise.all((await rings.all()).map(async ring =>
+      (await wardenOrbitLocalGeometry(ring, systemId)).radii,
+    ))
+    // Owner-local geometry inversion can vary by less than 0.01 map units across browser CTM matrices.
+    expect(compactHostedRadii).toHaveLength(3)
+    for (const [index, radius] of [56, 72, 88].entries()) {
+      const radii = compactHostedRadii[index]
+      if (!radii) throw new Error('A compact hosted Orbit radius is missing.')
+      expect(radii.horizontal, 'compact hosted horizontal radius').toBeCloseTo(radius, 2)
+      expect(radii.vertical, 'compact hosted vertical radius').toBeCloseTo(radius, 2)
+    }
   })
 
   await test.step('A drag that leaves the map before showing a ring still blocks Undo', async () => {
@@ -225,14 +235,27 @@ test('system Add immediately places on repeated clicks and preserves each placem
       const matrix = element.getScreenCTM()
       const existing = element.closest('svg')?.querySelectorAll<SVGEllipseElement>('.continuous-warden-orbit-target')
       if (!matrix || !existing?.length) throw new Error('Expected concentric rendered rings.')
-      const previewStroke = parseFloat(getComputedStyle(element).strokeWidth)
-      const scale = Math.hypot(matrix.a, matrix.b)
+      const scaleFor = (transform: DOMMatrix) => Math.hypot(transform.a, transform.b)
+      const previewScale = scaleFor(matrix)
+      const strokeWidthInScreenPixels = (ellipse: SVGEllipseElement, transform: DOMMatrix) => {
+        const style = getComputedStyle(ellipse)
+        const strokeWidth = parseFloat(style.strokeWidth)
+        const strokeScale = style.getPropertyValue('vector-effect') === 'non-scaling-stroke'
+          ? 1
+          : scaleFor(transform)
+        return strokeWidth * strokeScale
+      }
+      const previewRadius = element.rx.baseVal.value * previewScale
+      const previewStroke = strokeWidthInScreenPixels(element, matrix)
       const gap = Math.min(...Array.from(existing, (ring) => {
-        const separation = Math.abs(element.rx.baseVal.value - ring.rx.baseVal.value)
-        const halfStrokes = (previewStroke + parseFloat(getComputedStyle(ring).strokeWidth)) / 2
-        return (separation - halfStrokes) * scale
+        const ringMatrix = ring.getScreenCTM()
+        if (!ringMatrix) throw new Error('Expected an existing Orbit transform.')
+        const ringRadius = ring.rx.baseVal.value * scaleFor(ringMatrix)
+        const ringStroke = strokeWidthInScreenPixels(ring, ringMatrix)
+        const halfStrokes = (previewStroke + ringStroke) / 2
+        return Math.abs(previewRadius - ringRadius) - halfStrokes
       }))
-      return { gap, scale }
+      return { gap, scale: previewScale }
     })
     const originalRing = await firstRing.evaluateHandle(element => element)
     let radius: string

@@ -20,6 +20,7 @@ import {
   waitForWorkspaceSaved,
   wardenLocalCoordinates,
   wardenMap,
+  wardenObjectLocalPosition,
   wardenObjectMark,
   wardenSystemMark,
 } from './helpers'
@@ -278,6 +279,7 @@ test('releasing an object drag over disabled history chrome cancels cleanly and 
   await expect(planet).toHaveAccessibleName('Select PL-01, Iria')
   const initialTransform = await planet.getAttribute('transform')
   if (!initialTransform) throw new Error('The Orbit object has no initial map position.')
+  const initialLocalPosition = await wardenObjectLocalPosition(planet)
   const historyDepthBeforeBlockedRelease = await historyUndoDepth(page)
   const redoBounds = await redo.boundingBox()
   const source = await exposedContinuousObjectHitPoint(planet)
@@ -310,7 +312,9 @@ test('releasing an object drag over disabled history chrome cancels cleanly and 
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(beforeBlockedRelease)
 
   await centerWorkspaceSelection(page)
-  await expect(planet).toHaveAttribute('transform', initialTransform)
+  const centeredLocalPosition = await wardenObjectLocalPosition(planet)
+  expect(centeredLocalPosition.x).toBeCloseTo(initialLocalPosition.x, 3)
+  expect(centeredLocalPosition.y).toBeCloseTo(initialLocalPosition.y, 3)
   await expect.poll(() => historyUndoDepth(page)).toBe(historyDepthBeforeBlockedRelease)
 
   const nextSource = await exposedContinuousObjectHitPoint(planet)
@@ -335,7 +339,11 @@ test('releasing an object drag over disabled history chrome cancels cleanly and 
   await expect.poll(() => historyUndoDepth(page)).toBe(historyDepthBeforeBlockedRelease + 1)
   await expect(undo).toHaveAccessibleName('Undo: Move Iria · Iria · Vesper')
   await waitForWorkspaceSaved(page)
-  await expect(planet).not.toHaveAttribute('transform', initialTransform)
+  const movedLocalPosition = await wardenObjectLocalPosition(planet)
+  expect(Math.hypot(
+    movedLocalPosition.x - initialLocalPosition.x,
+    movedLocalPosition.y - initialLocalPosition.y,
+  )).toBeGreaterThan(1)
   const moved = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(moved.cluster?.systems.find(system => system.id === systemId)
     ?.objects.find(object => object.id === createdPlanet.id)?.placement).toEqual({ kind: 'orbit', orbitId })
