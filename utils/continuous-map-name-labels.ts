@@ -1,9 +1,11 @@
 import type { Point } from '../domain/workspace'
 import type { MapViewport, SvgViewportRect } from './map-zoom'
+import { CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS } from './continuous-map-route-geometry'
 
 export const CONTINUOUS_SYSTEM_NAME_FONT_PIXELS = 24
 export const CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS = 36
 export const CONTINUOUS_SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS = 8
+export const CONTINUOUS_SYSTEM_RESIZE_HANDLE_PIXELS = 44
 export const CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_COUNT = 12
 export const CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_SPACING_PIXELS = 42
 
@@ -44,12 +46,26 @@ export function continuousMapNameLabelFramePosition(
   progress: number,
   viewportRect?: SvgViewportRect,
   insetPixels = 12,
+  resizeHandleHitAreaPixels = 0,
+  resizeHandleGapPixels = 6,
 ): Pick<Point, 'x' | 'y'> {
   const scale = Number.isFinite(svgPixelScale) && svgPixelScale > 0 ? svgPixelScale : 1
   const amount = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0
   const inset = Math.max(0, insetPixels) / scale
   let targetX = viewport.x + frame.x * viewport.k + inset + label.width / 2
   let targetY = viewport.y + frame.y * viewport.k + inset
+  let handleCenterX: number | undefined
+  let handleCenterY: number | undefined
+  let handleEdge = Number.NEGATIVE_INFINITY
+  const handleGap = Math.max(0, resizeHandleGapPixels) / scale
+  if (resizeHandleHitAreaPixels > 0 && frame.width > 0 && frame.height > 0) {
+    const cornerRadius = Math.min(CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS, frame.width / 2, frame.height / 2)
+    const cornerInset = cornerRadius * (1 - Math.SQRT1_2)
+    handleCenterX = viewport.x + (frame.x + cornerInset) * viewport.k
+    handleCenterY = viewport.y + (frame.y + cornerInset) * viewport.k
+    handleEdge = handleCenterX + resizeHandleHitAreaPixels / (2 * scale)
+    targetX = handleEdge + handleGap + label.width / 2
+  }
   if (viewportRect) {
     const margin = CONTINUOUS_SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS / scale
     const halfWidth = label.width / 2
@@ -63,6 +79,13 @@ export function continuousMapNameLabelFramePosition(
       viewportRect.y + margin,
       viewportRect.y + viewportRect.height - margin - CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / scale,
     )
+    if (handleCenterY !== undefined && targetX - halfWidth < handleEdge) {
+      targetY = clampToViewport(
+        handleCenterY - resizeHandleHitAreaPixels / (2 * scale) - handleGap - CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / scale,
+        viewportRect.y + margin,
+        viewportRect.y + viewportRect.height - margin - CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / scale,
+      )
+    }
   }
   return {
     x: label.x + (targetX - label.x) * amount,

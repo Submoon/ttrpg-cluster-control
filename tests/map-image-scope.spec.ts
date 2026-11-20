@@ -9,6 +9,7 @@ import {
   trimMapImageRoute,
 } from '../utils/map-image-scope'
 import {
+  CONTINUOUS_SYSTEM_RESIZE_HANDLE_PIXELS,
   continuousMapNameLabelFramePosition,
   continuousMapNameLabels,
   type ContinuousMapNameProjection,
@@ -148,6 +149,51 @@ test('continuous system names ease into frame corners and transformed text has a
   expect(finalPosition.y).toBeCloseTo(83)
   expect(continuousMapTextScale(5.6, 20, 28)).toBeCloseTo(.25)
   expect(continuousMapTextScale(.2, 20, 28)).toBe(1)
+})
+
+test('a Move name clears the top-left resize hit area without changing its frame-top alignment @pure', { tag: '@pure' }, () => {
+  const frame = { x: 40, y: 30, width: 100, height: 80 }
+  const camera = { x: 10, y: 20, k: 1.7 }
+  const viewportRect = { x: 0, y: 0, width: 1000, height: 600 }
+  const label = { x: 300, y: 250, width: 100 }
+  const position = continuousMapNameLabelFramePosition(
+    label,
+    frame,
+    camera,
+    1,
+    1,
+    viewportRect,
+    12,
+    CONTINUOUS_SYSTEM_RESIZE_HANDLE_PIXELS,
+  )
+  const cornerInset = 18 * (1 - Math.SQRT1_2)
+  const handleCenterX = camera.x + (frame.x + cornerInset) * camera.k
+  const handleRight = handleCenterX + CONTINUOUS_SYSTEM_RESIZE_HANDLE_PIXELS / 2
+
+  expect(position.x - label.width / 2 - handleRight).toBeCloseTo(6)
+  expect(position.y).toBeCloseTo(camera.y + frame.y * camera.k + 12)
+})
+
+test('a Move name stays viewport-clamped and moves above the handle only when the right-side fit fails @pure', { tag: '@pure' }, () => {
+  const frame = { x: 150, y: 30, width: 100, height: 80 }
+  const camera = { x: 10, y: 20, k: 1.7 }
+  const viewportRect = { x: 0, y: 0, width: 360, height: 220 }
+  const label = { x: 300, y: 250, width: 100 }
+  const position = continuousMapNameLabelFramePosition(
+    label,
+    frame,
+    camera,
+    1,
+    1,
+    viewportRect,
+    12,
+    CONTINUOUS_SYSTEM_RESIZE_HANDLE_PIXELS,
+  )
+
+  expect(position.x).toBe(302)
+  expect(position.x - label.width / 2).toBeGreaterThanOrEqual(8)
+  expect(position.x + label.width / 2).toBeLessThanOrEqual(352)
+  expect(position.y).toBeLessThan(camera.y + frame.y * camera.k + 12)
 })
 
 test('a detailed system name stays inside the viewport when its rounded frame corner is offscreen @pure', { tag: '@pure' }, () => {

@@ -30,7 +30,7 @@ test('a far object drop does not create an elastic frame preview @pure', { tag: 
     anchor,
     displayedFrame: frame,
     preferredFrame: frame,
-    target: { x: 250, y: 60 },
+    target: { x: 286, y: 60 },
     fixedFrames: [],
     pixelsPerSceneUnit: 1,
   })
@@ -61,15 +61,15 @@ test('a straight-side drop through 40 pixels commits a regular frame that contai
     anchor,
     displayedFrame: frame,
     preferredFrame: frame,
-    target: { x: 245, y: 60 },
+    target: { x: 281, y: 60 },
     fixedFrames: [],
     pixelsPerSceneUnit: 1,
   })
   expect(beyondReach).toBeNull()
 })
 
-test('the visible elastic edge accepts straight-side drops through its 44 pixel reach @pure', { tag: '@pure' }, () => {
-  for (const x of [242, 243, 244]) {
+test('the visible elastic edge accepts straight-side drops through its 80 pixel reach @pure', { tag: '@pure' }, () => {
+  for (const x of [278, 279, 280]) {
     const target = { x, y: 60 }
     const preview = planContinuousMapElasticPlacement({
       systemId: 'source',
@@ -85,12 +85,12 @@ test('the visible elastic edge accepts straight-side drops through its 44 pixel 
     expect(preview?.acceptsDrop).toBe(true)
     expect(continuousMapRoundedFrameContains(target, preview!.displayedFrame)).toBe(true)
     expect(continuousMapRoundedFrameContains(target, preview!.preferredFrame)).toBe(true)
-    expect(preview?.preferredFrame.width).toBeLessThanOrEqual(frame.width + 44.001)
+    expect(preview?.preferredFrame.width).toBeLessThanOrEqual(frame.width + 80.001)
   }
 })
 
 test('the exact elastic limit accepts a straight-side drop between contour samples @pure', { tag: '@pure' }, () => {
-  const target = { x: 244, y: 61 }
+  const target = { x: 280, y: 61 }
   const preview = planContinuousMapElasticPlacement({
     systemId: 'source',
     anchor,
@@ -127,8 +127,8 @@ test('the rounded corner keeps an accepted elastic drop inside the grown frame @
 test('the exact elastic limit accepts an off-sample rounded-corner drop @pure', { tag: '@pure' }, () => {
   const angle = -Math.PI * 0.27
   const target = {
-    x: 182 + 62 * Math.cos(angle),
-    y: 18 + 62 * Math.sin(angle),
+    x: 182 + 98 * Math.cos(angle),
+    y: 18 + 98 * Math.sin(angle),
   }
   const preview = planContinuousMapElasticPlacement({
     systemId: 'source',

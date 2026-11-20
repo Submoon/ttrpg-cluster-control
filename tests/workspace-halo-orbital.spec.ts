@@ -194,6 +194,7 @@ test('Warden frame resize handles remain available across selection and save a l
 
 test('a drop near the reach of the elastic halo grows a regular frame and undoes both changes together', async ({ page }) => {
   test.setTimeout(60_000)
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
   await captureMapExportBlobs(page)
   const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
     viewport: { width: 1440, height: 900 },
@@ -219,7 +220,7 @@ test('a drop near the reach of the elastic halo grows a regular frame and undoes
   const screen = await frame.boundingBox()
   if (!screen) throw new Error('The starting frame needs a visible outline.')
   const drop = {
-    x: screen.x + screen.width + 39 + hit.x - origin.x,
+    x: screen.x + screen.width + 75 + hit.x - origin.x,
     y: screen.y + screen.height / 2 + hit.y - origin.y,
   }
   const dragToEdge = async () => {
@@ -232,13 +233,85 @@ test('a drop near the reach of the elastic halo grows a regular frame and undoes
   await dragToEdge()
   await page.keyboard.press('Escape')
   await expect(stretch).toHaveCount(0)
+  await expect(map.locator('.continuous-warden-frame-growth-animation')).toHaveCount(0)
   await page.mouse.up()
   expect(await readFrame(frame)).toEqual(original)
 
   await dragToEdge()
+  const growth = map.locator('.continuous-warden-frame-growth-animation')
+  const tween = growth.locator('.continuous-warden-frame-growth-tween')
+  await page.evaluate(() => {
+    type Sample = { source: number; intermediate: number; target: number }
+    type Probe = { sample?: Sample; error?: string }
+    const state = window as typeof window & { __wardenFrameGrowthProbe?: Probe }
+    const svg = document.querySelector<SVGSVGElement>('.continuous-warden-map-svg')
+    if (!svg) throw new Error('The map needs an SVG root for the frame-growth probe.')
+    const probe: Probe = {}
+    state.__wardenFrameGrowthProbe = probe
+    let animationFrame = 0
+    let timeout = 0
+    const cleanup = () => {
+      observer.disconnect()
+      cancelAnimationFrame(animationFrame)
+      clearTimeout(timeout)
+    }
+    const sample = (element: SVGRectElement) => {
+      const animation = element.querySelector<SVGAnimationElement>('animate[attributeName="width"]')
+      if (!animation) {
+        probe.error = 'The frame-growth tween is missing its width animation.'
+        cleanup()
+        return
+      }
+      const source = Number(animation.getAttribute('from'))
+      const target = Number(animation.getAttribute('to'))
+      const intermediate = element.width.animVal.value
+      if (intermediate > source && intermediate < target) {
+        probe.sample = { source, intermediate, target }
+        cleanup()
+      } else if (intermediate >= target) {
+        probe.error = 'The frame-growth tween completed before an intermediate width was observed.'
+        cleanup()
+      } else {
+        animationFrame = requestAnimationFrame(() => sample(element))
+      }
+    }
+    const observeTween = () => {
+      const element = svg.querySelector<SVGRectElement>('.continuous-warden-frame-growth-tween')
+      if (!element) return
+      observer.disconnect()
+      animationFrame = requestAnimationFrame(() => sample(element))
+    }
+    const observer = new MutationObserver(observeTween)
+    observer.observe(svg, { childList: true, subtree: true })
+    timeout = window.setTimeout(() => {
+      probe.error = 'The frame-growth tween did not yield an intermediate width.'
+      cleanup()
+    }, 1_000)
+    observeTween()
+  })
   await page.mouse.up()
   await expect(stretch).toHaveCount(0)
+  await expect.poll(async () => page.evaluate(() => {
+    const state = window as typeof window & { __wardenFrameGrowthProbe?: { sample?: unknown; error?: string } }
+    if (state.__wardenFrameGrowthProbe?.error) throw new Error(state.__wardenFrameGrowthProbe.error)
+    return state.__wardenFrameGrowthProbe?.sample ?? null
+  })).not.toBeNull()
+  await expect(tween).toHaveCount(1)
+  const tweenSample = await page.evaluate(() => {
+    const state = window as typeof window & {
+      __wardenFrameGrowthProbe?: { sample?: { source: number; intermediate: number; target: number } }
+    }
+    const sample = state.__wardenFrameGrowthProbe?.sample
+    delete state.__wardenFrameGrowthProbe
+    return sample
+  })
+  if (!tweenSample) throw new Error('The frame-growth animation did not provide its intermediate geometry.')
+  expect(tweenSample.target).toBeGreaterThan(tweenSample.source)
+  expect(tweenSample.intermediate).toBeGreaterThan(tweenSample.source)
+  expect(tweenSample.intermediate).toBeLessThan(tweenSample.target)
   await expect.poll(async () => (await readFrame(frame)).width).toBeGreaterThan(original.width)
+  expect((await readFrame(frame)).width).toBeCloseTo(tweenSample.target, 3)
+  await expect(growth).toHaveCount(0)
   await waitForWorkspaceSaved(page)
   const after = await downloadJson(page, 'Export Jump Cluster JSON')
   if (before.type !== 'cluster' || after.type !== 'cluster') throw new Error('Expected complete Cluster backups.')

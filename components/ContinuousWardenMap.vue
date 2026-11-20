@@ -60,6 +60,7 @@
                 'is-detailed': detailSystemIds.has(projection.id),
                 'is-move-preview': previewPositions.has(projection.id),
                 'is-elastic-replaced': elasticPlacementPreview?.systemId === projection.id,
+                'is-frame-growth-arrival': frameGrowthAnimation?.systemId === projection.id,
               }"
               :x="displayFrameFor(projection.id).x"
               :y="displayFrameFor(projection.id).y"
@@ -67,7 +68,32 @@
               :height="displayFrameFor(projection.id).height"
               rx="18"
               aria-hidden="true"
+              @animationend.self="finishElasticFrameGrowthAnimation"
             />
+            <g
+              v-if="frameGrowthAnimation?.systemId === projection.id"
+              class="continuous-warden-frame-growth-animation"
+              aria-hidden="true"
+              pointer-events="none"
+            >
+              <path
+                class="continuous-warden-frame-growth-stretch"
+                :d="frameGrowthAnimation.stretchedPath"
+              />
+              <rect
+                class="continuous-warden-frame-growth-tween"
+                :x="frameGrowthAnimation.sourceFrame.x"
+                :y="frameGrowthAnimation.sourceFrame.y"
+                :width="frameGrowthAnimation.sourceFrame.width"
+                :height="frameGrowthAnimation.sourceFrame.height"
+                rx="18"
+              >
+                <animate attributeName="x" :from="frameGrowthAnimation.sourceFrame.x" :to="frameGrowthAnimation.targetFrame.x" dur="260ms" begin="indefinite" fill="freeze" />
+                <animate attributeName="y" :from="frameGrowthAnimation.sourceFrame.y" :to="frameGrowthAnimation.targetFrame.y" dur="260ms" begin="indefinite" fill="freeze" />
+                <animate attributeName="width" :from="frameGrowthAnimation.sourceFrame.width" :to="frameGrowthAnimation.targetFrame.width" dur="260ms" begin="indefinite" fill="freeze" />
+                <animate attributeName="height" :from="frameGrowthAnimation.sourceFrame.height" :to="frameGrowthAnimation.targetFrame.height" dur="260ms" begin="indefinite" fill="freeze" />
+              </rect>
+            </g>
             <path
               v-if="elasticPlacementPreview?.systemId === projection.id"
               class="continuous-warden-elastic-envelope"
@@ -531,7 +557,12 @@ import type { MapImageExportOptions, MapImageFormat, MapImagePalette } from '../
 import { mapImageContextKey, type MapImageScope } from '../utils/map-image-scope'
 import { exportContinuousWardenMapImage } from '../utils/continuous-warden-image-export'
 import { resolveSystemObjectTransferMapPlacement } from '../utils/system-object-transfer-map-placement'
-import { CONTINUOUS_SYSTEM_NAME_FONT_PIXELS as SYSTEM_NAME_FONT_PIXELS, continuousMapNameLabelFramePosition, continuousMapNameLabels } from '../utils/continuous-map-name-labels'
+import {
+  CONTINUOUS_SYSTEM_NAME_FONT_PIXELS as SYSTEM_NAME_FONT_PIXELS,
+  CONTINUOUS_SYSTEM_RESIZE_HANDLE_PIXELS as SYSTEM_RESIZE_HANDLE_PIXELS,
+  continuousMapNameLabelFramePosition,
+  continuousMapNameLabels,
+} from '../utils/continuous-map-name-labels'
 import type { ContinuousMapNameLabel } from '../utils/continuous-map-name-labels'
 import { continuousSystemFrames } from '../utils/continuous-system-frames'
 import { constrainContinuousSystemFrame, type ContinuousSystemFrameInput } from '../utils/continuous-system-frames'
@@ -552,7 +583,10 @@ const MINIMUM_FIT_PADDING = 48
 const ROUTE_REVEAL_PADDING_PIXELS = 14
 const ROUTE_FAN_OUT_LIMIT_PIXELS = 96
 const VIEWPORT_FEEDBACK_INTERVAL_MS = 120
-const SYSTEM_RESIZE_HANDLE_PIXELS = 44
+const WHEEL_ZOOM_SMOOTHING_MS = 55
+const WHEEL_ZOOM_SETTLE_SCALE_EPSILON = 0.0005
+const WHEEL_ZOOM_SETTLE_TRANSLATION_EPSILON = 0.05
+const PRECISE_WHEEL_DELTA_THRESHOLD = 32
 const DETAIL_RENDER_OVERSCAN_PIXELS = 36
 const OVERVIEW_DETAIL_SYSTEM_IDS: ReadonlySet<string> = new Set()
 
@@ -625,6 +659,8 @@ const viewport = ref<MapViewport>({ x: 0, y: 0, k: 1 })
 const previewPositions = ref(new Map<string, Point>())
 const frameResizePreview = shallowRef<{ systemId: string; frame: SvgViewportRect } | null>(null)
 const elasticPlacementPreview = shallowRef<(ContinuousMapElasticPlacementPreview & { systemId: string }) | null>(null)
+const frameGrowthAnimation = shallowRef<ElasticFrameGrowthAnimation | null>(null)
+let pendingElasticFrameGrowth: PendingElasticFrameGrowth | null = null
 const selectedObjectDragPreview = shallowRef<SelectedObjectDragPreview | null>(null)
 const transferPreviewOverride = shallowRef<SystemObjectTransferMapPreview | null | undefined>(undefined)
 const objectMovePreview = shallowRef<{ systemId: string; objectId: string; projection: ContinuousWardenSystemProjection } | null>(null)
@@ -644,6 +680,8 @@ const searchLocatorTarget = shallowRef<{ clusterId: string; systemId: string; ob
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 let resizeObserver: ResizeObserver | undefined
 let viewportFeedbackTimer: ReturnType<typeof setTimeout> | undefined
+let wheelZoomFrame: number | undefined
+let pendingWheelZoom: { target: MapViewport; expectedCurrent: MapViewport; lastFrameTime: number } | null = null
 let cameraInitialized = false
 let searchInteractionGeneration = 0
 let focusFallbackGeneration = 0
@@ -668,6 +706,19 @@ interface ActiveObjectDrag {
   moved: boolean
   targetPosition: Point
   targetScenePoint: Point
+}
+
+interface ElasticFrameGrowthAnimation {
+  systemId: string
+  stretchedPath: string
+  sourceFrame: SvgViewportRect
+  targetFrame: SvgViewportRect
+}
+
+interface PendingElasticFrameGrowth extends ElasticFrameGrowthAnimation {
+  objectId: string
+  workspaceSnapshot: LocalWorkspace
+  expectedInsets: SystemFrameInsets
 }
 
 let activeObjectDrag: ActiveObjectDrag | null = null
@@ -1468,7 +1519,16 @@ function positionNameLabel(label: ContinuousMapNameLabel, progress: number): Con
   const frame = detailFrameFor(projection)
   return {
     ...label,
-    ...continuousMapNameLabelFramePosition(label, frame, viewport.value, svgPixelScale.value, progress, svgViewport.value),
+    ...continuousMapNameLabelFramePosition(
+      label,
+      frame,
+      viewport.value,
+      svgPixelScale.value,
+      progress,
+      svgViewport.value,
+      12,
+      props.mode === 'move' && !props.presentation ? SYSTEM_RESIZE_HANDLE_PIXELS : 0,
+    ),
     hasLeader: label.hasLeader && progress < .12,
   }
 }
@@ -1713,7 +1773,7 @@ function updateMinimumZoomScale(rect: SvgViewportRect, allowIncrease = false): v
   zoomBehavior?.scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
 }
 
-function setViewport(nextViewport: MapViewport, feedback: 'immediate' | 'coalesced' = 'immediate'): void {
+function applyViewport(nextViewport: MapViewport, feedback: 'immediate' | 'coalesced' = 'immediate'): void {
   const element = svgElement.value
   if (!element || !zoomBehavior) return
   if (Number.isFinite(nextViewport.k) && nextViewport.k > 0) {
@@ -1724,6 +1784,76 @@ function setViewport(nextViewport: MapViewport, feedback: 'immediate' | 'coalesc
   if (!next) return
   select(element).call(zoomBehavior.transform, zoomIdentity.translate(next.x, next.y).scale(next.k))
   if (feedback === 'immediate') publishViewportFeedback()
+}
+
+/** Stops an eased wheel camera request before another camera owner takes control. */
+function cancelWheelZoom(): void {
+  pendingWheelZoom = null
+  if (wheelZoomFrame !== undefined) {
+    if (typeof window !== 'undefined') window.cancelAnimationFrame(wheelZoomFrame)
+    wheelZoomFrame = undefined
+  }
+}
+
+function sameViewport(left: MapViewport, right: MapViewport): boolean {
+  return Math.abs(left.x - right.x) < WHEEL_ZOOM_SETTLE_TRANSLATION_EPSILON
+    && Math.abs(left.y - right.y) < WHEEL_ZOOM_SETTLE_TRANSLATION_EPSILON
+    && Math.abs(left.k - right.k) < WHEEL_ZOOM_SETTLE_SCALE_EPSILON
+}
+
+function animateWheelZoom(frameTime: number): void {
+  wheelZoomFrame = undefined
+  const pending = pendingWheelZoom
+  if (!pending) return
+
+  const current = getViewport()
+  // A camera update that bypasses setViewport still wins over an older wheel animation.
+  if (!sameViewport(current, pending.expectedCurrent)) {
+    cancelWheelZoom()
+    return
+  }
+
+  const elapsed = Math.max(1, Math.min(50, frameTime - pending.lastFrameTime))
+  pending.lastFrameTime = frameTime
+  const progress = 1 - Math.exp(-elapsed / WHEEL_ZOOM_SMOOTHING_MS)
+  const target = pending.target
+  let next = {
+    x: current.x + (target.x - current.x) * progress,
+    y: current.y + (target.y - current.y) * progress,
+    k: current.k + (target.k - current.k) * progress,
+  }
+
+  if (sameViewport(next, target)) {
+    next = target
+    pendingWheelZoom = null
+  }
+  applyViewport(next, 'coalesced')
+  if (pendingWheelZoom) {
+    pendingWheelZoom.expectedCurrent = getViewport()
+    wheelZoomFrame = window.requestAnimationFrame(animateWheelZoom)
+  }
+}
+
+function scheduleWheelZoom(target: MapViewport, current: MapViewport): void {
+  if (pendingWheelZoom) {
+    pendingWheelZoom.target = target
+    pendingWheelZoom.expectedCurrent = current
+  } else {
+    pendingWheelZoom = {
+      target,
+      expectedCurrent: current,
+      lastFrameTime: window.performance.now(),
+    }
+  }
+  if (wheelZoomFrame === undefined) {
+    pendingWheelZoom.lastFrameTime = window.performance.now()
+    wheelZoomFrame = window.requestAnimationFrame(animateWheelZoom)
+  }
+}
+
+function setViewport(nextViewport: MapViewport, feedback: 'immediate' | 'coalesced' = 'immediate'): void {
+  cancelWheelZoom()
+  applyViewport(nextViewport, feedback)
 }
 
 function fitMap(usableRect?: SvgViewportRect): void {
@@ -2175,6 +2305,7 @@ function revealHistoryCluster(usableRect?: SvgViewportRect): boolean {
 function zoomBy(factor: number): void {
   const element = svgElement.value
   if (!element || !zoomBehavior || !Number.isFinite(factor) || factor <= 0) return
+  cancelWheelZoom()
   select(element).call(zoomBehavior.scaleBy, factor)
   publishViewportFeedback()
 }
@@ -2497,17 +2628,58 @@ function onOrbitAdjustmentKeydown(event: KeyboardEvent): boolean {
 
 function onWheelCapture(event: WheelEvent): void {
   touchCameraNavigation.clearDoubleTap()
-  if (props.standaloneImportPlacementEnabled || !event.ctrlKey || event.deltaY === 0 || props.mode !== 'move'
-    || props.creationType != null || props.clusterAddType != null || props.clusterChooserOpen
-    || props.moveTargeting || props.clusterMoveTargeting) return
-  const hit = orbitTargetAtTarget(event.target)
-  if (!hit) return
-  emitOrbitAdjustment(event, {
-    systemId: hit.systemId,
-    orbitId: hit.orbitId,
-    inputKind: 'wheel',
-    change: { kind: 'rotation', delta: event.deltaY * 0.05 },
-  })
+  if (!props.standaloneImportPlacementEnabled && event.ctrlKey && event.deltaY !== 0 && props.mode === 'move'
+    && props.creationType == null && props.clusterAddType == null && !props.clusterChooserOpen
+    && !props.moveTargeting && !props.clusterMoveTargeting) {
+    const hit = orbitTargetAtTarget(event.target)
+    if (hit) {
+      cancelWheelZoom()
+      emitOrbitAdjustment(event, {
+        systemId: hit.systemId,
+        orbitId: hit.orbitId,
+        inputKind: 'wheel',
+        change: { kind: 'rotation', delta: event.deltaY * 0.05 },
+      })
+      return
+    }
+  }
+
+  const element = svgElement.value
+  if (!element || event.deltaY === 0 || !Number.isFinite(event.deltaY)) return
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+
+  // Small pixel deltas are already continuous trackpad input, so keep them immediate.
+  const preciseInput = event.deltaMode === 0 && Math.abs(event.deltaY) < PRECISE_WHEEL_DELTA_THRESHOLD
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  const direct = preciseInput || reducedMotion
+  if (direct) cancelWheelZoom()
+
+  const current = getViewport()
+  const base = direct ? current : (pendingWheelZoom?.target ?? current)
+  const [anchorX, anchorY] = pointer(event, element) as [number, number]
+  const deltaUnit = event.deltaMode === 1 ? 0.05 : event.deltaMode === 2 ? 1 : 0.002
+  const scaleDelta = event.deltaY * deltaUnit * (event.ctrlKey ? 10 : 1)
+  const minimumExponent = Math.log2(minimumZoomScale.value)
+  const maximumExponent = Math.log2(MAP_ZOOM_MAX_SCALE)
+  const nextExponent = Math.max(minimumExponent, Math.min(maximumExponent, Math.log2(base.k) - scaleDelta))
+  const nextScale = 2 ** nextExponent
+  const sceneAnchorX = (anchorX - current.x) / current.k
+  const sceneAnchorY = (anchorY - current.y) / current.k
+  const target = clampMapViewport({
+    x: anchorX - sceneAnchorX * nextScale,
+    y: anchorY - sceneAnchorY * nextScale,
+    k: nextScale,
+  }, minimumZoomScale.value)
+  if (!target) return
+  if (target.k === current.k) {
+    cancelWheelZoom()
+    return
+  }
+
+  if (direct) applyViewport(target, 'coalesced')
+  else scheduleWheelZoom(target, current)
 }
 
 function updateObjectMovePreview(drag: ActiveObjectDrag, scenePoint: Point): void {
@@ -2914,6 +3086,57 @@ function finishSelectedObjectDrag(cancelled: boolean): void {
   if (drag.drag) void drag.drag.complete(drag.delta)
 }
 
+function clearElasticFrameGrowthAnimation(): void {
+  pendingElasticFrameGrowth = null
+  frameGrowthAnimation.value = null
+}
+
+function finishElasticFrameGrowthAnimation(): void {
+  frameGrowthAnimation.value = null
+}
+
+function showAcceptedElasticFrameGrowth(workspace: LocalWorkspace): void {
+  const pending = pendingElasticFrameGrowth
+  if (!pending || toRaw(workspace) === pending.workspaceSnapshot) return
+  pendingElasticFrameGrowth = null
+  if (workspace.id !== pending.workspaceSnapshot.id
+    || workspace.cluster.id !== pending.workspaceSnapshot.cluster.id) return
+
+  const insets = workspaceSystemFrame(workspace, pending.systemId)
+  if (!insets
+    || insets.left !== pending.expectedInsets.left
+    || insets.top !== pending.expectedInsets.top
+    || insets.right !== pending.expectedInsets.right
+    || insets.bottom !== pending.expectedInsets.bottom) return
+
+  const previousSystem = pending.workspaceSnapshot.cluster.systems.find(system => system.id === pending.systemId)
+  const currentSystem = workspace.cluster.systems.find(system => system.id === pending.systemId)
+  if (!previousSystem || !currentSystem) return
+  const previousPosition = objectPositions(previousSystem, systemMapGeometry(pending.workspaceSnapshot)).get(pending.objectId)
+  const currentPosition = objectPositions(currentSystem, systemMapGeometry(workspace)).get(pending.objectId)
+  if (!previousPosition || !currentPosition
+    || Math.hypot(currentPosition.x - previousPosition.x, currentPosition.y - previousPosition.y) < 1e-5) return
+
+  const animation: ElasticFrameGrowthAnimation = {
+    systemId: pending.systemId,
+    stretchedPath: pending.stretchedPath,
+    sourceFrame: pending.sourceFrame,
+    targetFrame: pending.targetFrame,
+  }
+  frameGrowthAnimation.value = animation
+  void nextTick(() => {
+    if (frameGrowthAnimation.value !== animation) return
+    const elements = svgElement.value?.querySelectorAll<SVGAnimationElement>(
+      '.continuous-warden-frame-growth-animation animate',
+    )
+    if (!elements?.length || [...elements].some(element => typeof element.beginElement !== 'function')) {
+      frameGrowthAnimation.value = null
+      return
+    }
+    elements.forEach(element => element.beginElement())
+  })
+}
+
 function finishObjectDrag(cancelled: boolean): void {
   const drag = activeObjectDrag
   if (!drag) return
@@ -2936,8 +3159,23 @@ function finishObjectDrag(cancelled: boolean): void {
       return
     }
     const position = drag.targetPosition
-    const frameInsets = elastic?.acceptsDrop
+    const acceptedFrameInsets = elastic?.acceptsDrop
       ? frameInsetsFor(drag.anchor, elastic.preferredFrame)
+      : undefined
+    if (elastic?.acceptsDrop && acceptedFrameInsets && drag.startDisplayedFrame) {
+      pendingElasticFrameGrowth = {
+        systemId: drag.systemId,
+        objectId: drag.objectId,
+        workspaceSnapshot: drag.workspaceSnapshot,
+        expectedInsets: acceptedFrameInsets,
+        stretchedPath: elastic.path,
+        sourceFrame: { ...drag.startDisplayedFrame },
+        targetFrame: { ...elastic.displayedFrame },
+      }
+      frameGrowthAnimation.value = null
+    }
+    const frameInsets = elastic?.acceptsDrop
+      ? acceptedFrameInsets
       : legacyFrameInsets(drag.workspaceSnapshot, drag.systemId, drag.anchor, drag.preferredFrame)
     clearObjectMovePreview()
     emit('move-object-in-system', drag.systemId, drag.objectId, position, drag.workspaceSnapshot, frameInsets)
@@ -3106,6 +3344,8 @@ function editingPointerId(): number | undefined {
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
+  clearElasticFrameGrowthAnimation()
+  cancelWheelZoom()
   if (event.pointerType !== 'touch') touchCameraNavigation.clearDoubleTap()
   const ownedPointerId = editingPointerId()
   if (ownedPointerId !== undefined && ownedPointerId !== event.pointerId) {
@@ -3840,6 +4080,7 @@ function getImageContextKey(scope: MapImageScope | null = 'viewport'): string {
 }
 
 function cancelActiveGesture(): void {
+  cancelWheelZoom()
   viewPan = null
   if (activeOrbitGesture) finishOrbitGesture(true)
   if (activeSystemFrameResize) finishSystemFrameResize(true)
@@ -3934,7 +4175,8 @@ onMounted(async () => {
   zoomBehavior = zoom<SVGSVGElement, unknown>()
     .extent(() => svgViewportExtent(getSvgViewportRect(element)))
     .scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
-    .filter(event => event.type === 'wheel')
+    // The map owns wheel zoom and applies it through its pointer-anchored eased camera path.
+    .filter(() => false)
     .on('zoom', onZoom)
   zoomBehavior.touchable(() => false)
   select(element).call(zoomBehavior)
@@ -3962,6 +4204,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('blur', cancelActiveGesture)
+  cancelWheelZoom()
   clearViewportFeedbackTimer()
   if (pendingMapClickTimer) clearTimeout(pendingMapClickTimer)
   pendingMapClickTimer = undefined
@@ -3975,6 +4218,7 @@ onBeforeUnmount(() => {
 
 watch(() => props.mode, () => cancelActiveGesture(), { flush: 'sync' })
 watch(() => props.workspace, workspace => {
+  showAcceptedElasticFrameGrowth(workspace)
   transferPreviewOverride.value = undefined
   if (activeSystemFrameResize && toRaw(activeSystemFrameResize.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
   if (activeExitDrag && toRaw(activeExitDrag.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
@@ -4093,6 +4337,11 @@ defineExpose({
   opacity: 0;
 }
 
+.continuous-warden-system-envelope.is-frame-growth-arrival {
+  opacity: 0;
+  animation: warden-frame-growth-arrival 260ms ease-out both;
+}
+
 .continuous-warden-elastic-envelope {
   fill: var(--warden-halo-fill);
   stroke: color-mix(in srgb, var(--map-orbit) 76%, transparent);
@@ -4100,6 +4349,49 @@ defineExpose({
   stroke-dasharray: 2 5;
   vector-effect: non-scaling-stroke;
   pointer-events: none;
+}
+
+.continuous-warden-frame-growth-animation,
+.continuous-warden-frame-growth-stretch,
+.continuous-warden-frame-growth-tween {
+  pointer-events: none;
+}
+
+.continuous-warden-frame-growth-stretch {
+  fill: var(--warden-halo-fill);
+  stroke: color-mix(in srgb, var(--map-orbit) 76%, transparent);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 5;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.72;
+  animation: warden-frame-growth-stretch-fade 180ms ease-out both;
+}
+
+.continuous-warden-frame-growth-tween {
+  fill: none;
+  stroke: color-mix(in srgb, var(--map-orbit) 76%, transparent);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 5;
+  vector-effect: non-scaling-stroke;
+}
+
+@keyframes warden-frame-growth-arrival {
+  to { opacity: 1; }
+}
+
+@keyframes warden-frame-growth-stretch-fade {
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .continuous-warden-system-envelope.is-frame-growth-arrival {
+    animation: none;
+    opacity: 1;
+  }
+
+  .continuous-warden-frame-growth-animation {
+    display: none;
+  }
 }
 
 .continuous-warden-system-resize-target {

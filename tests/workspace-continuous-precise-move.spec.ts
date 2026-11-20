@@ -16,6 +16,16 @@ import {
 } from './helpers'
 
 type LocalPoint = { x: number; y: number }
+type WardenWheelProbe = {
+  pointer: LocalPoint | null
+  wheelCount: number
+  wheelScales: number[]
+  initialScale: number | null
+  initialOrbitRadius: number | null
+  scenePointAtLastWheel: LocalPoint | null
+  scales: number[]
+  settled: boolean
+}
 
 async function prepareContinuousOrbitMap(page: import('@playwright/test').Page) {
   await captureMapExportBlobs(page)
@@ -40,37 +50,137 @@ async function prepareContinuousOrbitMap(page: import('@playwright/test').Page) 
 }
 
 test('wheel zoom repaints object text and Orbits in a fixed viewport paint space', async ({ page }) => {
-  const { map, orbit, systemId, primaryObjectId } = await prepareContinuousOrbitMap(page)
+  const { map, systemId, primaryObjectId } = await prepareContinuousOrbitMap(page)
   const object = wardenObjectMark(page, systemId, primaryObjectId)
   const camera = map.locator('.cluster-map-content')
   const scale = () => camera.evaluate(element => (element as SVGGraphicsElement).getCTM()!.a)
-  const fixedPaint = () => map.evaluate(element => {
-    const root = (element as SVGSVGElement).getScreenCTM()!
-    // Camera-scaled SVG paints can become cached bitmaps during Firefox wheel zoom.
-    // Each mark must instead be repainted in the root SVG's fixed coordinate space.
-    return [...element.querySelectorAll<SVGGraphicsElement>(
-      '.continuous-warden-object, .continuous-warden-object-name, .continuous-warden-orbit-target',
-    )].map(mark => {
-      const matrix = mark.getScreenCTM()!
-      return Math.hypot(matrix.a, matrix.b) / Math.hypot(root.a, root.b)
-    })
-  })
   const pointer = await object.evaluate(element => {
     const point = new DOMPoint().matrixTransform((element as SVGGraphicsElement).getScreenCTM()!)
     return { x: point.x, y: point.y }
   })
-  await page.mouse.move(pointer.x, pointer.y)
-  for (const delta of [-100, -100, 100]) {
-    const before = await scale()
-    const radius = Number(await orbit.getAttribute('rx'))
-    await page.mouse.wheel(0, delta)
-    await expect.poll(scale).not.toBe(before)
-    const after = await scale()
-    expect(Number(await orbit.getAttribute('rx'))).toBeCloseTo(radius * after / before, 3)
-    const paints = await fixedPaint()
-    expect(paints.length).toBeGreaterThan(2)
-    for (const paintScale of paints) expect(paintScale).toBeCloseTo(1, 5)
+  await page.mouse.move(Math.round(pointer.x), Math.round(pointer.y))
+  await map.evaluate((element) => {
+    const camera = element.querySelector<SVGGElement>('.cluster-map-content')
+    const initialMatrix = camera?.getScreenCTM()
+    if (!camera || !initialMatrix) throw new Error('The continuous map camera must be measurable before wheel zoom.')
+
+    const probe: WardenWheelProbe = {
+      pointer: null,
+      wheelCount: 0,
+      wheelScales: [],
+      initialScale: null,
+      initialOrbitRadius: null,
+      scenePointAtLastWheel: null,
+      scales: [],
+      settled: false,
+    }
+    const readScale = () => camera.getCTM()?.a ?? Number.NaN
+    const observeWheel = (event: WheelEvent) => {
+      const matrix = camera.getScreenCTM()
+      if (!matrix) throw new Error('The continuous map camera must be measurable at wheel delivery.')
+      const scenePoint = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
+      probe.pointer = { x: event.clientX, y: event.clientY }
+      probe.scenePointAtLastWheel = { x: scenePoint.x, y: scenePoint.y }
+      probe.wheelScales.push(readScale())
+      probe.wheelCount += 1
+      probe.settled = false
+      if (probe.wheelCount === 3) window.removeEventListener('wheel', observeWheel, true)
+
+      if (probe.initialScale !== null) return
+      probe.initialScale = readScale()
+      const orbit = element.querySelector<SVGEllipseElement>('.continuous-warden-orbit-target')
+      if (!orbit) throw new Error('A Warden Orbit must be present before wheel zoom.')
+      probe.initialOrbitRadius = Number(orbit.getAttribute('rx'))
+      probe.scales.push(probe.initialScale)
+
+      let previousScale = probe.initialScale
+      let unchangedFrames = 0
+      const sampleCamera = () => {
+        const nextScale = readScale()
+        probe.scales.push(nextScale)
+        if (Math.abs(nextScale - previousScale) < 0.0000001) unchangedFrames += 1
+        else {
+          previousScale = nextScale
+          unchangedFrames = 0
+        }
+        if (probe.wheelCount >= 3 && unchangedFrames >= 3) {
+          probe.settled = true
+          return
+        }
+        window.requestAnimationFrame(sampleCamera)
+      }
+      window.requestAnimationFrame(sampleCamera)
+    }
+
+    ;(window as unknown as { __wardenWheelProbe?: WardenWheelProbe }).__wardenWheelProbe = probe
+    window.addEventListener('wheel', observeWheel, { capture: true })
+  })
+  await page.mouse.wheel(0, -100)
+  const wheelProbe = () => page.evaluate(() =>
+    (window as unknown as { __wardenWheelProbe: WardenWheelProbe }).__wardenWheelProbe,
+  )
+  await expect.poll(async () => {
+    const probe = await wheelProbe()
+    return probe.initialScale !== null && probe.scales.some(value => value > probe.initialScale! + 0.001)
+  }, { intervals: [5] }).toBe(true)
+
+  const mapBounds = await map.boundingBox()
+  if (!mapBounds) throw new Error('The Warden map must be visible for pointer-anchored wheel zoom.')
+  const firstPointer = { x: Math.round(pointer.x), y: Math.round(pointer.y) }
+  const secondPointer = {
+    x: Math.round(firstPointer.x + (firstPointer.x + 64 < mapBounds.x + mapBounds.width - 8 ? 64 : -64)),
+    y: Math.round(firstPointer.y + (firstPointer.y + 40 < mapBounds.y + mapBounds.height - 8 ? 40 : -40)),
   }
+  expect(secondPointer.x).not.toBe(firstPointer.x)
+  await page.mouse.move(secondPointer.x, secondPointer.y)
+  await page.mouse.wheel(0, -100)
+  await page.mouse.wheel(0, 100)
+
+  await expect.poll(async () => (await wheelProbe()).settled).toBe(true)
+  const probe = await wheelProbe()
+  if (!probe.pointer || !probe.scenePointAtLastWheel || probe.initialScale === null || probe.initialOrbitRadius === null) {
+    throw new Error('The native wheel input did not reach the Warden camera probe.')
+  }
+  expect(probe.wheelCount).toBe(3)
+  expect(probe.pointer.x).not.toBe(firstPointer.x)
+  const expectedFinalScale = probe.initialScale * 2 ** 0.2
+  const intermediateScales = probe.scales.filter(value => value > probe.initialScale! + 0.001 && value < expectedFinalScale - 0.001)
+  expect(intermediateScales.length).toBeGreaterThan(1)
+  expect(probe.wheelScales[1]).toBeLessThan(probe.initialScale * 2 ** 0.2 - 0.001)
+  await expect.poll(scale).toBeCloseTo(expectedFinalScale, 3)
+
+  const finalPaint = await map.evaluate((element) => {
+    const root = element as SVGSVGElement
+    const camera = root.querySelector<SVGGElement>('.cluster-map-content')
+    const orbit = root.querySelector<SVGEllipseElement>('.continuous-warden-orbit-target')
+    if (!camera || !orbit) throw new Error('The continuous camera and Orbit must remain mounted after wheel zoom.')
+    const rootMatrix = root.getScreenCTM()
+    const cameraMatrix = camera.getCTM()
+    if (!rootMatrix || !cameraMatrix) throw new Error('The final Warden camera transform must be measurable.')
+    const paints = [...root.querySelectorAll<SVGGraphicsElement>(
+      '.continuous-warden-object, .continuous-warden-object-name, .continuous-warden-orbit-target',
+    )].map(mark => {
+      const matrix = mark.getScreenCTM()
+      if (!matrix) throw new Error('A painted Warden mark must remain measurable during wheel zoom.')
+      return Math.hypot(matrix.a, matrix.b) / Math.hypot(rootMatrix.a, rootMatrix.b)
+    })
+    // Capture these together so no animation frame can split their camera snapshots.
+    return { scale: cameraMatrix.a, orbitRadius: Number(orbit.getAttribute('rx')), paints }
+  })
+  expect(finalPaint.scale).toBeCloseTo(expectedFinalScale, 3)
+  expect(finalPaint.orbitRadius).toBeGreaterThan(0)
+  expect(finalPaint.orbitRadius).toBeCloseTo(probe.initialOrbitRadius * finalPaint.scale / probe.initialScale, 3)
+  expect(finalPaint.paints.length).toBeGreaterThan(2)
+  for (const paintScale of finalPaint.paints) expect(paintScale).toBeCloseTo(1, 5)
+
+  const finalScenePoint = await camera.evaluate((element, clientPoint) => {
+    const matrix = (element as SVGGraphicsElement).getScreenCTM()
+    if (!matrix) throw new Error('The final Warden camera transform must be measurable.')
+    const point = new DOMPoint(clientPoint.x, clientPoint.y).matrixTransform(matrix.inverse())
+    return { x: point.x, y: point.y }
+  }, probe.pointer)
+  expect(finalScenePoint.x).toBeCloseTo(probe.scenePointAtLastWheel.x, 2)
+  expect(finalScenePoint.y).toBeCloseTo(probe.scenePointAtLastWheel.y, 2)
 })
 
 async function orbitClientPoint(

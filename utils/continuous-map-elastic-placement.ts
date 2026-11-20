@@ -3,7 +3,7 @@ import { CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS } from './continuous-map-route-ge
 import { constrainContinuousSystemFrame, type ContinuousSystemFrameInput } from './continuous-system-frames'
 import type { SvgViewportRect } from './map-zoom'
 
-const ELASTIC_REACH_PIXELS = 44
+const ELASTIC_REACH_PIXELS = 80
 
 export interface ContinuousMapElasticPlacementInput {
   systemId: string
@@ -402,7 +402,8 @@ function segmentInteriorEntry(start: Point, end: Point, frame: SvgViewportRect):
 
 function pointInPolygonInclusive(point: Point, points: readonly Point[]): boolean {
   let inside = false
-  points.forEach((start, index) => {
+  for (let index = 0; index < points.length; index += 1) {
+    const start = points[index]!
     const end = points[(index + 1) % points.length]!
     const dx = end.x - start.x
     const dy = end.y - start.y
@@ -412,11 +413,11 @@ function pointInPolygonInclusive(point: Point, points: readonly Point[]): boolea
       const nearestX = start.x + dx * fraction
       const nearestY = start.y + dy * fraction
       const tolerance = Math.max(1e-8, Math.max(Math.abs(point.x), Math.abs(point.y), 1) * 1e-12)
-      if (Math.hypot(point.x - nearestX, point.y - nearestY) <= tolerance) inside = true
+      if (Math.hypot(point.x - nearestX, point.y - nearestY) <= tolerance) return true
     }
     if ((start.y > point.y) !== (end.y > point.y)
       && point.x < start.x + (end.x - start.x) * (point.y - start.y) / (end.y - start.y)) inside = !inside
-  })
+  }
   return inside
 }
 
