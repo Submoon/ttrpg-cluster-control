@@ -1,6 +1,12 @@
 import type { JumpCluster, Point, StarSystem } from '../domain/workspace'
 import { buildContinuousWardenRouteGeometries } from './continuous-warden-routes'
-import { continuousMapNameTransitionProgress, type ContinuousWardenSystemProjection } from './continuous-map-projection'
+import {
+  continuousMapNameTransitionProgress,
+  continuousMapTextScale,
+  wardenStarHaloRadius,
+  wardenStarOverlapsAnchor,
+  type ContinuousWardenSystemProjection,
+} from './continuous-map-projection'
 import type { ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
 import { continuousSystemFrames } from './continuous-system-frames'
 import type { MapViewport, SvgViewportRect } from './map-zoom'
@@ -355,10 +361,10 @@ function layoutSystemNames(
     const frame = displayFrames.get(projection.id)
     const resolvedFrame = positiveFrame(frame) ? frame : projection.envelope
     const progress = viewport
-      ? continuousMapNameTransitionProgress(resolvedFrame, viewport.k, scale)
+      ? continuousMapNameTransitionProgress(projection.envelope, viewport.k, scale)
       : 0
     const position = viewport
-      ? continuousMapNameLabelFramePosition(label, resolvedFrame, viewport, scale, progress)
+      ? continuousMapNameLabelFramePosition(label, resolvedFrame, viewport, scale, progress, placementRect)
       : { x: label.x, y: label.y }
     return [{
       projection,
@@ -421,11 +427,13 @@ function appendSystem(
     group.append(envelope)
   }
 
-  if (detailed) appendSystemDetail(group, projection, systems, dimmedObjectIds)
+  const system = systems.find(candidate => candidate.id === projection.id)
+  const pixelsPerSceneUnit = scope === 'viewport' ? viewport.k * svgPixelScale : 1
+  if (detailed && system) appendSystemDetail(group, projection, system, dimmedObjectIds, pixelsPerSceneUnit)
 
   const anchor = createScopedElement(parent, 'g', 'cluster-system-node continuous-warden-system-anchor')
   anchor.setAttribute('data-system-id', projection.id)
-  const scale = scope === 'viewport' ? 1 / Math.max(0.0001, viewport.k * svgPixelScale) : 1
+  const scale = 1 / Math.max(0.0001, pixelsPerSceneUnit)
   anchor.setAttribute('transform', `translate(${projection.anchor.x} ${projection.anchor.y}) scale(${scale})`)
   const hitTarget = createScopedElement(parent, 'circle', 'continuous-warden-anchor-hit-target')
   hitTarget.setAttribute('r', '16')
@@ -434,7 +442,11 @@ function appendSystem(
   mark.setAttribute('r', '7')
   const core = createScopedElement(parent, 'circle', 'continuous-warden-anchor-core')
   core.setAttribute('r', '2')
-  anchor.append(hitTarget, mark, core)
+  anchor.append(hitTarget)
+  const coveredByStar = detailed && projection.objects.some(object =>
+    wardenStarOverlapsAnchor(projection, object.scenePosition, pixelsPerSceneUnit)
+    && system?.objects.some(source => source.id === object.id && source.subtype === 'star'))
+  if (!coveredByStar) anchor.append(mark, core)
   group.append(anchor)
   parent.append(group)
 }
@@ -442,11 +454,10 @@ function appendSystem(
 function appendSystemDetail(
   parent: SVGElement,
   projection: ContinuousWardenSystemProjection,
-  systems: readonly StarSystem[],
+  system: StarSystem,
   dimmedObjectIds: ReadonlySet<string>,
+  pixelsPerSceneUnit: number,
 ): void {
-  const system = systems.find(candidate => candidate.id === projection.id)
-  if (!system) return
   const detail = createScopedElement(parent, 'g', 'continuous-warden-system-detail')
   detail.setAttribute(
     'transform',
@@ -468,6 +479,8 @@ function appendSystemDetail(
   detail.append(orbits)
 
   const items = createScopedElement(parent, 'g', 'system-map-items')
+  const screenScale = projection.scale * pixelsPerSceneUnit
+  const textScale = continuousMapTextScale(screenScale, 20, 28)
   for (const object of projection.objects) {
     const sourceObject = system.objects.find(candidate => candidate.id === object.id)
     if (!sourceObject) continue
@@ -478,7 +491,7 @@ function appendSystemDetail(
     mark.setAttribute('aria-hidden', 'true')
     if (sourceObject.subtype === 'star') {
       const halo = createScopedElement(parent, 'circle', 'continuous-warden-star-halo')
-      halo.setAttribute('r', '18')
+      halo.setAttribute('r', String(wardenStarHaloRadius(screenScale)))
       mark.append(halo)
     }
     const glyph = createScopedElement(parent, 'text', 'continuous-warden-object-glyph')
@@ -494,7 +507,10 @@ function appendSystemDetail(
     name.setAttribute('y', '46')
     name.setAttribute('text-anchor', 'middle')
     name.textContent = object.name
-    mark.append(glyph, key, name)
+    const text = createScopedElement(mark, 'g', 'continuous-warden-object-text')
+    text.setAttribute('transform', `scale(${textScale})`)
+    text.append(glyph, key, name)
+    mark.append(text)
     items.append(mark)
   }
   detail.append(items)

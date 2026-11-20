@@ -402,7 +402,9 @@ const systemNameLabels = computed<PlayerContinuousNameLabel[]>(() => layoutPlaye
   const frame = system?.geometry ? thresholdSystemsById.value.get(label.systemId)?.geometry?.envelope : undefined
   if (!frame || !system?.geometry) return label
   const progress = continuousMapNameTransitionProgress(frame, camera.value.k, svgPixelScale.value)
-  const position = continuousMapNameLabelFramePosition(label, frame, camera.value, svgPixelScale.value, progress)
+  const position = continuousMapNameLabelFramePosition(
+    label, frame, camera.value, svgPixelScale.value, progress, nameViewport.value,
+  )
   return {
     ...label,
     ...position,

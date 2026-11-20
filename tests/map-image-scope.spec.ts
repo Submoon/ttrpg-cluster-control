@@ -131,6 +131,16 @@ test('continuous system names ease into frame corners and transformed text has a
   expect(continuousMapTextScale(.2, 20, 28)).toBe(1)
 })
 
+test('a detailed system name stays inside the viewport when its rounded frame corner is offscreen @pure', { tag: '@pure' }, () => {
+  const frame = { x: 40, y: 30, width: 100, height: 80 }
+  const camera = { x: -180, y: -140, k: 2 }
+  const viewportRect = { x: 0, y: 0, width: 360, height: 220 }
+  const label = { x: 90, y: 26, width: 100 }
+
+  expect(continuousMapNameLabelFramePosition(label, frame, camera, 1, 1, viewportRect)).toEqual({ x: 58, y: 8 })
+  expect(continuousMapNameLabelFramePosition(label, frame, camera, 1, .5, viewportRect)).toEqual({ x: 74, y: 17 })
+})
+
 test('Warden image scope falls back without an owner and viewport requests fence their full context @pure', { tag: '@pure' }, () => {
   const snapshot = {
     clusterId: 'cluster',

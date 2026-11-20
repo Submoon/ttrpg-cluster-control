@@ -3,8 +3,9 @@ import { CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS } from './continuous-map-route-ge
 import { constrainContinuousSystemFrame, type ContinuousSystemFrameInput } from './continuous-system-frames'
 import type { SvgViewportRect } from './map-zoom'
 
-const ELASTIC_BUDGET_PIXELS = 26
-const ELASTIC_RELEASE_PIXELS = 7
+const ELASTIC_COMMIT_BUDGET_PIXELS = 26
+const ELASTIC_PREVIEW_REACH_PIXELS = 44
+const ELASTIC_PREVIEW_RELEASE_PIXELS = 7
 
 export interface ContinuousMapElasticPlacementInput {
   systemId: string
@@ -58,16 +59,22 @@ export function planContinuousMapElasticPlacement(
   const located = locateRoundedFrame(target, displayedFrame, radius)
   if (located.inside) return null
 
-  const budget = ELASTIC_BUDGET_PIXELS / pixelsPerSceneUnit
+  const commitBudget = ELASTIC_COMMIT_BUDGET_PIXELS / pixelsPerSceneUnit
+  const previewReach = ELASTIC_PREVIEW_REACH_PIXELS / pixelsPerSceneUnit
   const gap = located.distance
   if (!Number.isFinite(gap) || gap < 0.05 / pixelsPerSceneUnit
-    || gap >= (ELASTIC_BUDGET_PIXELS + ELASTIC_RELEASE_PIXELS) / pixelsPerSceneUnit) return null
+    || gap >= previewReach) return null
 
   // Most drops are nowhere near an envelope. Reject those analytically before sampling a contour.
   const contour = roundedFrameContour(displayedFrame, radius)
   const nearest = contour.at(located.phase)
-  const taper = clamp((gap - budget + 3 / pixelsPerSceneUnit) / (10 / pixelsPerSceneUnit), 0, 1)
-  const stretch = Math.min(budget, gap + Math.min(8 / pixelsPerSceneUnit, gap * 1.5))
+  const taper = clamp(
+    (gap - previewReach + ELASTIC_PREVIEW_RELEASE_PIXELS / pixelsPerSceneUnit)
+      / (ELASTIC_PREVIEW_RELEASE_PIXELS / pixelsPerSceneUnit),
+    0,
+    1,
+  )
+  const stretch = Math.min(previewReach, gap + Math.min(8 / pixelsPerSceneUnit, gap * 1.5))
     * (1 - taper * taper * (3 - 2 * taper))
   const direction = {
     x: (target.x - nearest.x) / gap,
@@ -82,7 +89,7 @@ export function planContinuousMapElasticPlacement(
     preferredFrame,
     target,
     CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS,
-    Math.max(Number.EPSILON, Math.min(0.001, budget / 1000)),
+    Math.max(Number.EPSILON, Math.min(0.001, commitBudget / 1000)),
   )
   let displayedCandidate: SvgViewportRect
   try {
@@ -93,7 +100,7 @@ export function planContinuousMapElasticPlacement(
   } catch {
     return null
   }
-  const acceptsDrop = withinGrowthBudget(preferredFrame, preferredCandidate, budget)
+  const acceptsDrop = withinGrowthBudget(preferredFrame, preferredCandidate, commitBudget)
     && continuousMapRoundedFrameContains(target, displayedCandidate)
     && pointInPolygonInclusive(target, stretched.points)
 

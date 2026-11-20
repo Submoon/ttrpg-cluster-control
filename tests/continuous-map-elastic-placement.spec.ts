@@ -30,12 +30,40 @@ test('a far object drop does not create an elastic frame preview @pure', { tag: 
     anchor,
     displayedFrame: frame,
     preferredFrame: frame,
-    target: { x: 240, y: 60 },
+    target: { x: 250, y: 60 },
     fixedFrames: [],
     pixelsPerSceneUnit: 1,
   })
 
   expect(preview).toBeNull()
+})
+
+test('a straight-side pull previews through 40 pixels while committed growth stays bounded @pure', { tag: '@pure' }, () => {
+  const preview = planContinuousMapElasticPlacement({
+    systemId: 'source',
+    anchor,
+    displayedFrame: frame,
+    preferredFrame: frame,
+    target: { x: 240, y: 60 },
+    fixedFrames: [],
+    pixelsPerSceneUnit: 1,
+  })
+
+  expect(preview).not.toBeNull()
+  expect(preview?.acceptsDrop).toBe(false)
+  const xCoordinates = Array.from(preview!.path.matchAll(/(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g), match => Number(match[1]))
+  expect(Math.max(...xCoordinates)).toBeGreaterThan(220)
+
+  const beyondReach = planContinuousMapElasticPlacement({
+    systemId: 'source',
+    anchor,
+    displayedFrame: frame,
+    preferredFrame: frame,
+    target: { x: 245, y: 60 },
+    fixedFrames: [],
+    pixelsPerSceneUnit: 1,
+  })
+  expect(beyondReach).toBeNull()
 })
 
 test('a nearby drop cannot stretch the source contour into a fixed neighbor frame @pure', { tag: '@pure' }, () => {

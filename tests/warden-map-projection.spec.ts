@@ -10,6 +10,8 @@ import {
   unprojectWardenSystemMapPoint,
   unprojectWardenClusterAnchor,
   unprojectWardenLocalPoint,
+  wardenStarHaloRadius,
+  wardenStarOverlapsAnchor,
 } from '../utils/continuous-map-projection'
 import { orbitPointAtAngle } from '../utils/system-map-geometry'
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
@@ -34,6 +36,15 @@ const offCenterStar: SystemObject = {
   name: 'Outer Lamp',
   placement: { kind: 'system', x: 1.4, y: -0.35 },
 }
+
+test('star rings are capped in screen pixels and only hide genuinely overlapping anchors @pure', () => {
+  const projection = { anchor: { x: 100, y: 120 }, scale: CONTINUOUS_MAP_SYSTEM_SCALE }
+  const pixelsPerSceneUnit = 9
+  const pixelsPerLocalUnit = pixelsPerSceneUnit * projection.scale
+  expect(wardenStarHaloRadius(pixelsPerLocalUnit) * pixelsPerLocalUnit).toBe(18)
+  expect(wardenStarOverlapsAnchor(projection, { x: 102, y: 120 }, pixelsPerSceneUnit)).toBe(true)
+  expect(wardenStarOverlapsAnchor(projection, { x: 110, y: 120 }, pixelsPerSceneUnit)).toBe(false)
+})
 
 function systemWithContents(): StarSystem {
   const planet: SystemObject = {

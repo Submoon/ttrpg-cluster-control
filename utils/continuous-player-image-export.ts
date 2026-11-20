@@ -117,7 +117,7 @@ export function serializeContinuousPlayerMapImage(
     const progress = continuousMapNameTransitionProgress(frame, camera.k, svgPixelScale)
     return {
       ...label,
-      ...continuousMapNameLabelFramePosition(label, frame, camera, svgPixelScale, progress),
+      ...continuousMapNameLabelFramePosition(label, frame, camera, svgPixelScale, progress, nameViewport),
       hasLeader: label.hasLeader && progress < .12,
     }
   })

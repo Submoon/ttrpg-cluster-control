@@ -24,6 +24,39 @@ function readFrame(contour: Locator) {
   })
 }
 
+test('resizing a halo does not change the zoom at which its system details reveal', async ({ page }) => {
+  test.setTimeout(60_000)
+  await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 900 } })
+  const base = createLocalWorkspace('Halo Zoom', 'Vesper')
+  const first = base.cluster.systems[0]!
+  const { system: second, workspace } = addStarSystem(base, 'Helion')
+  workspace.layout.systemPositions[first.id] = { x: 0.29, y: 0.5 }
+  workspace.layout.systemPositions[second.id] = { x: 0.74, y: 0.5 }
+  workspace.layout.systemFrames = {
+    [first.id]: { left: 140, right: 140, top: 95, bottom: 95 },
+  }
+  const review = await reviewJumpClusterBackup(page, 'halo-zoom.json', JSON.stringify(exportJumpCluster(workspace)))
+  await resolveJumpClusterRestoreReview(review, 'confirm')
+  const map = wardenMap(page)
+  await expect(map).toHaveAccessibleName('Halo Zoom continuous map')
+  const envelope = (id: string) =>
+    map.locator(`.continuous-warden-system[data-system-id="${id}"] .continuous-warden-system-envelope`)
+  expect((await readFrame(envelope(first.id))).width).toBeGreaterThan((await readFrame(envelope(second.id))).width * 1.5)
+  const detailed = map.locator('.continuous-warden-system-envelope.is-detailed')
+  const controls = workspaceZoomControls(page)
+  const zoomIn = controls.getByRole('button', { name: 'Zoom in', exact: true })
+  const zoomOut = controls.getByRole('button', { name: 'Zoom out', exact: true })
+  for (let step = 0; step < 20 && await zoomOut.isEnabled(); step += 1) await zoomOut.click()
+  await expect(detailed).toHaveCount(0)
+  for (let step = 0; step < 20 && await zoomIn.isEnabled(); step += 1) {
+    await zoomIn.click()
+    const count = await detailed.count()
+    expect(count).not.toBe(1)
+    if (count === 2) break
+  }
+  await expect(detailed).toHaveCount(2)
+})
+
 test('a Warden can resize a halo corner and save the larger regular frame', async ({ page }) => {
   test.setTimeout(60_000)
   await captureMapExportBlobs(page)

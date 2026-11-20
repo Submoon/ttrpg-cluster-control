@@ -42,13 +42,28 @@ export function continuousMapNameLabelFramePosition(
   viewport: MapViewport,
   svgPixelScale: number,
   progress: number,
+  viewportRect?: SvgViewportRect,
   insetPixels = 12,
 ): Pick<Point, 'x' | 'y'> {
   const scale = Number.isFinite(svgPixelScale) && svgPixelScale > 0 ? svgPixelScale : 1
   const amount = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0
   const inset = Math.max(0, insetPixels) / scale
-  const targetX = viewport.x + frame.x * viewport.k + inset + label.width / 2
-  const targetY = viewport.y + frame.y * viewport.k + inset
+  let targetX = viewport.x + frame.x * viewport.k + inset + label.width / 2
+  let targetY = viewport.y + frame.y * viewport.k + inset
+  if (viewportRect) {
+    const margin = CONTINUOUS_SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS / scale
+    const halfWidth = label.width / 2
+    targetX = clampToViewport(
+      targetX,
+      viewportRect.x + margin + halfWidth,
+      viewportRect.x + viewportRect.width - margin - halfWidth,
+    )
+    targetY = clampToViewport(
+      targetY,
+      viewportRect.y + margin,
+      viewportRect.y + viewportRect.height - margin - CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / scale,
+    )
+  }
   return {
     x: label.x + (targetX - label.x) * amount,
     y: label.y + (targetY - label.y) * amount,

@@ -25,11 +25,12 @@
         Zoom continuously to reveal each system interior independently. In Move, drag an object to move it within its owning system or drop it inside another system’s frame to transfer it. Drag a system anchor or name to update its Cluster position. Use a selected system’s resize corner buttons, or focus a corner and use the arrow keys, to resize its frame.
       </desc>
       <defs>
-        <linearGradient :id="`${haloGradientId}-fill`" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="var(--map-orbit)" stop-opacity="0.045" />
-          <stop offset="52%" stop-color="var(--map-orbit)" stop-opacity="0.012" />
-          <stop offset="100%" stop-color="var(--map-orbit)" stop-opacity="0.035" />
-        </linearGradient>
+        <radialGradient :id="`${haloGradientId}-fill`" cx="50%" cy="50%" r="55%">
+          <stop offset="0%" stop-color="var(--map-text)" stop-opacity="0" />
+          <stop offset="35%" stop-color="var(--map-text)" stop-opacity="0" />
+          <stop offset="85%" stop-color="var(--map-text)" stop-opacity="0.14" />
+          <stop offset="100%" stop-color="var(--map-text)" stop-opacity="0" />
+        </radialGradient>
       </defs>
       <g class="cluster-map-content" :transform="cameraTransform">
         <ContinuousMapRouteLayer
@@ -77,7 +78,11 @@
 
             <g
               class="cluster-system-node continuous-warden-system-anchor"
-              :class="{ 'is-selected': selectedSystemId === projection.id, 'is-move-preview': previewPositions.has(projection.id) }"
+              :class="{
+                'is-selected': selectedSystemId === projection.id,
+                'is-move-preview': previewPositions.has(projection.id),
+                'is-covered-by-central-star': centralStarOverlapsAnchor(projection),
+              }"
               :data-system-id="projection.id"
               :transform="anchorTransform(projection)"
               role="button"
@@ -91,7 +96,7 @@
 
             <Transition name="continuous-warden-detail" @before-leave="deactivateDetailOnExit">
             <g
-              v-if="detailSystemIds.has(projection.id)"
+              v-if="mountedDetailSystemIds.has(projection.id)"
               class="continuous-warden-system-detail"
               :transform="systemTransform(projection)"
             >
@@ -234,7 +239,11 @@
                     :r="searchLocatorRadius(projection)"
                     aria-hidden="true"
                   />
-                  <circle v-if="objectSubtype(projection.id, object.id) === 'star'" class="continuous-warden-star-halo" r="18" />
+                  <circle
+                    v-if="objectSubtype(projection.id, object.id) === 'star'"
+                    class="continuous-warden-star-halo"
+                    :r="starHaloRadius(projection)"
+                  />
                   <g class="continuous-warden-object-text" :transform="detailTextTransform(projection)">
                     <text
                       class="continuous-warden-object-glyph"
@@ -476,6 +485,8 @@ import {
   previewWardenSystemObjects,
   projectWardenSystem,
   unprojectWardenClusterAnchor,
+  wardenStarHaloRadius,
+  wardenStarOverlapsAnchor,
   type ContinuousWardenSystemProjection,
 } from '../utils/continuous-map-projection'
 import { systemFrameInsetsFromRect } from '../utils/continuous-map-projection'
@@ -528,6 +539,7 @@ const ROUTE_REVEAL_PADDING_PIXELS = 14
 const ROUTE_FAN_OUT_LIMIT_PIXELS = 96
 const VIEWPORT_FEEDBACK_INTERVAL_MS = 120
 const SYSTEM_RESIZE_HANDLE_PIXELS = 44
+const DETAIL_RENDER_OVERSCAN_PIXELS = 36
 const OVERVIEW_DETAIL_SYSTEM_IDS: ReadonlySet<string> = new Set()
 
 const props = defineProps<{
@@ -906,6 +918,32 @@ const renderedProjections = computed(() => {
   })
 })
 
+/** Keep detail membership intact while avoiding SVG work for fully offscreen systems. */
+const mountedDetailSystemIds = computed(() => {
+  const mounted = new Set<string>()
+  const focusedSystemId = focusedDetailSystemId()
+  const activeSystemIds = new Set<string>()
+  if (activeObjectDrag) activeSystemIds.add(activeObjectDrag.systemId)
+  if (activeSelectedObjectDrag) activeSystemIds.add(activeSelectedObjectDrag.systemId)
+  if (activeAnchorDrag) activeSystemIds.add(activeAnchorDrag.systemId)
+  if (activeSystemFrameResize) activeSystemIds.add(activeSystemFrameResize.systemId)
+  if (activeOrbitGesture) activeSystemIds.add(activeOrbitGesture.systemId)
+  if (objectMovePreview.value) activeSystemIds.add(objectMovePreview.value.systemId)
+  if (preciseObjectPlacementPreview.value) activeSystemIds.add(preciseObjectPlacementPreview.value.systemId)
+  if (preciseOrbitCenterMovePreview.value) activeSystemIds.add(preciseOrbitCenterMovePreview.value.systemId)
+  if (directOrbitPreview.value) activeSystemIds.add(directOrbitPreview.value.systemId)
+  for (const systemId of selectedObjectDragPreview.value?.objectSystemIds.values() ?? []) {
+    activeSystemIds.add(systemId)
+  }
+
+  for (const projection of renderedProjections.value) {
+    if (!detailSystemIds.value.has(projection.id)) continue
+    if (projection.id === focusedSystemId || activeSystemIds.has(projection.id)
+      || detailSystemIntersectsViewport(projection)) mounted.add(projection.id)
+  }
+  return mounted
+})
+
 /** A held gesture owns changed geometry, while unrelated draft labels, positions and Orbits stay painted. */
 function overlayHeldGeometry(
   presentation: ContinuousWardenSystemProjection,
@@ -1112,6 +1150,40 @@ function displayFrameFor(systemId: string): SvgViewportRect {
 function detailFrameFor(projection: ContinuousWardenSystemProjection): SvgViewportRect {
   const frame = displayFrames.value.get(projection.id)
   return hasPositiveFrame(frame) ? frame : translatedRawFrame(projection)
+}
+
+/** Semantic reveal follows projected contents; editable frame sizing only affects presentation. */
+function semanticEnvelopeFor(projection: ContinuousWardenSystemProjection): Pick<SvgViewportRect, 'width' | 'height'> {
+  return projection.envelope
+}
+
+function detailSystemIntersectsViewport(projection: ContinuousWardenSystemProjection): boolean {
+  const envelope = translatedRawFrame(projection)
+  const { x, y, k } = viewport.value
+  const screenBounds = {
+    left: x + envelope.x * k,
+    top: y + envelope.y * k,
+    right: x + (envelope.x + envelope.width) * k,
+    bottom: y + (envelope.y + envelope.height) * k,
+  }
+  if (!Object.values(screenBounds).every(Number.isFinite)) return true
+  const overscan = svgPixelScale.value > 0
+    ? DETAIL_RENDER_OVERSCAN_PIXELS / svgPixelScale.value
+    : DETAIL_RENDER_OVERSCAN_PIXELS
+  const viewportRect = svgViewport.value
+  return screenBounds.right >= viewportRect.x - overscan
+    && screenBounds.left <= viewportRect.x + viewportRect.width + overscan
+    && screenBounds.bottom >= viewportRect.y - overscan
+    && screenBounds.top <= viewportRect.y + viewportRect.height + overscan
+}
+
+function focusedDetailSystemId(): string | null {
+  if (typeof document === 'undefined' || typeof Element === 'undefined') return null
+  const focused = document.activeElement
+  if (!(focused instanceof Element)) return null
+  return focused.closest<SVGElement>(
+    '.continuous-warden-object[data-system-id], .continuous-warden-orbit-target[data-system-id], .continuous-warden-orbit-edit-handle[data-system-id]',
+  )?.getAttribute('data-system-id') ?? null
 }
 
 function hasPositiveFrame(frame: SvgViewportRect | undefined): frame is SvgViewportRect {
@@ -1327,10 +1399,10 @@ const nameLabels = computed<ContinuousMapNameLabel[]>(() => continuousMapNameLab
   const projection = presentationProjectionById.value.get(label.id)
   if (!projection) return label
   const frame = detailFrameFor(projection)
-  const progress = continuousMapNameTransitionProgress(frame, viewport.value.k, svgPixelScale.value)
+  const progress = continuousMapNameTransitionProgress(semanticEnvelopeFor(projection), viewport.value.k, svgPixelScale.value)
   return {
     ...label,
-    ...continuousMapNameLabelFramePosition(label, frame, viewport.value, svgPixelScale.value, progress),
+    ...continuousMapNameLabelFramePosition(label, frame, viewport.value, svgPixelScale.value, progress, svgViewport.value),
     hasLeader: label.hasLeader && progress < .12,
   }
 }))
@@ -1410,6 +1482,17 @@ function detailTextTransform(projection: ContinuousWardenSystemProjection): stri
   return `scale(${continuousMapTextScale(systemScreenScale(projection), 20, 28)})`
 }
 
+function starHaloRadius(projection: ContinuousWardenSystemProjection): number {
+  return wardenStarHaloRadius(systemScreenScale(projection))
+}
+
+function centralStarOverlapsAnchor(projection: ContinuousWardenSystemProjection): boolean {
+  if (!mountedDetailSystemIds.value.has(projection.id)) return false
+  const pixelsPerSceneUnit = viewport.value.k * svgPixelScale.value
+  return projection.objects.some(object => objectSubtype(projection.id, object.id) === 'star'
+    && wardenStarOverlapsAnchor(projection, object.scenePosition, pixelsPerSceneUnit))
+}
+
 function orbitEditHandleRadius(projection: ContinuousWardenSystemProjection): number {
   const screenScale = systemScreenScale(projection)
   return screenScale > 0 ? 7 / screenScale : 7
@@ -1442,7 +1525,7 @@ function detailSystemIdsAtScale(cameraScale: number): Set<string> {
   const next = new Set<string>()
   for (const projection of presentationProjections.value) {
     const threshold = current.has(projection.id) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS
-    if (cameraScale >= Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(detailFrameFor(projection), svgPixelScale.value, threshold))) {
+    if (cameraScale >= Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, threshold))) {
       next.add(projection.id)
     }
   }
@@ -1628,7 +1711,7 @@ function frameSystem(systemId: string, usableRect?: SvgViewportRect, centerTarge
     y: projection.envelope.y + delta.y,
   }
   const detailScaleFloor = continuousMapDetailScale(
-    detailFrameFor(projection),
+    semanticEnvelopeFor(projection),
     svgPixelScale.value,
     detailSystemIds.value.has(projection.id) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS,
   )
@@ -1745,7 +1828,7 @@ function frameEntityTarget(
   const current = getViewport()
   const minimumScale = detailSystemIds.value.has(projection.id)
     ? undefined
-    : Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(detailFrameFor(projection), svgPixelScale.value, DETAIL_REVEAL_PIXELS))
+    : Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, DETAIL_REVEAL_PIXELS))
   const next = centerTarget
     ? centerMapTargetViewport({
         current,
@@ -1829,7 +1912,7 @@ function frameSearchObjectBranch(systemId: string, objectId: string, usableRect?
 
   const current = getViewport()
   const minimumScale = Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(
-    detailFrameFor(projection),
+    semanticEnvelopeFor(projection),
     svgPixelScale.value,
     detailSystemIds.value.has(systemId) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS,
   ))
@@ -1971,7 +2054,7 @@ function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportR
     const halfWidth = Math.max(18, object.name.length * 3.6, object.locationKey.length * 2.8)
     bounds = { x: center.x - halfWidth, y: center.y - 27, width: halfWidth * 2, height: 54 }
     if (!detailSystemIds.value.has(projection.id)) {
-      minimumScale = Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(detailFrameFor(projection), svgPixelScale.value, DETAIL_REVEAL_PIXELS))
+      minimumScale = Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, DETAIL_REVEAL_PIXELS))
     }
   } else if (target.kind === 'orbit') {
     const orbit = projection.orbits.find(candidate => candidate.id === target.id)
@@ -1981,7 +2064,7 @@ function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportR
     if (!orbitBounds) return false
     bounds = orbitBounds
     if (!detailSystemIds.value.has(projection.id)) {
-      minimumScale = Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(detailFrameFor(projection), svgPixelScale.value, DETAIL_REVEAL_PIXELS))
+      minimumScale = Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, DETAIL_REVEAL_PIXELS))
     }
   } else {
     return false
@@ -3923,7 +4006,6 @@ defineExpose({
   stroke: color-mix(in srgb, var(--map-orbit) 58%, transparent);
   stroke-width: 1.25;
   stroke-dasharray: 2 5;
-  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--map-orbit) 30%, transparent));
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
@@ -3946,7 +4028,6 @@ defineExpose({
   stroke: color-mix(in srgb, var(--map-orbit) 76%, transparent);
   stroke-width: 1.5;
   stroke-dasharray: 2 5;
-  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--map-orbit) 34%, transparent));
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
@@ -4292,6 +4373,11 @@ defineExpose({
 .continuous-warden-anchor-core {
   fill: var(--map-selected);
   pointer-events: none;
+}
+
+.continuous-warden-system-anchor.is-covered-by-central-star:not(:hover):not(:focus):not(.is-selected):not(.is-move-preview) .continuous-warden-anchor-mark,
+.continuous-warden-system-anchor.is-covered-by-central-star:not(:hover):not(:focus):not(.is-selected):not(.is-move-preview) .continuous-warden-anchor-core {
+  visibility: hidden;
 }
 
 .continuous-warden-system-anchor,
