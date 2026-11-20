@@ -9,6 +9,7 @@ import {
   quitSystemAdd,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
+  wardenLocalCoordinates,
   wardenMap,
   wardenObjectMark,
   workspaceZoomOutput,
@@ -38,39 +39,87 @@ async function prepareContinuousOrbitMap(page: import('@playwright/test').Page) 
   return { map, orbit, orbitId: createdOrbit.id, primaryObjectId, systemId, systemName }
 }
 
+test('wheel zoom repaints object text and Orbits in a fixed viewport paint space', async ({ page }) => {
+  const { map, orbit, systemId, primaryObjectId } = await prepareContinuousOrbitMap(page)
+  const object = wardenObjectMark(page, systemId, primaryObjectId)
+  const camera = map.locator('.cluster-map-content')
+  const scale = () => camera.evaluate(element => (element as SVGGraphicsElement).getCTM()!.a)
+  const fixedPaint = () => map.evaluate(element => {
+    const root = (element as SVGSVGElement).getScreenCTM()!
+    // Camera-scaled SVG paints can become cached bitmaps during Firefox wheel zoom.
+    // Each mark must instead be repainted in the root SVG's fixed coordinate space.
+    return [...element.querySelectorAll<SVGGraphicsElement>(
+      '.continuous-warden-object, .continuous-warden-object-name, .continuous-warden-orbit-target',
+    )].map(mark => {
+      const matrix = mark.getScreenCTM()!
+      return Math.hypot(matrix.a, matrix.b) / Math.hypot(root.a, root.b)
+    })
+  })
+  const pointer = await object.evaluate(element => {
+    const point = new DOMPoint().matrixTransform((element as SVGGraphicsElement).getScreenCTM()!)
+    return { x: point.x, y: point.y }
+  })
+  await page.mouse.move(pointer.x, pointer.y)
+  for (const delta of [-100, -100, 100]) {
+    const before = await scale()
+    const radius = Number(await orbit.getAttribute('rx'))
+    await page.mouse.wheel(0, delta)
+    await expect.poll(scale).not.toBe(before)
+    const after = await scale()
+    expect(Number(await orbit.getAttribute('rx'))).toBeCloseTo(radius * after / before, 3)
+    const paints = await fixedPaint()
+    expect(paints.length).toBeGreaterThan(2)
+    for (const paintScale of paints) expect(paintScale).toBeCloseTo(1, 5)
+  }
+})
+
 async function orbitClientPoint(
+  page: import('@playwright/test').Page,
+  systemId: string,
   map: import('@playwright/test').Locator,
   orbitId: string,
   angle: number,
   offset = 0,
 ): Promise<{ client: LocalPoint; local: LocalPoint; radius: number }> {
-  return map.evaluate((element, input) => {
+  const coordinates = await wardenLocalCoordinates(page, systemId)
+  const axes = await map.evaluate((element, input) => {
     const ellipse = [...element.querySelectorAll<SVGEllipseElement>('.continuous-warden-orbit-target')]
       .find(candidate => candidate.getAttribute('data-orbit-id') === input.orbitId)
-    const detail = element.querySelector<SVGGElement>('.continuous-warden-system-detail')
-    const matrix = detail?.getScreenCTM()
+    const matrix = ellipse?.getScreenCTM()
     if (!ellipse || !matrix) throw new Error('The continuous map Orbit is not measurable.')
 
     const cx = Number(ellipse.getAttribute('cx'))
     const cy = Number(ellipse.getAttribute('cy'))
     const radius = Number(ellipse.getAttribute('rx'))
-    const rotation = Number(ellipse.getAttribute('transform')?.match(/^rotate\(([-+.\deE]+)/)?.[1] ?? 0)
-      * Math.PI / 180
-    const paramX = (radius + input.offset) * Math.cos(input.angle)
-    const paramY = Number(ellipse.getAttribute('ry')) * Math.sin(input.angle)
-    const local = {
-      x: cx + paramX * Math.cos(rotation) - paramY * Math.sin(rotation),
-      y: cy + paramX * Math.sin(rotation) + paramY * Math.cos(rotation),
+    const screen = (x: number, y: number) => {
+      const point = new DOMPoint(x, y).matrixTransform(matrix)
+      return { x: point.x, y: point.y }
     }
-    const screen = new DOMPoint(local.x, local.y).matrixTransform(matrix)
-    return { client: { x: screen.x, y: screen.y }, local, radius }
-  }, { orbitId, angle, offset })
+    return { center: screen(cx, cy), horizontal: screen(cx + radius, cy), vertical: screen(cx, cy + Number(ellipse.getAttribute('ry'))) }
+  }, { orbitId })
+  const center = coordinates.fromClient(axes.center)
+  const horizontal = coordinates.fromClient(axes.horizontal)
+  const vertical = coordinates.fromClient(axes.vertical)
+  const radius = Math.hypot(horizontal.x - center.x, horizontal.y - center.y)
+  const ratio = (radius + offset) / radius
+  const local = {
+    x: center.x + (horizontal.x - center.x) * ratio * Math.cos(angle) + (vertical.x - center.x) * Math.sin(angle),
+    y: center.y + (horizontal.y - center.y) * ratio * Math.cos(angle) + (vertical.y - center.y) * Math.sin(angle),
+  }
+  return { client: coordinates.toClient(local), local, radius }
 }
 
-function objectLocalPosition(transform: string | null): LocalPoint {
-  const match = transform?.match(/^translate\(([-+.\deE]+)[ ,]+([-+.\deE]+)/)
-  if (!match) throw new Error(`Unexpected continuous object transform: ${transform}`)
-  return { x: Number(match[1]), y: Number(match[2]) }
+async function objectLocalPosition(
+  object: import('@playwright/test').Locator,
+  coordinates: Awaited<ReturnType<typeof wardenLocalCoordinates>>,
+): Promise<LocalPoint> {
+  const anchor = await object.evaluate(element => {
+    const matrix = (element as SVGGraphicsElement).getScreenCTM()
+    if (!matrix) throw new Error('The continuous object is not painted.')
+    const point = new DOMPoint().matrixTransform(matrix)
+    return { x: point.x, y: point.y }
+  })
+  return coordinates.fromClient(anchor)
 }
 
 test('continuous precise Free placement stays exact beside an Orbit and commits to its inspected owner', async ({ page }) => {
@@ -99,30 +148,25 @@ test('continuous precise Free placement stays exact beside an Orbit and commits 
   await placement.click()
   await page.getByRole('button', { name: 'Move on map', exact: true }).click()
 
-  const ringPoint = await orbitClientPoint(map, orbitId, 0)
-  const target = await orbitClientPoint(map, orbitId, 0, 18)
+  const ringPoint = await orbitClientPoint(page, systemId, map, orbitId, 0)
+  const target = await orbitClientPoint(page, systemId, map, orbitId, 0, 18)
   expect(Math.hypot(target.local.x - ringPoint.local.x, target.local.y - ringPoint.local.y))
     .toBeCloseTo(18, 1)
   const click = { x: Math.round(target.client.x), y: Math.round(target.client.y) }
-  const expected = await map.locator('.continuous-warden-system-detail').evaluate((element, point) => {
-    if (!(element instanceof SVGGraphicsElement)) throw new Error('The owning system has no geometry.')
-    const matrix = element.getScreenCTM()
-    if (!matrix) throw new Error('The owning system has no screen transform.')
-    const local = new DOMPoint(point.x, point.y).matrixTransform(matrix.inverse())
-    return { x: local.x, y: local.y }
-  }, click)
+  const coordinates = await wardenLocalCoordinates(page, systemId)
+  const expected = coordinates.fromClient(click)
   await page.mouse.click(click.x, click.y)
 
   await placement.click()
   await expect(page.getByRole('button', { name: 'Confirm position', exact: true })).toBeVisible()
-  const previewPosition = objectLocalPosition(await object.getAttribute('transform'))
+  const previewPosition = await objectLocalPosition(object, coordinates)
   expect(previewPosition.x).toBeCloseTo(expected.x, 1)
   expect(previewPosition.y).toBeCloseTo(expected.y, 1)
 
   await page.getByRole('button', { name: 'Confirm position', exact: true }).click()
-  await expect.poll(async () => objectLocalPosition(await object.getAttribute('transform')).x)
+  await expect.poll(async () => (await objectLocalPosition(object, coordinates)).x)
     .toBeCloseTo(expected.x, 1)
-  await expect.poll(async () => objectLocalPosition(await object.getAttribute('transform')).y)
+  await expect.poll(async () => (await objectLocalPosition(object, coordinates)).y)
     .toBeCloseTo(expected.y, 1)
   await waitForWorkspaceSaved(page)
 })

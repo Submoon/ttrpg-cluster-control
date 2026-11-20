@@ -938,6 +938,53 @@ export async function wardenLocalCoordinates(page: import('@playwright/test').Pa
   }
 }
 
+/** Measures a painted object's anchor in its owner's local geometry, independent of the paint layer. */
+export async function wardenObjectLocalPosition(mark: Locator): Promise<WorldPoint> {
+  const systemId = await mark.getAttribute('data-system-id')
+  if (!systemId) throw new Error('The painted object has no owning system.')
+  const coordinates = await wardenLocalCoordinates(mark.page(), systemId)
+  const painted = await snapshotSvgCoordinates(mark)
+  return coordinates.fromClient(painted.toClient({ x: 0, y: 0 }))
+}
+
+/** Measures painted Orbit radii in owner-local units, independently of viewport projection. */
+export async function wardenOrbitLocalRadii(mark: Locator): Promise<{ horizontal: number; vertical: number }> {
+  return (await wardenOrbitLocalGeometry(mark)).radii
+}
+
+/** Measures committed or preview Orbit paint in owner-local units across camera changes. */
+export async function wardenOrbitLocalGeometry(mark: Locator, systemId?: string): Promise<{
+  center: WorldPoint
+  radii: { horizontal: number; vertical: number }
+}> {
+  const ownerId = systemId ?? await mark.evaluate(element =>
+    element.getAttribute('data-system-id') ?? element.closest('.continuous-warden-system')?.getAttribute('data-system-id'))
+  if (!ownerId) throw new Error('The painted Orbit has no owning system.')
+  const coordinates = await wardenLocalCoordinates(mark.page(), ownerId)
+  const axes = await mark.evaluate(element => {
+    if (!(element instanceof SVGEllipseElement)) throw new Error('The Orbit has no ellipse.')
+    const matrix = element.getScreenCTM()
+    if (!matrix) throw new Error('The Orbit has no painted coordinate space.')
+    const cx = element.cx.baseVal.value
+    const cy = element.cy.baseVal.value
+    const screen = (x: number, y: number) => {
+      const point = new DOMPoint(x, y).matrixTransform(matrix)
+      return { x: point.x, y: point.y }
+    }
+    return { center: screen(cx, cy), horizontal: screen(cx + element.rx.baseVal.value, cy), vertical: screen(cx, cy + element.ry.baseVal.value) }
+  })
+  const center = coordinates.fromClient(axes.center)
+  const horizontal = coordinates.fromClient(axes.horizontal)
+  const vertical = coordinates.fromClient(axes.vertical)
+  return {
+    center,
+    radii: {
+      horizontal: Math.hypot(horizontal.x - center.x, horizontal.y - center.y),
+      vertical: Math.hypot(vertical.x - center.x, vertical.y - center.y),
+    },
+  }
+}
+
 /** Delivers a native click to a normalized point in an explicit system's local layout. */
 export async function clickWardenSystemPoint(
   page: import('@playwright/test').Page,

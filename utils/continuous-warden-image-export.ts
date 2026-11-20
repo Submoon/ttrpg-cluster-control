@@ -192,6 +192,8 @@ export async function exportContinuousWardenMapImage(
       const title = clone.ownerDocument.createElementNS(clone.namespaceURI, 'title')
       title.textContent = appliedImageName
       clone.prepend(title)
+      // Live detail paint is viewport-projected; rebuild it below from committed Cluster geometry.
+      clone.querySelector(':scope > .continuous-warden-fixed-paint')?.remove()
       const content = clone.querySelector<SVGGElement>('.cluster-map-content')
       if (!content) throw new Error('The continuous map is not ready to export.')
       const routeStyleSource = clone.querySelector<SVGPathElement>('.continuous-warden-route-layer .cluster-route-line')

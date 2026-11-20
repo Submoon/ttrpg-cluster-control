@@ -15,7 +15,9 @@ import {
   setWorkspaceMapMode,
   wardenLocalCoordinates,
   wardenMap,
+  wardenObjectLocalPosition,
   wardenObjectMark,
+  wardenOrbitLocalGeometry,
   wardenSystemMark,
   workspaceNavigation,
 } from './helpers'
@@ -83,15 +85,16 @@ async function createFreeOrbitWithPassenger(page: Page): Promise<{
   await expect(ring).toHaveCount(1)
   const passenger = await addPlanetOnOrbit(page, systemId, ring, Math.PI / 2)
   await expect(passenger).toBeVisible()
-  await expect(ring).toHaveAttribute('ry', '112')
+  // Inverting the painted viewport geometry should recover the local Orbit radius within subpixel rounding.
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.vertical).toBeCloseTo(112, 2)
   const { start } = await orbitDragPoints(ring, 1, .5)
   await page.mouse.click(start.x, start.y)
   await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Horizontal radius', exact: true }).fill('16')
   await page.getByRole('spinbutton', { name: 'Vertical radius', exact: true }).fill('60')
   await page.getByRole('button', { name: /^Apply changes\b/ }).click()
-  await expect(ring).toHaveAttribute('rx', '16')
-  await expect(ring).toHaveAttribute('ry', '60')
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal).toBeCloseTo(16, 2)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.vertical).toBeCloseTo(60, 2)
   await closeVisiblePanels(page)
   await wardenSystemMark(page, systemId).focus()
   await page.keyboard.press('Enter')
@@ -415,7 +418,7 @@ test('touchcancel restores an unoccupied Orbit center and failed host attachment
     await dispatchTouch(cdp, 'touchMove', [{ ...start, x: start.x + 28, y: start.y + 20 }])
     await expect(ring).not.toHaveAttribute('cx', centerXBefore!)
     await expect(passenger).not.toHaveAttribute('transform', passengerBefore!)
-    await expect(ring).toHaveAttribute('ry', '60')
+    await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.vertical).toBeCloseTo(60, 2)
     await dispatchTouch(cdp, 'touchCancel', [])
     await expect(ring).toHaveAttribute('cx', centerXBefore!)
     await expect(ring).toHaveAttribute('cy', centerYBefore!)
@@ -436,11 +439,7 @@ test('touchcancel restores an unoccupied Orbit center and failed host attachment
     const primaryStar = systemBeforeMove.objects.find(object => object.name === 'Primary Star')
     if (!primaryStar) throw new Error('The exported system has no Primary Star.')
     const host = wardenObjectMark(page, systemId, primaryObjectId)
-    const hostPoint = await host.evaluate(element => {
-      const transform = element.getAttribute('transform')?.match(/^translate\(([^ ]+) ([^)]+)\)$/)
-      if (!transform) throw new Error('Could not locate Primary Star on the map.')
-      return { x: Number(transform[1]), y: Number(transform[2]) }
-    })
+    const hostPoint = await wardenObjectLocalPosition(host)
     const recordsBeforeWrite = await readWorkspaceRecords(page)
     const coordinates = await wardenLocalCoordinates(page, systemId)
     const retryDestination = coordinates.toClient(hostPoint)
@@ -456,15 +455,16 @@ test('touchcancel restores an unoccupied Orbit center and failed host attachment
         x: retryDestination.x,
         y: retryDestination.y,
       }])
-      await expect.poll(async () => Number(await ring.getAttribute('cx')))
-        .toBeCloseTo(hostPoint.x, 0)
-      await expect(ring).toHaveAttribute('rx', '39')
-      await expect(ring).toHaveAttribute('ry', '60')
+      // Detail SVG attributes are viewport-projected; compare in owner-local map units.
+      await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.x)
+        .toBeCloseTo(hostPoint.x, 2)
+      await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal).toBeCloseTo(39, 2)
+      await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.vertical).toBeCloseTo(60, 2)
       await dispatchTouch(cdp, 'touchEnd', [])
 
       const hostedRing = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"][data-orbit-id="${originalOrbitId}"]`)
-      await expect(hostedRing).toHaveAttribute('rx', '39')
-      await expect(hostedRing).toHaveAttribute('ry', '60')
+      await expect.poll(async () => (await wardenOrbitLocalGeometry(hostedRing, systemId)).radii.horizontal).toBeCloseTo(39, 2)
+      await expect.poll(async () => (await wardenOrbitLocalGeometry(hostedRing, systemId)).radii.vertical).toBeCloseTo(60, 2)
       await expect(activeWorkspaceFeedback(page).getByRole('alert')).toContainText('Not saved.')
       const radiusToast = page.getByText('Orbit radii adjusted', { exact: true })
       await expect(radiusToast).toBeVisible()
@@ -519,11 +519,7 @@ test('blur restores an attached host drag and Move camera takeover changes only 
     const hostTransformBefore = await host.getAttribute('transform')
     const ringCenterBefore = await ring.getAttribute('cx')
     const passengerTransformBefore = await passenger.getAttribute('transform')
-    const position = await host.evaluate(element => {
-      const transform = element.getAttribute('transform')?.match(/^translate\(([^ ]+) ([^)]+)\)$/)
-      if (!transform) throw new Error('Could not locate the attached host.')
-      return { x: Number(transform[1]), y: Number(transform[2]) }
-    })
+    const position = await wardenObjectLocalPosition(host)
     const coordinates = await wardenLocalCoordinates(page, systemId)
     const hostClient = coordinates.toClient(position)
     const destinationClient = { x: hostClient.x + 64, y: hostClient.y + 40 }

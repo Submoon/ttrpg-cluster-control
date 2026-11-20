@@ -16,16 +16,15 @@ import {
   waitForWorkspaceStartup,
   wardenObjectMark,
   wardenLocalCoordinates,
+  wardenObjectLocalPosition,
+  wardenOrbitLocalGeometry,
   wardenMap,
   workspaceNavigation,
   workspaceZoomControls,
 } from './helpers'
 
 async function renderedObjectPosition(mark: Locator): Promise<{ x: number; y: number }> {
-  const transform = await mark.getAttribute('transform')
-  const match = transform?.match(/^translate\(([-\d.e]+)\s+([-\d.e]+)\)$/)
-  if (!match) throw new Error('A system object has no rendered position.')
-  return { x: Number(match[1]), y: Number(match[2]) }
+  return wardenObjectLocalPosition(mark)
 }
 
 async function visibleIndicatorObjectIds(indicators: Locator): Promise<string[]> {
@@ -403,9 +402,10 @@ freshTest('the default Warden map moves a group across owning systems and restor
   const destinationRing = wardenMap(page).locator(`.continuous-warden-orbit-target[data-orbit-id="${destinationOrbitId}"]`)
   const destinationCoordinates = await wardenLocalCoordinates(page, otherOwner.id)
   const memberBeforeMove = destinationCoordinates.toClient(await renderedObjectPosition(otherMark))
+  const destinationGeometry = await wardenOrbitLocalGeometry(destinationRing, otherOwner.id)
   const destinationPoint = destinationCoordinates.toClient({
-    x: Number(await destinationRing.getAttribute('cx')) + Number(await destinationRing.getAttribute('rx')) + 6,
-    y: Number(await destinationRing.getAttribute('cy')),
+    x: destinationGeometry.center.x + destinationGeometry.radii.horizontal + 6,
+    y: destinationGeometry.center.y,
   })
   // Move the member in the uninspected owner onto its fixed Orbit while keeping the group selected.
   const dragEnd = {

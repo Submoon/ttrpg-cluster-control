@@ -8,6 +8,7 @@ import {
   hideWorkspaceInspector,
   quitSystemAdd,
   setWorkspaceMapMode,
+  wardenOrbitLocalGeometry,
   wardenMap,
   workspaceZoomOutput,
 } from './helpers'
@@ -90,8 +91,9 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
   const redo = page.locator('.workspace-history-controls').getByRole('button', { name: /^Redo(?:\b|:)/ })
 
   await centerWorkspaceSelection(page)
-  const initialRadius = Number(await ring.getAttribute('rx'))
-  const initialVerticalRadius = Number(await ring.getAttribute('ry'))
+  const initialRadii = (await wardenOrbitLocalGeometry(ring, systemId)).radii
+  const initialRadius = initialRadii.horizontal
+  const initialVerticalRadius = initialRadii.vertical
   const initialRotation = Number(await rotate.getAttribute('aria-valuenow'))
   const initialZoom = (await workspaceZoomOutput(page).textContent())?.trim()
   const wheelPoint = await orbitScreenPoint(ring, 0.7)
@@ -138,7 +140,8 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
 
   await undo.click()
   await expect(rotate).toHaveAttribute('aria-valuenow', String(initialRotation))
-  await expect(ring).toHaveAttribute('rx', String(initialRadius))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(initialRadius, 3)
   await expect(redo).toBeEnabled()
 
   const horizontalBeforeKeyboard = Number(await resize.getAttribute('aria-valuenow'))
@@ -146,26 +149,32 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
   await page.keyboard.down('ArrowRight')
   await expect(resize).toBeFocused()
   await page.keyboard.down('ArrowRight')
-  await expect(ring).toHaveAttribute('rx', String(horizontalBeforeKeyboard + 2))
-  await expect(ring).toHaveAttribute('ry', String(initialVerticalRadius))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(horizontalBeforeKeyboard + 2, 3)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.vertical)
+    .toBeCloseTo(initialVerticalRadius, 3)
   await expect(resize).toBeFocused()
   await expect(undo).toBeDisabled()
   await waitForWorkspaceSaved(page)
   await testInfo.attach('held-orbit-key-repeat', { body: await page.screenshot(), contentType: 'image/png' })
   await page.setViewportSize({ width: 390, height: 844 })
-  await expect(ring).toHaveAttribute('rx', String(horizontalBeforeKeyboard + 2))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(horizontalBeforeKeyboard + 2, 3)
   await expect(undo).toBeDisabled()
   await waitForWorkspaceSaved(page)
   await page.keyboard.up('ArrowRight')
   await expect(undo).toBeEnabled()
-  await expect(ring).toHaveAttribute('rx', String(horizontalBeforeKeyboard + 2))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(horizontalBeforeKeyboard + 2, 3)
   if (desktopViewport) await page.setViewportSize(desktopViewport)
 
   await undo.click()
-  await expect(ring).toHaveAttribute('rx', String(horizontalBeforeKeyboard))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(horizontalBeforeKeyboard, 3)
   await expect(redo).toBeEnabled()
   await redo.click()
-  await expect(ring).toHaveAttribute('rx', String(horizontalBeforeKeyboard + 2))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(horizontalBeforeKeyboard + 2, 3)
   await expect(undo).toBeEnabled()
   await waitForWorkspaceSaved(page)
 })

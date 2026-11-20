@@ -5,7 +5,7 @@ import {
   exposedContinuousObjectHitPoint, hideWorkspaceInspector, inspectImageSvg,
   measureMouseDrag, openMapFilesSection, openWorkspaceHierarchy, resolveImportReview, reviewStarSystemImport,
   setHeaderMapActionsOpen, setWorkspaceMapMode, waitForWorkspaceSaved, waitForWorkspaceStartup, wardenLocalCoordinates,
-  wardenMap, wardenObjectMark, workspaceZoomControls, type WorldPoint,
+  wardenMap, wardenObjectMark, wardenObjectLocalPosition, wardenOrbitLocalRadii, workspaceZoomControls, type WorldPoint,
 } from './helpers'
 
 async function ensureLocalPointsReachable(page: Page, systemId: string, points: readonly WorldPoint[]): Promise<void> {
@@ -25,17 +25,15 @@ async function ensureLocalPointsReachable(page: Page, systemId: string, points: 
 }
 
 async function objectPosition(mark: Locator): Promise<WorldPoint> {
-  return mark.evaluate(element => {
-    const graphic = element as SVGGraphicsElement
-    const transforms = graphic.transform.baseVal
-    if (!transforms.numberOfItems) throw new Error('The object has no local SVG position.')
-    // Read each matrix without consolidate(), which rewrites the live transform attribute.
-    let matrix = new DOMMatrix()
-    for (let index = 0; index < transforms.numberOfItems; index += 1) {
-      matrix = matrix.multiply(transforms.getItem(index).matrix)
-    }
-    return { x: matrix.e, y: matrix.f }
-  })
+  return wardenObjectLocalPosition(mark)
+}
+
+async function expectObjectPosition(mark: Locator, expected: WorldPoint): Promise<void> {
+  const coordinates = await wardenLocalCoordinates(mark.page(), (await mark.getAttribute('data-system-id'))!)
+  const position = await objectPosition(mark)
+  const actual = coordinates.toClient(position)
+  const target = coordinates.toClient(expected)
+  expect(Math.hypot(actual.x - target.x, actual.y - target.y)).toBeLessThan(.01)
 }
 
 async function resizePaintedOrbit(page: Page, ring: Locator, factor: number): Promise<void> {
@@ -147,17 +145,16 @@ test('the system map expands beyond its initial bounds and exports the full appl
   await ring.press('Enter')
   await hideWorkspaceInspector(page)
   await setWorkspaceMapMode(page, 'Move')
-  const primaryBefore = await primaryMark.getAttribute('transform')
-  const radius = Number(await ring.getAttribute('rx'))
+  const primaryBefore = await objectPosition(primaryMark)
+  const radius = (await wardenOrbitLocalRadii(ring)).horizontal
   const resizeAngle = .5
   const resizeTarget = { x: 480 + 1070 * Math.cos(resizeAngle), y: 280 + 1070 * Math.sin(resizeAngle) }
   await ensureLocalPointsReachable(page, system.id, [
     { x: 480 + radius * Math.cos(resizeAngle), y: 280 + radius * Math.sin(resizeAngle) }, resizeTarget,
   ])
   await resizePaintedOrbit(page, ring, 1070 / radius)
-  await expect.poll(async () => Number(await ring.getAttribute('rx'))).toBeGreaterThan(960)
-  const resizedRadius = await ring.getAttribute('rx')
-  if (!resizedRadius) throw new Error('The resized Orbit has no radius.')
+  await expect.poll(async () => (await wardenOrbitLocalRadii(ring)).horizontal).toBeGreaterThan(960)
+  const resizedRadius = (await wardenOrbitLocalRadii(ring)).horizontal
   await ensureLocalPointsReachable(page, system.id, [await objectPosition(planet), { x: 1750, y: 800 }])
   const coordinates = await wardenLocalCoordinates(page, system.id)
   const origin = await objectPosition(planet)
@@ -177,8 +174,7 @@ test('the system map expands beyond its initial bounds and exports the full appl
   expect(Math.abs(rendered.y - expectedRendered.y)).toBeLessThanOrEqual(.01)
   expect(farPosition.x).toBeGreaterThan(960)
   expect(farPosition.y).toBeGreaterThan(560)
-  const farTransform = await planet.getAttribute('transform')
-  await expect(primaryMark).toHaveAttribute('transform', primaryBefore ?? '')
+  await expectObjectPosition(primaryMark, primaryBefore)
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
   await expect(ring).toBeVisible()
   await expect(planet).toBeVisible()
@@ -216,8 +212,11 @@ test('the system map expands beyond its initial bounds and exports the full appl
       systemIds: [...document.querySelectorAll('.continuous-warden-system')].map(system => system.getAttribute('data-system-id')),
     }
   }, { text: svg.text, objectId: planetObject.id, orbitId: orbitObject.id })
-  expect(exported.planetTransform).toBe(farTransform)
-  expect(exported.orbitRadius).toBe(resizedRadius)
+  const exportedPosition = exported.planetTransform?.match(/^translate\(([-+.\deE]+)[ ,]+([-+.\deE]+)\)/)
+  expect(exportedPosition).not.toBeNull()
+  const exportedClient = coordinates.toClient({ x: Number(exportedPosition?.[1]), y: Number(exportedPosition?.[2]) })
+  expect(Math.hypot(exportedClient.x - rendered.x, exportedClient.y - rendered.y)).toBeLessThan(.01)
+  expect(Number(exported.orbitRadius)).toBeCloseTo(resizedRadius, 3)
   expect(exported.systemIds).toEqual([system.id])
   const png = await downloadImage(page, 'image/png')
   expect(png.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
@@ -237,7 +236,7 @@ test('the system map expands beyond its initial bounds and exports the full appl
   await waitForWorkspaceStartup(page)
   await openVesper()
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(saved)
-  await expect(primaryMark).toHaveAttribute('transform', primaryBefore ?? '')
-  await expect(planet).toHaveAttribute('transform', farTransform ?? '')
-  await expect(ring).toHaveAttribute('rx', resizedRadius)
+  await expectObjectPosition(primaryMark, primaryBefore)
+  await expectObjectPosition(planet, farPosition)
+  expect((await wardenOrbitLocalRadii(ring)).horizontal).toBeCloseTo(resizedRadius, 3)
 })

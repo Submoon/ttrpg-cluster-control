@@ -30,6 +30,8 @@ On 2026-11-18, local `main` was fast-forwarded to `0774efc2f80490aa9889d73c61660
 
 A second fetch on 2026-11-18 advanced local `main` and `origin/main` to `48873799dac97b84856db676176b5c6b869b5620`, including the application logo and favicon. The activation runs through `06f6b1d64bbbc5c1ea95b7fe93fddbb1571edc5c` intentionally retained the earlier baseline for exact verification. Integration `cb76f4ecc9bfcd930df8e108b4c467981f742bc6` incorporates the refreshed baseline for subsequent qualification.
 
+The 2026-11-20 feedback correction resumes the prototype at `65ef166dba60468353162570066f8450406fdb15` on `codex/semantic-zoom-sharpness`. After fetching, `main` and `origin/main` remain at `48873799dac97b84856db676176b5c6b869b5620`; the feature base contains that revision. The supplied Firefox desktop GIF shows transient raster blur on object labels and dashed Orbits during wheel zoom, followed by sharp settled rendering. Software Firefox captures do not reproduce that transient blur. The correction must paint ordinary system details directly in viewport coordinates and retain object/Orbit interaction geometry. In Move, all available system-frame corners must remain visible and operable regardless of selection; existing placement and modal guards still apply.
+
 ## User Stories
 
 ### Explore and arrange the map

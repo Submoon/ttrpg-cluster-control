@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page } from './fixtures'
 import { expectPaletteOptionActive } from './scenarios/search-palette'
 import { expectPaintedInsideUsableMap, measurePaintedBounds } from './scenarios/search-assertions'
 import { largestUnobstructedClientRect } from '../utils/map-usable-area'
+import { CONTINUOUS_MAP_SYSTEM_SCALE } from '../utils/continuous-map-projection'
 import {
   createLocalWorkspace,
   createOrbit,
@@ -244,8 +245,7 @@ test('search centers a rotated recursive branch at sufficient current zoom witho
   await expect(map.locator('[data-map-search-locator]')).toHaveCount(0)
   const frameScale = scaleFromTransform(await content.getAttribute('transform'))
   expect(frameScale).toBe(scaleFromTransform(beforeFrame))
-  const localScale = scaleFromTransform(await owner.locator('.continuous-warden-system-detail').getAttribute('transform'))
-  expect(frameScale * localScale).toBeLessThan(0.25)
+  expect(frameScale * CONTINUOUS_MAP_SYSTEM_SCALE).toBeLessThan(0.25)
   expect(await content.getAttribute('transform')).not.toBe(beforeFrame)
 
   await expectBranchPaintInsideUsableMap(page, map, owner, branchRings, [fixture.targetName, ...fixture.branchNames])

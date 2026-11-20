@@ -22,7 +22,7 @@
     >
       <title>{{ sceneCluster.name }} continuous Warden map</title>
       <desc id="continuous-warden-map-keyboard-help">
-        Zoom continuously to reveal each system interior independently. In Move, drag an object to move it within its owning system or drop it inside another system’s frame to transfer it. Drag a system anchor or name to update its Cluster position. Use a selected system’s resize corner buttons, or focus a corner and use the arrow keys, to resize its frame.
+        Zoom continuously to reveal each system interior independently. In Move, drag an object to move it within its owning system or drop it inside another system’s frame to transfer it. Drag a system anchor or name to update its Cluster position. Use any system frame’s resize corner buttons, or focus a corner and use the arrow keys, to resize its frame.
       </desc>
       <defs>
         <radialGradient :id="`${haloGradientId}-fill`" cx="50%" cy="50%" r="55%">
@@ -44,14 +44,15 @@
         :label-obstacles="routeLabelObstacles"
         :move-enabled="mode === 'move' && !moveTargeting && !clusterMoveTargeting && !creationType && clusterAddType === null"
       />
-      <g class="cluster-map-content" :transform="cameraTransform">
-        <g class="cluster-map-items">
+      <!-- Keep the system-detail layer free of a camera-scale ancestor so live wheel zoom repaints its geometry at the final viewport scale. -->
+      <g class="cluster-map-items continuous-warden-fixed-paint">
           <g
             v-for="projection in renderedProjections"
             :key="projection.id"
             class="continuous-warden-system"
             :data-system-id="projection.id"
           >
+            <g class="continuous-warden-system-overview" :transform="cameraTransform">
             <rect
               v-if="hasPositiveFrame(displayFrameFor(projection.id))"
               class="continuous-warden-system-envelope"
@@ -94,6 +95,7 @@
               <circle class="continuous-warden-anchor-mark" r="7" />
               <circle class="continuous-warden-anchor-core" r="2" />
             </g>
+            </g>
 
             <g
               v-if="mountedDetailSystemIds.has(projection.id)"
@@ -102,7 +104,7 @@
                 'is-entering': detailMotion.progressFor(projection.id) < 1,
                 'is-exiting': !detailSystemIds.has(projection.id),
               }"
-              :transform="systemTransform(projection)"
+              :style="detailSystemPaintStyle(projection)"
               :fill-opacity="detailMotion.progressFor(projection.id)"
               :stroke-opacity="detailMotion.progressFor(projection.id)"
               :aria-hidden="detailSystemIds.has(projection.id) && detailMotion.progressFor(projection.id) >= 1 ? undefined : 'true'"
@@ -110,13 +112,13 @@
             >
               <g class="system-orbits">
                 <ellipse
-                  v-if="orbitPlacementPreviewFor(projection.id)"
+                  v-if="orbitPlacementPreviewPaint(projection)"
                   class="orbit-ring is-placement-preview"
-                  :cx="orbitPlacementPreviewFor(projection.id)?.center.x"
-                  :cy="orbitPlacementPreviewFor(projection.id)?.center.y"
-                  :rx="orbitPlacementPreviewFor(projection.id)?.radii.horizontal"
-                  :ry="orbitPlacementPreviewFor(projection.id)?.radii.vertical"
-                  :transform="`rotate(${orbitPlacementPreviewFor(projection.id)?.rotation ?? 0} ${orbitPlacementPreviewFor(projection.id)?.center.x} ${orbitPlacementPreviewFor(projection.id)?.center.y})`"
+                  :cx="orbitPlacementPreviewPaint(projection)?.center.x"
+                  :cy="orbitPlacementPreviewPaint(projection)?.center.y"
+                  :rx="orbitPlacementPreviewPaint(projection)?.rx"
+                  :ry="orbitPlacementPreviewPaint(projection)?.ry"
+                  :transform="orbitPlacementPreviewPaint(projection)?.transform"
                   aria-hidden="true"
                 />
                 <ellipse
@@ -129,11 +131,11 @@
                   role="button"
                   tabindex="0"
                   :aria-label="orbitLabel(projection.id, orbit.id)"
-                  :cx="orbit.center.x"
-                  :cy="orbit.center.y"
-                  :rx="orbit.radii.horizontal"
-                  :ry="orbit.radii.vertical"
-                  :transform="`rotate(${orbit.rotation} ${orbit.center.x} ${orbit.center.y})`"
+                  :cx="orbitPaintGeometry(projection, orbit).center.x"
+                  :cy="orbitPaintGeometry(projection, orbit).center.y"
+                  :rx="orbitPaintGeometry(projection, orbit).rx"
+                  :ry="orbitPaintGeometry(projection, orbit).ry"
+                  :transform="orbitPaintGeometry(projection, orbit).transform"
                 />
                 <template v-for="orbit in projection.orbits" :key="`${orbit.id}-edit-controls`">
                   <circle
@@ -147,9 +149,9 @@
                     tabindex="0"
                     :aria-label="`Resize horizontal radius of ${orbitLabel(projection.id, orbit.id)}`"
                     v-bind="orbitRadiusSliderValues(projection.id, orbit, 'horizontal')"
-                    :cx="orbitAxisHandlePoint(orbit, 'horizontal').x"
-                    :cy="orbitAxisHandlePoint(orbit, 'horizontal').y"
-                    :r="orbitEditHandleRadius(projection)"
+                    :cx="detailPaintPoint(projection, orbitAxisHandlePoint(orbit, 'horizontal')).x"
+                    :cy="detailPaintPoint(projection, orbitAxisHandlePoint(orbit, 'horizontal')).y"
+                    :r="orbitEditHandleRadius(projection) * detailPaintScale(projection)"
                   />
                   <circle
                     v-if="props.mode === 'move' && isSelectedOrbit(projection.id, orbit.id)"
@@ -163,9 +165,9 @@
                     :aria-label="`Resize vertical radius of ${orbitLabel(projection.id, orbit.id)}`"
                     v-bind="orbitRadiusSliderValues(projection.id, orbit, 'vertical')"
                     aria-orientation="vertical"
-                    :cx="orbitAxisHandlePoint(orbit, 'vertical').x"
-                    :cy="orbitAxisHandlePoint(orbit, 'vertical').y"
-                    :r="orbitEditHandleRadius(projection)"
+                    :cx="detailPaintPoint(projection, orbitAxisHandlePoint(orbit, 'vertical')).x"
+                    :cy="detailPaintPoint(projection, orbitAxisHandlePoint(orbit, 'vertical')).y"
+                    :r="orbitEditHandleRadius(projection) * detailPaintScale(projection)"
                   />
                   <circle
                     v-if="props.mode === 'move' && isSelectedOrbit(projection.id, orbit.id)"
@@ -180,9 +182,9 @@
                     :aria-valuemax="360"
                     :aria-valuenow="orbit.rotation"
                     :aria-valuetext="`${Math.round(orbit.rotation)} degrees`"
-                    :cx="orbitRotationHandlePoint(orbit.center, orbit.radii, orbit.rotation).x"
-                    :cy="orbitRotationHandlePoint(orbit.center, orbit.radii, orbit.rotation).y"
-                    :r="orbitEditHandleRadius(projection)"
+                    :cx="detailPaintPoint(projection, orbitRotationHandlePoint(orbit.center, orbit.radii, orbit.rotation)).x"
+                    :cy="detailPaintPoint(projection, orbitRotationHandlePoint(orbit.center, orbit.radii, orbit.rotation)).y"
+                    :r="orbitEditHandleRadius(projection) * detailPaintScale(projection)"
                   />
                   <circle
                     v-if="props.mode === 'move' && localOrbit(projection.id, orbit.id)?.hostId === null"
@@ -193,9 +195,9 @@
                     role="button"
                     tabindex="0"
                     :aria-label="`Move center of ${orbitLabel(projection.id, orbit.id)}`"
-                    :cx="orbit.center.x"
-                    :cy="orbit.center.y"
-                    :r="orbitEditHandleRadius(projection)"
+                    :cx="detailPaintPoint(projection, orbit.center).x"
+                    :cy="detailPaintPoint(projection, orbit.center).y"
+                    :r="orbitEditHandleRadius(projection) * detailPaintScale(projection)"
                   />
                 </template>
               </g>
@@ -215,7 +217,7 @@
                     'is-group-arriving': isGroupObjectArriving(object.id),
                     'is-group-departing': isGroupObjectDeparting(object.id),
                   }"
-                  :transform="objectTransform(projection.id, object)"
+                  :transform="objectTransform(projection, object)"
                   :data-object-id="object.id"
                   :data-system-id="projection.id"
                   role="button"
@@ -223,11 +225,11 @@
                   :aria-label="`Select ${object.locationKey}, ${object.name}`"
                   :aria-pressed="isSelectedObject(projection.id, object.id)"
                 >
-                  <circle class="continuous-warden-object-hit-target" r="18" />
+                  <circle class="continuous-warden-object-hit-target" :r="18 * detailPaintScale(projection)" />
                   <circle
                     v-if="localObject(projection.id, object.id)?.markerColor !== undefined"
                     class="continuous-warden-object-marker-outline"
-                    r="18"
+                    :r="18 * detailPaintScale(projection)"
                     aria-hidden="true"
                   />
                   <g
@@ -237,52 +239,62 @@
                     aria-hidden="true"
                     pointer-events="none"
                   >
-                    <circle class="system-object-selection-outline" r="15.5" />
-                    <circle class="system-object-selection-dashes" r="19.5" pathLength="100" stroke-dasharray="6 4" />
+                    <circle class="system-object-selection-outline" :r="15.5 * detailPaintScale(projection)" />
+                    <circle class="system-object-selection-dashes" :r="19.5 * detailPaintScale(projection)" pathLength="100" stroke-dasharray="6 4" />
                   </g>
                   <circle
                     v-if="isSearchLocatorFor(projection.id, object.id)"
                     class="continuous-warden-search-locator"
                     data-map-search-locator
-                    :r="searchLocatorRadius(projection)"
+                    :r="searchLocatorRadius(projection) * detailPaintScale(projection)"
                     aria-hidden="true"
                   />
                   <circle
                     v-if="objectSubtype(projection.id, object.id) === 'star'"
                     class="continuous-warden-star-halo"
-                    :r="starHaloRadius(projection)"
+                    :r="starHaloRadius(projection) * detailPaintScale(projection)"
                   />
-                  <g class="continuous-warden-object-text" :style="{ '--map-object-text-scale': detailTextScale(projection) }">
+                  <g class="continuous-warden-object-text" :style="{ '--map-object-text-scale': detailTextScale(projection) * detailPaintScale(projection) }">
                     <text
                       class="continuous-warden-object-glyph"
                       :style="{ fill: localObject(projection.id, object.id)?.markerColor }"
-                      :y="8 * detailTextScale(projection)"
+                      :y="8 * detailTextScale(projection) * detailPaintScale(projection)"
                       text-anchor="middle"
                     >
                       {{ objectGlyph(projection.id, object.id) }}
                     </text>
-                    <text class="continuous-warden-object-key" :y="31 * detailTextScale(projection)" text-anchor="middle">
+                    <text class="continuous-warden-object-key" :y="31 * detailTextScale(projection) * detailPaintScale(projection)" text-anchor="middle">
                       {{ object.locationKey }}
                     </text>
-                    <text class="continuous-warden-object-name" :y="46 * detailTextScale(projection)" text-anchor="middle">
+                    <text class="continuous-warden-object-name" :y="46 * detailTextScale(projection) * detailPaintScale(projection)" text-anchor="middle">
                       {{ object.name }}
                     </text>
                   </g>
                 </g>
               </g>
             </g>
-            <g v-if="orbitAddPreview?.systemId === projection.id" :transform="systemTransform(projection)">
+            <g
+              v-if="orbitAddPreview?.systemId === projection.id"
+              class="continuous-warden-orbit-add-preview"
+              :style="{
+                '--warden-orbit-preview-stroke-width': `${2.5 * detailPaintScale(projection)}px`,
+                '--warden-orbit-preview-dasharray': `${6 * detailPaintScale(projection)}px ${4 * detailPaintScale(projection)}px`,
+              }"
+            >
               <ellipse
                 class="orbit-creation-preview-ring"
-                :cx="orbitAddPreview.center.x"
-                :cy="orbitAddPreview.center.y"
-                :rx="orbitAddPreview.radii.horizontal"
-                :ry="orbitAddPreview.radii.vertical"
-                :transform="`rotate(${orbitAddPreview.rotation} ${orbitAddPreview.center.x} ${orbitAddPreview.center.y})`"
+                :cx="detailPaintPoint(projection, orbitAddPreview.center).x"
+                :cy="detailPaintPoint(projection, orbitAddPreview.center).y"
+                :rx="orbitAddPreview.radii.horizontal * detailPaintScale(projection)"
+                :ry="orbitAddPreview.radii.vertical * detailPaintScale(projection)"
+                :transform="orbitPaintTransform(projection, orbitAddPreview.center, orbitAddPreview.rotation)"
                 aria-hidden="true"
               />
             </g>
           </g>
+      </g>
+      <g class="cluster-map-content" :transform="cameraTransform">
+        <g class="cluster-map-items">
           <g
             v-if="transferBranchPreview"
             class="continuous-warden-transfer-preview"
@@ -849,33 +861,31 @@ function baselineDisplayedFrameInputs(): ContinuousSystemFrameInput[] {
   return inputs.map(frame => ({ ...frame, envelope: displayed.get(frame.id) ?? frame.envelope }))
 }
 const systemFrameResizeHandles = computed(() => {
-  if (props.mode !== 'move' || props.presentation || props.selectedSystemId === null
-    || props.creationType !== null || props.clusterAddType !== null || props.clusterChooserOpen
-    || props.moveTargeting || props.clusterMoveTargeting || props.standaloneImportPlacementEnabled
-    || props.systemObjectTransferPreview || props.keyboardOwnedOverlayOpen) return []
-  const projection = presentationProjections.value.find(candidate => candidate.id === props.selectedSystemId)
-  const frame = displayFrames.value.get(props.selectedSystemId)
-  if (!projection || !hasPositiveFrame(frame)) return []
+  if (props.mode !== 'move' || props.presentation) return []
   const size = SYSTEM_RESIZE_HANDLE_PIXELS / svgPixelScale.value
-  const left = viewport.value.x + viewport.value.k * frame.x
-  const top = viewport.value.y + viewport.value.k * frame.y
-  const right = viewport.value.x + viewport.value.k * (frame.x + frame.width)
-  const bottom = viewport.value.y + viewport.value.k * (frame.y + frame.height)
-  const cornerInset = Math.min(CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS, frame.width / 2, frame.height / 2)
-    * (1 - Math.SQRT1_2)
-  return [
-    { corner: 'top-left' as const, x: left + viewport.value.k * cornerInset, y: top + viewport.value.k * cornerInset },
-    { corner: 'top-right' as const, x: right - viewport.value.k * cornerInset, y: top + viewport.value.k * cornerInset },
-    { corner: 'bottom-left' as const, x: left + viewport.value.k * cornerInset, y: bottom - viewport.value.k * cornerInset },
-    { corner: 'bottom-right' as const, x: right - viewport.value.k * cornerInset, y: bottom - viewport.value.k * cornerInset },
-  ].map(handle => ({
-    ...handle,
-    systemId: projection.id,
-    systemName: projection.name,
-    x: handle.x - size / 2,
-    y: handle.y - size / 2,
-    size,
-  }))
+  return presentationProjections.value.flatMap(projection => {
+    const frame = displayFrames.value.get(projection.id)
+    if (!hasPositiveFrame(frame)) return []
+    const left = viewport.value.x + viewport.value.k * frame.x
+    const top = viewport.value.y + viewport.value.k * frame.y
+    const right = viewport.value.x + viewport.value.k * (frame.x + frame.width)
+    const bottom = viewport.value.y + viewport.value.k * (frame.y + frame.height)
+    const cornerInset = Math.min(CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS, frame.width / 2, frame.height / 2)
+      * (1 - Math.SQRT1_2)
+    return [
+      { corner: 'top-left' as const, x: left + viewport.value.k * cornerInset, y: top + viewport.value.k * cornerInset },
+      { corner: 'top-right' as const, x: right - viewport.value.k * cornerInset, y: top + viewport.value.k * cornerInset },
+      { corner: 'bottom-left' as const, x: left + viewport.value.k * cornerInset, y: bottom - viewport.value.k * cornerInset },
+      { corner: 'bottom-right' as const, x: right - viewport.value.k * cornerInset, y: bottom - viewport.value.k * cornerInset },
+    ].map(handle => ({
+      ...handle,
+      systemId: projection.id,
+      systemName: projection.name,
+      x: handle.x - size / 2,
+      y: handle.y - size / 2,
+      size,
+    }))
+  })
 })
 const presentationProjectionById = computed(() => new Map(presentationProjections.value.map(projection => [projection.id, projection] as const)))
 const hiddenSelectedObjectCount = computed(() => {
@@ -1008,11 +1018,12 @@ function isGroupObjectDeparting(objectId: string): boolean {
 }
 
 function objectTransform(
-  systemId: string,
+  projection: ContinuousWardenSystemProjection,
   object: ContinuousWardenSystemProjection['objects'][number],
 ): string {
-  const position = groupObjectPreview(systemId, object.id)?.positions.get(object.id) ?? object.position
-  return `translate(${position.x} ${position.y})`
+  const position = groupObjectPreview(projection.id, object.id)?.positions.get(object.id) ?? object.position
+  const point = detailPaintPoint(projection, position)
+  return `translate(${point.x} ${point.y})`
 }
 
 const routeMarks = computed(() => {
@@ -1205,8 +1216,7 @@ function startSystemFrameResize(
   element: SVGSVGElement,
   target: NonNullable<ReturnType<typeof systemFrameResizeTarget>>,
 ): void {
-  if (props.mode !== 'move' || props.selectedSystemId !== target.systemId
-    || props.presentation || props.creationType || props.clusterAddType || props.clusterChooserOpen
+  if (props.mode !== 'move' || props.presentation || props.creationType || props.clusterAddType || props.clusterChooserOpen
     || props.moveTargeting || props.clusterMoveTargeting || props.standaloneImportPlacementEnabled
     || props.systemObjectTransferPreview || props.keyboardOwnedOverlayOpen) return
   const projection = presentationProjections.value.find(candidate => candidate.id === target.systemId)
@@ -1324,7 +1334,7 @@ function resizeFrameWithKeyboard(
     || props.mode !== 'move' || props.presentation || props.creationType || props.clusterAddType
     || props.clusterChooserOpen || props.moveTargeting || props.clusterMoveTargeting
     || props.standaloneImportPlacementEnabled || props.systemObjectTransferPreview
-    || props.keyboardOwnedOverlayOpen || props.selectedSystemId !== target.systemId) return false
+    || props.keyboardOwnedOverlayOpen) return false
   const projection = presentationProjections.value.find(candidate => candidate.id === target.systemId)
   const baselineFrames = baselineDisplayedFrameInputs()
   const frame = baselineFrames.find(candidate => candidate.id === target.systemId)?.envelope
@@ -1377,6 +1387,64 @@ function systemIdsAtDisplayPoint(point: Point): string[] {
 function systemTransform(projection: ContinuousWardenSystemProjection): string {
   const anchor = anchorFor(projection)
   return `translate(${anchor.x - CONTINUOUS_MAP_LOCAL_ORIGIN.x * projection.scale} ${anchor.y - CONTINUOUS_MAP_LOCAL_ORIGIN.y * projection.scale}) scale(${projection.scale})`
+}
+
+/** Scene geometry is projected to SVG viewport coordinates before it reaches the detail paint layer. */
+function detailPaintScale(projection: ContinuousWardenSystemProjection): number {
+  return projection.scale * viewport.value.k
+}
+
+function detailPaintPoint(projection: ContinuousWardenSystemProjection, localPoint: Point): Point {
+  const anchor = anchorFor(projection)
+  const worldPoint = {
+    x: anchor.x + (localPoint.x - projection.localOrigin.x) * projection.scale,
+    y: anchor.y + (localPoint.y - projection.localOrigin.y) * projection.scale,
+  }
+  return {
+    x: viewport.value.x + worldPoint.x * viewport.value.k,
+    y: viewport.value.y + worldPoint.y * viewport.value.k,
+  }
+}
+
+function detailSystemPaintStyle(projection: ContinuousWardenSystemProjection) {
+  const scale = detailPaintScale(projection)
+  return {
+    '--warden-detail-selection-stroke-width': `${1.35 * scale}px`,
+  }
+}
+
+function orbitPaintTransform(
+  projection: ContinuousWardenSystemProjection,
+  localCenter: Point,
+  rotation: number,
+): string {
+  const center = detailPaintPoint(projection, localCenter)
+  return `rotate(${rotation} ${center.x} ${center.y})`
+}
+
+function orbitPaintGeometry(
+  projection: ContinuousWardenSystemProjection,
+  orbit: ContinuousWardenSystemProjection['orbits'][number],
+) {
+  const scale = detailPaintScale(projection)
+  return {
+    center: detailPaintPoint(projection, orbit.center),
+    rx: orbit.radii.horizontal * scale,
+    ry: orbit.radii.vertical * scale,
+    transform: orbitPaintTransform(projection, orbit.center, orbit.rotation),
+  }
+}
+
+function orbitPlacementPreviewPaint(projection: ContinuousWardenSystemProjection) {
+  const preview = orbitPlacementPreviewFor(projection.id)
+  if (!preview) return null
+  const scale = detailPaintScale(projection)
+  return {
+    center: detailPaintPoint(projection, preview.center),
+    rx: preview.radii.horizontal * scale,
+    ry: preview.radii.vertical * scale,
+    transform: orbitPaintTransform(projection, preview.center, preview.rotation ?? 0),
+  }
 }
 
 function anchorTransform(projection: ContinuousWardenSystemProjection): string {
@@ -4208,7 +4276,7 @@ defineExpose({
 .system-object-selection-dashes {
   fill: none;
   stroke: var(--map-selected);
-  stroke-width: 1.35;
+  stroke-width: var(--warden-detail-selection-stroke-width, 1.35px);
 }
 
 .system-object-selection-outline {
@@ -4217,8 +4285,6 @@ defineExpose({
 
 .system-object-selection-dashes {
   opacity: 0.68;
-  transform-box: fill-box;
-  transform-origin: center;
   stroke-linecap: round;
   animation:
     system-object-selection-breathe 2.8s ease-in-out infinite,
@@ -4228,12 +4294,10 @@ defineExpose({
 @keyframes system-object-selection-breathe {
   0%,
   100% {
-    transform: scale(0.99);
     opacity: 0.68;
   }
 
   50% {
-    transform: scale(1.035);
     opacity: 0.95;
   }
 }
@@ -4253,8 +4317,8 @@ defineExpose({
 .orbit-creation-preview-ring {
   fill: none;
   stroke: var(--map-selected);
-  stroke-width: 2.5;
-  stroke-dasharray: 6 4;
+  stroke-width: var(--warden-orbit-preview-stroke-width, 2.5px);
+  stroke-dasharray: var(--warden-orbit-preview-dasharray, 6 4);
   pointer-events: none;
 }
 

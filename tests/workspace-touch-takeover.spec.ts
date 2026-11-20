@@ -10,6 +10,8 @@ import {
   waitForWorkspaceSaved,
   wardenMap,
   wardenObjectMark,
+  wardenObjectLocalPosition,
+  wardenOrbitLocalGeometry,
   workspaceZoomOutput,
   type DownloadWindow,
   type ExportedMap,
@@ -17,6 +19,7 @@ import {
 
 type TouchPoint = { id: number; x: number; y: number }
 type StoredWorkspaceRecords = { current: unknown; lastValid: unknown }
+type OrbitOwnerGeometry = Awaited<ReturnType<typeof wardenOrbitLocalGeometry>>
 type OrbitPreviewScreenGeometry = {
   cx: string | null
   cy: string | null
@@ -24,6 +27,7 @@ type OrbitPreviewScreenGeometry = {
   ry: string | null
   center: { x: number; y: number }
   radius: number
+  ownerLocal: OrbitOwnerGeometry
 }
 
 async function enableTouch(page: Page) {
@@ -55,7 +59,7 @@ async function pointAtCenter(locator: import('@playwright/test').Locator): Promi
 }
 
 async function readOrbitPreviewScreenGeometry(preview: Locator): Promise<OrbitPreviewScreenGeometry> {
-  return preview.evaluate((element) => {
+  const screenGeometry = await preview.evaluate((element) => {
     if (!(element instanceof SVGEllipseElement)) throw new Error('Expected a circular Orbit preview.')
     const matrix = element.getScreenCTM()
     if (!matrix) throw new Error('Expected a rendered Orbit preview transform.')
@@ -69,6 +73,17 @@ async function readOrbitPreviewScreenGeometry(preview: Locator): Promise<OrbitPr
       radius: element.rx.baseVal.value * Math.hypot(matrix.a, matrix.b),
     }
   })
+  return { ...screenGeometry, ownerLocal: await wardenOrbitLocalGeometry(preview) }
+}
+
+async function expectOrbitOwnerGeometryToMatch(mark: Locator, expected: OrbitOwnerGeometry): Promise<void> {
+  // CTM inversion can vary by less than 0.01 owner-local units across camera matrices.
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(mark)).center.x).toBeCloseTo(expected.center.x, 2)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(mark)).center.y).toBeCloseTo(expected.center.y, 2)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(mark)).radii.horizontal)
+    .toBeCloseTo(expected.radii.horizontal, 2)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(mark)).radii.vertical)
+    .toBeCloseTo(expected.radii.vertical, 2)
 }
 
 async function expectOrbitPreviewRadiusToFollowFinger(
@@ -177,6 +192,7 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
   if (!bounds) throw new Error('The system map has no visible bounds for touch input.')
   const scene = map.locator('.cluster-map-content')
   const objectTransformBefore = await star.getAttribute('transform')
+  const objectPositionBefore = await wardenObjectLocalPosition(star)
   const viewportBefore = await scene.getAttribute('transform')
   const zoomOutput = workspaceZoomOutput(page)
   const zoomBefore = await zoomOutput.textContent()
@@ -197,7 +213,8 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
       y: Math.min(bounds.y + bounds.height - 24, firstMove.y + 36),
     }
     await dispatchTouch(cdp, 'touchStart', [firstMove, secondStart])
-    await expect(star).toHaveAttribute('transform', objectTransformBefore!)
+    await expect.poll(async () => (await wardenObjectLocalPosition(star)).x).toBeCloseTo(objectPositionBefore.x, 2)
+    await expect.poll(async () => (await wardenObjectLocalPosition(star)).y).toBeCloseTo(objectPositionBefore.y, 2)
 
     const direction = firstMove.x < mapCenterX ? 1 : -1
     const availableSpread = direction > 0
@@ -251,7 +268,8 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
     }
     await expect(zoomOutput).not.toHaveText(zoomBeforeDoubleTap)
     await page.waitForTimeout(80)
-    await expect(star).toHaveAttribute('transform', objectTransformBefore!)
+    await expect.poll(async () => (await wardenObjectLocalPosition(star)).x).toBeCloseTo(objectPositionBefore.x, 2)
+    await expect.poll(async () => (await wardenObjectLocalPosition(star)).y).toBeCloseTo(objectPositionBefore.y, 2)
     await expect(page.getByRole('toolbar', { name: 'Workspace navigation' })
       .getByRole('button', { name: 'Move', exact: true })).toHaveAttribute('aria-pressed', 'true')
   } finally {
@@ -286,9 +304,6 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
         await expect(preview).toBeVisible()
         await expect(rings).toHaveCount(0)
         const beforePinch = await readOrbitPreviewScreenGeometry(preview)
-        if (beforePinch.cx === null || beforePinch.cy === null || beforePinch.rx === null || beforePinch.ry === null) {
-          throw new Error('Expected complete Orbit preview geometry before pinch.')
-        }
 
         const direction = firstDragged.x < mapCenterX ? 1 : -1
         const secondStart = {
@@ -310,17 +325,14 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
         await expect.poll(() => scene.getAttribute('transform')).not.toBe(transformBeforePinch)
         await expect.poll(() => zoomOutput.textContent()).not.toBe(zoomBeforePinch)
         await expect(rings).toHaveCount(0)
-        await expect(preview).toHaveAttribute('cx', beforePinch.cx)
-        await expect(preview).toHaveAttribute('cy', beforePinch.cy)
-        await expect(preview).toHaveAttribute('rx', beforePinch.rx)
-        await expect(preview).toHaveAttribute('ry', beforePinch.ry)
+        await expectOrbitOwnerGeometryToMatch(preview, beforePinch.ownerLocal)
 
         // Chromium dispatches touchEnd for the departing identifier while preserving the remaining contact.
         await dispatchTouch(orbitCdp, 'touchEnd', [secondPinchMove])
         await expect(preview).toBeVisible()
         const resumed = await expectOrbitPreviewRadiusToFollowFinger(preview, firstPinchMove)
-        expect(resumed.cx).toBe(beforePinch.cx)
-        expect(resumed.cy).toBe(beforePinch.cy)
+        expect(resumed.ownerLocal.center.x).toBeCloseTo(beforePinch.ownerLocal.center.x, 2)
+        expect(resumed.ownerLocal.center.y).toBeCloseTo(beforePinch.ownerLocal.center.y, 2)
         await expect(rings).toHaveCount(0)
 
         return { firstPinchMove, resumed }
@@ -370,8 +382,8 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
       await expect(created).toHaveAttribute('cy', finalPreview.cy)
       await expect(created).toHaveAttribute('rx', finalPreview.rx)
       await expect(created).toHaveAttribute('ry', finalPreview.ry)
-      expect(canceledGesture.resumed.cx).toBe(finalPreview.cx)
-      expect(canceledGesture.resumed.cy).toBe(finalPreview.cy)
+      expect(canceledGesture.resumed.ownerLocal.center.x).toBeCloseTo(finalPreview.ownerLocal.center.x, 2)
+      expect(canceledGesture.resumed.ownerLocal.center.y).toBeCloseTo(finalPreview.ownerLocal.center.y, 2)
 
       const freshTap = await starPoint(5)
       await dispatchTouch(orbitCdp, 'touchStart', [freshTap])

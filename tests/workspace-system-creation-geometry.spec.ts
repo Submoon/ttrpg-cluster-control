@@ -15,7 +15,9 @@ import {
   waitForWorkspaceSaved,
   setWorkspaceMapMode,
   wardenMap,
+  wardenObjectLocalPosition,
   wardenObjectMark,
+  wardenOrbitLocalGeometry,
   wardenSystemMark,
   type WorldPoint,
 } from './helpers'
@@ -108,10 +110,10 @@ function mapObjects(map: Locator, systemId: string): Locator {
 async function expectObjectAt(object: Locator, expected: WorldPoint): Promise<string> {
   const transform = await object.getAttribute('transform')
   expect(transform).not.toBeNull()
-  const position = transform?.match(/^translate\(([-\d.e]+)\s+([-\d.e]+)\)$/)
-  expect(position).not.toBeNull()
-  expect(Number(position?.[1])).toBeCloseTo(expected.x, 6)
-  expect(Number(position?.[2])).toBeCloseTo(expected.y, 6)
+  const position = await wardenObjectLocalPosition(object)
+  // Matrix round trips can vary below 0.001 owner-local units, far below a rendered CSS pixel.
+  expect(position.x).toBeCloseTo(expected.x, 3)
+  expect(position.y).toBeCloseTo(expected.y, 3)
   return transform!
 }
 
@@ -192,8 +194,15 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
   clickErrors.push(await clickScenePoint(page, systemId, creationTargets[0].point))
   await expect(mapObjects(map, systemId)).toHaveCount(initialObjectCount + 2)
   await expectPlanetAddArmed(page)
-  await expect(map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"][data-orbit-id="${alphaOrbit.id}"]`))
-    .toHaveAttribute('transform', 'rotate(30 480 280)')
+  const alphaOrbitMark = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"][data-orbit-id="${alphaOrbit.id}"]`)
+  const alphaOrbitTransform = await alphaOrbitMark.getAttribute('transform')
+  const rotation = alphaOrbitTransform?.match(/^rotate\(([^ ]+)/)
+  if (!rotation) throw new Error('The new Orbit has no painted rotation.')
+  expect(Number(rotation[1])).toBe(30)
+  // CTM inversion measures the viewport-painted Orbit center in owner-local map coordinates.
+  const alphaOrbitGeometry = await wardenOrbitLocalGeometry(alphaOrbitMark, systemId)
+  expect(alphaOrbitGeometry.center.x).toBeCloseTo(480, 2)
+  expect(alphaOrbitGeometry.center.y).toBeCloseTo(280, 2)
   const completedExport = await downloadImage(page, 'image/svg+xml', 'Selected system')
   if (!completedExport.text) throw new Error('The SVG exported after direct Add has no serialized content.')
   expect(completedExport.text).toContain(alphaPlanet.name)

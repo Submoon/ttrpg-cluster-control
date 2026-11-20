@@ -75,24 +75,80 @@ test('equivalent systems glide into detail together even with different halo siz
   await nameMotion.dispose()
 })
 
-test('a Warden can resize a halo corner and save the larger regular frame', async ({ page }) => {
+test('Warden frame resize handles remain available across selection and save a larger regular frame', async ({ page }) => {
   test.setTimeout(60_000)
   await captureMapExportBlobs(page)
-  const { systemId, systemName } = await createSingleSystemWorkspace(page, {
+  const { systemName } = await createSingleSystemWorkspace(page, {
     viewport: { width: 1440, height: 900 },
   })
-  const map = wardenMap(page)
-  const frame = map.locator(`.continuous-warden-system[data-system-id="${systemId}"] .continuous-warden-system-envelope`)
-  await expect(frame).toBeVisible()
-  const before = await downloadJson(page, 'Export Jump Cluster JSON')
-  await page.getByRole('group', { name: 'Map interaction mode' })
-    .getByRole('button', { name: 'Move', exact: true }).click()
+  const base = createLocalWorkspace('Halo Resize', systemName)
+  const first = base.cluster.systems[0]!
+  const { system: second, workspace } = addStarSystem(base, 'Helion')
+  workspace.layout.systemPositions[first.id] = { x: 0.28, y: 0.5 }
+  workspace.layout.systemPositions[second.id] = { x: 0.72, y: 0.5 }
+  workspace.layout.systemFrames = { [first.id]: { left: 140, right: 140, top: 95, bottom: 95 } }
+  const restore = await reviewJumpClusterBackup(page, 'halo-resize.json', JSON.stringify(exportJumpCluster(workspace)))
+  await resolveJumpClusterRestoreReview(restore, 'confirm')
+  await expect(restore).toBeHidden()
 
+  const map = wardenMap(page)
+  const frame = map.locator(`.continuous-warden-system[data-system-id="${first.id}"] .continuous-warden-system-envelope`)
+  const resizeButtons = map.locator('button[data-system-resize-handle][data-system-id]')
+  const expectSystemResizeCorners = async (systemId: string): Promise<void> => {
+    const corners = map.locator(`button[data-system-resize-handle][data-system-id="${systemId}"]`)
+    await expect(corners).toHaveCount(4)
+    for (let index = 0; index < 4; index += 1) await expect(corners.nth(index)).toBeVisible()
+  }
+
+  const clearSystemSelection = async (): Promise<void> => {
+    const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
+    if (await hierarchyToggle.getAttribute('aria-expanded') !== 'true') await hierarchyToggle.click()
+    await page.getByRole('button', { name: 'Open Jump Cluster details', exact: true }).click()
+    await expect(map.locator('.continuous-warden-system-anchor.is-selected')).toHaveCount(0)
+    for (const name of ['Hierarchy', 'Inspect']) {
+      const toggle = page.getByRole('button', { name, exact: true })
+      if (await toggle.getAttribute('aria-expanded') === 'true') await toggle.click()
+    }
+    await fitWorkspaceMap(page)
+  }
+
+  await clearSystemSelection()
+  await expect(frame).toBeVisible()
+  const modeGroup = page.getByRole('group', { name: 'Map interaction mode' })
+  await modeGroup.getByRole('button', { name: 'Select', exact: true }).click()
+  await expect(resizeButtons).toHaveCount(0)
+  await modeGroup.getByRole('button', { name: 'Move', exact: true }).click()
+  await expect(resizeButtons).toHaveCount(8)
+  await expectSystemResizeCorners(first.id)
+  await expectSystemResizeCorners(second.id)
+
+  await map.locator('.continuous-warden-name-target')
+    .and(map.getByRole('button', { name: `Select ${second.name}`, exact: true })).click()
+  await expect(map.locator(`.continuous-warden-system-anchor[data-system-id="${second.id}"].is-selected`)).toHaveCount(1)
+  await expect(resizeButtons).toHaveCount(8)
+  await expectSystemResizeCorners(first.id)
+  await expectSystemResizeCorners(second.id)
+
+  await clearSystemSelection()
+  await modeGroup.getByRole('button', { name: 'Move', exact: true }).click()
+  await expect(resizeButtons).toHaveCount(8)
+  const before = await downloadJson(page, 'Export Jump Cluster JSON')
+
+  // Resize buttons stay keyboard-operable while the Cluster has no selected system.
   const corner = map.getByLabel(`Resize top right corner of ${systemName}`, { exact: true })
-  await expect(corner).toBeVisible()
+  const original = await readFrame(frame)
+  await corner.focus()
+  await page.keyboard.press('ArrowUp')
+  await expect.poll(async () => (await readFrame(frame)).height).toBeGreaterThan(original.height)
+  await waitForWorkspaceSaved(page)
+
+  // The screen-space target remains large enough to hit after the selection-independent preview.
   const target = await corner.boundingBox()
   if (!target) throw new Error('The frame resize corner needs a painted pointer target.')
-  const original = await readFrame(frame)
+  expect(target.width).toBeCloseTo(44, 0)
+  expect(target.height).toBeCloseTo(44, 0)
+  const originalAfterKeyboard = await readFrame(frame)
+  await expect(corner).toBeVisible()
   const handle = { x: target.x + target.width / 2, y: target.y + target.height / 2 }
   const distanceToEdge = await frame.evaluate((element, handleCenter) => {
     if (!(element instanceof SVGGeometryElement)) throw new Error('The system outline has no geometry.')
@@ -113,10 +169,10 @@ test('a Warden can resize a halo corner and save the larger regular frame', asyn
   await page.mouse.down()
   await page.mouse.move(handle.x + 22, handle.y - 18, { steps: 8 })
   const preview = await readFrame(frame)
-  expect(preview.width).toBeGreaterThan(original.width)
-  expect(preview.height).toBeGreaterThan(original.height)
-  expect(preview.x).toBeCloseTo(original.x, 4)
-  expect(preview.y + preview.height).toBeCloseTo(original.y + original.height, 4)
+  expect(preview.width).toBeGreaterThan(originalAfterKeyboard.width)
+  expect(preview.height).toBeGreaterThan(originalAfterKeyboard.height)
+  expect(preview.x).toBeCloseTo(originalAfterKeyboard.x, 4)
+  expect(preview.y + preview.height).toBeCloseTo(originalAfterKeyboard.y + originalAfterKeyboard.height, 4)
   expect(await camera.getAttribute('transform')).toBe(originalCamera)
   await page.mouse.up()
   await expect.poll(() => readFrame(frame)).toEqual(preview)
@@ -128,8 +184,8 @@ test('a Warden can resize a halo corner and save the larger regular frame', asyn
   if (before.type !== 'cluster' || after.type !== 'cluster') throw new Error('Expected complete Cluster backups.')
   expect(after.cluster).toEqual(before.cluster)
   expect(after.layout.systemPositions).toEqual(before.layout.systemPositions)
-  expect(after.layout.systemFrames?.[systemId]).toBeDefined()
-  expect(after.layout.systemFrames?.[systemId]).not.toEqual(before.layout.systemFrames?.[systemId])
+  expect(after.layout.systemFrames?.[first.id]).toBeDefined()
+  expect(after.layout.systemFrames?.[first.id]).not.toEqual(before.layout.systemFrames?.[first.id])
 
   await page.reload()
   await waitForWorkspaceStartup(page)

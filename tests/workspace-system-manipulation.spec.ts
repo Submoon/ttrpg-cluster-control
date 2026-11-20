@@ -12,6 +12,7 @@ import {
   setWorkspaceMapMode,
   wardenLocalCoordinates,
   wardenMap,
+  wardenObjectLocalPosition,
   workspaceNavigation,
 } from './helpers'
 import type { ExportedMap, ExportedObject, WorldPoint } from './helpers'
@@ -56,20 +57,20 @@ function objectMark(map: Locator, objectId: string): Locator {
 }
 
 async function objectMapPosition(map: Locator, objectId: string): Promise<WorldPoint> {
-  const transform = await objectMark(map, objectId).getAttribute('transform')
-  const match = transform?.match(/^translate\(([-\d.e]+)\s+([-\d.e]+)\)$/)
-  if (!match) throw new Error(`Could not read the rendered position of map object "${objectId}".`)
-  return { x: Number(match[1]), y: Number(match[2]) }
+  return wardenObjectLocalPosition(objectMark(map, objectId))
 }
 
 async function renderedMapObjects(map: Locator) {
-  const entries = await map.locator('.continuous-warden-object[data-object-id]').evaluateAll(marks => marks.map(mark => {
+  const rendered = await map.locator('.continuous-warden-object[data-object-id]').evaluateAll(marks => marks.map(mark => {
     const name = mark.querySelector('.continuous-warden-object-name')?.textContent
     const id = mark.getAttribute('data-object-id')
-    const point = mark.getAttribute('transform')?.match(/^translate\(([-\d.e]+)\s+([-\d.e]+)\)$/)
-    if (!name || !id || !point) throw new Error('The rendered object has no name, identity or position.')
-    return [name, { id, point: { x: Number(point[1]), y: Number(point[2]) } }] as const
+    return { name, id }
   }))
+  const entries: Array<readonly [string, { id: string; point: WorldPoint }]> = []
+  for (const { name, id } of rendered) {
+    if (!name || !id) throw new Error('The rendered object has no name or identity.')
+    entries.push([name, { id, point: await objectMapPosition(map, id) }])
+  }
   return new Map(entries)
 }
 

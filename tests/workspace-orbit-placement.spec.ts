@@ -13,6 +13,8 @@ import {
   waitForWorkspaceSaved,
   wardenLocalCoordinates,
   wardenMap,
+  wardenObjectLocalPosition,
+  wardenOrbitLocalGeometry,
   type ExportedMap,
   type WorldPoint,
 } from './helpers'
@@ -104,14 +106,20 @@ async function openPlacementLab(
 }
 
 async function objectPosition(map: Locator, id: string): Promise<WorldPoint> {
-  const transform = await map.locator(`.continuous-warden-object[data-object-id="${id}"]`).getAttribute('transform')
-  const match = transform?.match(/^translate\(([-\d.e]+)\s+([-\d.e]+)\)$/)
-  if (!match) throw new Error(`Could not read the rendered position for ${id}.`)
-  return { x: Number(match[1]), y: Number(match[2]) }
+  return wardenObjectLocalPosition(map.locator(`.continuous-warden-object[data-object-id="${id}"]`))
+}
+
+function expectLocalPositionClose(actual: WorldPoint, expected: WorldPoint): void {
+  // Matrix round trips can vary below 0.001 owner-local units, far below a rendered CSS pixel.
+  expect(actual.x).toBeCloseTo(expected.x, 3)
+  expect(actual.y).toBeCloseTo(expected.y, 3)
 }
 
 async function expectObjectPosition(map: Locator, id: string, expected: WorldPoint): Promise<void> {
-  await expect.poll(() => objectPosition(map, id)).toEqual(expected)
+  await expect.poll(async () => {
+    const actual = await objectPosition(map, id)
+    return Math.max(Math.abs(actual.x - expected.x), Math.abs(actual.y - expected.y))
+  }).toBeLessThanOrEqual(0.001)
 }
 
 /** Starts a native drag in the explicit owner's local coordinates and leaves release to the scenario. */
@@ -170,7 +178,7 @@ test('an ambiguous Orbit center drag requires a named host choice before preview
   }
 
   const primaryPosition = await objectPosition(map, primary.id)
-  expect(await objectPosition(map, overlappingHost.id)).toEqual(primaryPosition)
+  expectLocalPositionClose(await objectPosition(map, overlappingHost.id), primaryPosition)
   const ring = map.locator(`.continuous-warden-orbit-target[data-orbit-id="${orbit.id}"]`)
   await hierarchy.getByRole('treeitem', { name: 'Orbit 1 around unoccupied center, 1 object', exact: true }).click()
   await setWorkspaceMapMode(page, 'Move')
@@ -206,10 +214,11 @@ test('an ambiguous Orbit center drag requires a named host choice before preview
   await page.getByRole('option', { name: 'A, Primary Star (Star)', exact: true }).click()
   expect(await readInspectorSelection(host)).toBe('A, Primary Star (Star)')
 
-  await expect.poll(async () => Number(await ring.getAttribute('cx'))).toBe(primaryPosition.x)
-  await expect.poll(async () => Number(await ring.getAttribute('cy'))).toBe(primaryPosition.y)
-  await expect.poll(async () => Number(await ring.getAttribute('rx'))).toBe(39)
-  await expect.poll(async () => Number(await ring.getAttribute('ry'))).toBe(60)
+  // CTM inversion recovers owner-local geometry within subpixel rounding.
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.x).toBeCloseTo(primaryPosition.x, 2)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.y).toBeCloseTo(primaryPosition.y, 2)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal).toBeCloseTo(39, 2)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.vertical).toBeCloseTo(60, 2)
   await expectObjectPosition(map, passenger.id, { x: primaryPosition.x, y: primaryPosition.y + 60 })
   await expectObjectPosition(map, nestedObject.id, { x: primaryPosition.x + 46, y: primaryPosition.y + 60 })
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(initial)
@@ -289,14 +298,8 @@ test('attaching an implicit-radius free Orbit preserves both free Orbit geometri
 
   const sourceRing = map.locator(`.continuous-warden-orbit-target[data-orbit-id="${orbit.id}"]`)
   const siblingRing = map.locator(`.continuous-warden-orbit-target[data-orbit-id="${sibling.id}"]`)
-  const sourceRadii = {
-    horizontal: Number(await sourceRing.getAttribute('rx')),
-    vertical: Number(await sourceRing.getAttribute('ry')),
-  }
-  const siblingRadii = {
-    horizontal: Number(await siblingRing.getAttribute('rx')),
-    vertical: Number(await siblingRing.getAttribute('ry')),
-  }
+  const sourceRadii = (await wardenOrbitLocalGeometry(sourceRing, systemId)).radii
+  const siblingRadii = (await wardenOrbitLocalGeometry(siblingRing, systemId)).radii
   const hostPosition = await objectPosition(map, oldPlanet.id)
   const neighborPosition = await objectPosition(map, neighbor.id)
 
@@ -307,10 +310,12 @@ test('attaching an implicit-radius free Orbit preserves both free Orbit geometri
   const centerHandle = map.locator(`.continuous-warden-orbit-center-handle[data-orbit-id="${orbit.id}"]`)
   await expect(centerHandle).toBeVisible()
   await beginCenterDrag(page, systemId, centerHandle, hostPosition)
-  await expect.poll(async () => Number(await sourceRing.getAttribute('cx'))).toBeCloseTo(hostPosition.x, 4)
-  await expect.poll(async () => Number(await sourceRing.getAttribute('cy'))).toBeCloseTo(hostPosition.y, 4)
-  await expect.poll(async () => Number(await sourceRing.getAttribute('rx'))).toBe(sourceRadii.horizontal)
-  await expect.poll(async () => Number(await sourceRing.getAttribute('ry'))).toBe(sourceRadii.vertical)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(sourceRing, systemId)).center.x).toBeCloseTo(hostPosition.x, 2)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(sourceRing, systemId)).center.y).toBeCloseTo(hostPosition.y, 2)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(sourceRing, systemId)).radii.horizontal)
+    .toBeCloseTo(sourceRadii.horizontal, 2)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(sourceRing, systemId)).radii.vertical)
+    .toBeCloseTo(sourceRadii.vertical, 2)
   await expectObjectPosition(map, passenger.id, { x: hostPosition.x, y: hostPosition.y + sourceRadii.vertical })
   await expectObjectPosition(map, nestedObject.id, { x: hostPosition.x + 46, y: hostPosition.y + sourceRadii.vertical })
   await expectObjectPosition(map, neighbor.id, neighborPosition)
@@ -353,10 +358,12 @@ test('attaching an implicit-radius free Orbit preserves both free Orbit geometri
   const restoredMap = wardenMap(page).locator(`.continuous-warden-system[data-system-id="${systemId}"]`)
   const restoredSourceRing = restoredMap.locator(`.continuous-warden-orbit-target[data-orbit-id="${orbit.id}"]`)
   const restoredSiblingRing = restoredMap.locator(`.continuous-warden-orbit-target[data-orbit-id="${sibling.id}"]`)
-  await expect(restoredSourceRing).toHaveAttribute('rx', String(sourceRadii.horizontal))
-  await expect(restoredSourceRing).toHaveAttribute('ry', String(sourceRadii.vertical))
-  await expect(restoredSiblingRing).toHaveAttribute('rx', String(siblingRadii.horizontal))
-  await expect(restoredSiblingRing).toHaveAttribute('ry', String(siblingRadii.vertical))
+  const restoredSourceRadii = (await wardenOrbitLocalGeometry(restoredSourceRing, systemId)).radii
+  const restoredSiblingRadii = (await wardenOrbitLocalGeometry(restoredSiblingRing, systemId)).radii
+  expect(restoredSourceRadii.horizontal).toBeCloseTo(sourceRadii.horizontal, 2)
+  expect(restoredSourceRadii.vertical).toBeCloseTo(sourceRadii.vertical, 2)
+  expect(restoredSiblingRadii.horizontal).toBeCloseTo(siblingRadii.horizontal, 2)
+  expect(restoredSiblingRadii.vertical).toBeCloseTo(siblingRadii.vertical, 2)
   await expectObjectPosition(restoredMap, neighbor.id, neighborPosition)
   expect(await downloadJson(page, 'Export star system JSON')).toEqual(committed)
 })

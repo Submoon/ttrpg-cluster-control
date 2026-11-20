@@ -3,7 +3,7 @@ import {
   captureMapExportBlobs, centerWorkspaceSelection, clickWardenSystemPoint, createSingleSystemWorkspace,
   dockAction, downloadJson, hideWorkspaceInspector, measureMouseDrag, openWorkspaceHierarchy,
   quitSystemAdd, selectInspectorOption, setWorkspaceMapMode, waitForWorkspaceSaved,
-  wardenLocalCoordinates, wardenMap, wardenObjectMark, workspaceZoomControls, type WorldPoint,
+  wardenLocalCoordinates, wardenMap, wardenObjectMark, wardenOrbitLocalGeometry, workspaceZoomControls, type WorldPoint,
 } from './helpers'
 
 
@@ -152,17 +152,16 @@ test('the Warden can preview and confirm an unoccupied Orbit center move without
   const orbitItem = hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center, 0 objects/ })
   await orbitItem.click()
   const ring = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"][data-orbit-id="${orbitId}"]`)
-  const initialCenter = {
-    x: Number(await ring.getAttribute('cx')),
-    y: Number(await ring.getAttribute('cy')),
-  }
+  const initialGeometry = await wardenOrbitLocalGeometry(ring, systemId)
+  const initialCenter = initialGeometry.center
+  const initialVerticalRadius = initialGeometry.radii.vertical
   await setWorkspaceMapMode(page, 'Move')
   const centerHandle = map.locator(`.continuous-warden-orbit-center-handle[data-system-id="${systemId}"][data-orbit-id="${orbitId}"]`)
   await centerHandle.focus()
   await page.keyboard.press('ArrowRight')
-  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.x)
     .toBeCloseTo(initialCenter.x, 2)
-  await expect.poll(async () => Number(await ring.getAttribute('cy')))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.y)
     .toBeCloseTo(initialCenter.y, 2)
   await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
   const controls = page.getByRole('group', { name: 'Orbit center placement controls' })
@@ -175,9 +174,9 @@ test('the Warden can preview and confirm an unoccupied Orbit center move without
 
   const clickedPoint = await clickWardenSystemPoint(page, systemId, { x: 0.69, y: 0.61 })
   await expect(map).toBeFocused()
-  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.x)
     .toBeCloseTo(64 + clickedPoint.x * 832, 1)
-  await expect.poll(async () => Number(await ring.getAttribute('cy')))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.y)
     .toBeCloseTo(72 + clickedPoint.y * 416, 1)
   const previewExport = await downloadJson(page, 'Export star system JSON')
   expect(previewExport.system?.orbits.find(candidate => candidate.hostId === null)?.center)
@@ -185,13 +184,13 @@ test('the Warden can preview and confirm an unoccupied Orbit center move without
 
   await map.focus()
   await page.keyboard.press('ArrowRight')
-  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.x)
     .toBeCloseTo(65 + clickedPoint.x * 832, 1)
   await controls.getByRole('button', { name: 'Cancel preview', exact: true }).click()
   await expect(map).toBeFocused()
-  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.x)
     .toBeCloseTo(initialCenter.x, 2)
-  await expect.poll(async () => Number(await ring.getAttribute('cy')))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.y)
     .toBeCloseTo(initialCenter.y, 2)
   const canceledExport = await downloadJson(page, 'Export star system JSON')
   expect(canceledExport.system?.orbits.find(candidate => candidate.hostId === null)?.center)
@@ -201,7 +200,7 @@ test('the Warden can preview and confirm an unoccupied Orbit center move without
   const confirmedTarget = await clickWardenSystemPoint(page, systemId, { x: 0.72, y: 0.58 })
   await controls.getByRole('button', { name: 'Confirm center position', exact: true }).click()
   await expect(map).toBeFocused()
-  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.x)
     .toBeCloseTo(64 + confirmedTarget.x * 832, 1)
   const confirmedExport = await downloadJson(page, 'Export star system JSON')
   const confirmedCenter = confirmedExport.system?.orbits.find(candidate => candidate.hostId === null)?.center
@@ -214,8 +213,9 @@ test('the Warden can preview and confirm an unoccupied Orbit center move without
   await controls.getByRole('button', { name: 'Confirm center position', exact: true }).click()
   await expect(page.getByLabel('Horizontal radius', { exact: true })).toHaveValue('240')
   await page.getByRole('button', { name: 'Save Orbit' }).click()
-  await expect(ring).toHaveAttribute('rx', '240')
-  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(240, 2)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.x)
     .toBeCloseTo(64 + applyDraftTarget.x * 832, 1)
 
   await page.getByRole('button', { name: 'Edit Orbit', exact: true }).click()
@@ -224,18 +224,21 @@ test('the Warden can preview and confirm an unoccupied Orbit center move without
   const discardDraftTarget = await clickWardenSystemPoint(page, systemId, { x: 0.34, y: 0.68 })
   await controls.getByRole('button', { name: 'Confirm center position', exact: true }).click()
   await page.getByRole('button', { name: 'Discard changes' }).click()
-  await expect(ring).toHaveAttribute('rx', '240')
-  await expect(ring).not.toHaveAttribute('ry', '250')
-  await expect.poll(async () => Number(await ring.getAttribute('cx')))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(240, 2)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.vertical)
+    .toBeCloseTo(initialVerticalRadius, 2)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.x)
     .toBeCloseTo(64 + discardDraftTarget.x * 832, 1)
 
   await waitForWorkspaceSaved(page)
   await page.reload()
   await inspectSystem(page, systemName)
   const restoredRing = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"][data-orbit-id="${orbitId}"]`)
-  await expect.poll(async () => Number(await restoredRing.getAttribute('cx')))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(restoredRing, systemId)).center.x)
     .toBeCloseTo(64 + discardDraftTarget.x * 832, 1)
-  await expect(restoredRing).toHaveAttribute('rx', '240')
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(restoredRing, systemId)).radii.horizontal)
+    .toBeCloseTo(240, 2)
 })
 
 detachedOrbitJourneyTest('the Warden can detach a hosted Orbit and move its unoccupied center', async ({ detachedOrbitPage: page }) => {
@@ -250,14 +253,9 @@ detachedOrbitJourneyTest('the Warden can detach a hosted Orbit and move its unoc
   const systemId = system.id
   const map = wardenMap(page).locator(`.continuous-warden-system[data-system-id="${systemId}"]`)
   const hostedRing = map.locator(`.continuous-warden-orbit-target[data-orbit-id="${orbitId}"]`)
-  const originalCenter = {
-    x: Number(await hostedRing.getAttribute('cx')),
-    y: Number(await hostedRing.getAttribute('cy')),
-  }
-  const originalRadii = {
-    horizontal: Number(await hostedRing.getAttribute('rx')),
-    vertical: Number(await hostedRing.getAttribute('ry')),
-  }
+  const originalOrbitGeometry = await wardenOrbitLocalGeometry(hostedRing, systemId)
+  const originalCenter = originalOrbitGeometry.center
+  const originalRadii = originalOrbitGeometry.radii
   const angleBeforeDetach = await ellipticalOrbitAngle(map, orbitId, nix.id)
   await hierarchy.getByRole('treeitem', { name: /Orbit 1 around Iria, 1 object/ }).click()
   await page.getByRole('button', { name: 'Detach Orbit', exact: true }).click()
@@ -268,13 +266,12 @@ detachedOrbitJourneyTest('the Warden can detach a hosted Orbit and move its unoc
   await expect(hierarchy.getByRole('treeitem', { name: /Orbit 1 around Iria, 0 objects/ }))
     .toBeVisible()
   await expect(page.getByRole('button', { name: 'Detach Orbit', exact: true })).toHaveCount(0)
-  await expect(detachedRing).toHaveAttribute('rx', String(originalRadii.horizontal))
-  await expect(detachedRing).toHaveAttribute('ry', String(originalRadii.vertical))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(detachedRing, systemId)).radii.horizontal)
+    .toBeCloseTo(originalRadii.horizontal, 2)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(detachedRing, systemId)).radii.vertical)
+    .toBeCloseTo(originalRadii.vertical, 2)
 
-  const detachedCenter = {
-    x: Number(await detachedRing.getAttribute('cx')),
-    y: Number(await detachedRing.getAttribute('cy')),
-  }
+  const detachedCenter = (await wardenOrbitLocalGeometry(detachedRing, systemId)).center
   expect(Math.hypot(
     detachedCenter.x - originalCenter.x,
     detachedCenter.y - originalCenter.y,
@@ -293,10 +290,10 @@ detachedOrbitJourneyTest('the Warden can detach a hosted Orbit and move its unoc
   const movedCenter = { x: detachedCenter.x + 256, y: detachedCenter.y + 128 }
   const deliveredCenter = await dragCenterTo(page, systemId, centerHandle, movedCenter)
   await expect.poll(async () =>
-    Math.abs(Number(await detachedRing.getAttribute('cx')) - deliveredCenter.x),
+    Math.abs((await wardenOrbitLocalGeometry(detachedRing, systemId)).center.x - deliveredCenter.x),
   ).toBeLessThan(0.01)
   await expect.poll(async () =>
-    Math.abs(Number(await detachedRing.getAttribute('cy')) - deliveredCenter.y),
+    Math.abs((await wardenOrbitLocalGeometry(detachedRing, systemId)).center.y - deliveredCenter.y),
   ).toBeLessThan(0.01)
   await expect.poll(async () => nixMark.getAttribute('transform'))
     .not.toBe(objectBeforeMove)
@@ -308,10 +305,7 @@ detachedOrbitJourneyTest('the Warden can detach a hosted Orbit and move its unoc
   const exportedSystem = exported.system
   if (!exportedSystem) throw new Error('The exported file does not contain a star system.')
   const exportedDetachedOrbit = exportedSystem.orbits.find(orbit => orbit.hostId === null)
-  const persistedCenter = {
-    x: Number(await detachedRing.getAttribute('cx')),
-    y: Number(await detachedRing.getAttribute('cy')),
-  }
+  const persistedCenter = (await wardenOrbitLocalGeometry(detachedRing, systemId)).center
   expect(exportedDetachedOrbit?.order).toBe(1)
   expect(exportedDetachedOrbit?.center?.x).toBeCloseTo((persistedCenter.x - 64) / 832, 5)
   expect(exportedDetachedOrbit?.center?.y).toBeCloseTo((persistedCenter.y - 72) / 416, 5)
@@ -324,10 +318,10 @@ detachedOrbitJourneyTest('the Warden can detach a hosted Orbit and move its unoc
   const restoredMap = wardenMap(page).locator(`.continuous-warden-system[data-system-id="${systemId}"]`)
   const restoredRing = restoredMap.locator(`.continuous-warden-orbit-target[data-orbit-id="${orbitId}"]`)
   await expect.poll(async () =>
-    Math.abs(Number(await restoredRing.getAttribute('cx')) - persistedCenter.x),
+    Math.abs((await wardenOrbitLocalGeometry(restoredRing, systemId)).center.x - persistedCenter.x),
   ).toBeLessThan(0.01)
   await expect.poll(async () =>
-    Math.abs(Number(await restoredRing.getAttribute('cy')) - persistedCenter.y),
+    Math.abs((await wardenOrbitLocalGeometry(restoredRing, systemId)).center.y - persistedCenter.y),
   ).toBeLessThan(0.01)
   await expect(restoredHierarchy.getByRole('treeitem', { name: /Orbit 1 around Iria, 0 objects/ }))
     .toBeVisible()

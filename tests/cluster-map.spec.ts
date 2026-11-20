@@ -4,7 +4,7 @@ import {
   hideWorkspaceInspector, measureMouseDrag, openWorkspaceHierarchy,
   openWorkspaceZoomNavigation, quitSystemAdd, selectInspectorOption, setWorkspaceMapMode, snapshotSvgCoordinates,
   waitForWorkspaceSaved, waitForWorkspaceStartup, wardenMap, wardenObjectMark, wardenSystemMark,
-  workspaceZoomControls, workspaceZoomOutput, type ExportedMap,
+  wardenOrbitLocalGeometry, workspaceZoomControls, workspaceZoomOutput, type ExportedMap,
 } from './helpers'
 
 async function hidePanels(page: Page): Promise<void> {
@@ -170,12 +170,14 @@ campaignTest.describe('prepared campaign map layout', () => {
     await hideWorkspaceInspector(page)
     await setWorkspaceMapMode(page, 'Move')
     const angle = await orbitalAngle(host, orbiting)
-    const initialRadius = Number(await orbit.getAttribute('rx'))
-    expect(initialRadius).toBe(112)
+    const initialRadius = (await wardenOrbitLocalGeometry(orbit, system.id)).radii.horizontal
+    expect(initialRadius).toBeCloseTo(112, 2)
     await resizePaintedOrbit(page, orbit, 153 / initialRadius)
-    await expect.poll(async () => Number(await orbit.getAttribute('rx'))).toBeGreaterThan(initialRadius)
-    const resizedRadius = Number(await orbit.getAttribute('rx'))
-    await expect(orbit).toHaveAttribute('ry', String(resizedRadius))
+    await expect.poll(async () => (await wardenOrbitLocalGeometry(orbit, system.id)).radii.horizontal)
+      .toBeGreaterThan(initialRadius)
+    const resizedRadii = (await wardenOrbitLocalGeometry(orbit, system.id)).radii
+    const resizedRadius = resizedRadii.horizontal
+    expect(resizedRadii.vertical).toBeCloseTo(resizedRadius, 2)
     expect(Math.abs(await orbitalAngle(host, orbiting) - angle)).toBeLessThan(.02)
     await (await dockAction(page, 'Add orbit')).click()
     const controls = page.getByRole('group', { name: 'Orbit creation controls', exact: true })
@@ -216,7 +218,8 @@ campaignTest.describe('prepared campaign map layout', () => {
     await expect(map.locator('.cluster-map-content')).not.toHaveAttribute('transform', beforePan ?? '')
     await waitForWorkspaceSaved(page)
     const saved = await downloadJson(page, 'Export Jump Cluster JSON')
-    expect(radii(saved, primaryOrbit.id)).toEqual({ horizontal: resizedRadius, vertical: resizedRadius })
+    expect(radii(saved, primaryOrbit.id).horizontal).toBeCloseTo(resizedRadii.horizontal, 2)
+    expect(radii(saved, primaryOrbit.id).vertical).toBeCloseTo(resizedRadii.vertical, 2)
     expect(radii(saved, second.id).horizontal).toBe(secondInitial + 401)
     await page.reload()
     await waitForWorkspaceStartup(page)
@@ -225,8 +228,10 @@ campaignTest.describe('prepared campaign map layout', () => {
     await centerWorkspaceSelection(page)
     await hidePanels(page)
     expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(saved)
-    await expect(orbit).toHaveAttribute('rx', String(resizedRadius))
-    await expect(secondRing).toHaveAttribute('rx', String(secondInitial + 401))
+    await expect.poll(async () => (await wardenOrbitLocalGeometry(orbit, system.id)).radii.horizontal)
+      .toBeCloseTo(resizedRadius, 2)
+    await expect.poll(async () => (await wardenOrbitLocalGeometry(secondRing, system.id)).radii.horizontal)
+      .toBeCloseTo(secondInitial + 401, 2)
     expect(Math.abs(await orbitalAngle(host, orbiting) - angle)).toBeLessThan(.02)
   })
 })
