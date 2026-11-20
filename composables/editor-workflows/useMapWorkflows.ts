@@ -13,12 +13,14 @@ import {
   moveOrbitCenter,
   normalizeOrbitRotation,
   replaceWorkspaceSystem,
+  setWorkspaceSystemFrame,
   updateWorkspaceObject,
   type LocalWorkspace,
   type CatalogueSubtype,
   type ObjectPlacement,
   type OrbitRadii,
   type Point,
+  type SystemFrameInsets,
 } from '../../domain/workspace'
 import type {
   OrbitAdjustmentGeometry,
@@ -457,6 +459,7 @@ export function useMapWorkflows({
     objectId: string,
     position: Point,
     expectedWorkspace?: LocalWorkspace,
+    frameInsets?: SystemFrameInsets,
   ): Promise<void> {
     if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
@@ -539,8 +542,34 @@ export function useMapWorkflows({
           if (!latestSystem || !latestObject) throw new Error('The selected map object is no longer available.')
           const latestBlocked = plan.changes.map(placementCommand).find(isEntityCommandBlocked)
           if (latestBlocked) throw new Error('Resolve the Inspector draft before changing this object or its placement.')
-          return applySelectedObjectTranslation(latest, systemId, plan)
+          const moved = applySelectedObjectTranslation(latest, systemId, plan)
+          return frameInsets ? setWorkspaceSystemFrame(moved, systemId, frameInsets) : moved
         },
+      })
+      throwIfRejected(result)
+      if (result.status === 'applied') await result.durable
+      editorError.value = ''
+    } catch (error) {
+      editorError.value = errorText(error)
+    }
+  }
+
+  /** Commits one regular frame resize against the snapshot used by the corner gesture. */
+  async function resizeSystemFrame(
+    systemId: string,
+    insets: SystemFrameInsets,
+    expectedWorkspace: LocalWorkspace,
+  ): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
+    const current = workspace.value
+    const system = current?.cluster.systems.find(candidate => candidate.id === systemId)
+    const isCurrent = () => workspace.value === current && store.activeView === 'cluster' && store.mapMode === 'move'
+    if (!current || !system || toRaw(current) !== toRaw(expectedWorkspace) || !isCurrent()) return
+    try {
+      const result = await mutations.execute({
+        action: { kind: 'resize', label: `Resize frame for ${system.name}`, target: { kind: 'system', id: systemId } },
+        isCurrent,
+        prepare: latest => setWorkspaceSystemFrame(latest, systemId, insets),
       })
       throwIfRejected(result)
       if (result.status === 'applied') await result.durable
@@ -1252,6 +1281,7 @@ export function useMapWorkflows({
     moveSystem,
     moveMapObject,
     moveMapObjectInSystem,
+    resizeSystemFrame,
     addMapObjectInSystem,
     placeMapObjectInOrbit,
     rotateMapObject,

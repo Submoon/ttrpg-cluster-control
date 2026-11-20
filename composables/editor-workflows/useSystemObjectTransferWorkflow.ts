@@ -1,11 +1,18 @@
 /** Coordinates guarded review, map ownership, and one reversible transfer publication. */
-import { computed, readonly, ref, shallowRef, watch } from 'vue'
+import { computed, readonly, ref, shallowRef, toRaw, watch } from 'vue'
 import type { Ref } from 'vue'
-import type { LocalWorkspace, SystemObjectTransferPlacement } from '../../domain/workspace'
-import { applySystemObjectTransfer, prepareSystemObjectTransfer, resolveSystemObjectBranch } from '../../domain/workspace'
+import type { LocalWorkspace, SystemObjectTransferPlacement, SystemObjectTransferReview } from '../../domain/workspace'
+import {
+  applySystemObjectTransfer,
+  prepareSystemObjectTransfer,
+  resolveSystemObjectBranch,
+  setWorkspaceSystemFrame,
+  workspaceSystemFrame,
+} from '../../domain/workspace'
 import { useSystemObjectTransferDraft } from '../useSystemObjectTransferDraft'
 import type { SystemObjectTransferAcceptance } from '../useSystemObjectTransferDraft'
 import type {
+  SystemObjectTransferDrop,
   SystemObjectTransferIntent,
   SystemObjectTransferMapPlacementLease,
   SystemObjectTransferMapPreview,
@@ -34,6 +41,7 @@ interface ActiveTransferSession {
   confirming: Ref<boolean>
   error: Ref<string | null>
   mapPlacementOwner: TransferMapPlacementOwner | null
+  drop?: SystemObjectTransferDrop
 }
 
 export interface SystemObjectTransferWorkflowOptions {
@@ -42,6 +50,13 @@ export interface SystemObjectTransferWorkflowOptions {
   history: WorkspaceHistoryCoordinator
   /** Resolve existing Inspector or related drafts before the transfer captures applied state. */
   resolveBeforeTransfer(): Promise<boolean>
+  resolveBeforeDrop?(
+    review: SystemObjectTransferReview,
+    ownsDrop: () => boolean,
+    onDraftApplied: () => void,
+  ): Promise<boolean>
+  canApplyDrop?(review: SystemObjectTransferReview): boolean
+  captureDropInspection?(review: SystemObjectTransferReview): (() => void) | undefined
   /** Settles a pending map adjustment before the transfer session captures its workspace and revision. */
   beforeWorkspaceOperation(): Promise<boolean>
   /** Moves and frames the chosen destination map before this transfer acquires map input. */
@@ -164,26 +179,85 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       if (!source || !root || !resolveSystemObjectBranch(source, rootObjectId)) {
         throw new Error('The selected map object no longer exists in its source system.')
       }
-      const draft = useSystemObjectTransferDraft(() => {
-        const latest = options.workspace.value
-        if (!latest) throw new Error('There is no applied workspace to change.')
-        return latest
-      }, sourceSystemId, rootObjectId)
-      activeSession.value = {
-        id: nextSessionId++,
-        sourceSystemId,
-        rootObjectId,
-        workspaceReference: current,
-        appliedRevision: options.appliedRevision.value,
-        draft,
-        open: ref(true),
-        placingOnMap: ref(false),
-        confirming: ref(false),
-        error: ref(null),
-        mapPlacementOwner: null,
-      }
+      activeSession.value = createSession(current, sourceSystemId, rootObjectId)
     } catch (error) {
       lastError.value = error instanceof Error ? error.message : 'The transfer review could not be opened.'
+    }
+  }
+
+  function createSession(
+    current: LocalWorkspace,
+    sourceSystemId: string,
+    rootObjectId: string,
+    drop?: SystemObjectTransferDrop,
+  ): ActiveTransferSession {
+    const draft = useSystemObjectTransferDraft(() => {
+      const latest = options.workspace.value
+      if (!latest) throw new Error('There is no applied workspace to change.')
+      return latest
+    }, sourceSystemId, rootObjectId)
+    return {
+      id: nextSessionId++,
+      sourceSystemId,
+      rootObjectId,
+      workspaceReference: current,
+      appliedRevision: options.appliedRevision.value,
+      draft,
+      open: ref(!drop),
+      placingOnMap: ref(false),
+      confirming: ref(false),
+      error: ref(null),
+      mapPlacementOwner: null,
+      drop,
+    }
+  }
+
+  async function dropObject(drop: SystemObjectTransferDrop): Promise<void> {
+    const workspaceSnapshot = options.workspace.value
+    if (activeSession.value || !workspaceSnapshot || toRaw(workspaceSnapshot) !== toRaw(drop.workspaceSnapshot)) return
+    const epoch = ++openGeneration
+    const { sourceSystemId, rootObjectId, destinationSystemId, placement } = drop
+    const request = { sourceSystemId, rootObjectId, destinationSystemId, placement }
+    const ownsContext = (): boolean => epoch === openGeneration && activeSession.value === null
+      && options.workspace.value?.id === workspaceSnapshot.id
+      && options.workspace.value.cluster.id === workspaceSnapshot.cluster.id
+    let admittedWorkspace = workspaceSnapshot
+    let admittedRevision = options.appliedRevision.value
+    const ownsDrop = (): boolean => ownsContext()
+      && options.workspace.value === admittedWorkspace && options.appliedRevision.value === admittedRevision
+    const onDraftApplied = (): void => {
+      const current = options.workspace.value
+      const revision = options.appliedRevision.value
+      if (!current || !ownsContext() || revision !== admittedRevision + 1) return
+      admittedWorkspace = current
+      admittedRevision = revision
+    }
+    lastError.value = null
+    try {
+      if (!await options.beforeWorkspaceOperation() || !ownsDrop()) return
+      const preview = prepareSystemObjectTransfer(workspaceSnapshot, request)
+      if (options.resolveBeforeDrop && !await options.resolveBeforeDrop(preview, ownsDrop, onDraftApplied)) return
+      if (!ownsDrop()) return
+      // An explicitly applied draft may have published during the guard. Seed the review against
+      // the resulting workspace and let normal admission revalidate the chosen destination.
+      const next = createSession(admittedWorkspace, sourceSystemId, rootObjectId, drop)
+      next.draft.selectDestination(destinationSystemId)
+      if (placement.kind === 'orbit') next.draft.chooseOrbitPlacement(placement.orbitId, placement.angle)
+      else next.draft.chooseFreePlacement({ x: placement.x, y: placement.y })
+      const review = next.draft.review.value
+      if (!review) throw new Error(next.draft.error.value ?? 'The dropped position is no longer available.')
+      activeSession.value = next
+      if (review.keyConflicts.length || review.detachedRouteAttachments.length || review.clearedStationLinks.length) {
+        next.open.value = true
+      } else {
+        const result = await apply(next.id)
+        if (activeSession.value === next && result.status !== 'applied') {
+          cancel(next.id)
+          if (result.status === 'rejected') lastError.value = result.message
+        }
+      }
+    } catch (error) {
+      if (ownsDrop()) lastError.value = error instanceof Error ? error.message : 'The dropped object could not change systems.'
     }
   }
 
@@ -374,17 +448,23 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     if (current.confirming.value) return rejected('busy', 'The transfer is already being applied.')
     if (current.placingOnMap.value) return rejected('busy', 'Finish or cancel map placement before applying the transfer.')
     let acceptance: SystemObjectTransferAcceptance
+    let dropReview: SystemObjectTransferReview | undefined
     try {
       acceptance = current.draft.captureAcceptance()
+      if (current.drop) dropReview = prepareSystemObjectTransfer(acceptance.workspaceReference, acceptance.request)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The transfer review is not valid.'
       setSessionError(current, message)
       return rejected(current.draft.isStale.value ? 'stale' : 'invalid', message)
     }
     const destinationSystemId = acceptance.request.destinationSystemId
-    if (options.hasDestinationGeometryDraft?.(destinationSystemId)) {
-      setSessionError(current, destinationDraftMessage)
-      return rejected('unavailable', destinationDraftMessage)
+    const canApplyToDestination = (): boolean => dropReview
+      ? options.canApplyDrop?.(dropReview) ?? true
+      : !options.hasDestinationGeometryDraft?.(destinationSystemId)
+    if (!canApplyToDestination()) {
+      const message = dropReview ? 'Finish the Inspector draft affected by this transfer first.' : destinationDraftMessage
+      setSessionError(current, message)
+      return rejected('unavailable', message)
     }
     const workspace = options.workspace.value
     const revision = options.appliedRevision.value
@@ -407,11 +487,12 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
 
     current.confirming.value = true
     current.error.value = null
+    const restoreDropInspection = dropReview ? options.captureDropInspection?.(dropReview) : undefined
     const isCurrent = (): boolean => activeSession.value === current
       && current.draft.isAcceptanceCurrent(acceptance)
       && options.workspace.value === acceptance.workspaceReference
       && options.appliedRevision.value === revision
-      && !options.hasDestinationGeometryDraft?.(destinationSystemId)
+      && canApplyToDestination()
       && (!mapOwnerAtApply
         || options.isDestinationMapOwnerCurrent(mapOwnerAtApply.destinationSystemId, mapOwnerAtApply.mapOwner))
     const root = currentSystem(workspace, current.sourceSystemId)?.objects
@@ -428,7 +509,15 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
         // The shared history pipeline prepares against a detached snapshot. `isCurrent` binds
         // that snapshot to the exact reviewed owner, revision, and input generation.
         if (!isCurrent()) throw new Error('The transfer review changed before it could be applied.')
-        return applySystemObjectTransfer(latest, acceptance.request, acceptance.locationKeys)
+        let next = applySystemObjectTransfer(latest, acceptance.request, acceptance.locationKeys)
+        if (current.drop?.sourceFrameInsets && !workspaceSystemFrame(next, current.sourceSystemId)) {
+          next = setWorkspaceSystemFrame(next, current.sourceSystemId, current.drop.sourceFrameInsets)
+        }
+        if (current.drop?.destinationFrameInsets && acceptance.request.destinationSystemId === current.drop.destinationSystemId
+          && !workspaceSystemFrame(next, acceptance.request.destinationSystemId)) {
+          next = setWorkspaceSystemFrame(next, acceptance.request.destinationSystemId, current.drop.destinationFrameInsets)
+        }
+        return next
       },
     }
 
@@ -442,7 +531,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     if (result.status === 'applied') {
       if (activeSession.value === current && current.draft.inputGeneration.value === acceptance.inputGeneration) {
         try {
-          options.onApplied?.({
+          if (!current.drop) options.onApplied?.({
             rootObjectId: current.rootObjectId,
             sourceSystemId: current.sourceSystemId,
             destinationSystemId: acceptance.request.destinationSystemId,
@@ -453,6 +542,11 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
         current.draft.cancel()
         activeSession.value = null
         pendingMapPlacement.value = null
+        try {
+          restoreDropInspection?.()
+        } catch {
+          // Inspection recovery is separate from an already-published transfer.
+        }
       }
       return result
     }
@@ -548,6 +642,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     mapPreview,
     lastError: readonly(lastError),
     handleIntent,
+    dropObject,
     ownsMapPlacement,
     previewMapPlacement,
     completeMapPlacement,

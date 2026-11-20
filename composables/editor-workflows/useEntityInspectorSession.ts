@@ -601,9 +601,9 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
   function getEntitySessionStaleError(
     session: EntityInspectorSession,
     options: { includeDraftTargets?: boolean } = {},
+    currentWorkspace = workspace.value,
   ): string | null {
     const includeDraftTargets = options.includeDraftTargets ?? true
-    const currentWorkspace = workspace.value
     if (!currentWorkspace || currentWorkspace.cluster.id !== session.clusterId) {
       return 'The Jump Cluster for this draft no longer exists.'
     }
@@ -1456,6 +1456,10 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
     endCleanHistorySession,
     isEntityCommandBlocked,
     isEntityDraftTarget,
+    wouldInvalidateEntitySession: (proposal: LocalWorkspace) => {
+      const session = entitySession.value
+      return session !== null && getEntitySessionStaleError(session, {}, proposal) !== null
+    },
     createCommittedPositionAppliedHandler,
     createCommittedOrbitCenterAppliedHandler,
   }

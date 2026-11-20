@@ -351,3 +351,69 @@ test('canceling a continuous group gesture leaves every owning system unchanged 
     }
   })
 })
+
+test('dropping an object into the inspected system preserves the unrelated Inspector draft @pure', async () => {
+  await withControlledBrowserEnvironment(async () => {
+    const harness = createContinuousHarness()
+    try {
+      harness.store.setSelection({ selectedObjectIds: [harness.first.id] })
+      await harness.owner.value.inspector.beginObjectEdit()
+      const session = harness.owner.value.inspector.entitySession.value
+      if (session?.kind !== 'object') throw new Error('The destination Inspector draft did not start.')
+      session.draft.name = 'Still editing this object'
+      const before = harness.workspace.value
+      if (!before) throw new Error('The Workspace did not hydrate.')
+      const inspected = harness.store.inspectedTarget
+      await harness.owner.value.transfer.dropObject({
+        workspaceSnapshot: before,
+        sourceSystemId: harness.secondSystemId,
+        rootObjectId: harness.second.id,
+        destinationSystemId: harness.firstSystemId,
+        placement: { kind: 'system', x: 0.61, y: 0.43 },
+      })
+      expect(harness.publications).toBe(1)
+      expect(harness.store.inspectedTarget).toEqual(inspected)
+      expect(harness.owner.value.inspector.entitySession.value).toMatchObject({
+        id: session.id,
+        kind: 'object',
+        draft: { name: 'Still editing this object' },
+      })
+      expect(harness.workspace.value?.cluster.systems.find(system => system.id === harness.firstSystemId)
+        ?.objects.find(object => object.id === harness.second.id)?.placement).toEqual({ kind: 'system', x: 0.61, y: 0.43 })
+    } finally {
+      harness.dispose()
+    }
+  })
+})
+
+test('an affected Inspector draft can be applied before a drop transfers the edited object @pure', async () => {
+  await withControlledBrowserEnvironment(async () => {
+    const harness = createContinuousHarness()
+    try {
+      harness.store.setSelection({ selectedObjectIds: [harness.first.id] })
+      await harness.owner.value.inspector.beginObjectEdit()
+      const session = harness.owner.value.inspector.entitySession.value
+      const before = harness.workspace.value
+      if (session?.kind !== 'object' || !before) throw new Error('The source draft needs an applied workspace.')
+      session.draft.name = 'Renamed before transfer'
+      const pending = harness.owner.value.transfer.dropObject({
+        workspaceSnapshot: before,
+        sourceSystemId: harness.firstSystemId,
+        rootObjectId: harness.first.id,
+        destinationSystemId: harness.secondSystemId,
+        placement: { kind: 'system', x: 0.62, y: 0.43 },
+      })
+      await expect.poll(() => harness.owner.value.charts.transitionGuard.value).toBe('inspector')
+      expect(harness.publications).toBe(0)
+      await harness.owner.value.charts.resolveTransitionChoice('apply')
+      await pending
+      expect(harness.publications).toBe(2)
+      expect(harness.workspace.value?.cluster.systems.find(system => system.id === harness.secondSystemId)
+        ?.objects.find(object => object.id === harness.first.id)?.name).toBe('Renamed before transfer')
+      expect((await harness.history.undo()).status).toBe('applied')
+      expect(harness.workspace.value?.cluster.systems[0]?.objects[0]?.name).toBe('Renamed before transfer')
+    } finally {
+      harness.dispose()
+    }
+  })
+})

@@ -2,7 +2,7 @@
  * Validate workspace structure and normalize supported legacy layouts and field formats on restore.
  */
 import { defaultObjectFieldSettings, nativePlayerFieldIds } from './workspace-model'
-import type { JumpCluster, JumpRoute, LocalWorkspace, ObjectFieldSettings, Point, StarSystem } from './workspace-model'
+import type { JumpCluster, JumpRoute, LocalWorkspace, ObjectFieldSettings, Point, StarSystem, SystemFrameInsets } from './workspace-model'
 import {
   isArrayOf,
   isJumpRoute,
@@ -17,6 +17,7 @@ import {
   maxNameLength,
   objectFieldValidationError,
 } from './workspace-validation'
+import { isSystemFrameInsetsRecord } from './workspace-system-frames'
 import {
   canPlaceObjectInOrbit,
   minimumOrbitRadius,
@@ -26,8 +27,11 @@ import {
 } from './workspace-orbits'
 import { jumpPointsInCluster } from './workspace-cluster'
 import {
+  CLUSTER_SCENE_COORDINATE_LIMIT,
+  clusterSystemPosition,
   clusterRouteGeometry,
   hasFiniteClusterRouteGeometry,
+  isSafeClusterScenePoint,
   hasSafeClusterSceneBounds,
 } from '../utils/cluster-map-geometry'
 
@@ -91,6 +95,27 @@ function isSystemStructureValid(system: StarSystem): boolean {
   })
 }
 
+function hasSafeSystemFrames(
+  systemFrames: Record<string, SystemFrameInsets>,
+  systemPositions: Record<string, Point>,
+): boolean {
+  return Object.entries(systemFrames).every(([systemId, insets]) => {
+    const anchor = clusterSystemPosition(systemPositions, systemId)
+    const left = anchor.x - insets.left
+    const top = anchor.y - insets.top
+    const right = anchor.x + insets.right
+    const bottom = anchor.y + insets.bottom
+    const width = insets.left + insets.right
+    const height = insets.top + insets.bottom
+    return Number.isFinite(width) && Number.isFinite(height)
+      && width > 0 && height > 0
+      && width <= CLUSTER_SCENE_COORDINATE_LIMIT
+      && height <= CLUSTER_SCENE_COORDINATE_LIMIT
+      && isSafeClusterScenePoint({ x: left, y: top })
+      && isSafeClusterScenePoint({ x: right, y: bottom })
+  })
+}
+
 /**
  * Validates a star system and its internal object, Orbit, station-link, and placement relationships.
  * @param value Unknown imported or restored data.
@@ -123,6 +148,7 @@ export function isStarSystem(value: unknown): value is StarSystem {
 type StoredWorkspaceLayout = Pick<LocalWorkspace['layout'], 'systemPositions'>
   & {
     unresolvedExitPositions?: Record<string, Point>
+    systemFrames?: LocalWorkspace['layout']['systemFrames']
     orbitRadii?: Record<string, unknown>
     orbitEllipseRadii?: Record<string, unknown>
     orbitRotations?: Record<string, number>
@@ -315,6 +341,7 @@ function isStoredLocalWorkspace(
   const layout = value.layout
   const systemPositionsValue = isRecord(layout) ? layout.systemPositions : undefined
   const unresolvedExitPositionsValue = isRecord(layout) ? layout.unresolvedExitPositions : undefined
+  const systemFramesValue = isRecord(layout) ? layout.systemFrames : undefined
   if (
     typeof clusterId !== 'string'
     || !clusterId
@@ -338,6 +365,7 @@ function isStoredLocalWorkspace(
     ))
     || !isPointRecord(systemPositionsValue)
     || (unresolvedExitPositionsValue !== undefined && !isPointRecord(unresolvedExitPositionsValue))
+    || (systemFramesValue !== undefined && !isSystemFrameInsetsRecord(systemFramesValue))
     || (layout.orbitRadii !== undefined && !isRecord(layout.orbitRadii))
     || (layout.orbitEllipseRadii !== undefined && !isRecord(layout.orbitEllipseRadii))
     || (layout.orbitRotations !== undefined && !isRecord(layout.orbitRotations))
@@ -408,6 +436,7 @@ function isStoredLocalWorkspace(
 
   const positions = systemPositionsValue
   const unresolvedExitPositions = unresolvedExitPositionsValue ?? {}
+  const systemFrames = systemFramesValue ?? {}
   const validatedCluster: JumpCluster = {
     id: clusterId,
     name: clusterName,
@@ -435,6 +464,8 @@ function isStoredLocalWorkspace(
   ))
   return Object.values(positions).every(isPoint)
     && Object.values(unresolvedExitPositions).every(isPoint)
+    && Object.entries(systemFrames).every(([systemId]) => systemIds.has(systemId))
+    && hasSafeSystemFrames(systemFrames, positions)
     && hasSafeClusterSceneBounds(validatedCluster, positions, unresolvedExitPositions)
     && Object.entries(unresolvedExitPositions).every(([routeId]) =>
       routes.some(route => route.id === routeId && route.toSystemId === null),
@@ -814,6 +845,7 @@ export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
     layout: {
       systemPositions: current.layout.systemPositions,
       unresolvedExitPositions: current.layout.unresolvedExitPositions ?? {},
+      ...(current.layout.systemFrames !== undefined ? { systemFrames: current.layout.systemFrames } : {}),
       orbitRadii,
       orbitRotations,
       objectAngles: current.layout.objectAngles ?? {},

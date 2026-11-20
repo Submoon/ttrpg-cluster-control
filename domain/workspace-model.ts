@@ -8,6 +8,14 @@ export interface Point {
   y: number
 }
 
+/** Distances from a system anchor to the four edges of its saved preferred frame, in Cluster scene units. */
+export interface SystemFrameInsets {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
 export const catalogueTypes = [
   { value: 'star', family: 'CelestialBody', label: 'Star', keyPrefix: 'STAR' },
   { value: 'planet', family: 'CelestialBody', label: 'Planet', keyPrefix: 'PL' },
@@ -195,6 +203,8 @@ export interface LocalWorkspace {
   layout: {
     /** Normalized cluster positions; interactive system drags clamp each axis to [0, 1]. */
     systemPositions: Record<string, Point>
+    /** Optional Warden-authored preferred frame sizes relative to each system anchor. */
+    systemFrames?: Record<string, SystemFrameInsets>
     /** Manually placed unresolved-exit targets in absolute SVG scene coordinates, keyed by route ID. */
     unresolvedExitPositions?: Record<string, Point>
     /** Orbit radii in SVG scene units. */
@@ -216,6 +226,8 @@ export interface ExportedLayout {
   objectAngles: Record<string, number>
   /** Optional for older files; manually placed unresolved targets are keyed by Cluster route ID. */
   unresolvedExitPositions?: Record<string, Point>
+  /** Optional saved Warden frames, keyed by Cluster system ID. */
+  systemFrames?: Record<string, SystemFrameInsets>
 }
 
 export type JumpClusterExport = {
@@ -233,7 +245,7 @@ export type StarSystemExport = {
   type: 'system'
   system: StarSystem
   objectFieldSettings: ObjectFieldSettings
-  layout: ExportedLayout
+  layout: Omit<ExportedLayout, 'systemFrames'>
 }
 
 /** Informational import preview; possible name/key matches do not merge map entities. */

@@ -34,6 +34,8 @@ export type MapHistoryTarget =
 export type TransitionGuard = 'chart' | 'inspector' | null
 export type TransitionDecision = 'apply' | 'discard' | 'stay'
 export interface TransitionOptions {
+  /** Lets a guarded command capture the exact revision published by its accepted draft Apply. */
+  onDraftApplied?: () => void
   /** Keeps a resumable chart-name session open for a command independent of its captured chart target. */
   leaveChart?: boolean
   /** Lets a read-only dialog open while an entity draft remains owned by its Inspector session. */

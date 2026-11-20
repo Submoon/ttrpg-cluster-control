@@ -9,6 +9,7 @@ export {
 } from './workspace-model'
 export type {
   Point,
+  SystemFrameInsets,
   CatalogueSubtype,
   ObjectFamily,
   CustomFieldType,
@@ -86,6 +87,7 @@ export type {
   SystemObjectTransferStationLink,
 } from './workspace-transfer'
 export { moveUnresolvedExitTarget } from './workspace-exit-placement'
+export { setWorkspaceSystemFrame, workspaceSystemFrame } from './workspace-system-frames'
 export {
   createOrbit,
   defaultOrbitRadius,

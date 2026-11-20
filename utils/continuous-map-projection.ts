@@ -1,5 +1,6 @@
 /** Pure conversion from legacy Cluster anchors and local system geometry into one Warden scene. */
-import type { OrbitRadii, Point } from '../domain/workspace'
+import type { OrbitRadii, Point, SystemFrameInsets } from '../domain/workspace'
+import { isSystemFrameInsets } from '../domain/workspace-system-frames'
 import { clusterSystemPosition } from './cluster-map-geometry'
 import {
   objectPositions,
@@ -92,6 +93,8 @@ export interface ContinuousWardenSystemProjection {
   objects: readonly (ResolvedContinuousObjectGeometry & { scenePosition: Point })[]
   orbits: readonly (ResolvedContinuousOrbitGeometry & { sceneCenter: Point; sceneRadii: OrbitRadii })[]
   envelope: SvgViewportRect
+  /** Saved Warden frame preference; independent from complete content bounds in `envelope`. */
+  preferredFrame?: SvgViewportRect
   projectLocalPoint(point: Point): Point
   unprojectLocalPoint(point: Point): Point
 }
@@ -179,6 +182,7 @@ export function projectWardenSystem(
   legacyAnchor: Point,
   geometry: SystemMapGeometry,
   scale = CONTINUOUS_MAP_SYSTEM_SCALE,
+  preferredFrameInsets?: SystemFrameInsets,
 ): ContinuousWardenSystemProjection {
   if (![legacyAnchor.x, legacyAnchor.y, scale].every(Number.isFinite) || scale <= 0) {
     throw new Error('A continuous system projection needs a finite anchor and positive scale.')
@@ -196,13 +200,53 @@ export function projectWardenSystem(
     radii: orbitRadii(system, orbit, geometry),
     rotation: orbitRotation(orbit, geometry),
   }))
-  return projectContinuousSystemGeometry({
+  const projection = projectContinuousSystemGeometry({
     id: system.id,
     name: system.name,
     anchor,
     objects: localObjects,
     orbits: localOrbits,
   }, scale)
+  if (preferredFrameInsets === undefined) return projection
+  return {
+    ...projection,
+    preferredFrame: systemFrameFromInsets(projection.anchor, preferredFrameInsets),
+  }
+}
+
+/** Converts anchor-relative saved distances into a Cluster-space rectangular frame. */
+export function systemFrameFromInsets(anchor: Point, insets: SystemFrameInsets): SvgViewportRect {
+  if (![anchor.x, anchor.y].every(Number.isFinite) || !isSystemFrameInsets(insets)) {
+    throw new Error('A system frame needs a finite anchor and finite, nonnegative insets.')
+  }
+  const frame = {
+    x: anchor.x - insets.left,
+    y: anchor.y - insets.top,
+    width: insets.left + insets.right,
+    height: insets.top + insets.bottom,
+  }
+  if (![frame.x, frame.y, frame.width, frame.height].every(Number.isFinite)) {
+    throw new Error('A system frame must have finite coordinates and dimensions.')
+  }
+  return frame
+}
+
+/** Converts an anchor-containing frame into the persistent distances used by the workspace. */
+export function systemFrameInsetsFromRect(anchor: Point, frame: SvgViewportRect): SystemFrameInsets {
+  const right = frame.x + frame.width
+  const bottom = frame.y + frame.height
+  if (![anchor.x, anchor.y, frame.x, frame.y, frame.width, frame.height, right, bottom].every(Number.isFinite)
+    || frame.width <= 0 || frame.height <= 0
+    || anchor.x < frame.x || anchor.x > right
+    || anchor.y < frame.y || anchor.y > bottom) {
+    throw new Error('A system frame must be finite and contain its anchor.')
+  }
+  return {
+    left: anchor.x - frame.x,
+    top: anchor.y - frame.y,
+    right: right - anchor.x,
+    bottom: bottom - anchor.y,
+  }
 }
 
 /** Projects resolved object and Orbit inputs without needing a source StarSystem record. */

@@ -89,6 +89,7 @@ function isImportedMap(value: unknown): value is ImportableMap {
       layout: {
         systemPositions: layout.systemPositions,
         unresolvedExitPositions: layout.unresolvedExitPositions,
+        systemFrames: layout.systemFrames,
         orbitRadii,
         orbitRotations,
         objectAngles: layout.objectAngles ?? {},
@@ -98,10 +99,11 @@ function isImportedMap(value: unknown): value is ImportableMap {
 
     const systemIds = new Set(candidate.cluster.systems.map(system => system.id))
     return Object.keys(candidate.layout.systemPositions).every(systemId => systemIds.has(systemId))
+      && Object.keys(candidate.layout.systemFrames ?? {}).every(systemId => systemIds.has(systemId))
   }
 
   const system = value.system
-  if (value.type !== 'system' || value.version === 5 || !isStarSystem(system)) return false
+  if (value.type !== 'system' || value.version === 5 || layout.systemFrames !== undefined || !isStarSystem(system)) return false
   if (!isRecord(layout.orbitRadii) || !isRecord(layout.objectAngles)) return false
 
   const orbitIds = new Set(system.orbits.map(orbit => orbit.id))
@@ -363,6 +365,7 @@ export function restoreJumpClusterBackup(value: unknown): LocalWorkspace {
     layout: {
       systemPositions: map.layout.systemPositions,
       unresolvedExitPositions: map.layout.unresolvedExitPositions ?? {},
+      ...(map.layout.systemFrames !== undefined ? { systemFrames: map.layout.systemFrames } : {}),
       orbitRadii: normalizeOrbitRadii(map.layout.orbitRadii ?? {}, map.layout.orbitEllipseRadii ?? {}) ?? {},
       orbitRotations: normalizeOrbitRotations(map.layout.orbitRotations ?? {}) ?? {},
       objectAngles: map.layout.objectAngles ?? {},
@@ -543,6 +546,9 @@ export function prepareJsonImport(
   const layout = {
     systemPositions: { ...workspace.layout.systemPositions },
     unresolvedExitPositions: { ...(workspace.layout.unresolvedExitPositions ?? {}) },
+    ...(workspace.layout.systemFrames !== undefined || (map.type === 'cluster' && map.layout.systemFrames !== undefined)
+      ? { systemFrames: { ...workspace.layout.systemFrames } }
+      : {}),
     orbitRadii: { ...workspace.layout.orbitRadii },
     orbitRotations: { ...workspace.layout.orbitRotations },
     objectAngles: { ...workspace.layout.objectAngles },
@@ -554,6 +560,9 @@ export function prepareJsonImport(
     }
     for (const [sourceId, position] of Object.entries(map.layout.unresolvedExitPositions ?? {})) {
       layout.unresolvedExitPositions[ids.get(sourceId)!] = position
+    }
+    for (const [sourceId, insets] of Object.entries(map.layout.systemFrames ?? {})) {
+      layout.systemFrames![ids.get(sourceId)!] = insets
     }
   } else {
     const addedSystemId = addedSystemIds[0]

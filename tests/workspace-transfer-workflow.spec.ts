@@ -30,6 +30,7 @@ function transferWorkspace(): { workspace: LocalWorkspace; sourceSystemId: strin
 
 function transferHarness(options: {
   maxBytes?: number
+  resolveBeforeDrop?: Parameters<typeof useSystemObjectTransferWorkflow>[0]['resolveBeforeDrop']
 } = {}) {
   const { workspace: fixture, sourceSystemId, destinationSystemId, rootObjectId } = transferWorkspace()
   const workspace = shallowRef(fixture)
@@ -59,6 +60,7 @@ function transferHarness(options: {
     appliedRevision: revision,
     history,
     resolveBeforeTransfer: async () => true,
+    resolveBeforeDrop: options.resolveBeforeDrop,
     beforeWorkspaceOperation: async () => true,
     captureDestinationMapOwner: systemId => systemId === destinationSystemId ? currentDestinationOwner : null,
     isDestinationMapOwnerCurrent: (systemId, owner) => systemId === destinationSystemId && owner === currentDestinationOwner,
@@ -119,6 +121,109 @@ test('one accepted transfer publishes once and actual-owner history target follo
   expect(resolveSystemObjectHistoryTarget(harness.workspace.value, harness.rootObjectId))
     .toEqual({ kind: 'object', id: harness.rootObjectId, systemId: harness.destinationSystemId })
   harness.dispose()
+})
+
+test('a drop in another system publishes the transfer and starting frame as one action @pure', async () => {
+  const harness = transferHarness()
+  const before = harness.workspace.value
+  const placement = { kind: 'system' as const, x: 0.61, y: 0.39 }
+  const frame = { left: 60, top: 30, right: 80, bottom: 30 }
+  const destinationFrame = { left: 45, top: 30, right: 55, bottom: 45 }
+  try {
+    await harness.workflow.dropObject({
+      sourceSystemId: harness.sourceSystemId,
+      rootObjectId: harness.rootObjectId,
+      destinationSystemId: harness.destinationSystemId,
+      workspaceSnapshot: before,
+      sourceFrameInsets: frame,
+      destinationFrameInsets: destinationFrame,
+      placement,
+    })
+    expect(harness.workflow.session.value).toBeNull()
+    expect(harness.publishCount).toBe(1)
+    expect(harness.workspace.value.layout.systemFrames?.[harness.sourceSystemId]).toEqual(frame)
+    expect(harness.workspace.value.layout.systemFrames?.[harness.destinationSystemId]).toEqual(destinationFrame)
+    const moved = harness.workspace.value.cluster.systems.find(system => system.id === harness.destinationSystemId)
+      ?.objects.find(object => object.id === harness.rootObjectId)
+    expect(moved?.placement).toEqual(placement)
+    expect((await harness.history.undo()).status).toBe('applied')
+    expect(harness.workspace.value).toEqual(before)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('a drop with a conflicting key keeps its chosen location in review until accepted @pure', async () => {
+  const harness = transferHarness()
+  const workspace = harness.workspace.value
+  const [source, destination] = workspace.cluster.systems
+  if (!source || !destination || !source.objects[0]) throw new Error('Expected a source object and two systems.')
+  const existing = { ...source.objects[0], id: 'destination-occupant' }
+  const before = {
+    ...workspace,
+    cluster: { ...workspace.cluster, systems: [source, { ...destination, objects: [existing] }] },
+  }
+  harness.workspace.value = before
+  const placement = { kind: 'system' as const, x: 0.61, y: 0.39 }
+  try {
+    await harness.workflow.dropObject({
+      sourceSystemId: harness.sourceSystemId,
+      rootObjectId: harness.rootObjectId,
+      destinationSystemId: harness.destinationSystemId,
+      workspaceSnapshot: before,
+      placement,
+    })
+    const review = harness.workflow.session.value
+    expect(review?.open).toBe(true)
+    expect(review?.placement).toEqual(placement)
+    expect(review?.review?.keyConflicts).toHaveLength(1)
+    expect(harness.publishCount).toBe(0)
+    expect(harness.workspace.value).toBe(before)
+    if (!review) throw new Error('The conflict needs an explicit transfer review.')
+    const result = await harness.workflow.handleIntent({ kind: 'apply', sessionId: review.sessionId })
+    expect(result?.status).toBe('applied')
+    expect(harness.publishCount).toBe(1)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('a drop never rebases onto a workspace revision published outside its draft guard @pure', async () => {
+  let finishGuard!: () => void
+  const waiting = new Promise<void>(resolve => { finishGuard = resolve })
+  let beginGuard!: () => void
+  const started = new Promise<void>(resolve => { beginGuard = resolve })
+  const harness = transferHarness({
+    resolveBeforeDrop: async () => {
+      beginGuard()
+      await waiting
+      return true
+    },
+  })
+  try {
+    const pending = harness.workflow.dropObject({
+      sourceSystemId: harness.sourceSystemId,
+      rootObjectId: harness.rootObjectId,
+      destinationSystemId: harness.destinationSystemId,
+      workspaceSnapshot: harness.workspace.value,
+      placement: { kind: 'system', x: 0.61, y: 0.39 },
+    })
+    await started
+    const newer = {
+      ...harness.workspace.value,
+      cluster: { ...harness.workspace.value.cluster, name: 'Changed elsewhere' },
+    }
+    harness.workspace.value = newer
+    harness.revision.value += 1
+    finishGuard()
+    await pending
+    expect(harness.workflow.session.value).toBeNull()
+    expect(harness.workspace.value).toBe(newer)
+    expect(harness.publishCount).toBe(0)
+  } finally {
+    finishGuard()
+    harness.dispose()
+  }
 })
 
 test('an oversized transfer is rejected before capacity consent or publication @pure', async () => {

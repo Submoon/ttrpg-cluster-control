@@ -469,8 +469,8 @@
                     :feedback-element="workspaceFeedbackRef"
                     @select-cluster-system="selectClusterSystem"
                     @move-select-cluster-system="selectClusterSystem($event, false)"
-                    @select-continuous-object="(systemId, objectId, openInspector) => inspectContinuousTarget({ kind: 'object', systemId, objectId }, openInspector)"
-                    @select-continuous-orbit="(systemId, orbitId, openInspector) => inspectContinuousTarget({ kind: 'orbit', systemId, orbitId }, openInspector)"
+                    @select-continuous-object="(systemId: string, objectId: string, openInspector?: boolean) => inspectContinuousTarget({ kind: 'object', systemId, objectId }, openInspector)"
+                    @select-continuous-orbit="(systemId: string, orbitId: string, openInspector?: boolean) => inspectContinuousTarget({ kind: 'orbit', systemId, orbitId }, openInspector)"
                     @select-route="selectRoute"
                     @move-select-route="selectRoute($event, false)"
                     @select-object="selectObject"
@@ -488,6 +488,8 @@
                     @continuous-object-add-target="handleContinuousObjectAddTarget"
                     @continuous-orbit-add-target="handleOrbitAddTarget"
                     @move-object-in-system="handleContinuousObjectMove"
+                    @resize-system-frame="resizeSystemFrame"
+                    @transfer-object-on-drop="transfer.dropObject"
                     @orbit-adjustment="updateOrbitAdjustment"
                     @entity-command-blocked="handleBlockedEntityCommand"
                     @cancel-cluster-preview="cancelClusterPlacement"
@@ -700,7 +702,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch, type Ref } from 'vue'
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type JumpRoute, type LocalWorkspace, type ObjectFamily, type Point } from '../domain/workspace'
+import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type JumpRoute, type LocalWorkspace, type ObjectFamily, type Point, type SystemFrameInsets } from '../domain/workspace'
 import { validName } from '../domain/workspace-validation'
 import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { EntityCommand, SearchPresentationSettlement, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
@@ -1278,7 +1280,7 @@ const {
   quitAdd,
 } = placement
 const {
-  moveSystem, moveMapObject, moveMapObjectInSystem, addMapObjectInSystem,
+  moveSystem, moveMapObject, moveMapObjectInSystem, resizeSystemFrame, addMapObjectInSystem,
   placeMapObjectInOrbit, rotateMapObject, resizeMapOrbit, rotateMapOrbit,
   moveMapOrbitCenter, detachSelectedOrbit,
 } = mapPlacement
@@ -1764,8 +1766,9 @@ function handleContinuousObjectMove(
   objectId: string,
   position: Point,
   workspaceSnapshot: LocalWorkspace,
+  frameInsets?: SystemFrameInsets,
 ): void {
-  void moveMapObjectInSystem(systemId, objectId, position, workspaceSnapshot)
+  void moveMapObjectInSystem(systemId, objectId, position, workspaceSnapshot, frameInsets)
 }
 
 function clearOrbitOwnerChoice(): void {

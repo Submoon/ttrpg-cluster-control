@@ -107,7 +107,7 @@ export async function exportContinuousWardenMapImage(
   const displayFrames = continuousSystemFrames(request.projections.map(projection => ({
     id: projection.id,
     anchor: projection.anchor,
-    envelope: projection.envelope,
+    envelope: projection.preferredFrame ?? projection.envelope,
   })))
   const useViewportRouteScale = request.scope === 'viewport'
   const routes = buildContinuousWardenRouteGeometries({
@@ -154,7 +154,7 @@ export async function exportContinuousWardenMapImage(
         })),
       })
     : null
-  const frames = sceneFrames(request, selected, labels, routeRecords, routeGeometries)
+  const frames = sceneFrames(request, selected, labels, routeRecords, routeGeometries, displayFrames)
   const frame = mapImageScopeFrame(request.scope, frames)
   const scale = request.scope === 'viewport' ? request.svgPixelScale : 1
   const outputWidth = request.scope === 'viewport'
@@ -273,6 +273,7 @@ function sceneFrames(
   labels: readonly ExportLabel[],
   routes: readonly JumpCluster['routes'][number][],
   geometries: ReadonlyMap<string, ContinuousMapRouteGeometry>,
+  displayFrames: ReadonlyMap<string, SvgViewportRect>,
 ) {
   const routeBounds = routes.flatMap(route => {
     const geometry = geometries.get(route.id)
@@ -299,6 +300,7 @@ function sceneFrames(
   }))
   const overview = mapImageBounds([
     ...request.projections.map(projection => projection.envelope),
+    ...[...displayFrames.values()],
     ...labelBounds,
     ...routeBounds,
   ]) ?? { x: 0, y: 0, width: 960, height: 560 }
@@ -306,6 +308,7 @@ function sceneFrames(
   const selectedSystem = selected
     ? mapImageBounds([
         selected.envelope,
+        displayFrames.get(selected.id) ?? null,
         selectedLabel ? {
           x: selectedLabel.centerX - selectedLabel.width / 2,
           y: selectedLabel.top,
@@ -332,17 +335,15 @@ function layoutSystemNames(
   displayFrames: ReadonlyMap<string, SvgViewportRect>,
 ): ExportLabel[] {
   const placementViewport = viewport ?? { x: 0, y: 0, k: 1 }
-  const placementRect = viewportRect ?? automaticNamePlacementViewportRect(projections)
   const scale = pixelScale > 0 ? pixelScale : 1
   const projectionsById = new Map(projections.map(projection => [projection.id, projection]))
-  const labelProjections = viewport
-    ? projections.map(projection => ({
-        ...projection,
-        envelope: positiveFrame(displayFrames.get(projection.id))
-          ? displayFrames.get(projection.id)!
-          : projection.envelope,
-      }))
-    : projections
+  const labelProjections = projections.map(projection => ({
+    ...projection,
+    envelope: positiveFrame(displayFrames.get(projection.id))
+      ? displayFrames.get(projection.id)!
+      : projection.envelope,
+  }))
+  const placementRect = viewportRect ?? automaticNamePlacementViewportRect(labelProjections)
   return continuousMapNameLabels({
     projections: labelProjections,
     viewport: placementViewport,

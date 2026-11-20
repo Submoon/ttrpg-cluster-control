@@ -28,6 +28,7 @@ import type { SearchResult } from '../utils/workspace-search'
 import { useWardenFilterCriteria } from './useWardenFilterCriteria'
 import { useSystemObjectTransferWorkflow } from './editor-workflows/useSystemObjectTransferWorkflow'
 import { resolveSystemObjectHistoryTarget } from '../domain/workspace'
+import type { SystemObjectTransferReview } from '../domain/workspace'
 import type { SystemObjectTransferIntent } from './editor-workflows/system-object-transfer-types'
 
 type EditorWorkflowsOptions = EditorWorkflowOptions & {
@@ -245,11 +246,39 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     })
   }
 
+  function dropAffectsRouteDraft(review: SystemObjectTransferReview): boolean {
+    // Transfer removes these points from their source system, the same dependency
+    // change a route draft must resolve before deleting an endpoint.
+    return route.isRouteCommandBlocked({
+      kind: 'deletion',
+      target: { kind: 'object', systemId: review.request.sourceSystemId, objectId: review.request.rootObjectId },
+      affectedObjectIds: review.branch.objectIds,
+      affectedRouteIds: review.detachedRouteAttachments.map(attachment => attachment.routeId),
+    })
+  }
+
   const systemTransfer = useSystemObjectTransferWorkflow({
     workspace,
     appliedRevision,
     history: mutations,
     resolveBeforeTransfer: () => transitions.resolveTransition(),
+    resolveBeforeDrop: (review, ownsDrop, onDraftApplied) => transitions.resolveTransition({
+      leaveChart: false,
+      leaveEntitySession: entity.wouldInvalidateEntitySession(review.previewWorkspace),
+      leaveRouteSession: dropAffectsRouteDraft(review),
+      onDraftApplied,
+    }, ownsDrop),
+    canApplyDrop: review => !entity.wouldInvalidateEntitySession(review.previewWorkspace) && !dropAffectsRouteDraft(review),
+    captureDropInspection: ({ request, branch }) => {
+      const inspected = store.inspectedTarget
+      if ((inspected?.kind !== 'object' && inspected?.kind !== 'orbit') || inspected.systemId !== request.sourceSystemId) return
+      const movesWithBranch = inspected.kind === 'object'
+        ? branch.objectIds.includes(inspected.objectId)
+        : branch.orbitIds.includes(inspected.orbitId)
+      if (!movesWithBranch) return
+      const target = { ...inspected, systemId: request.destinationSystemId }
+      return () => { void navigation.inspectContinuousTarget(target, false) }
+    },
     beforeWorkspaceOperation,
     prepareDestinationMap: async (systemId, isCurrent) => {
       if (!isCurrent()) return false
@@ -283,6 +312,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     onApplied: target => revealTransferredObject(target.rootObjectId),
   })
   watch(workspaceContextId, () => systemTransfer.dispose(), { flush: 'sync' })
+  watch(systemTransfer.lastError, error => { if (error) editorError.value = error })
   onBeforeUnmount(() => systemTransfer.dispose())
   const publicationMenu = usePublicationMenu({
     workspace,
@@ -621,6 +651,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
         moveSystem: map.moveSystem,
         moveMapObject: map.moveMapObject,
         moveMapObjectInSystem: map.moveMapObjectInSystem,
+        resizeSystemFrame: map.resizeSystemFrame,
         addMapObjectInSystem: map.addMapObjectInSystem,
         placeMapObjectInOrbit: map.placeMapObjectInOrbit,
         rotateMapObject: map.rotateMapObject,
@@ -714,6 +745,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       ownsMapPlacement: systemTransfer.ownsMapPlacement,
       previewMapPlacement: systemTransfer.previewMapPlacement,
       completeMapPlacement: systemTransfer.completeMapPlacement,
+      dropObject: systemTransfer.dropObject,
       handleIntent: (intent: SystemObjectTransferIntent) => systemTransfer.handleIntent(intent),
     },
     adjustments: {

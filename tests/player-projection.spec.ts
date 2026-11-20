@@ -89,6 +89,15 @@ test('hidden distant systems and private source extensions do not affect the pub
   hidden.layout.systemPositions[withHiddenSystem.system.id] = { x: 100_000, y: -100_000 }
   const before = structuredClone(hidden)
   const projected = projectPlayerCluster(hidden)
+  const withPrivateFrame = {
+    ...hidden,
+    layout: {
+      ...hidden.layout,
+      systemFrames: {
+        [initialSystem.id]: { left: 50_000, top: 60_000, right: 70_000, bottom: 80_000 },
+      },
+    },
+  }
   const extended = {
     ...hidden,
     privateExtension: 'UNKNOWN WORKSPACE PROPERTY',
@@ -120,6 +129,7 @@ test('hidden distant systems and private source extensions do not affect the pub
   }
 
   expect(projectPlayerCluster(extended)).toEqual(projected)
+  expect(projectPlayerCluster(withPrivateFrame)).toEqual(projected)
   expect(projected.systems).toHaveLength(1)
   expect(projected.systems[0]?.id).toBe('system-1')
   expect(JSON.stringify(projected)).not.toMatch(/SECRET|UNKNOWN|Far Hidden System|Secret Internal Name/)

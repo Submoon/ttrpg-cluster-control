@@ -56,6 +56,7 @@ const styleProperties = [
   'visibility',
   'vector-effect',
 ] as const
+const gradientStopProperties = ['stop-color', 'stop-opacity'] as const
 
 export interface MapImageSceneFrame {
   x: number
@@ -197,10 +198,11 @@ function inlineComputedStyles(copy: SVGSVGElement): void {
   const copyElements: SVGElement[] = [copy, ...Array.from(copy.querySelectorAll<SVGElement>('*'))]
   const styleSnapshots = copyElements.map(element => {
     const computedStyle = getComputedStyle(element)
-    return styleProperties.map(property => {
+    const properties = element.localName === 'stop' ? [...styleProperties, ...gradientStopProperties] : styleProperties
+    return properties.flatMap(property => {
       const value = computedStyle.getPropertyValue(property)
-      return value ? [property, standalonePaintUrl(value)] as const : null
-    }).filter((entry): entry is readonly [typeof styleProperties[number], string] => entry !== null)
+      return value ? [[property, standalonePaintUrl(value)] as const] : []
+    })
   })
   for (const [index, element] of copyElements.entries()) {
     const snapshot = styleSnapshots[index]

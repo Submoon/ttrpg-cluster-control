@@ -44,9 +44,9 @@ export function buildContinuousWardenRouteGeometries(
       id: projection.id,
       anchor,
       envelope: {
-        ...projection.envelope,
-        x: projection.envelope.x + delta.x,
-        y: projection.envelope.y + delta.y,
+        ...(projection.preferredFrame ?? projection.envelope),
+        x: (projection.preferredFrame ?? projection.envelope).x + delta.x,
+        y: (projection.preferredFrame ?? projection.envelope).y + delta.y,
       },
     }
   }))

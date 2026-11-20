@@ -3,10 +3,22 @@ import type {
   LocalWorkspace,
   Point,
   StarSystem,
+  SystemFrameInsets,
   SystemObjectTransferPlacement,
   SystemObjectTransferRequest,
   SystemObjectTransferReview,
 } from '../../domain/workspace'
+
+/** A captured single-object Move release into a different system's frame. */
+export interface SystemObjectTransferDrop {
+  readonly sourceSystemId: string
+  readonly rootObjectId: string
+  readonly destinationSystemId: string
+  readonly placement: SystemObjectTransferPlacement
+  readonly workspaceSnapshot: LocalWorkspace
+  readonly sourceFrameInsets?: SystemFrameInsets
+  readonly destinationFrameInsets?: SystemFrameInsets
+}
 
 export interface SystemObjectTransferReviewState {
   readonly sessionId: number

@@ -5,6 +5,7 @@
       class="cluster-map-svg continuous-warden-map-svg block h-full min-h-0 w-full flex-1"
       :class="{ 'map-touch-surface': touchNavigation }"
       viewBox="0 0 960 560"
+      :style="{ '--warden-halo-fill': `url(#${haloGradientId}-fill)` }"
       role="group"
       :aria-label="`${sceneCluster.name} continuous map`"
       aria-describedby="workspace-map-tool-shortcut-help continuous-warden-map-keyboard-help"
@@ -21,8 +22,15 @@
     >
       <title>{{ sceneCluster.name }} continuous Warden map</title>
       <desc id="continuous-warden-map-keyboard-help">
-        Zoom continuously to reveal each system interior independently. In Move, drag an object to move it within its owning system, or drag a system anchor or name to update its Cluster position.
+        Zoom continuously to reveal each system interior independently. In Move, drag an object to move it within its owning system or drop it inside another system’s frame to transfer it. Drag a system anchor or name to update its Cluster position. Use a selected system’s resize corner buttons, or focus a corner and use the arrow keys, to resize its frame.
       </desc>
+      <defs>
+        <linearGradient :id="`${haloGradientId}-fill`" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--map-orbit)" stop-opacity="0.045" />
+          <stop offset="52%" stop-color="var(--map-orbit)" stop-opacity="0.012" />
+          <stop offset="100%" stop-color="var(--map-orbit)" stop-opacity="0.035" />
+        </linearGradient>
+      </defs>
       <g class="cluster-map-content" :transform="cameraTransform">
         <ContinuousMapRouteLayer
           ref="routeLayer"
@@ -46,13 +54,25 @@
             <rect
               v-if="hasPositiveFrame(displayFrameFor(projection.id))"
               class="continuous-warden-system-envelope"
-              :class="{ 'is-detailed': detailSystemIds.has(projection.id), 'is-move-preview': previewPositions.has(projection.id) }"
+              :class="{
+                'is-detailed': detailSystemIds.has(projection.id),
+                'is-move-preview': previewPositions.has(projection.id),
+                'is-elastic-replaced': elasticPlacementPreview?.systemId === projection.id,
+              }"
               :x="displayFrameFor(projection.id).x"
               :y="displayFrameFor(projection.id).y"
               :width="displayFrameFor(projection.id).width"
               :height="displayFrameFor(projection.id).height"
               rx="18"
               aria-hidden="true"
+            />
+            <path
+              v-if="elasticPlacementPreview?.systemId === projection.id"
+              class="continuous-warden-elastic-envelope"
+              :data-system-id="projection.id"
+              :d="elasticPlacementPreview.path"
+              aria-hidden="true"
+              pointer-events="none"
             />
 
             <g
@@ -379,6 +399,26 @@
               </text>
             </g>
           </g>
+          <template v-for="handle in systemFrameResizeHandles" :key="`${handle.systemId}:${handle.corner}`">
+            <foreignObject
+              :x="handle.x"
+              :y="handle.y"
+              :width="handle.size"
+              :height="handle.size"
+              class="continuous-warden-system-resize-target"
+            >
+              <button
+                type="button"
+                class="continuous-warden-system-resize-button"
+                :data-system-id="handle.systemId"
+                :data-system-resize-handle="handle.corner"
+                :aria-label="`Resize ${handle.corner.replace('-', ' ')} corner of ${handle.systemName}`"
+                :title="`Resize ${handle.corner.replace('-', ' ')} corner of ${handle.systemName}`"
+              >
+                <span aria-hidden="true" />
+              </button>
+            </foreignObject>
+          </template>
         </g>
       </g>
     </svg>
@@ -398,12 +438,12 @@
 
 <script setup lang="ts">
 /** Warden continuous scene with one D3 camera and independent system-envelope reveal. */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, useId, watch } from 'vue'
 import type { DeepReadonly } from 'vue'
 import { pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
-import { jumpPointsInCluster, minimumOrbitRadius, type CatalogueSubtype, type JumpCluster, type JumpRoute, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem, type SystemObjectTransferPlacement } from '../domain/workspace'
+import { jumpPointsInCluster, minimumOrbitRadius, workspaceSystemFrame, type CatalogueSubtype, type JumpCluster, type JumpRoute, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem, type SystemFrameInsets, type SystemObjectTransferPlacement } from '../domain/workspace'
 import { normalizeOrbitRotation } from '../domain/workspace-orbits'
-import { getDetachedOrbitCenter, objectPositions, objectsMovedWithOrbit, orbitCenter, orbitPointAtAngle, orbitRadii as readOrbitRadii, orbitRotation, orbitRotationHandlePoint, rotatePoint, requiredPosition } from '../utils/system-map-geometry'
+import { getDetachedOrbitCenter, objectPositions, objectsMovedWithOrbit, orbitCenter, orbitPlacementHitsAtPoint, orbitPointAtAngle, orbitRadii as readOrbitRadii, orbitRotation, orbitRotationHandlePoint, rotatePoint, requiredPosition } from '../utils/system-map-geometry'
 import { orbitGeometrySource } from '../utils/orbit-geometry-source'
 import { measureSystemObjectBranchBounds, resolveSystemObjectBranch } from '../utils/system-object-branch'
 import { continuousOrbitKeyboardChange } from '../utils/continuous-orbit-interaction'
@@ -411,7 +451,7 @@ import type { EntityCommand, MapHistoryTarget, MapInteractionMode, OrbitCenterMo
 import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
 import type { InspectedMapTarget } from '../stores/editor-ui'
-import type { SystemObjectTransferMapPreview } from '../composables/editor-workflows/system-object-transfer-types'
+import type { SystemObjectTransferDrop, SystemObjectTransferMapPreview } from '../composables/editor-workflows/system-object-transfer-types'
 import { initialClusterSystemPosition } from '../domain/workspace-cluster'
 import type { MapViewport, SvgViewportRect } from '../utils/map-zoom'
 import {
@@ -438,6 +478,7 @@ import {
   unprojectWardenClusterAnchor,
   type ContinuousWardenSystemProjection,
 } from '../utils/continuous-map-projection'
+import { systemFrameInsetsFromRect } from '../utils/continuous-map-projection'
 import { applySelectedObjectTranslation, planSelectedObjectTranslation } from '../utils/selected-object-placement'
 import { continuousObjectDragTarget, hasMapDragThreshold } from '../utils/continuous-object-drag'
 import { updateWorkspaceObject } from '../domain/workspace-placement'
@@ -450,6 +491,7 @@ import {
 } from '../utils/continuous-map-editing'
 import { clusterRouteLabel, clusterSystemPosition, hasSafeClusterSceneBounds, isSafeClusterScenePoint } from '../utils/cluster-map-geometry'
 import { buildContinuousWardenRouteGeometries } from '../utils/continuous-warden-routes'
+import { CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS } from '../utils/continuous-map-route-geometry'
 import { centerContinuousMapRouteViewport, revealContinuousMapRouteViewport } from '../utils/continuous-map-route-viewport'
 import {
   centerMapTargetViewport,
@@ -466,6 +508,12 @@ import { resolveSystemObjectTransferMapPlacement } from '../utils/system-object-
 import { CONTINUOUS_SYSTEM_NAME_FONT_PIXELS as SYSTEM_NAME_FONT_PIXELS, continuousMapNameLabelFramePosition, continuousMapNameLabels } from '../utils/continuous-map-name-labels'
 import type { ContinuousMapNameLabel } from '../utils/continuous-map-name-labels'
 import { continuousSystemFrames } from '../utils/continuous-system-frames'
+import { constrainContinuousSystemFrame, type ContinuousSystemFrameInput } from '../utils/continuous-system-frames'
+import {
+  continuousMapRoundedFrameContains,
+  planContinuousMapElasticPlacement,
+  type ContinuousMapElasticPlacementPreview,
+} from '../utils/continuous-map-elastic-placement'
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
 import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
 import type { SelectedObjectDrag, SelectedObjectDragPreview } from '../composables/editor-workflows/selected-object-drag'
@@ -479,6 +527,7 @@ const MINIMUM_FIT_PADDING = 48
 const ROUTE_REVEAL_PADDING_PIXELS = 14
 const ROUTE_FAN_OUT_LIMIT_PIXELS = 96
 const VIEWPORT_FEEDBACK_INTERVAL_MS = 120
+const SYSTEM_RESIZE_HANDLE_PIXELS = 44
 const OVERVIEW_DETAIL_SYSTEM_IDS: ReadonlySet<string> = new Set()
 
 const props = defineProps<{
@@ -526,7 +575,9 @@ const emit = defineEmits<{
   'cluster-target': [point: Point, systemIds: string[]]
   'continuous-object-add-target': [request: ContinuousObjectAddTarget]
   'continuous-orbit-add-target': [owners: readonly OrbitAddOwner[], requiresOwnerChoice: boolean, workspace: LocalWorkspace]
-  'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace]
+  'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace, frameInsets?: SystemFrameInsets]
+  'resize-system-frame': [systemId: string, insets: SystemFrameInsets, workspaceSnapshot: LocalWorkspace]
+  'transfer-object-on-drop': [drop: SystemObjectTransferDrop]
   'orbit-adjustment': [input: OrbitAdjustmentInput]
   'entity-command-blocked': [command: EntityCommand]
   'move-orbit-center': [orbitId: string, center: Point, hostId: string | null, systemId: string, sourceGeometry: string]
@@ -542,9 +593,12 @@ const emit = defineEmits<{
 }>()
 
 const svgElement = ref<SVGSVGElement | null>(null)
+const haloGradientId = `continuous-warden-halo-${useId()}`
 const routeLayer = ref<InstanceType<typeof ContinuousMapRouteLayer> | null>(null)
 const viewport = ref<MapViewport>({ x: 0, y: 0, k: 1 })
 const previewPositions = ref(new Map<string, Point>())
+const frameResizePreview = shallowRef<{ systemId: string; frame: SvgViewportRect } | null>(null)
+const elasticPlacementPreview = shallowRef<(ContinuousMapElasticPlacementPreview & { systemId: string }) | null>(null)
 const selectedObjectDragPreview = shallowRef<SelectedObjectDragPreview | null>(null)
 const transferPreviewOverride = shallowRef<SystemObjectTransferMapPreview | null | undefined>(undefined)
 const objectMovePreview = shallowRef<{ systemId: string; objectId: string; projection: ContinuousWardenSystemProjection } | null>(null)
@@ -579,8 +633,14 @@ interface ActiveObjectDrag {
   legacyAnchor: Point
   projection: ContinuousWardenSystemProjection
   workspaceSnapshot: LocalWorkspace
+  anchor: Point
+  startDisplayedFrame: SvgViewportRect | null
+  preferredFrame: SvgViewportRect
+  fixedFrames: readonly ContinuousSystemFrameInput[]
+  startFrames: readonly ContinuousSystemFrameInput[]
   moved: boolean
   targetPosition: Point
+  targetScenePoint: Point
 }
 
 let activeObjectDrag: ActiveObjectDrag | null = null
@@ -612,6 +672,22 @@ let activeAnchorDrag: {
   preview: Point
   moved: boolean
 } | null = null
+interface ActiveSystemFrameResize {
+  systemId: string
+  corner: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  pointerId: number
+  startClient: Point
+  startScene: Point
+  camera: MapViewport
+  workspaceSnapshot: LocalWorkspace
+  anchor: Point
+  startFrame: SvgViewportRect
+  fixedFrames: readonly ContinuousSystemFrameInput[]
+  previewFrame: SvgViewportRect
+  moved: boolean
+}
+
+let activeSystemFrameResize: ActiveSystemFrameResize | null = null
 interface ActiveExitDrag {
   routeId: string
   pointerId: number
@@ -682,6 +758,8 @@ const projections = computed(() => props.cluster.systems.map((system, index) => 
   system,
   props.systemPositions[system.id] ?? initialClusterSystemPosition(index),
   systemGeometry.value,
+  undefined,
+  workspaceSystemFrame(props.workspace, system.id),
 )))
 const transferBranchPreview = computed(() => {
   const preview = transferPreviewOverride.value === undefined
@@ -695,7 +773,13 @@ const transferBranchPreview = computed(() => {
   const anchor = props.systemPositions[preview.destinationSystemId]
   if (!system || !anchor) return null
   try {
-    const projection = projectWardenSystem(system, anchor, systemMapGeometry(preview.previewWorkspace))
+    const projection = projectWardenSystem(
+      system,
+      anchor,
+      systemMapGeometry(preview.previewWorkspace),
+      undefined,
+      workspaceSystemFrame(preview.previewWorkspace, system.id),
+    )
     const movedObjectIds = new Set(preview.movedObjectIds)
     const movedOrbitIds = new Set(preview.movedOrbitIds)
     return {
@@ -717,21 +801,67 @@ const presentationProjections = computed(() => {
     system,
     draft.layout.systemPositions[system.id] ?? initialClusterSystemPosition(index),
     draft.layout,
+    undefined,
+    workspaceSystemFrame({ ...props.workspace, layout: draft.layout }, system.id),
   ))
 })
-const displayFrames = computed(() => continuousSystemFrames(presentationProjections.value.map(projection => {
+const systemFrameInputs = computed(() => presentationProjections.value.map(projection => {
   const anchor = anchorFor(projection)
   const delta = { x: anchor.x - projection.anchor.x, y: anchor.y - projection.anchor.y }
+  const preferred = projection.preferredFrame ?? projection.envelope
   return {
     id: projection.id,
     anchor,
     envelope: {
-      ...projection.envelope,
-      x: projection.envelope.x + delta.x,
-      y: projection.envelope.y + delta.y,
+      ...preferred,
+      x: preferred.x + delta.x,
+      y: preferred.y + delta.y,
     },
   }
-})))
+}))
+const displayFrames = computed(() => {
+  const resize = frameResizePreview.value
+  const baseline = baselineDisplayedFrameInputs()
+  if (!resize) return new Map(baseline.map(frame => [frame.id, frame.envelope] as const))
+  const preview = new Map(baseline.map(frame => [frame.id, frame.envelope] as const))
+  preview.set(resize.systemId, resize.frame)
+  return preview
+})
+
+function baselineDisplayedFrameInputs(): ContinuousSystemFrameInput[] {
+  const inputs = systemFrameInputs.value
+  const displayed = continuousSystemFrames(inputs)
+  return inputs.map(frame => ({ ...frame, envelope: displayed.get(frame.id) ?? frame.envelope }))
+}
+const systemFrameResizeHandles = computed(() => {
+  if (props.mode !== 'move' || props.presentation || props.selectedSystemId === null
+    || props.creationType !== null || props.clusterAddType !== null || props.clusterChooserOpen
+    || props.moveTargeting || props.clusterMoveTargeting || props.standaloneImportPlacementEnabled
+    || props.systemObjectTransferPreview || props.keyboardOwnedOverlayOpen) return []
+  const projection = presentationProjections.value.find(candidate => candidate.id === props.selectedSystemId)
+  const frame = displayFrames.value.get(props.selectedSystemId)
+  if (!projection || !hasPositiveFrame(frame)) return []
+  const size = SYSTEM_RESIZE_HANDLE_PIXELS / svgPixelScale.value
+  const left = viewport.value.x + viewport.value.k * frame.x
+  const top = viewport.value.y + viewport.value.k * frame.y
+  const right = viewport.value.x + viewport.value.k * (frame.x + frame.width)
+  const bottom = viewport.value.y + viewport.value.k * (frame.y + frame.height)
+  const cornerInset = Math.min(CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS, frame.width / 2, frame.height / 2)
+    * (1 - Math.SQRT1_2)
+  return [
+    { corner: 'top-left' as const, x: left + viewport.value.k * cornerInset, y: top + viewport.value.k * cornerInset },
+    { corner: 'top-right' as const, x: right - viewport.value.k * cornerInset, y: top + viewport.value.k * cornerInset },
+    { corner: 'bottom-left' as const, x: left + viewport.value.k * cornerInset, y: bottom - viewport.value.k * cornerInset },
+    { corner: 'bottom-right' as const, x: right - viewport.value.k * cornerInset, y: bottom - viewport.value.k * cornerInset },
+  ].map(handle => ({
+    ...handle,
+    systemId: projection.id,
+    systemName: projection.name,
+    x: handle.x - size / 2,
+    y: handle.y - size / 2,
+    size,
+  }))
+})
 const presentationProjectionById = computed(() => new Map(presentationProjections.value.map(projection => [projection.id, projection] as const)))
 const hiddenSelectedObjectCount = computed(() => {
   const owners = new Map(props.cluster.systems.flatMap(system => system.objects.map(object => [object.id, system.id] as const)))
@@ -929,6 +1059,13 @@ const sceneBounds = computed<SvgViewportRect | null>(() => {
     top = Math.min(top, projection.envelope.y + delta.y)
     right = Math.max(right, projection.envelope.x + delta.x + projection.envelope.width)
     bottom = Math.max(bottom, projection.envelope.y + delta.y + projection.envelope.height)
+    const displayed = displayFrames.value.get(projection.id)
+    if (displayed) {
+      left = Math.min(left, displayed.x + delta.x)
+      top = Math.min(top, displayed.y + delta.y)
+      right = Math.max(right, displayed.x + delta.x + displayed.width)
+      bottom = Math.max(bottom, displayed.y + delta.y + displayed.height)
+    }
   }
   for (const { bounds } of overviewRoutes.value.values()) {
     left = Math.min(left, bounds.x)
@@ -980,6 +1117,182 @@ function detailFrameFor(projection: ContinuousWardenSystemProjection): SvgViewpo
 function hasPositiveFrame(frame: SvgViewportRect | undefined): frame is SvgViewportRect {
   return !!frame && Number.isFinite(frame.width) && Number.isFinite(frame.height)
     && frame.width > 0 && frame.height > 0
+}
+
+function systemFrameResizeTarget(target: EventTarget | null): { systemId: string; corner: ActiveSystemFrameResize['corner'] } | null {
+  if (!(target instanceof Element)) return null
+  const button = target.closest<HTMLButtonElement>('button[data-system-resize-handle][data-system-id]')
+  const systemId = button?.getAttribute('data-system-id')
+  const corner = button?.getAttribute('data-system-resize-handle')
+  if (!systemId || (corner !== 'top-left' && corner !== 'top-right' && corner !== 'bottom-left' && corner !== 'bottom-right')) {
+    return null
+  }
+  return { systemId, corner }
+}
+
+function startSystemFrameResize(
+  event: PointerEvent,
+  element: SVGSVGElement,
+  target: NonNullable<ReturnType<typeof systemFrameResizeTarget>>,
+): void {
+  if (props.mode !== 'move' || props.selectedSystemId !== target.systemId
+    || props.presentation || props.creationType || props.clusterAddType || props.clusterChooserOpen
+    || props.moveTargeting || props.clusterMoveTargeting || props.standaloneImportPlacementEnabled
+    || props.systemObjectTransferPreview || props.keyboardOwnedOverlayOpen) return
+  const projection = presentationProjections.value.find(candidate => candidate.id === target.systemId)
+  const baselineFrames = baselineDisplayedFrameInputs()
+  const frame = baselineFrames.find(candidate => candidate.id === target.systemId)?.envelope
+  const startScene = cameraPoint(event)
+  if (!projection || !hasPositiveFrame(frame) || !startScene) return
+  const fixedFrames = baselineFrames.filter(candidate => candidate.id !== target.systemId)
+  activeSystemFrameResize = {
+    systemId: target.systemId,
+    corner: target.corner,
+    pointerId: event.pointerId,
+    startClient: { x: event.clientX, y: event.clientY },
+    startScene,
+    camera: getViewport(),
+    workspaceSnapshot: props.workspace,
+    anchor: anchorFor(projection),
+    startFrame: { ...frame },
+    fixedFrames,
+    previewFrame: { ...frame },
+    moved: false,
+  }
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  try { element.setPointerCapture(event.pointerId) } catch { /* Capture is best effort for synthetic input. */ }
+  emit('editing-gesture-change', true)
+}
+
+function resizeFrameFromDrag(drag: ActiveSystemFrameResize, point: Point): SvgViewportRect {
+  return resizeFrameByDelta(
+    drag.systemId,
+    drag.anchor,
+    drag.startFrame,
+    drag.corner,
+    { x: point.x - drag.startScene.x, y: point.y - drag.startScene.y },
+    drag.fixedFrames,
+  )
+}
+
+function resizeFrameByDelta(
+  systemId: string,
+  anchor: Point,
+  startFrame: SvgViewportRect,
+  corner: ActiveSystemFrameResize['corner'],
+  delta: Point,
+  fixedFrames: readonly ContinuousSystemFrameInput[],
+): SvgViewportRect {
+  let left = startFrame.x
+  let top = startFrame.y
+  let right = startFrame.x + startFrame.width
+  let bottom = startFrame.y + startFrame.height
+  const minimumWidth = Math.min(CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS * 2, startFrame.width)
+  const minimumHeight = Math.min(CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS * 2, startFrame.height)
+  if (corner.endsWith('left')) left = Math.min(right - minimumWidth, anchor.x, left + delta.x)
+  else right = Math.max(left + minimumWidth, anchor.x, right + delta.x)
+  if (corner.startsWith('top')) top = Math.min(bottom - minimumHeight, anchor.y, top + delta.y)
+  else bottom = Math.max(top + minimumHeight, anchor.y, bottom + delta.y)
+  const fixedCorner = {
+    x: corner.endsWith('left') ? startFrame.x + startFrame.width : startFrame.x,
+    y: corner.startsWith('top') ? startFrame.y + startFrame.height : startFrame.y,
+  }
+  const constrained = constrainContinuousSystemFrame({
+    id: systemId,
+    anchor,
+    envelope: { x: left, y: top, width: right - left, height: bottom - top },
+  }, fixedFrames, fixedCorner)
+  const contains = (frame: SvgViewportRect, point: Point) => point.x >= frame.x && point.x <= frame.x + frame.width
+    && point.y >= frame.y && point.y <= frame.y + frame.height
+  const anchorWasInside = contains(startFrame, anchor)
+  return hasPositiveFrame(constrained) && contains(constrained, fixedCorner)
+    && (!anchorWasInside || contains(constrained, anchor))
+    ? constrained
+    : startFrame
+}
+
+function updateSystemFrameResize(drag: ActiveSystemFrameResize, event: PointerEvent): void {
+  if (!hasMapDragThreshold(drag.startClient, { x: event.clientX, y: event.clientY }) && !drag.moved) return
+  drag.moved = true
+  const point = cameraPointAt(event, drag.camera)
+  if (!point) return
+  drag.previewFrame = resizeFrameFromDrag(drag, point)
+  frameResizePreview.value = { systemId: drag.systemId, frame: drag.previewFrame }
+  event.preventDefault()
+}
+
+function sameFrame(left: SvgViewportRect, right: SvgViewportRect): boolean {
+  return left.x === right.x && left.y === right.y && left.width === right.width && left.height === right.height
+}
+
+function finishSystemFrameResize(cancelled: boolean): void {
+  const drag = activeSystemFrameResize
+  if (!drag) return
+  activeSystemFrameResize = null
+  const element = svgElement.value
+  if (element?.hasPointerCapture(drag.pointerId)) {
+    try { element.releasePointerCapture(drag.pointerId) } catch { /* Capture may already be released. */ }
+  }
+  frameResizePreview.value = null
+  emit('editing-gesture-change', false)
+  if (cancelled || drag.moved) suppressClickAfterOwnedGesture()
+  if (cancelled || !drag.moved || sameFrame(drag.startFrame, drag.previewFrame)) return
+  try {
+    const insets = systemFrameInsetsFromRect(drag.anchor, drag.previewFrame)
+    emit('resize-system-frame', drag.systemId, insets, drag.workspaceSnapshot)
+  } catch {
+    // A frame that cannot contain its anchor is never published.
+  }
+}
+
+function resizeFrameWithKeyboard(
+  target: NonNullable<ReturnType<typeof systemFrameResizeTarget>>,
+  event: KeyboardEvent,
+): boolean {
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)
+    || props.mode !== 'move' || props.presentation || props.creationType || props.clusterAddType
+    || props.clusterChooserOpen || props.moveTargeting || props.clusterMoveTargeting
+    || props.standaloneImportPlacementEnabled || props.systemObjectTransferPreview
+    || props.keyboardOwnedOverlayOpen || props.selectedSystemId !== target.systemId) return false
+  const projection = presentationProjections.value.find(candidate => candidate.id === target.systemId)
+  const baselineFrames = baselineDisplayedFrameInputs()
+  const frame = baselineFrames.find(candidate => candidate.id === target.systemId)?.envelope
+  if (!projection || !hasPositiveFrame(frame)) return false
+  const step = event.shiftKey ? 10 : 2
+  let dx = 0
+  let dy = 0
+  if (target.corner.endsWith('left')) {
+    if (event.key === 'ArrowLeft') dx = -step
+    if (event.key === 'ArrowRight') dx = step
+  } else {
+    if (event.key === 'ArrowRight') dx = step
+    if (event.key === 'ArrowLeft') dx = -step
+  }
+  if (target.corner.startsWith('top')) {
+    if (event.key === 'ArrowUp') dy = -step
+    if (event.key === 'ArrowDown') dy = step
+  } else {
+    if (event.key === 'ArrowDown') dy = step
+    if (event.key === 'ArrowUp') dy = -step
+  }
+  const resized = resizeFrameByDelta(
+    target.systemId,
+    anchorFor(projection),
+    frame,
+    target.corner,
+    { x: dx, y: dy },
+    baselineFrames.filter(candidate => candidate.id !== target.systemId),
+  )
+  event.preventDefault()
+  event.stopPropagation()
+  if (sameFrame(frame, resized)) return true
+  try {
+    emit('resize-system-frame', target.systemId, systemFrameInsetsFromRect(anchorFor(projection), resized), props.workspace)
+  } catch {
+    // A frame that cannot contain its anchor is never published.
+  }
+  return true
 }
 
 function systemIdsAtDisplayPoint(point: Point): string[] {
@@ -2062,7 +2375,23 @@ function updateObjectMovePreview(drag: ActiveObjectDrag, scenePoint: Point): voi
   const previewWorkspace = applySelectedObjectTranslation(drag.workspaceSnapshot, drag.systemId, plan)
   const projection = projectWardenSystem(system, drag.legacyAnchor, systemMapGeometry(previewWorkspace), drag.projection.scale)
   drag.targetPosition = toNormalizedMapPoint(previewPosition)
+  drag.targetScenePoint = {
+    x: drag.projection.projectLocalPoint(targetLocal).x + drag.anchorDelta.x,
+    y: drag.projection.projectLocalPoint(targetLocal).y + drag.anchorDelta.y,
+  }
   objectMovePreview.value = { systemId: drag.systemId, objectId: drag.objectId, projection }
+  const elastic = drag.startDisplayedFrame && hasPositiveFrame(drag.startDisplayedFrame)
+    ? planContinuousMapElasticPlacement({
+    systemId: drag.systemId,
+    anchor: drag.anchor,
+    displayedFrame: drag.startDisplayedFrame,
+    preferredFrame: drag.preferredFrame,
+    target: drag.targetScenePoint,
+    fixedFrames: drag.fixedFrames,
+    pixelsPerSceneUnit: viewport.value.k * svgPixelScale.value,
+    })
+    : null
+  elasticPlacementPreview.value = elastic ? { ...elastic, systemId: drag.systemId } : null
 }
 
 function orbitEditTargetAtTarget(target: EventTarget | null): {
@@ -2442,13 +2771,124 @@ function finishObjectDrag(cancelled: boolean): void {
   }
   emit('editing-gesture-change', false)
   if (cancelled || drag.moved) suppressClickAfterOwnedGesture()
+  const elastic = elasticPlacementPreview.value?.systemId === drag.systemId
+    ? elasticPlacementPreview.value
+    : null
+  elasticPlacementPreview.value = null
   if (!cancelled && drag.moved) {
+    const transfer = transferDropForObjectDrag(drag)
+    if (transfer) {
+      clearObjectMovePreview()
+      emit('transfer-object-on-drop', transfer)
+      return
+    }
     const position = drag.targetPosition
+    const frameInsets = elastic?.acceptsDrop
+      ? frameInsetsFor(drag.anchor, elastic.preferredFrame)
+      : legacyFrameInsets(drag.workspaceSnapshot, drag.systemId, drag.anchor, drag.preferredFrame)
     clearObjectMovePreview()
-    emit('move-object-in-system', drag.systemId, drag.objectId, position, drag.workspaceSnapshot)
+    emit('move-object-in-system', drag.systemId, drag.objectId, position, drag.workspaceSnapshot, frameInsets)
     return
   }
   clearObjectMovePreview()
+}
+
+function frameInsetsFor(anchor: Point, frame: SvgViewportRect): SystemFrameInsets | undefined {
+  try {
+    return systemFrameInsetsFromRect(anchor, frame)
+  } catch {
+    return undefined
+  }
+}
+
+function legacyFrameInsets(
+  workspace: LocalWorkspace,
+  systemId: string,
+  anchor: Point,
+  frame: SvgViewportRect,
+): SystemFrameInsets | undefined {
+  if (workspaceSystemFrame(workspace, systemId)) return undefined
+  return frameInsetsFor(anchor, frame)
+}
+
+function transferDropForObjectDrag(drag: ActiveObjectDrag): SystemObjectTransferDrop | null {
+  const containingFrames = drag.startFrames.filter(frame =>
+    continuousMapRoundedFrameContains(drag.targetScenePoint, frame.envelope))
+  // Source and destination both count at their shared edge, so only a unique other frame transfers.
+  if (containingFrames.length !== 1 || containingFrames[0]?.id === drag.systemId) return null
+
+  const destinationSystemId = containingFrames[0]!.id
+  const destination = drag.workspaceSnapshot.cluster.systems.find(system => system.id === destinationSystemId)
+  const destinationProjection = projections.value.find(projection => projection.id === destinationSystemId)
+  const destinationFrame = containingFrames[0]!
+  if (!destination || !destinationProjection) return null
+
+  const destinationDelta = anchorDelta(destinationProjection)
+  const destinationLocalPoint = destinationProjection.unprojectLocalPoint({
+    x: drag.targetScenePoint.x - destinationDelta.x,
+    y: drag.targetScenePoint.y - destinationDelta.y,
+  })
+  const normalizedPoint = toNormalizedMapPoint(destinationLocalPoint)
+  if (![normalizedPoint.x, normalizedPoint.y].every(Number.isFinite)) return null
+
+  const geometry = systemMapGeometry(drag.workspaceSnapshot)
+  const orbitHit = orbitPlacementHitsAtPoint(
+    destination,
+    fromNormalizedMapPoint(normalizedPoint),
+    objectPositions(destination, geometry),
+    geometry,
+    drag.objectId,
+  ).find(candidate => candidate.valid)
+  const orbitCandidate = orbitHit
+    ? { kind: 'orbit' as const, orbitId: orbitHit.orbit.id, angle: orbitHit.angle }
+    : null
+  const placement = resolveSystemObjectTransferMapPlacement(
+    destination,
+    geometry,
+    drag.objectId,
+    orbitCandidate,
+    normalizedPoint,
+  )
+  if (!placement) return null
+
+  const destinationAnchor = {
+    x: destinationProjection.anchor.x + destinationDelta.x,
+    y: destinationProjection.anchor.y + destinationDelta.y,
+  }
+  const authoredDestination = destinationProjection.preferredFrame ?? destinationProjection.envelope
+  const destinationPreferredFrame = {
+    ...authoredDestination,
+    x: authoredDestination.x + destinationDelta.x,
+    y: authoredDestination.y + destinationDelta.y,
+  }
+  const destinationElastic = planContinuousMapElasticPlacement({
+    systemId: destinationSystemId,
+    anchor: destinationAnchor,
+    displayedFrame: destinationFrame.envelope,
+    preferredFrame: destinationPreferredFrame,
+    target: drag.targetScenePoint,
+    fixedFrames: drag.startFrames.filter(frame => frame.id !== destinationSystemId),
+    pixelsPerSceneUnit: drag.camera.k * svgPixelScale.value,
+  })
+  const sourceFrameInsets = legacyFrameInsets(
+    drag.workspaceSnapshot,
+    drag.systemId,
+    drag.anchor,
+    drag.preferredFrame,
+  )
+  const destinationFrameInsets = destinationElastic?.acceptsDrop
+    ? frameInsetsFor(destinationAnchor, destinationElastic.preferredFrame)
+    : legacyFrameInsets(drag.workspaceSnapshot, destinationSystemId, destinationAnchor, destinationPreferredFrame)
+
+  return {
+    sourceSystemId: drag.systemId,
+    rootObjectId: drag.objectId,
+    destinationSystemId,
+    placement,
+    workspaceSnapshot: drag.workspaceSnapshot,
+    ...(sourceFrameInsets ? { sourceFrameInsets } : {}),
+    ...(destinationFrameInsets ? { destinationFrameInsets } : {}),
+  }
 }
 
 function startExitDrag(event: PointerEvent, element: SVGSVGElement, routeId: string): void {
@@ -2505,6 +2945,7 @@ function finishExitDrag(cancelled: boolean): void {
 
 function editingPointerId(): number | undefined {
   return activeOrbitGesture?.pointerId
+    ?? activeSystemFrameResize?.pointerId
     ?? activeSelectedObjectDrag?.pointerId
     ?? activeObjectDrag?.pointerId
     ?? activeAnchorDrag?.pointerId
@@ -2520,9 +2961,14 @@ function onPointerDownCapture(event: PointerEvent): void {
   }
   clearOwnedGestureClickSuppression()
   takePendingMapClickTarget()
+  const resizeTarget = systemFrameResizeTarget(event.target)
+  const element = svgElement.value
+  if (resizeTarget && element) {
+    startSystemFrameResize(event, element, resizeTarget)
+    if (activeSystemFrameResize?.pointerId === event.pointerId) return
+  }
   if (props.standaloneImportPlacementEnabled || event.button !== 0 || props.mode !== 'move' || props.moveTargeting || props.clusterMoveTargeting
     || props.clusterAddType != null || props.creationType != null) return
-  const element = svgElement.value
   const moveHit = moveTargetAtPoint(event, element)
   const moveTarget = moveHit.target
   if (!moveTarget && moveHit.blockedCommand) {
@@ -2574,6 +3020,10 @@ function onPointerDownCapture(event: PointerEvent): void {
     if (!projection || !localObject || !system || !legacyAnchor || !scene) return
     const camera = getViewport()
     const delta = anchorDelta(projection)
+    const baselineFrames = baselineDisplayedFrameInputs()
+    const displayedFrame = baselineFrames.find(candidate => candidate.id === objectTarget.systemId)?.envelope
+    const authored = projection.preferredFrame ?? projection.envelope
+    const preferredFrame = { ...authored, x: authored.x + delta.x, y: authored.y + delta.y }
     activeObjectDrag = {
       systemId: objectTarget.systemId,
       objectId: objectTarget.objectId,
@@ -2586,8 +3036,14 @@ function onPointerDownCapture(event: PointerEvent): void {
       legacyAnchor: { ...legacyAnchor },
       projection,
       workspaceSnapshot: props.workspace,
+      anchor: { x: projection.anchor.x + delta.x, y: projection.anchor.y + delta.y },
+      startDisplayedFrame: hasPositiveFrame(displayedFrame) ? { ...displayedFrame } : null,
+      preferredFrame,
+      fixedFrames: baselineFrames.filter(candidate => candidate.id !== objectTarget.systemId),
+      startFrames: baselineFrames.map(candidate => ({ ...candidate, envelope: { ...candidate.envelope } })),
       moved: false,
       targetPosition: toNormalizedMapPoint(localObject.position),
+      targetScenePoint: { x: localObject.scenePosition.x + delta.x, y: localObject.scenePosition.y + delta.y },
     }
     event.preventDefault()
     event.stopPropagation()
@@ -2629,6 +3085,10 @@ function onPointerMoveCapture(event: PointerEvent): void {
     const point = orbitGestureLocalPoint(orbitGesture, event)
     if (point) previewOrbitGestureAt(orbitGesture, point)
     event.preventDefault()
+    return
+  }
+  if (activeSystemFrameResize?.pointerId === event.pointerId) {
+    updateSystemFrameResize(activeSystemFrameResize, event)
     return
   }
   const selectedObjectDrag = activeSelectedObjectDrag
@@ -2685,6 +3145,17 @@ function onPointerEndCapture(event: PointerEvent): void {
   if (editingPointerId() !== event.pointerId) return
   // Pointer capture retargets the event to the SVG even when chrome covers the actual release.
   const cancelled = event.type === 'pointercancel' || !isClientPointOnMap(event.clientX, event.clientY)
+  if (activeSystemFrameResize?.pointerId === event.pointerId) {
+    const resize = activeSystemFrameResize
+    if (!cancelled && (resize.moved || hasMapDragThreshold(resize.startClient, { x: event.clientX, y: event.clientY }))) {
+      updateSystemFrameResize(resize, event)
+    }
+    finishSystemFrameResize(cancelled)
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    return
+  }
   const exitDrag = activeExitDrag
   if (exitDrag?.pointerId === event.pointerId) {
     if (!cancelled) {
@@ -2781,6 +3252,7 @@ function onPointerEndCapture(event: PointerEvent): void {
 }
 
 function onLostPointerCapture(event: PointerEvent): void {
+  if (activeSystemFrameResize?.pointerId === event.pointerId) finishSystemFrameResize(true)
   if (activeExitDrag?.pointerId === event.pointerId) finishExitDrag(true)
   if (activeOrbitGesture?.pointerId === event.pointerId) finishOrbitGesture(true)
   if (activeSelectedObjectDrag?.pointerId === event.pointerId) finishSelectedObjectDrag(true)
@@ -2872,6 +3344,14 @@ function onClickCapture(event: MouseEvent): void {
 
 function onKeydownCapture(event: KeyboardEvent): void {
   if (event.defaultPrevented) return
+  if (event.key === 'Escape' && editingPointerId() !== undefined) {
+    event.preventDefault()
+    event.stopPropagation()
+    cancelActiveGesture()
+    return
+  }
+  const resizeTarget = systemFrameResizeTarget(event.target)
+  if (resizeTarget && resizeFrameWithKeyboard(resizeTarget, event)) return
   const objectTarget = objectTargetAtTarget(event.target)
   const orbitTarget = orbitTargetAtTarget(event.target)
   const systemId = systemIdAtTarget(event.target)
@@ -3209,6 +3689,7 @@ function getImageContextKey(scope: MapImageScope | null = 'viewport'): string {
 function cancelActiveGesture(): void {
   viewPan = null
   if (activeOrbitGesture) finishOrbitGesture(true)
+  if (activeSystemFrameResize) finishSystemFrameResize(true)
   if (activeSelectedObjectDrag) finishSelectedObjectDrag(true)
   if (activeObjectDrag) finishObjectDrag(true)
   if (activeAnchorDrag) finishAnchorDrag(true)
@@ -3234,12 +3715,13 @@ function clearViewportFeedbackTimer(): void {
 }
 
 function startTouchNavigation(event: TouchEvent): void {
-  if (event.touches.length <= 1 && (activeExitDrag || activeOrbitGesture || activeObjectDrag || activeSelectedObjectDrag)) {
+  if (event.touches.length <= 1 && (activeExitDrag || activeOrbitGesture || activeSystemFrameResize || activeObjectDrag || activeSelectedObjectDrag)) {
     touchCameraNavigation.clearDoubleTap()
     return
   }
   if (activeExitDrag) finishExitDrag(true)
   if (activeOrbitGesture) finishOrbitGesture(true)
+  if (activeSystemFrameResize) finishSystemFrameResize(true)
   if (activeObjectDrag) finishObjectDrag(true)
   if (activeSelectedObjectDrag) finishSelectedObjectDrag(true)
   if (activeAnchorDrag) {
@@ -3250,12 +3732,12 @@ function startTouchNavigation(event: TouchEvent): void {
 }
 
 function moveTouchNavigation(event: TouchEvent): void {
-  if (activeOrbitGesture || activeAnchorDrag || activeExitDrag || activeObjectDrag || activeSelectedObjectDrag) return
+  if (activeOrbitGesture || activeSystemFrameResize || activeAnchorDrag || activeExitDrag || activeObjectDrag || activeSelectedObjectDrag) return
   touchCameraNavigation.move(event)
 }
 
 function endTouchNavigation(event: TouchEvent): void {
-  if (activeOrbitGesture || activeAnchorDrag || activeExitDrag || activeObjectDrag || activeSelectedObjectDrag) return
+  if (activeOrbitGesture || activeSystemFrameResize || activeAnchorDrag || activeExitDrag || activeObjectDrag || activeSelectedObjectDrag) return
   touchCameraNavigation.end(event)
 }
 
@@ -3341,6 +3823,7 @@ onBeforeUnmount(() => {
 watch(() => props.mode, () => cancelActiveGesture(), { flush: 'sync' })
 watch(() => props.workspace, workspace => {
   transferPreviewOverride.value = undefined
+  if (activeSystemFrameResize && toRaw(activeSystemFrameResize.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
   if (activeExitDrag && toRaw(activeExitDrag.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
   if (activeSelectedObjectDrag && toRaw(activeSelectedObjectDrag.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
   if (activeObjectDrag && toRaw(activeObjectDrag.workspaceSnapshot) !== toRaw(workspace)) cancelActiveGesture()
@@ -3350,6 +3833,7 @@ watch(() => props.systemObjectTransferPreview, () => {
   transferPreviewOverride.value = undefined
 }, { flush: 'sync' })
 watch(() => props.cluster.systems.map(system => system.id).join('\u0000'), ids => {
+  if (activeSystemFrameResize && !ids.split('\u0000').includes(activeSystemFrameResize.systemId)) cancelActiveGesture()
   if (activeSelectedObjectDrag && !ids.split('\u0000').includes(activeSelectedObjectDrag.systemId)) cancelActiveGesture()
   if (activeObjectDrag && !ids.split('\u0000').includes(activeObjectDrag.systemId)) cancelActiveGesture()
   if (activeOrbitGesture && !ids.split('\u0000').includes(activeOrbitGesture.systemId)) cancelActiveGesture()
@@ -3435,23 +3919,74 @@ defineExpose({
 }
 
 .continuous-warden-system-envelope {
-  fill: color-mix(in srgb, var(--map-orbit) 5%, transparent);
-  stroke: color-mix(in srgb, var(--map-orbit) 48%, transparent);
+  fill: var(--warden-halo-fill);
+  stroke: color-mix(in srgb, var(--map-orbit) 58%, transparent);
   stroke-width: 1.25;
-  stroke-dasharray: 5 5;
+  stroke-dasharray: 2 5;
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--map-orbit) 30%, transparent));
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
 
 .continuous-warden-system-envelope.is-detailed {
-  fill: color-mix(in srgb, var(--map-selected) 5%, transparent);
-  stroke: color-mix(in srgb, var(--map-selected) 70%, transparent);
-  stroke-dasharray: none;
+  stroke: color-mix(in srgb, var(--map-orbit) 72%, transparent);
 }
 
 .continuous-warden-system-envelope.is-move-preview {
-  stroke: var(--map-selected);
-  stroke-width: 2;
+  stroke: color-mix(in srgb, var(--map-orbit) 78%, transparent);
+  stroke-width: 1.75;
+}
+
+.continuous-warden-system-envelope.is-elastic-replaced {
+  opacity: 0;
+}
+
+.continuous-warden-elastic-envelope {
+  fill: var(--warden-halo-fill);
+  stroke: color-mix(in srgb, var(--map-orbit) 76%, transparent);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 5;
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--map-orbit) 34%, transparent));
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.continuous-warden-system-resize-target {
+  overflow: visible;
+  pointer-events: all;
+}
+
+.continuous-warden-system-resize-button {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--map-orbit);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.continuous-warden-system-resize-button span {
+  width: 9px;
+  height: 9px;
+  border: 1px solid currentColor;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--map-bg) 86%, transparent);
+  box-shadow: 0 0 3px color-mix(in srgb, var(--map-orbit) 36%, transparent);
+  transform: rotate(45deg);
+}
+
+.continuous-warden-system-resize-button:focus-visible span {
+  outline: 2px solid var(--map-orbit);
+  outline-offset: 2px;
+}
+
+.continuous-warden-system-resize-button[data-system-resize-handle="top-right"],
+.continuous-warden-system-resize-button[data-system-resize-handle="bottom-left"] {
+  cursor: nesw-resize;
 }
 
 .continuous-warden-import-placement-preview {

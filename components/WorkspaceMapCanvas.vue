@@ -78,6 +78,8 @@
       @orbit-adjustment="forwardOrbitAdjustment"
       @entity-command-blocked="emit('entity-command-blocked', $event)"
       @move-object-in-system="forwardMoveObjectInSystem"
+      @resize-system-frame="forwardResizeSystemFrame"
+      @transfer-object-on-drop="forwardObjectDropTransfer"
       @move-orbit-center="forwardMoveOrbitCenter"
       @orbit-center-candidates="forwardOrbitCenterCandidates"
       @resize-orbit="forwardResizeOrbit"
@@ -192,6 +194,7 @@ import type {
   Point,
   StarSystem,
   SystemObjectTransferPlacement,
+  SystemFrameInsets,
 } from '../domain/workspace'
 import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
 import type {
@@ -222,6 +225,7 @@ import type { SearchTarget } from '../utils/workspace-search'
 import type { InspectedMapTarget } from '../stores/editor-ui'
 import type { ContinuousObjectAddTarget } from '../utils/continuous-map-editing'
 import type {
+  SystemObjectTransferDrop,
   SystemObjectTransferMapAnchor,
   SystemObjectTransferMapPlacementLease,
   SystemObjectTransferMapPointerPreview,
@@ -329,7 +333,9 @@ const emit = defineEmits<{
   'cluster-target': [point: Point, systemIds: string[]]
   'continuous-object-add-target': [request: ContinuousObjectAddTarget]
   'continuous-orbit-add-target': [owners: readonly { systemId: string; candidates: SystemCreationCandidate[] }[], requiresChoice: boolean, workspace: LocalWorkspace]
-  'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace]
+  'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace, frameInsets?: SystemFrameInsets]
+  'resize-system-frame': [systemId: string, insets: SystemFrameInsets, workspaceSnapshot: LocalWorkspace]
+  'transfer-object-on-drop': [drop: SystemObjectTransferDrop]
   'standalone-import-placement-anchor': [anchor: Point]
   'cancel-standalone-import-placement': []
   'cancel-cluster-preview': []
@@ -743,9 +749,22 @@ function forwardMoveObjectInSystem(
   objectId: string,
   position: Point,
   workspaceSnapshot: LocalWorkspace,
+  frameInsets?: SystemFrameInsets,
 ): void {
   holdClickSuppression()
-  emit('move-object-in-system', systemId, objectId, position, workspaceSnapshot)
+  emit('move-object-in-system', systemId, objectId, position, workspaceSnapshot, frameInsets)
+}
+
+function forwardResizeSystemFrame(systemId: string, insets: SystemFrameInsets, workspaceSnapshot: LocalWorkspace): void {
+  if (props.mode !== 'move') return
+  holdClickSuppression()
+  emit('resize-system-frame', systemId, insets, workspaceSnapshot)
+}
+
+function forwardObjectDropTransfer(drop: SystemObjectTransferDrop): void {
+  if (props.mode !== 'move') return
+  holdClickSuppression()
+  emit('transfer-object-on-drop', drop)
 }
 
 function hasOrbitAddIntent(): boolean {
@@ -760,7 +779,8 @@ function isMapEntityTarget(target: EventTarget | null): boolean {
   return target instanceof Element
     && !!target.closest(
       '.cluster-system-node, .cluster-route, .system-object, .orbit-mark, .orbit-hit-target, .orbit-edit-control, '
-      + '.continuous-warden-object, .continuous-warden-orbit-target, .continuous-warden-orbit-edit-handle',
+      + '.continuous-warden-object, .continuous-warden-orbit-target, .continuous-warden-orbit-edit-handle, '
+      + '[data-system-resize-handle]',
     )
 }
 

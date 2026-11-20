@@ -84,6 +84,116 @@ export function continuousSystemFrames(
   }))
 }
 
+/** Constrains one proposed frame against fixed neighbors without moving those neighbors. */
+export function constrainContinuousSystemFrame(
+  proposal: ContinuousSystemFrameInput,
+  fixedFrames: readonly ContinuousSystemFrameInput[],
+  /** Optional opposite corner to keep fixed during a resize. */
+  fixedCorner?: Point,
+): SvgViewportRect {
+  if (fixedFrames.some(frame => frame.id === proposal.id)
+    || new Set(fixedFrames.map(frame => frame.id)).size !== fixedFrames.length) {
+    throw new Error('A proposed system frame needs unique system identities.')
+  }
+
+  const proposalBounds = boundsOf(proposal.envelope)
+  let { left, top, right, bottom } = proposalBounds
+  const anchorIsAuthored = proposal.anchor.x >= left && proposal.anchor.x <= right
+    && proposal.anchor.y >= top && proposal.anchor.y <= bottom
+
+  // Stable ordering makes the result independent of how callers enumerate fixed neighbors.
+  const orderedFixedFrames = [...fixedFrames].sort((leftFrame, rightFrame) =>
+    leftFrame.id < rightFrame.id ? -1 : leftFrame.id > rightFrame.id ? 1 : 0,
+  )
+  for (const fixed of orderedFixedFrames) {
+    const fixedBounds = boundsOf(fixed.envelope)
+    if (!(Math.min(right, fixedBounds.right) > Math.max(left, fixedBounds.left)
+      && Math.min(bottom, fixedBounds.bottom) > Math.max(top, fixedBounds.top))) continue
+
+    const deltaX = fixed.anchor.x - proposal.anchor.x
+    const deltaY = fixed.anchor.y - proposal.anchor.y
+    const horizontalComesFirst = deltaX === 0 ? proposal.id < fixed.id : deltaX > 0
+    const verticalComesFirst = deltaY > 0
+    const current = { left, top, right, bottom }
+    const horizontal = clipToFixedNeighbor(current, fixedBounds, 'x', horizontalComesFirst)
+    const vertical = clipToFixedNeighbor(current, fixedBounds, 'y', verticalComesFirst)
+    const prefersHorizontal = Math.abs(deltaX) >= Math.abs(deltaY)
+    const preferred = prefersHorizontal ? horizontal : vertical
+    const alternate = prefersHorizontal ? vertical : horizontal
+    const preservesResizeGeometry = (bounds: FrameCaps) => hasPositiveArea(bounds)
+      && (!anchorIsAuthored || containsAnchor(bounds, proposal.anchor))
+      && (!fixedCorner || containsAnchor(bounds, fixedCorner))
+    const preferredPreservesGeometry = preservesResizeGeometry(preferred)
+    const alternatePreservesGeometry = preservesResizeGeometry(alternate)
+    const constrained = !preferredPreservesGeometry && alternatePreservesGeometry ? alternate : preferred
+    left = constrained.left
+    top = constrained.top
+    right = constrained.right
+    bottom = constrained.bottom
+
+    if (anchorIsAuthored && (proposal.anchor.x < left || proposal.anchor.x > right)) {
+      left = proposal.anchor.x
+      right = proposal.anchor.x
+    }
+    if (right < left) {
+      const corner = anchorIsAuthored
+        ? proposal.anchor.x
+        : clamp(proposal.anchor.x, proposalBounds.left, proposalBounds.right)
+      left = corner
+      right = corner
+    }
+    if (anchorIsAuthored && (proposal.anchor.y < top || proposal.anchor.y > bottom)) {
+      top = proposal.anchor.y
+      bottom = proposal.anchor.y
+    }
+    if (bottom < top) {
+      const corner = anchorIsAuthored
+        ? proposal.anchor.y
+        : clamp(proposal.anchor.y, proposalBounds.top, proposalBounds.bottom)
+      top = corner
+      bottom = corner
+    }
+  }
+
+  return { x: left, y: top, width: right - left, height: bottom - top }
+}
+
+function boundsOf(rect: SvgViewportRect): FrameCaps {
+  const farX = rect.x + rect.width
+  const farY = rect.y + rect.height
+  return {
+    left: Math.min(rect.x, farX),
+    top: Math.min(rect.y, farY),
+    right: Math.max(rect.x, farX),
+    bottom: Math.max(rect.y, farY),
+  }
+}
+
+function clipToFixedNeighbor(
+  bounds: FrameCaps,
+  fixed: FrameCaps,
+  axis: 'x' | 'y',
+  proposalComesFirst: boolean,
+): FrameCaps {
+  if (axis === 'x') {
+    return proposalComesFirst
+      ? { ...bounds, right: Math.min(bounds.right, fixed.left) }
+      : { ...bounds, left: Math.max(bounds.left, fixed.right) }
+  }
+  return proposalComesFirst
+    ? { ...bounds, bottom: Math.min(bounds.bottom, fixed.top) }
+    : { ...bounds, top: Math.max(bounds.top, fixed.bottom) }
+}
+
+function containsAnchor(bounds: FrameCaps, anchor: Point): boolean {
+  return anchor.x >= bounds.left && anchor.x <= bounds.right
+    && anchor.y >= bounds.top && anchor.y <= bounds.bottom
+}
+
+function hasPositiveArea(bounds: FrameCaps): boolean {
+  return bounds.right > bounds.left && bounds.bottom > bounds.top
+}
+
 function applyPairCap(
   caps: Map<string, FrameCaps>,
   firstId: string,
