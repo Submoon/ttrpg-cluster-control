@@ -28,7 +28,7 @@
         <radialGradient :id="`${haloGradientId}-fill`" cx="50%" cy="50%" r="55%">
           <stop offset="0%" stop-color="var(--map-text)" stop-opacity="0" />
           <stop offset="35%" stop-color="var(--map-text)" stop-opacity="0" />
-          <stop offset="85%" stop-color="var(--map-text)" stop-opacity="0.14" />
+          <stop offset="85%" stop-color="var(--map-text)" stop-opacity="0.09" />
           <stop offset="100%" stop-color="var(--map-text)" stop-opacity="0" />
         </radialGradient>
       </defs>
@@ -85,6 +85,7 @@
               }"
               :data-system-id="projection.id"
               :transform="anchorTransform(projection)"
+              :style="{ '--anchor-detail-progress': detailMotion.progressFor(projection.id) }"
               role="button"
               tabindex="0"
               :aria-label="`Select ${projection.name}`"
@@ -94,11 +95,18 @@
               <circle class="continuous-warden-anchor-core" r="2" />
             </g>
 
-            <Transition name="continuous-warden-detail" @before-leave="deactivateDetailOnExit">
             <g
               v-if="mountedDetailSystemIds.has(projection.id)"
               class="continuous-warden-system-detail"
+              :class="{
+                'is-entering': detailMotion.progressFor(projection.id) < 1,
+                'is-exiting': !detailSystemIds.has(projection.id),
+              }"
               :transform="systemTransform(projection)"
+              :fill-opacity="detailMotion.progressFor(projection.id)"
+              :stroke-opacity="detailMotion.progressFor(projection.id)"
+              :aria-hidden="detailSystemIds.has(projection.id) && detailMotion.progressFor(projection.id) >= 1 ? undefined : 'true'"
+              :inert="detailSystemIds.has(projection.id) && detailMotion.progressFor(projection.id) >= 1 ? undefined : ''"
             >
               <g class="system-orbits">
                 <ellipse
@@ -263,8 +271,6 @@
                 </g>
               </g>
             </g>
-            </Transition>
-
             <g v-if="orbitAddPreview?.systemId === projection.id" :transform="systemTransform(projection)">
               <ellipse
                 class="orbit-creation-preview-ring"
@@ -370,7 +376,8 @@
             </g>
           </g>
         </g>
-        <g class="continuous-warden-name-layer" :transform="screenLayerTransform">
+      </g>
+      <g class="continuous-warden-name-layer">
           <g v-for="label in nameLabels" :key="label.id">
             <line
               v-if="label.hasLeader"
@@ -429,7 +436,6 @@
             </foreignObject>
           </template>
         </g>
-      </g>
     </svg>
     <div
       v-if="selectedObjectDragPreview"
@@ -475,9 +481,6 @@ import {
 } from '../utils/map-zoom'
 import {
   clampWardenClusterAnchor,
-  CONTINUOUS_MAP_DETAIL_HIDE_PIXELS,
-  CONTINUOUS_MAP_DETAIL_REVEAL_PIXELS,
-  continuousMapNameTransitionProgress,
   continuousMapDetailScale,
   continuousMapTextScale,
   CONTINUOUS_MAP_LOCAL_ORIGIN,
@@ -528,10 +531,9 @@ import {
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
 import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
 import type { SelectedObjectDrag, SelectedObjectDragPreview } from '../composables/editor-workflows/selected-object-drag'
+import { useContinuousMapDetailMotion } from '../composables/useContinuousMapDetailMotion'
 import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
 
-const DETAIL_REVEAL_PIXELS = CONTINUOUS_MAP_DETAIL_REVEAL_PIXELS
-const DETAIL_HIDE_PIXELS = CONTINUOUS_MAP_DETAIL_HIDE_PIXELS
 const SEARCH_LOCATOR_LOCAL_RADIUS = 25
 const SEARCH_LOCATOR_MIN_SCREEN_RADIUS = 10
 const MINIMUM_FIT_PADDING = 48
@@ -620,7 +622,8 @@ const directOrbitPreview = shallowRef<{ systemId: string; orbitId: string; proje
 const orbitPlacementPreview = shallowRef<{ systemId: string; orbitId: string; preview: { center: Point; radii: { horizontal: number; vertical: number }; rotation?: number } } | null>(null)
 const exitPositionOverrides = ref(new Map<string, Point>())
 const previewVersions = ref(new Map<string, number>())
-const detailSystemIds = ref(new Set<string>())
+const detailSystemIds = shallowRef<ReadonlySet<string>>(new Set())
+const detailMotion = useContinuousMapDetailMotion(detailSystemIds)
 const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
 const svgPixelScale = ref(1)
 const svgViewport = ref<SvgViewportRect>({ x: 0, y: 0, width: 960, height: 560 })
@@ -937,7 +940,7 @@ const mountedDetailSystemIds = computed(() => {
   }
 
   for (const projection of renderedProjections.value) {
-    if (!detailSystemIds.value.has(projection.id)) continue
+    if (!detailSystemIds.value.has(projection.id) && !detailMotion.isLeaving(projection.id)) continue
     if (projection.id === focusedSystemId || activeSystemIds.has(projection.id)
       || detailSystemIntersectsViewport(projection)) mounted.add(projection.id)
   }
@@ -1117,11 +1120,6 @@ const sceneBounds = computed<SvgViewportRect | null>(() => {
 })
 
 const cameraTransform = computed(() => `translate(${viewport.value.x} ${viewport.value.y}) scale(${viewport.value.k})`)
-const screenLayerTransform = computed(() => {
-  const { x, y, k } = viewport.value
-  return `translate(${-x / k} ${-y / k}) scale(${1 / k})`
-})
-
 function anchorFor(projection: ContinuousWardenSystemProjection): Point {
   const preview = previewPositions.value.get(projection.id)
   return preview
@@ -1386,7 +1384,7 @@ function anchorTransform(projection: ContinuousWardenSystemProjection): string {
   return `translate(${anchor.x} ${anchor.y}) scale(${1 / (viewport.value.k * svgPixelScale.value)})`
 }
 
-const nameLabels = computed<ContinuousMapNameLabel[]>(() => continuousMapNameLabels({
+const nameLabelLayout = computed<ContinuousMapNameLabel[]>(() => continuousMapNameLabels({
   projections: presentationProjections.value.map(projection => ({
     ...projection,
     anchor: anchorFor(projection),
@@ -1395,17 +1393,21 @@ const nameLabels = computed<ContinuousMapNameLabel[]>(() => continuousMapNameLab
   viewport: viewport.value,
   viewportRect: svgViewport.value,
   svgPixelScale: svgPixelScale.value,
-}).map(label => {
+}))
+function positionNameLabel(label: ContinuousMapNameLabel, progress: number): ContinuousMapNameLabel {
   const projection = presentationProjectionById.value.get(label.id)
   if (!projection) return label
   const frame = detailFrameFor(projection)
-  const progress = continuousMapNameTransitionProgress(semanticEnvelopeFor(projection), viewport.value.k, svgPixelScale.value)
   return {
     ...label,
     ...continuousMapNameLabelFramePosition(label, frame, viewport.value, svgPixelScale.value, progress, svgViewport.value),
     hasLeader: label.hasLeader && progress < .12,
   }
-}))
+}
+
+const nameLabels = computed(() => nameLabelLayout.value.map(label =>
+  positionNameLabel(label, detailMotion.progressFor(label.id)),
+))
 
 const sceneObjects = computed(() => new Map(sceneCluster.value.systems.map(system =>
   [system.id, new Map(system.objects.map(object => [object.id, object]))],
@@ -1415,12 +1417,15 @@ function localObject(projectionId: string, objectId: string): StarSystem['object
   return sceneObjects.value.get(projectionId)?.get(objectId)
 }
 
-const routeLabelObstacles = computed(() => nameLabels.value.map(label => ({
-  x: label.x - label.width / 2,
-  y: label.y,
-  width: label.width,
-  height: label.height,
-})))
+const routeLabelObstacles = computed(() => nameLabelLayout.value.map(label => {
+  const positioned = positionNameLabel(label, Number(detailSystemIds.value.has(label.id)))
+  return {
+    x: positioned.x - positioned.width / 2,
+    y: positioned.y,
+    width: positioned.width,
+    height: positioned.height,
+  }
+}))
 
 function objectGlyph(projectionId: string, objectId: string): string {
   const object = localObject(projectionId, objectId)
@@ -1524,8 +1529,11 @@ function detailSystemIdsAtScale(cameraScale: number): Set<string> {
   const current = detailSystemIds.value
   const next = new Set<string>()
   for (const projection of presentationProjections.value) {
-    const threshold = current.has(projection.id) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS
-    if (cameraScale >= Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, threshold))) {
+    const minimumScale = Math.min(
+      MAP_ZOOM_MAX_SCALE,
+      continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, current.has(projection.id)),
+    )
+    if (cameraScale >= minimumScale) {
       next.add(projection.id)
     }
   }
@@ -1540,12 +1548,6 @@ function updateDetailReveal(cameraScale: number): void {
     preserveFocusBeforeDetailCollapse(next)
     detailSystemIds.value = next
   }
-}
-
-function deactivateDetailOnExit(element: Element): void {
-  element.setAttribute('aria-hidden', 'true')
-  element.setAttribute('inert', '')
-  element.classList.add('is-exiting')
 }
 
 function preserveFocusBeforeDetailCollapse(nextDetailSystemIds: ReadonlySet<string>): void {
@@ -1713,7 +1715,7 @@ function frameSystem(systemId: string, usableRect?: SvgViewportRect, centerTarge
   const detailScaleFloor = continuousMapDetailScale(
     semanticEnvelopeFor(projection),
     svgPixelScale.value,
-    detailSystemIds.value.has(projection.id) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS,
+    detailSystemIds.value.has(projection.id),
   )
   const next = centerMapTargetViewport({
     current,
@@ -1828,7 +1830,7 @@ function frameEntityTarget(
   const current = getViewport()
   const minimumScale = detailSystemIds.value.has(projection.id)
     ? undefined
-    : Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, DETAIL_REVEAL_PIXELS))
+    : Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, false))
   const next = centerTarget
     ? centerMapTargetViewport({
         current,
@@ -1914,7 +1916,7 @@ function frameSearchObjectBranch(systemId: string, objectId: string, usableRect?
   const minimumScale = Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(
     semanticEnvelopeFor(projection),
     svgPixelScale.value,
-    detailSystemIds.value.has(systemId) ? DETAIL_HIDE_PIXELS : DETAIL_REVEAL_PIXELS,
+    detailSystemIds.value.has(systemId),
   ))
   const branchFrame = centerMapTargetViewport({
     current,
@@ -2054,7 +2056,7 @@ function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportR
     const halfWidth = Math.max(18, object.name.length * 3.6, object.locationKey.length * 2.8)
     bounds = { x: center.x - halfWidth, y: center.y - 27, width: halfWidth * 2, height: 54 }
     if (!detailSystemIds.value.has(projection.id)) {
-      minimumScale = Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, DETAIL_REVEAL_PIXELS))
+      minimumScale = Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, false))
     }
   } else if (target.kind === 'orbit') {
     const orbit = projection.orbits.find(candidate => candidate.id === target.id)
@@ -2064,7 +2066,7 @@ function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportR
     if (!orbitBounds) return false
     bounds = orbitBounds
     if (!detailSystemIds.value.has(projection.id)) {
-      minimumScale = Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, DETAIL_REVEAL_PIXELS))
+      minimumScale = Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, false))
     }
   } else {
     return false
@@ -4151,15 +4153,9 @@ defineExpose({
   pointer-events: none;
 }
 .continuous-warden-system-detail.is-exiting,
-.continuous-warden-system-detail.is-exiting * { pointer-events: none !important; }
-.continuous-warden-detail-enter-active,
-.continuous-warden-detail-leave-active { transition: opacity 150ms ease; }
-.continuous-warden-detail-enter-from,
-.continuous-warden-detail-leave-to { opacity: 0; }
-.continuous-warden-detail-enter-from .system-map-items { opacity: 0; }
-.continuous-warden-detail-enter-active .system-map-items { transition: opacity 130ms 70ms ease; }
-.continuous-warden-detail-leave-to .system-map-items { opacity: 0; }
-.continuous-warden-detail-leave-active .system-map-items { transition: opacity 120ms ease; }
+.continuous-warden-system-detail.is-exiting *,
+.continuous-warden-system-detail.is-entering,
+.continuous-warden-system-detail.is-entering * { pointer-events: none !important; }
 
 .continuous-warden-system-detail .continuous-warden-orbit-target {
   pointer-events: stroke;
@@ -4251,18 +4247,6 @@ defineExpose({
 @media (prefers-reduced-motion: reduce) {
   .system-object-selection-dashes {
     animation: none;
-  }
-  .continuous-warden-detail-enter-active,
-  .continuous-warden-detail-leave-active,
-  .continuous-warden-detail-enter-active .system-map-items,
-  .continuous-warden-detail-leave-active .system-map-items {
-    transition: none;
-  }
-  .continuous-warden-detail-enter-from,
-  .continuous-warden-detail-leave-to,
-  .continuous-warden-detail-enter-from .system-map-items,
-  .continuous-warden-detail-leave-to .system-map-items {
-    opacity: 1;
   }
 }
 
@@ -4377,7 +4361,8 @@ defineExpose({
 
 .continuous-warden-system-anchor.is-covered-by-central-star:not(:hover):not(:focus):not(.is-selected):not(.is-move-preview) .continuous-warden-anchor-mark,
 .continuous-warden-system-anchor.is-covered-by-central-star:not(:hover):not(:focus):not(.is-selected):not(.is-move-preview) .continuous-warden-anchor-core {
-  visibility: hidden;
+  fill-opacity: calc(1 - var(--anchor-detail-progress));
+  stroke-opacity: calc(1 - var(--anchor-detail-progress));
 }
 
 .continuous-warden-system-anchor,

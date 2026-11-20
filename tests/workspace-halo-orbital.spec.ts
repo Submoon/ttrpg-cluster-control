@@ -24,7 +24,7 @@ function readFrame(contour: Locator) {
   })
 }
 
-test('resizing a halo does not change the zoom at which its system details reveal', async ({ page }) => {
+test('equivalent systems glide into detail together even with different halo sizes', async ({ page }) => {
   test.setTimeout(60_000)
   await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 900 } })
   const base = createLocalWorkspace('Halo Zoom', 'Vesper')
@@ -48,6 +48,21 @@ test('resizing a halo does not change the zoom at which its system details revea
   const zoomOut = controls.getByRole('button', { name: 'Zoom out', exact: true })
   for (let step = 0; step < 20 && await zoomOut.isEnabled(); step += 1) await zoomOut.click()
   await expect(detailed).toHaveCount(0)
+  const nameMotion = await map.evaluateHandle((element, systemId) => {
+    const positions = new Set<string>()
+    const camera = element.querySelector('.cluster-map-content')
+    let revealCamera: string | null = null
+    const observer = new MutationObserver(() => {
+      const detailed = element.querySelector('.continuous-warden-system-envelope.is-detailed')
+      const cameraTransform = camera?.getAttribute('transform')
+      const position = element.querySelector(`.continuous-warden-name-target[data-system-id="${systemId}"]`)?.getAttribute('transform')
+      if (!detailed || !cameraTransform || !position) return
+      revealCamera ??= cameraTransform
+      if (cameraTransform === revealCamera) positions.add(position)
+    })
+    observer.observe(element, { attributes: true, childList: true, subtree: true })
+    return { positions, observer }
+  }, first.id)
   for (let step = 0; step < 20 && await zoomIn.isEnabled(); step += 1) {
     await zoomIn.click()
     const count = await detailed.count()
@@ -55,6 +70,9 @@ test('resizing a halo does not change the zoom at which its system details revea
     if (count === 2) break
   }
   await expect(detailed).toHaveCount(2)
+  await expect.poll(() => nameMotion.evaluate(({ positions }) => positions.size)).toBeGreaterThan(2)
+  await nameMotion.evaluate(({ observer }) => observer.disconnect())
+  await nameMotion.dispose()
 })
 
 test('a Warden can resize a halo corner and save the larger regular frame', async ({ page }) => {
@@ -118,7 +136,7 @@ test('a Warden can resize a halo corner and save the larger regular frame', asyn
   await expect.poll(() => readFrame(frame)).toEqual(preview)
 })
 
-test('a near object drop stretches the halo only until release and undoes both changes together', async ({ page }) => {
+test('a drop near the reach of the elastic halo grows a regular frame and undoes both changes together', async ({ page }) => {
   test.setTimeout(60_000)
   await captureMapExportBlobs(page)
   const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
@@ -145,7 +163,7 @@ test('a near object drop stretches the halo only until release and undoes both c
   const screen = await frame.boundingBox()
   if (!screen) throw new Error('The starting frame needs a visible outline.')
   const drop = {
-    x: screen.x + screen.width + 6 + hit.x - origin.x,
+    x: screen.x + screen.width + 39 + hit.x - origin.x,
     y: screen.y + screen.height / 2 + hit.y - origin.y,
   }
   const dragToEdge = async () => {

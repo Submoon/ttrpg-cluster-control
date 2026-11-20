@@ -13,7 +13,7 @@ import {
   continuousMapNameLabels,
   type ContinuousMapNameProjection,
 } from '../utils/continuous-map-name-labels'
-import { continuousMapNameTransitionProgress, continuousMapTextScale } from '../utils/continuous-map-projection'
+import { continuousMapTextScale } from '../utils/continuous-map-projection'
 
 test('selected-system image scopes include both incident directions and leave unrelated routes out @pure', { tag: '@pure' }, () => {
   const routes = [
@@ -118,11 +118,9 @@ test('continuous system names ease into frame corners and transformed text has a
   const frame = { x: 40, y: 30, width: 100, height: 80 }
   const camera = { x: 10, y: 20, k: 1.7 }
   const label = { x: 300, y: 250, width: 100 }
-  const halfway = continuousMapNameTransitionProgress(frame, camera.k, 1)
-  const halfwayPosition = continuousMapNameLabelFramePosition(label, frame, camera, 1, halfway)
+  const halfwayPosition = continuousMapNameLabelFramePosition(label, frame, camera, 1, .5)
   const finalPosition = continuousMapNameLabelFramePosition(label, frame, camera, 1, 1)
 
-  expect(halfway).toBeCloseTo(.5)
   expect(halfwayPosition.x).toBeCloseTo(220)
   expect(halfwayPosition.y).toBeCloseTo(166.5)
   expect(finalPosition.x).toBeCloseTo(140)

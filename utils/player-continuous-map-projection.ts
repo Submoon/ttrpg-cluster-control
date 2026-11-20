@@ -3,8 +3,6 @@ import type { PlayerClusterDocument, PlayerSystemMarker } from '../domain/player
 import type { Point } from '../domain/workspace-model'
 import { MAP_ZOOM_MAX_SCALE, type SvgViewportRect } from './map-zoom'
 import {
-  CONTINUOUS_MAP_DETAIL_HIDE_PIXELS,
-  CONTINUOUS_MAP_DETAIL_REVEAL_PIXELS,
   continuousMapDetailScale,
   projectContinuousSystemGeometry,
   type ContinuousWardenSystemProjection,
@@ -27,9 +25,6 @@ export interface PlayerContinuousMapProjection {
   bounds: SvgViewportRect
 }
 
-export const PLAYER_DETAIL_REVEAL_PIXELS = CONTINUOUS_MAP_DETAIL_REVEAL_PIXELS
-export const PLAYER_DETAIL_HIDE_PIXELS = CONTINUOUS_MAP_DETAIL_HIDE_PIXELS
-
 /** Applies each Revealed system's threshold and reuses unchanged membership for route transitions. */
 export function playerContinuousDetailSystemIds(
   systems: readonly PlayerContinuousSystemProjection[],
@@ -47,8 +42,7 @@ export function playerContinuousDetailSystemIds(
     const envelope = system.geometry?.envelope
     if (!envelope) continue
     const wasDetailed = currentlyDetailed.has(system.id)
-    const threshold = wasDetailed ? PLAYER_DETAIL_HIDE_PIXELS : PLAYER_DETAIL_REVEAL_PIXELS
-    if (cameraScale >= Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(envelope, svgPixelScale, threshold))) {
+    if (cameraScale >= Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(envelope, svgPixelScale, wasDetailed))) {
       next.add(system.id)
       if (!wasDetailed) addedDetail = true
     }

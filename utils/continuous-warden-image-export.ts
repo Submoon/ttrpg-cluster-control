@@ -1,7 +1,6 @@
 import type { JumpCluster, Point, StarSystem } from '../domain/workspace'
 import { buildContinuousWardenRouteGeometries } from './continuous-warden-routes'
 import {
-  continuousMapNameTransitionProgress,
   continuousMapTextScale,
   wardenStarHaloRadius,
   wardenStarOverlapsAnchor,
@@ -141,6 +140,7 @@ export async function exportContinuousWardenMapImage(
     request.scope === 'viewport' ? request.svgPixelScale : 1,
     request.scope === 'viewport' ? request.viewportRect : null,
     displayFrames,
+    detailSystemIds,
   )
   const viewportRouteLabels = request.scope === 'viewport'
     ? placeContinuousMapRouteLabels({
@@ -196,6 +196,7 @@ export async function exportContinuousWardenMapImage(
       if (!content) throw new Error('The continuous map is not ready to export.')
       const routeStyleSource = clone.querySelector<SVGPathElement>('.continuous-warden-route-layer .cluster-route-line')
       content.replaceChildren()
+      clone.querySelector(':scope > .continuous-warden-name-layer')?.remove()
       if (request.scope === 'viewport') {
         content.setAttribute('transform', `translate(${request.viewport.x} ${request.viewport.y}) scale(${request.viewport.k})`)
       } else {
@@ -260,14 +261,8 @@ export async function exportContinuousWardenMapImage(
       content.append(items)
 
       const nameLayer = createScopedElement(clone, 'g', 'continuous-warden-name-layer')
-      if (request.scope === 'viewport') {
-        nameLayer.setAttribute(
-          'transform',
-          `translate(${-request.viewport.x / request.viewport.k} ${-request.viewport.y / request.viewport.k}) scale(${1 / request.viewport.k})`,
-        )
-      }
       for (const label of labels) appendSystemName(nameLayer, label)
-      content.append(nameLayer)
+      clone.append(nameLayer)
     },
     isCurrent,
   )
@@ -339,6 +334,7 @@ function layoutSystemNames(
   pixelScale: number,
   viewportRect: SvgViewportRect | null,
   displayFrames: ReadonlyMap<string, SvgViewportRect>,
+  detailSystemIds: ReadonlySet<string>,
 ): ExportLabel[] {
   const placementViewport = viewport ?? { x: 0, y: 0, k: 1 }
   const scale = pixelScale > 0 ? pixelScale : 1
@@ -360,9 +356,7 @@ function layoutSystemNames(
     if (!projection) return []
     const frame = displayFrames.get(projection.id)
     const resolvedFrame = positiveFrame(frame) ? frame : projection.envelope
-    const progress = viewport
-      ? continuousMapNameTransitionProgress(projection.envelope, viewport.k, scale)
-      : 0
+    const progress = Number(!!viewport && detailSystemIds.has(projection.id))
     const position = viewport
       ? continuousMapNameLabelFramePosition(label, resolvedFrame, viewport, scale, progress, placementRect)
       : { x: label.x, y: label.y }

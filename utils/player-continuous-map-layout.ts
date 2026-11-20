@@ -4,7 +4,6 @@ import type { MapViewport, SvgViewportRect } from './map-zoom'
 import type { PlayerContinuousSystemProjection } from './player-continuous-map-projection'
 import { fitMapViewport, MAP_ZOOM_MAX_SCALE } from './map-zoom'
 import { continuousMapDetailScale } from './continuous-map-projection'
-import { PLAYER_DETAIL_HIDE_PIXELS, PLAYER_DETAIL_REVEAL_PIXELS } from './player-continuous-map-projection'
 
 export interface PlayerContinuousNameLabel {
   systemId: string
@@ -205,10 +204,9 @@ export function playerContinuousTargetMinimumScale(
 ): number | undefined {
   const envelope = system.geometry?.envelope
   if (!envelope || !Number.isFinite(pixelScale) || pixelScale <= 0) return undefined
-  const threshold = isDetailed ? PLAYER_DETAIL_HIDE_PIXELS : PLAYER_DETAIL_REVEAL_PIXELS
   const extent = Math.max(envelope.width, envelope.height)
   if (!Number.isFinite(extent) || extent <= 0) return undefined
-  return Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(envelope, pixelScale, threshold))
+  return Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(envelope, pixelScale, isDetailed))
 }
 
 function systemNameWidthPixels(name: string): number {

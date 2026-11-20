@@ -232,7 +232,7 @@ test('player continuous target framing includes long labels, rotated orbits, and
   const orbitBounds = playerContinuousTargetBounds(geometry, { kind: 'orbit', id: 'orbit-1' })
   const detailScale = playerContinuousTargetMinimumScale(system, 1, false)
   const retainedDetailScale = playerContinuousTargetMinimumScale(system, 1, true)
-  const requiredDetailScale = 250 / Math.max(geometry.envelope.width, geometry.envelope.height)
+  const extent = Math.max(geometry.envelope.width, geometry.envelope.height)
 
   expect(objectBounds?.width).toBeGreaterThanOrEqual(Array.from('Pilgrim World').length * 7 + 22)
   const angle = Math.PI / 6
@@ -240,8 +240,8 @@ test('player continuous target framing includes long labels, rotated orbits, and
   const extentY = Math.hypot(18 * Math.sin(angle), 8 * Math.cos(angle))
   expect(orbitBounds?.width).toBeCloseTo(extentX * 2 + 28)
   expect(orbitBounds?.height).toBeCloseTo(extentY * 2 + 28)
-  expect(detailScale).toBeCloseTo(requiredDetailScale)
-  expect(retainedDetailScale).toBeCloseTo(210 / Math.max(geometry.envelope.width, geometry.envelope.height))
+  expect(detailScale).toBeCloseTo(Math.max(380 / extent, 3.25))
+  expect(retainedDetailScale).toBeCloseTo(Math.max(320 / extent, 2.75))
 
   if (!objectBounds) throw new Error('The public object has no framing bounds.')
   const viewport = { x: 0, y: 0, width: 960, height: 560 }
@@ -269,9 +269,9 @@ test('player continuous target Center preserves fitting zoom and expands only fo
 test('player system detail uses independent public envelope thresholds with collapse hysteresis @pure', () => {
   const projection = projectPlayerContinuousMap(publicDocument())
   const fitDetail = playerContinuousDetailSystemIds(projection.systems, 1, 1, new Set())
-  const revealedDetail = playerContinuousDetailSystemIds(projection.systems, 2.5, 1, new Set())
-  const retainedDetail = playerContinuousDetailSystemIds(projection.systems, 1.58, 1, new Set(['system-3']))
-  const collapsedDetail = playerContinuousDetailSystemIds(projection.systems, 1.58, 1, new Set())
+  const revealedDetail = playerContinuousDetailSystemIds(projection.systems, 3.5, 1, new Set())
+  const retainedDetail = playerContinuousDetailSystemIds(projection.systems, 3, 1, new Set(['system-3']))
+  const collapsedDetail = playerContinuousDetailSystemIds(projection.systems, 3, 1, new Set())
 
   expect(fitDetail).not.toContain('system-3')
   expect(revealedDetail).toContain('system-3')
@@ -286,9 +286,9 @@ test('player route detail membership stays stable between threshold crossings @p
   const overview = new Set<string>()
   expect(playerContinuousDetailSystemIds(systems, 1, 1, overview)).toBe(overview)
 
-  const revealed = playerContinuousDetailSystemIds(systems, 2.5, 1, overview)
+  const revealed = playerContinuousDetailSystemIds(systems, 3.5, 1, overview)
   expect(revealed).toEqual(new Set(['system-3', 'system-4']))
-  expect(playerContinuousDetailSystemIds(systems, 2, 1, revealed)).toBe(revealed)
+  expect(playerContinuousDetailSystemIds(systems, 3, 1, revealed)).toBe(revealed)
 
   const collapsed = playerContinuousDetailSystemIds(systems, 1, 1, revealed)
   expect(collapsed).toEqual(overview)

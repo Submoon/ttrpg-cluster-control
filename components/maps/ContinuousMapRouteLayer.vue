@@ -62,6 +62,7 @@ import type { Point } from '../../domain/workspace'
 import { continuousMapRouteCurve, type ContinuousMapRouteGeometry } from '../../utils/continuous-map-route-geometry'
 import { CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS, placeContinuousMapRouteLabels } from '../../utils/continuous-map-route-labels'
 import { nearestContinuousMapRouteHit } from '../../utils/continuous-map-route-hit'
+import { CONTINUOUS_MAP_DETAIL_MOTION_MS, continuousMapDetailMotionEase } from '../../utils/continuous-map-projection'
 import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
 
 interface RouteMark {
@@ -85,7 +86,6 @@ const props = defineProps<{
   destinationsInForeground?: boolean
 }>()
 
-const TRANSITION_DURATION_MS = 140
 const layerElement = useTemplateRef<SVGGElement>('layerElement')
 const animated = shallowRef<ReadonlyMap<string, ContinuousMapRouteGeometry>>(new Map())
 let frame: number | undefined
@@ -159,11 +159,11 @@ watch(
     animated.value = new Map(motions.map(({ id, from }) => [id, from]))
     const started = window.performance.now()
     function step(now: number): void {
-      if (now >= started + TRANSITION_DURATION_MS || motionPreference.matches) {
+      if (now >= started + CONTINUOUS_MAP_DETAIL_MOTION_MS || motionPreference.matches) {
         stopAnimation()
         return
       }
-      const progress = 1 - (1 - Math.max(0, now - started) / TRANSITION_DURATION_MS) ** 3
+      const progress = continuousMapDetailMotionEase((now - started) / CONTINUOUS_MAP_DETAIL_MOTION_MS)
       // Camera zoom can expand route lanes during a tween. Use each current target
       // with the existing start and deadline so continued zoom never snaps the endpoint.
       const currentTargets = props.geometries

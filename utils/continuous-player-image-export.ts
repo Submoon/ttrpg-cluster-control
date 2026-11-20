@@ -12,7 +12,6 @@ import {
 import { playerMapPaint, type PlayerMapPaint } from './player-map-image-export'
 import { layoutPlayerContinuousNameLabels, type PlayerContinuousNameLabel } from './player-continuous-map-layout'
 import { continuousMapNameLabelFramePosition } from './continuous-map-name-labels'
-import { continuousMapNameTransitionProgress } from './continuous-map-projection'
 import { projectPlayerContinuousMap, type PlayerContinuousSystemProjection } from './player-continuous-map-projection'
 import { projectPlayerContinuousRouteEndpoints, type PlayerContinuousRouteDescriptor } from './player-continuous-route-projection'
 import { buildContinuousMapRouteGeometries, type ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
@@ -114,7 +113,7 @@ export function serializeContinuousPlayerMapImage(
   ).map((label) => {
     const frame = snapshot ? nameSystemsById.get(label.systemId)?.geometry?.envelope : undefined
     if (!frame) return label
-    const progress = continuousMapNameTransitionProgress(frame, camera.k, svgPixelScale)
+    const progress = Number(detailIds.has(label.systemId))
     return {
       ...label,
       ...continuousMapNameLabelFramePosition(label, frame, camera, svgPixelScale, progress, nameViewport),

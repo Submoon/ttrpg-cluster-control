@@ -13,33 +13,23 @@ import {
 } from './system-map-geometry'
 import type { SvgViewportRect } from './map-zoom'
 
-export const CONTINUOUS_MAP_DETAIL_REVEAL_PIXELS = 250
-export const CONTINUOUS_MAP_DETAIL_HIDE_PIXELS = 210
-export const CONTINUOUS_MAP_NAME_TRANSITION_START_PIXELS = 90
+export const CONTINUOUS_MAP_DETAIL_MOTION_MS = 200
 
-/** Converts a semantic detail threshold in CSS pixels to a camera scale. */
+export function continuousMapDetailMotionEase(fraction: number): number {
+  const t = Math.max(0, Math.min(1, fraction))
+  return t * t * (3 - 2 * t)
+}
+
+/** Keeps both the projected envelope and its marks readable, with hysteresis on collapse. */
 export function continuousMapDetailScale(
   envelope: Pick<SvgViewportRect, 'width' | 'height'>,
   svgPixelScale: number,
-  threshold: number,
+  isDetailed: boolean,
 ): number {
-  return threshold / (Math.max(envelope.width, envelope.height) * svgPixelScale)
-}
-
-/** Smoothly moves screen-space system labels toward their frame as its apparent size grows. */
-export function continuousMapNameTransitionProgress(
-  frame: Pick<SvgViewportRect, 'width' | 'height'>,
-  cameraScale: number,
-  svgPixelScale: number,
-  startPixels = CONTINUOUS_MAP_NAME_TRANSITION_START_PIXELS,
-  endPixels = CONTINUOUS_MAP_DETAIL_REVEAL_PIXELS,
-): number {
-  if (![frame.width, frame.height, cameraScale, svgPixelScale, startPixels, endPixels].every(Number.isFinite)
-    || frame.width <= 0 || frame.height <= 0 || cameraScale <= 0 || svgPixelScale <= 0 || endPixels <= startPixels) return 0
-
-  const apparentExtent = Math.max(frame.width, frame.height) * cameraScale * svgPixelScale
-  const linearProgress = Math.max(0, Math.min(1, (apparentExtent - startPixels) / (endPixels - startPixels)))
-  return linearProgress * linearProgress * (3 - 2 * linearProgress)
+  const envelopePixels = isDetailed ? 320 : 380
+  const glyphPixels = isDetailed ? 11 : 13
+  const extent = Math.max(envelope.width, envelope.height)
+  return Math.max(envelopePixels / extent, glyphPixels / (20 * CONTINUOUS_MAP_SYSTEM_SCALE)) / svgPixelScale
 }
 
 /** Caps transformed SVG text without changing the world geometry or hit target around it. */
