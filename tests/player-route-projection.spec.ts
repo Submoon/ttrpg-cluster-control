@@ -10,7 +10,7 @@ import {
   updateChartDetails,
   updateSystemObject,
 } from '../domain/workspace'
-import { clusterRouteGeometry } from '../utils/cluster-map-geometry'
+import { clusterRouteGeometry, clusterSystemPosition } from '../utils/cluster-map-geometry'
 
 function addJumpPointPair(
   workspace: ReturnType<typeof createLocalWorkspace>,
@@ -41,6 +41,23 @@ function setSystemPublication(
     playerTitle: workspace.cluster.playerTitle,
     publication,
   })
+}
+
+function setPointPublication(
+  workspace: ReturnType<typeof createLocalWorkspace>,
+  systemId: string,
+  pointId: string,
+  publication: 'hidden' | 'unknown' | 'known-type' | 'revealed',
+): ReturnType<typeof createLocalWorkspace> {
+  const system = workspace.cluster.systems.find(candidate => candidate.id === systemId)
+  if (!system) throw new Error('Route projection fixture system is missing.')
+  const updated = updateSystemObject(
+    system,
+    pointId,
+    { publication, name: 'Published Gate' },
+    workspace.objectFieldSettings,
+  )
+  return replaceWorkspaceSystem(workspace, updated)
 }
 
 test('shared routes between retained systems use safe public references and filtered ordinals @pure', () => {
@@ -92,6 +109,80 @@ test('shared routes between retained systems use safe public references and filt
   ]) {
     expect(serialized).not.toContain(privateText)
   }
+})
+
+test('player routes publish only independently Revealed Jump Points in their owning systems @pure', () => {
+  for (const originMode of ['hidden', 'unknown', 'known-type', 'revealed'] as const) {
+    for (const destinationMode of ['hidden', 'unknown', 'known-type', 'revealed'] as const) {
+      const initial = createLocalWorkspace('Private Route Reach', 'Origin System')
+      const added = addStarSystem(initial, 'Destination System')
+      const originSystemId = initial.cluster.systems[0]!.id
+      const destinationSystemId = added.system.id
+      const origin = addJumpPointPair(added.workspace, originSystemId)
+      const destination = addJumpPointPair(origin.workspace, destinationSystemId)
+      let workspace = setSystemPublication(destination.workspace, originSystemId, 'revealed')
+      workspace = setSystemPublication(workspace, destinationSystemId, 'revealed')
+      workspace = setPointPublication(workspace, originSystemId, origin.points[0].id, originMode)
+      workspace = setPointPublication(workspace, destinationSystemId, destination.points[0].id, destinationMode)
+      const route = createJumpRoute(workspace.cluster, {
+        jumpLevel: 3,
+        fromSystemId: originSystemId,
+        fromPointId: origin.points[0].id,
+        toSystemId: destinationSystemId,
+        toPointId: destination.points[0].id,
+        playerShared: true,
+      })
+      workspace = { ...workspace, cluster: { ...workspace.cluster, routes: [route] } }
+
+      const document = projectPlayerCluster(workspace)
+      const projectedRoute = document.routes[0]
+
+      expect(document.version).toBe(2)
+      expect(projectedRoute?.fromPointId).toBe(originMode === 'revealed' ? 'object-2' : undefined)
+      expect(projectedRoute?.destination).toEqual({
+        kind: 'system',
+        systemId: 'system-2',
+        ...(destinationMode === 'revealed' ? { pointId: 'object-2' } : {}),
+      })
+    }
+  }
+})
+
+test('a Hidden source becomes an anonymous destination while its Revealed Jump Point becomes the public origin attachment @pure', () => {
+  const initial = createLocalWorkspace('Private Route Reach', 'Hidden Origin')
+  const added = addStarSystem(initial, 'Revealed Destination')
+  const hiddenSystemId = initial.cluster.systems[0]!.id
+  const revealedSystemId = added.system.id
+  const hidden = addJumpPointPair(added.workspace, hiddenSystemId)
+  const revealed = addJumpPointPair(hidden.workspace, revealedSystemId)
+  let workspace = setSystemPublication(revealed.workspace, hiddenSystemId, 'hidden')
+  workspace = setSystemPublication(workspace, revealedSystemId, 'revealed')
+  workspace = setPointPublication(workspace, revealedSystemId, revealed.points[0].id, 'revealed')
+  const route = createJumpRoute(workspace.cluster, {
+    jumpLevel: 6,
+    fromSystemId: hiddenSystemId,
+    fromPointId: hidden.points[0].id,
+    toSystemId: revealedSystemId,
+    toPointId: revealed.points[0].id,
+    playerShared: true,
+  })
+  workspace = { ...workspace, cluster: { ...workspace.cluster, routes: [route] } }
+
+  const document = projectPlayerCluster(workspace)
+
+  expect(document.routes).toEqual([{
+    id: 'route-1',
+    jumpLevel: 6,
+    fromSystemId: 'system-1',
+    fromPointId: 'object-2',
+    destination: {
+      kind: 'unknown',
+      position: clusterSystemPosition(workspace.layout.systemPositions, hiddenSystemId),
+      label: 'Unknown destination',
+    },
+  }])
+  expect(JSON.stringify(document)).not.toContain(hiddenSystemId)
+  expect(JSON.stringify(document)).not.toContain(hidden.points[0].id)
 })
 
 test('routes to Hidden systems expose only exact anonymous positions from the retained side @pure', () => {
@@ -176,13 +267,25 @@ test('routes to Hidden systems expose only exact anonymous positions from the re
   }
 })
 
-test('shared routes between points in the same retained system remain public loops @pure', () => {
+test('system-only shared routes project without Jump Point data @pure', () => {
   const initial = createLocalWorkspace('Loop Cluster', 'Loop System')
-  const systemId = initial.cluster.systems[0]!.id
-  const pair = addJumpPointPair(initial, systemId)
-  const workspace = setSystemPublication(pair.workspace, systemId, 'revealed')
-  const route = createJumpRoute(workspace.cluster, 9, pair.points[0].id, pair.points[1].id, 'PRIVATE LOOP EXIT', true)
-  const source = { ...workspace, cluster: { ...workspace.cluster, routes: [{ ...route, name: 'PRIVATE LOOP NAME' }] } }
+  const withDestination = addStarSystem(initial, 'Distant System').workspace
+  const [originSystem, destinationSystem] = withDestination.cluster.systems
+  if (!originSystem || !destinationSystem) throw new Error('The route fixture needs two systems.')
+  let workspace = setSystemPublication(withDestination, originSystem.id, 'revealed')
+  workspace = setSystemPublication(workspace, destinationSystem.id, 'revealed')
+  const route = {
+    ...createJumpRoute(workspace.cluster, {
+      jumpLevel: 9,
+      fromSystemId: originSystem.id,
+      fromPointId: null,
+      toSystemId: destinationSystem.id,
+      toPointId: null,
+      playerShared: true,
+    }),
+    name: 'PRIVATE LOOP NAME',
+  }
+  const source = { ...workspace, cluster: { ...workspace.cluster, routes: [route] } }
 
   const document = projectPlayerCluster(source)
 
@@ -190,12 +293,11 @@ test('shared routes between points in the same retained system remain public loo
     id: 'route-1',
     jumpLevel: 9,
     fromSystemId: 'system-1',
-    destination: { kind: 'system', systemId: 'system-1' },
+    destination: { kind: 'system', systemId: 'system-2' },
   }])
   expect(JSON.stringify(document)).not.toContain('PRIVATE LOOP NAME')
-  expect(JSON.stringify(document)).not.toContain('PRIVATE LOOP EXIT')
-  expect(JSON.stringify(document)).not.toContain(pair.points[0].id)
-  expect(JSON.stringify(document)).not.toContain(pair.points[1].id)
+  expect(JSON.stringify(document)).not.toContain(originSystem.id)
+  expect(JSON.stringify(document)).not.toContain(destinationSystem.id)
 })
 
 test('shared unresolved routes keep source geometry but receive public-only ordinals and labels @pure', () => {

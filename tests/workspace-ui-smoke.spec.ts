@@ -7,13 +7,16 @@ import {
   exportJumpCluster,
 } from '../domain/workspace'
 import {
+  centerWorkspaceSelection,
+  fitWorkspaceMap,
   waitForWorkspaceSaved,
   createSingleSystemWorkspace,
   openWorkspaceHierarchy,
   resolveJumpClusterRestoreReview,
-  returnToClusterMap,
   reviewJumpClusterBackup,
   setHeaderMapActionsOpen,
+  wardenMap,
+  wardenSystemMark,
 } from './helpers'
 import { RENDER_GEOMETRY_TOLERANCE_PX } from './render-tolerances'
 
@@ -46,14 +49,17 @@ function makeRouteFooterWorkspace() {
   return { ...workspace, cluster: { ...cluster, routes: [route] } }
 }
 
-async function restoreRouteFooterWorkspace(page: import('@playwright/test').Page): Promise<void> {
+async function restoreRouteFooterWorkspace(page: import('@playwright/test').Page): Promise<string> {
   const incoming = makeRouteFooterWorkspace()
-  await returnToClusterMap(page)
+  const system = incoming.cluster.systems.find(system => system.name === 'A')
+  if (!system) throw new Error('The footer fixture needs the A system.')
   const review = await reviewJumpClusterBackup(page, 'footer-routes.json', JSON.stringify(exportJumpCluster(incoming)))
   await resolveJumpClusterRestoreReview(review, 'confirm')
+  await expect(review).toBeHidden()
   await setHeaderMapActionsOpen(page, false)
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
   await waitForWorkspaceSaved(page)
+  return system.id
 }
 
 async function expectFooterActionToFit(
@@ -119,7 +125,7 @@ for (const viewport of smokeViewports) {
       systemName: 'Temporary',
       viewport,
     })
-    await restoreRouteFooterWorkspace(page)
+    const systemId = await restoreRouteFooterWorkspace(page)
 
     const inspector = page.locator('#workspace-inspector-panel')
     const chartHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
@@ -129,21 +135,25 @@ for (const viewport of smokeViewports) {
     await expectFooterActionToFit(clusterDetails, editChartDetails, viewport)
     await expect(clusterDetails.getByRole('region', { name: 'Player publication settings' })).toBeVisible()
     await closeInspector(page)
-    const clusterMap = page.getByRole('group', { name: 'Footer Reach Jump Cluster map', exact: true })
-    const systemNode = clusterMap.getByRole('button', { name: 'Select A system', exact: true })
-    await systemNode.click()
+    const map = wardenMap(page)
+    await expect(map).toHaveAccessibleName('Footer Reach continuous map')
+    const systemNode = wardenSystemMark(page, systemId)
+    await expect(systemNode).toHaveAccessibleName('Select A')
+    await systemNode.press('Enter')
     await ensureInspectorOpen(page, inspector)
     const selectedSystemDetails = page.getByRole('region', { name: 'Jump Cluster details', exact: true })
-    const systemActions = selectedSystemDetails.locator('.chart-details-actions')
-    const openSystem = systemActions.getByRole('button', { name: 'Open system', exact: true })
-    await expectFooterActionToFit(selectedSystemDetails, openSystem, viewport)
+    await expect(selectedSystemDetails.getByRole('heading', { name: 'A', exact: true })).toBeVisible()
+    const editSystem = selectedSystemDetails.getByRole('button', { name: 'Edit Jump Cluster details', exact: true })
+    await expectFooterActionToFit(selectedSystemDetails, editSystem, viewport)
     await expect(selectedSystemDetails.getByRole('group', { name: 'Configured visibility', exact: true })).toBeVisible()
     await expect(selectedSystemDetails.getByRole('button', { name: 'Delete A system', exact: true })).toBeVisible()
-    await openSystem.click()
+    await editSystem.click()
+    const systemEditor = page.getByRole('form', { name: 'Edit Jump Cluster details', exact: true })
+    await expect(systemEditor.getByLabel('Star system', { exact: true })).toHaveValue('A')
     await closeInspector(page)
-    await expect(page.getByRole('navigation', { name: 'Map context and commands' })
-      .getByRole('heading', { name: 'A', exact: true })).toBeVisible()
-    await returnToClusterMap(page)
+    await centerWorkspaceSelection(page)
+    await expect(map.locator(`.continuous-warden-object[data-system-id="${systemId}"]`)).toHaveCount(2)
+
     const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
     const route = hierarchy.getByRole('button', { name: /^Select Jump Level 1: .*A Origin.*B Entry/ })
     await expect(route).toBeVisible()

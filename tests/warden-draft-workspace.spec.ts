@@ -121,20 +121,31 @@ test('Warden chart draft preview uses its captured system and preserves invalid 
 test('Warden route draft keeps endpoints coherent when an incomplete destination falls back @pure', async () => {
   await withControlledBrowserEnvironment(async () => {
     const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
-    const baseSystem = initial.cluster.systems[0]!
-    const points = []
-    let system = baseSystem
-    for (let index = 0; index < 3; index += 1) {
-      const point = createSystemObject(system, 'jump-point')
-      points.push(point)
-      system = { ...system, objects: [...system.objects, point] }
+    const { workspace: withSecond } = addStarSystem(initial, 'Harrow')
+    const baseSystem = withSecond.cluster.systems[0]!
+    const destination = withSecond.cluster.systems[1]!
+    const originPoint = createSystemObject(baseSystem, 'jump-point')
+    const systemWithOrigin = { ...baseSystem, objects: [...baseSystem.objects, originPoint] }
+    const otherOrigin = createSystemObject(systemWithOrigin, 'jump-point')
+    const destinationPoint = createSystemObject(destination, 'jump-point')
+    const routeCluster = {
+      ...withSecond.cluster,
+      systems: [
+        { ...systemWithOrigin, objects: [...systemWithOrigin.objects, otherOrigin] },
+        { ...destination, objects: [...destination.objects, destinationPoint] },
+      ],
     }
-    const routeCluster = { ...initial.cluster, systems: [system] }
     const routeWorkspace: LocalWorkspace = {
-      ...initial,
+      ...withSecond,
       cluster: {
         ...routeCluster,
-        routes: [createJumpRoute(routeCluster, 1, points[0]!.id, points[1]!.id, 'Beyond Vesper')],
+        routes: [createJumpRoute(routeCluster, {
+          jumpLevel: 1,
+          fromSystemId: baseSystem.id,
+          fromPointId: originPoint.id,
+          toSystemId: destination.id,
+          toPointId: destinationPoint.id,
+        })],
       },
     }
     const route = routeWorkspace.cluster.routes[0]!
@@ -146,16 +157,19 @@ test('Warden route draft keeps endpoints coherent when an incomplete destination
       if (!session || session.routeId !== route.id) throw new Error('The existing route edit session did not start.')
 
       session.draft.jumpLevel = '0'
-      session.draft.fromPointId = points[2]!.id
-      session.draft.destination = 'point'
+      session.draft.fromPointId = otherOrigin.id
+      session.draft.destination = 'system'
+      session.draft.toSystemId = ''
       session.draft.toPointId = ''
       session.draft.playerShared = true
 
       const projectedRoute = harness.workflows.wardenDraftWorkspace.value?.cluster.routes.find(item => item.id === route.id)
       expect(projectedRoute).toMatchObject({
         jumpLevel: route.jumpLevel,
-        fromPointId: points[2]!.id,
-        toPointId: points[1]!.id,
+        fromSystemId: baseSystem.id,
+        fromPointId: otherOrigin.id,
+        toSystemId: destination.id,
+        toPointId: destinationPoint.id,
         playerShared: true,
       })
       expect(harness.workspace.value?.cluster.routes[0]).toEqual(route)

@@ -4,16 +4,22 @@ import type { CommittedObjectPosition, EntityCommand } from './types'
 import type { WorkspaceMutationExecutor } from './workspace-mutations'
 import { useEditorUiStore } from '../../stores/editor-ui'
 import {
+  applyContinuousSelectedObjectTranslation,
   applySelectedObjectTranslation,
+  prepareContinuousSelectedObjectTranslation,
   prepareSelectedObjectTranslation,
+  type ContinuousSelectedObjectTranslationPlan,
+  type OwnedSelectedObjectPlacementChange,
   type SelectedObjectPlacementChange,
   type SelectedObjectTranslationPlan,
 } from '../../utils/selected-object-placement'
 
 /** Scene-coordinate preview for one collective selected-object drag. */
 export interface SelectedObjectDragPreview {
-  /** Proposed positions for selected objects and every descendant carried with their hosted branches. */
+  /** Proposed owner-local positions for selected objects and carried descendants. */
   positions: ReadonlyMap<string, Point>
+  /** Owning systems for the positions map; included for cross-system Cluster previews. */
+  objectSystemIds: ReadonlyMap<string, string>
   /** Selected objects that will detach from their current Orbit at the exact translated point. */
   departingObjectIds: ReadonlySet<string>
   /** Independently moving group members that will attach to an exact eligible Orbit destination. */
@@ -22,6 +28,7 @@ export interface SelectedObjectDragPreview {
 
 /** Single-use pointer gesture whose proposal remains transient until its complete call. */
 export interface SelectedObjectDrag {
+  /** Receives local map units in a system map and Cluster-scene units on the continuous map. */
   preview(delta: Point): SelectedObjectDragPreview | null
   complete(delta: Point): Promise<void>
   cancel(): void
@@ -43,7 +50,30 @@ interface CapturedGesture {
   workspace: LocalWorkspace
   revision: number | undefined
   systemId: string
+  activeView: 'cluster' | 'system'
+  selectedSystemId: string | null
+  inspectedTargetSignature: string
   objectIds: readonly string[]
+}
+
+type DragPlan = SelectedObjectTranslationPlan | ContinuousSelectedObjectTranslationPlan
+
+function ownedChanges(plan: DragPlan): OwnedSelectedObjectPlacementChange[] {
+  return 'systemPlans' in plan
+    ? [...plan.changes]
+    : plan.changes.map(change => ({ systemId: '', change }))
+}
+
+function planUpdates(plan: DragPlan): OwnedSelectedObjectPlacementChange[] {
+  return 'systemPlans' in plan
+    ? [...plan.updates]
+    : plan.updates.map(change => ({ systemId: '', change }))
+}
+
+function applyPlan(workspace: LocalWorkspace, plan: DragPlan, fallbackSystemId: string): LocalWorkspace {
+  return 'systemPlans' in plan
+    ? applyContinuousSelectedObjectTranslation(workspace, plan)
+    : applySelectedObjectTranslation(workspace, fallbackSystemId, plan)
 }
 
 function orbitIdOf(placement: ObjectPlacement): string | null {
@@ -89,6 +119,7 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
     workspace.value?.cluster.id ?? null,
     store.activeView,
     store.selectedSystemId,
+    store.inspectedTarget,
     store.mapMode,
     store.selectedObjectIds,
   ]))
@@ -105,15 +136,16 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
       && currentWorkspace?.id === captured.workspace.id
       && currentWorkspace.cluster.id === captured.workspace.cluster.id
       && (appliedRevision === undefined || appliedRevision.value === captured.revision)
-      && store.activeView === 'system'
+      && store.activeView === captured.activeView
       && store.mapMode === 'move'
-      && store.selectedSystemId === captured.systemId
+      && store.selectedSystemId === captured.selectedSystemId
+      && JSON.stringify(store.inspectedTarget) === captured.inspectedTargetSignature
       && store.selectedObjectIds.length === captured.objectIds.length
       && store.selectedObjectIds.every((objectId, index) => objectId === captured.objectIds[index])
   }
 
-  function validatePlan(plan: SelectedObjectTranslationPlan): boolean {
-    for (const change of plan.changes) {
+  function validatePlan(plan: DragPlan): boolean {
+    for (const { change } of ownedChanges(plan)) {
       if (isEntityCommandBlocked(placementCommand(change))) {
         return false
       }
@@ -121,15 +153,33 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
     return true
   }
 
-  function beginSelectedObjectDrag(anchorId: string): SelectedObjectDrag | null {
+  function beginSelectedObjectDrag(
+    anchorId: string,
+    continuousSystemScales?: ReadonlyMap<string, number>,
+  ): SelectedObjectDrag | null {
     const currentWorkspace = workspace.value
-    const systemId = store.selectedSystemId
     const selectedIds = [...store.selectedObjectIds]
-    if (!currentWorkspace || store.activeView !== 'system' || store.mapMode !== 'move'
-      || !systemId || selectedIds.length < 2 || !selectedIds.includes(anchorId)) return null
-    let preparedPlan: ReturnType<typeof prepareSelectedObjectTranslation>
+    if (!currentWorkspace || store.mapMode !== 'move' || selectedIds.length < 2 || !selectedIds.includes(anchorId)) return null
+    const ownerSystemId = currentWorkspace.cluster.systems.find(system => system.objects.some(object => object.id === anchorId))?.id
+    if (!ownerSystemId) return null
+    const continuous = store.activeView === 'cluster'
+    if ((!continuous && (store.activeView !== 'system' || store.selectedSystemId !== ownerSystemId))
+      || (continuous && !continuousSystemScales)) return null
+    let preparedPlan: ((delta: Point) => DragPlan | null) | null
     try {
-      preparedPlan = prepareSelectedObjectTranslation(currentWorkspace, systemId, selectedIds, anchorId)
+      if (continuous) {
+        const prepare = prepareContinuousSelectedObjectTranslation(
+          currentWorkspace,
+          selectedIds,
+          ownerSystemId,
+          anchorId,
+          continuousSystemScales!,
+        )
+        preparedPlan = prepare
+      } else {
+        const prepare = prepareSelectedObjectTranslation(currentWorkspace, ownerSystemId, selectedIds, anchorId)
+        preparedPlan = prepare
+      }
     } catch (error) {
       moveError.value = error instanceof Error ? error.message : String(error)
       return null
@@ -145,14 +195,17 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
       anchorId,
       workspace: currentWorkspace,
       revision: appliedRevision?.value,
-      systemId,
+      systemId: ownerSystemId,
+      activeView: store.activeView,
+      selectedSystemId: store.selectedSystemId,
+      inspectedTargetSignature: JSON.stringify(store.inspectedTarget),
       objectIds: selectedIds,
     }
     let completed = false
     let released = false
     let externallyCancelled = false
 
-    const currentPlan = (delta: Point) => contextIsCurrent(captured) ? preparedPlan(delta) : null
+    const currentPlan = (delta: Point) => contextIsCurrent(captured) ? preparedPlan!(delta) : null
 
     function setError(message: string): void {
       if (feedbackGestureId === captured.id && !externallyCancelled) moveError.value = message
@@ -188,6 +241,9 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
           }
           return {
             positions: plan.positions,
+            objectSystemIds: 'objectSystemIds' in plan
+              ? plan.objectSystemIds
+              : new Map(plan.movedObjectIds.map(objectId => [objectId, ownerSystemId])),
             departingObjectIds: plan.departingObjectIds,
             arrivingObjectIds: plan.arrivingObjectIds,
           }
@@ -241,8 +297,8 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
             return
           }
 
-          const handlers = plan.updates
-            .map(change => options.createCommittedPositionAppliedHandler?.(committedPosition(change)))
+          const handlers = planUpdates(plan)
+            .map(({ change }) => options.createCommittedPositionAppliedHandler?.(committedPosition(change)))
             .filter((handler): handler is () => void => handler !== undefined)
           const staleMessage = 'The selected objects or map context changed before the move could be applied.'
           let draftGuardBlocked = false
@@ -269,7 +325,7 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
               if (!validatePlan(plan)) {
                 throw new Error('Resolve the Inspector draft before changing an object or its placement.')
               }
-              return applySelectedObjectTranslation(latestWorkspace, captured.systemId, plan)
+              return applyPlan(latestWorkspace, plan, captured.systemId)
             },
             ...(handlers.length ? { onApplied: () => handlers.forEach(handler => handler()) } : {}),
           })

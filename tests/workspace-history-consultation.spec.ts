@@ -2,10 +2,13 @@ import { expect, test } from './fixtures'
 import {
   createSingleSystemWorkspace,
   openChartDetailsEditor,
+  waitForWorkspaceSaved,
+  wardenMap,
+  wardenSystemMark,
 } from './helpers'
 
 test('History consultation stays read only across Undo and Redo and returns focus on compact screens', async ({ page }) => {
-  await createSingleSystemWorkspace(page)
+  const { systemId, clusterName } = await createSingleSystemWorkspace(page)
   await page.setViewportSize({ width: 390, height: 844 })
   const historyButton = page.getByRole('button', { name: 'History', exact: true })
   const historyControls = page.locator('.workspace-history-controls')
@@ -35,8 +38,10 @@ test('History consultation stays read only across Undo and Redo and returns focu
   await expect(redo).toBeDisabled()
   const undoLabelBeforeConsultation = await undo.getAttribute('aria-label')
   expect(undoLabelBeforeConsultation ?? '').toContain('Rename Jump Cluster and star system')
-  const activeSystemMap = page.getByRole('group', { name: 'Vesper Prime star system map', exact: true })
-  await expect(activeSystemMap).toBeVisible()
+  const map = wardenMap(page)
+  const system = wardenSystemMark(page, systemId)
+  await expect(map).toHaveAccessibleName(`${clusterName} continuous map`)
+  await expect(system).toHaveAccessibleName('Select Vesper Prime')
 
   const actionLabel = 'Rename Jump Cluster and star system'
   await historyButton.click()
@@ -62,7 +67,7 @@ test('History consultation stays read only across Undo and Redo and returns focu
   await expect(undo).toBeEnabled()
   await expect(redo).toBeDisabled()
   await expect(undo).toHaveAttribute('aria-label', undoLabelBeforeConsultation ?? '')
-  await expect(activeSystemMap).toBeVisible()
+  await expect(system).toHaveAccessibleName('Select Vesper Prime')
   await expect(historyButton).toBeFocused()
 
   await historyButton.click()
@@ -70,9 +75,10 @@ test('History consultation stays read only across Undo and Redo and returns focu
   await expect(historyDialog.getByText('1 available to undo · 0 available through Redo', { exact: true })).toHaveText(positionSummaryText)
   await page.keyboard.press('Escape')
   await expect(historyDialog).toBeHidden()
-  await expect(activeSystemMap).toBeVisible()
+  await expect(system).toHaveAccessibleName('Select Vesper Prime')
 
   await undo.click()
+  await expect(system).toHaveAccessibleName('Select Vesper')
   await expect(page.getByRole('navigation', { name: 'Map context and commands' }).getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
   await expect(redo).toBeEnabled()
   await historyButton.click()
@@ -83,5 +89,7 @@ test('History consultation stays read only across Undo and Redo and returns focu
   await expect(redo).toBeEnabled()
   await expect(historyButton).toBeFocused()
   await redo.click()
+  await waitForWorkspaceSaved(page)
+  await expect(system).toHaveAccessibleName('Select Vesper Prime')
   await expect(undo).toBeEnabled()
 })

@@ -18,7 +18,7 @@ export function moveUnresolvedExitTarget(
   if (!isPoint(position)) {
     throw new Error('Choose a finite position for the unresolved exit.')
   }
-  if (!workspace.cluster.routes.some(route => route.id === routeId && route.toPointId === null)) {
+  if (!workspace.cluster.routes.some(route => route.id === routeId && route.toSystemId === null)) {
     throw new Error('The unresolved Jump Route no longer exists.')
   }
 

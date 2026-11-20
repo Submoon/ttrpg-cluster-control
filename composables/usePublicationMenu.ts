@@ -17,6 +17,7 @@ interface OwnedMenu extends PublicationMenuView {
   clusterId: string
   context: string
   mapCanvas: Element | null
+  hierarchyOrigin: { tree: Element; rowKey: string } | null
   selectionPending: boolean
 }
 
@@ -32,16 +33,32 @@ function isVisible(element: Element): boolean {
   return true
 }
 
+function captureHierarchyOrigin(request: PublicationMenuRequest): OwnedMenu['hierarchyOrigin'] {
+  const item = request.opener.closest('[role="treeitem"]')
+  const row = item?.matches('[data-hierarchy-key]')
+    ? item
+    : [...(item?.querySelectorAll('[data-hierarchy-key]') ?? [])]
+        .find(candidate => candidate.closest('[role="treeitem"]') === item)
+  const tree = row?.closest('[role="tree"]')
+  const rowKey = row?.getAttribute('data-hierarchy-key')
+  return tree && rowKey && row?.getAttribute('data-system-id') === request.target.systemId
+    && row.getAttribute('data-object-id') === request.target.id
+    ? { tree, rowKey }
+    : null
+}
+
 /** Owns one transient context menu and its originating target/focus lifetime for a page. */
 export function usePublicationMenu(options: {
   workspace: Ref<LocalWorkspace | null>
   store: PublicationUiStore
+  continuousMap?: Readonly<Ref<boolean>>
   canRestoreFocus?: (request: PublicationMenuRequest) => boolean
   prepareContextObjectSelection?: (objectId: string, isCurrent: () => boolean) => Promise<boolean>
 }) {
   const {
     workspace,
     store,
+    continuousMap,
     canRestoreFocus = () => true,
     prepareContextObjectSelection,
   } = options
@@ -53,10 +70,12 @@ export function usePublicationMenu(options: {
   function contextSignature(): string {
     return JSON.stringify([
       store.workspaceId,
+      continuousMap?.value === true,
       store.activeView,
       store.selectedSystemId,
       store.clusterSelectedSystemId,
       store.inspectedClusterSystemId,
+      store.inspectedTarget,
       store.mapMode,
     ])
   }
@@ -90,19 +109,32 @@ export function usePublicationMenu(options: {
 
   function isTargetInMapContext(menu: OwnedMenu): boolean {
     if (menu.source !== 'map') return true
+    const canvas = menu.mapCanvas
+    const continuousMap = !!canvas?.querySelector('.continuous-warden-map-svg')
+    if (continuousMap) {
+      return store.activeView === 'cluster'
+        && canvas?.getAttribute('data-workspace-id') === menu.workspaceId
+        && canvas?.getAttribute('data-cluster-id') === menu.clusterId
+    }
     if (menu.target.kind === 'system') return store.activeView === 'cluster'
     return store.activeView === 'system' && store.selectedSystemId === menu.target.systemId
   }
 
   function markerMatchesTarget(menu: OwnedMenu, marker: Element): boolean {
+    if (!isTargetInMapContext(menu)) return false
     if (menu.target.kind === 'system') {
       return marker.matches('.cluster-system-node[data-system-id]')
         && marker.getAttribute('data-system-id') === menu.target.id
     }
 
+    const continuousMap = !!menu.mapCanvas?.querySelector('.continuous-warden-map-svg')
+    if (continuousMap) {
+      return marker.matches('.continuous-warden-object[data-system-id][data-object-id]')
+        && marker.getAttribute('data-system-id') === menu.target.systemId
+        && marker.getAttribute('data-object-id') === menu.target.id
+    }
     const systemMap = menu.mapCanvas?.querySelector('.system-map-svg[data-system-id]')
-    return isTargetInMapContext(menu)
-      && systemMap?.getAttribute('data-system-id') === menu.target.systemId
+    return systemMap?.getAttribute('data-system-id') === menu.target.systemId
       && marker.matches('.system-object[data-object-id]')
       && marker.getAttribute('data-object-id') === menu.target.id
   }
@@ -111,13 +143,28 @@ export function usePublicationMenu(options: {
     const canvas = menu.mapCanvas
     if (!canvas || !isVisible(canvas) || !isTargetInMapContext(menu)) return null
 
+    const continuousMap = canvas.querySelector('.continuous-warden-map-svg') !== null
     const selector = menu.target.kind === 'system'
       ? '.cluster-system-node[data-system-id]'
-      : '.system-object[data-object-id]'
+      : continuousMap
+        ? '.continuous-warden-object[data-system-id][data-object-id]'
+        : '.system-object[data-object-id]'
     return [...canvas.querySelectorAll(selector)].find(marker => markerMatchesTarget(menu, marker)) ?? null
   }
 
   function focusTarget(menu: OwnedMenu): HTMLElement | SVGElement | null {
+    const origin = menu.hierarchyOrigin
+    if (origin) {
+      if (!isVisible(origin.tree)) return null
+      // Sparse sibling changes can replace a row; recover only within the same mounted Hierarchy tree.
+      const row = [...origin.tree.querySelectorAll<HTMLElement>('[data-hierarchy-key]')].find(candidate =>
+        candidate.getAttribute('data-hierarchy-key') === origin.rowKey
+        && candidate.getAttribute('data-system-id') === menu.target.systemId
+        && candidate.getAttribute('data-object-id') === menu.target.id
+        && candidate.closest('[role="tree"]') === origin.tree)
+      if (!row || !isVisible(row)) return null
+      return row.closest<HTMLElement>('[role="treeitem"]') ?? row
+    }
     if (menu.source !== 'map') return isVisible(menu.opener) ? menu.opener : null
 
     const canvas = menu.mapCanvas
@@ -162,8 +209,8 @@ export function usePublicationMenu(options: {
       && menuContextIsCurrent(menu)
       && menu.target.kind === 'object'
       && (menu.source === 'map' || menu.source === 'hierarchy')
-      && store.activeView === 'system'
-      && store.selectedSystemId === menu.target.systemId
+      && ((continuousMap?.value === true && store.activeView === 'cluster')
+        || (store.activeView === 'system' && store.selectedSystemId === menu.target.systemId))
   }
 
   const currentRequest = computed<PublicationMenuView | null>(() => {
@@ -217,7 +264,7 @@ export function usePublicationMenu(options: {
     const shouldPrepareSelection = !!menuOptions?.selectObjectForContext
       && request.target.kind === 'object'
       && (request.source === 'map' || request.source === 'hierarchy')
-      && store.activeView === 'system'
+      && (store.activeView === 'system' || (continuousMap?.value === true && store.activeView === 'cluster'))
     if (pending) pending.selectionPending = false
     const menu: OwnedMenu = {
       ...request,
@@ -228,6 +275,10 @@ export function usePublicationMenu(options: {
       clusterId: current.cluster.id,
       context: contextSignature(),
       mapCanvas: request.source === 'map' ? request.opener.closest('.workspace-map-canvas') : null,
+      hierarchyOrigin: shouldPrepareSelection && request.source === 'hierarchy'
+        && continuousMap?.value === true && store.activeView === 'cluster'
+        ? captureHierarchyOrigin(request)
+        : null,
       selectionPending: shouldPrepareSelection,
       restoreFocus: closingContent => restoreFocus(menu, closingContent),
     }

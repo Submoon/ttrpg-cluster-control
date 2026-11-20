@@ -12,14 +12,17 @@ import {
   planMapEntityDeletion,
   prepareJsonImport,
   removeCustomFieldDefinition,
+  restoreLocalWorkspace,
   updateCustomFieldApplicability,
   updateCustomFieldType,
   type LocalWorkspace,
+  type StarSystem,
 } from '../domain/workspace'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
 import type { WorkspaceHistoryCapacityDetails } from '../composables/editor-workflows/workspace-mutations'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
 import { createWorkspaceSnapshot } from '../utils/workspace-storage'
+import { projectWardenSystem } from '../utils/continuous-map-projection'
 import {
   waitForWorkspaceSaved,
   addClusterSystem,
@@ -27,14 +30,14 @@ import {
   createSingleSystemWorkspace,
   downloadJson,
   openWorkspaceHierarchy,
-  returnToClusterMap,
+  fitWorkspaceMap,
 } from './helpers'
 
-function fakeImportInput(content: string): { event: Event; restore(): void } {
+function fakeImportInput(content: string, readContent: () => Promise<string> = async () => content): { event: Event; restore(): void } {
   const previousDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'HTMLInputElement')
   class TestInput {
     value = 'map.json'
-    files = [{ text: async () => content }]
+    files = [{ text: readContent }]
   }
   Object.defineProperty(globalThis, 'HTMLInputElement', {
     configurable: true,
@@ -87,6 +90,177 @@ function makeFileActions(initial: LocalWorkspace, options: {
     },
   }
 }
+
+test('standalone import previews a detached placement that can be moved and canceled @pure', async () => {
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const source = createLocalWorkspace('Far Reach', 'Iria')
+  const sourceSystem = source.cluster.systems[0]
+  if (!sourceSystem) throw new Error('The standalone import fixture needs a source system.')
+  const harness = makeFileActions(initial)
+  const input = fakeImportInput(JSON.stringify(exportStarSystem(source, sourceSystem.id)))
+  const before = createWorkspaceSnapshot(initial)
+  const chosenAnchor = { x: -1.2, y: 1.8 }
+
+  try {
+    await harness.files.importJsonFile(input.event)
+    expect(harness.files.importReview.value.open).toBe(false)
+    expect(harness.files.standaloneImportPlacementEnabled.value).toBe(true)
+    const placement = harness.files.standaloneImportPlacement.value
+    expect(placement?.system.name).toBe('Iria')
+    expect(placement?.system.id).not.toBe(sourceSystem.id)
+    expect(placement?.anchor).toEqual({ x: 0.5, y: 0.35 })
+
+    expect(harness.files.previewStandaloneImportAnchor({ x: Number.POSITIVE_INFINITY, y: 0 })).toBe(false)
+    expect(harness.files.standaloneImportPlacement.value?.anchor).toEqual({ x: 0.5, y: 0.35 })
+    expect(harness.files.previewStandaloneImportAnchor(chosenAnchor)).toBe(true)
+    expect(harness.files.standaloneImportPlacement.value?.anchor).toEqual(chosenAnchor)
+    expect(harness.workspace.value).toEqual(before)
+
+    harness.files.cancelStandaloneImportPlacement()
+    expect(harness.files.standaloneImportPlacementEnabled.value).toBe(false)
+    expect(harness.files.standaloneImportPlacement.value).toBeNull()
+    expect(harness.files.importReview.value.open).toBe(false)
+    expect(harness.workspace.value).toEqual(before)
+  } finally {
+    input.restore()
+    harness.history.dispose()
+  }
+})
+
+test('legacy standalone placement reviews and applies the selected anchor with its complete rotated Orbit geometry @pure', async () => {
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const source = createLocalWorkspace('Far Reach', 'Iria')
+  const sourceSystem = source.cluster.systems[0]
+  if (!sourceSystem) throw new Error('The legacy import fixture needs a source system.')
+  const star = sourceSystem.objects[0]
+  if (!star) throw new Error('The legacy import fixture needs its host star.')
+  const orbit = createOrbit(sourceSystem, star.id)
+  const systemWithOrbit = { ...sourceSystem, orbits: [orbit] }
+  const distantPlanet = createSystemObject(systemWithOrbit, 'planet', orbit.id)
+  const standaloneSystem = {
+    ...systemWithOrbit,
+    objects: [...sourceSystem.objects, distantPlanet],
+  }
+  const sourceWithGeometry = {
+    ...source,
+    cluster: { ...source.cluster, systems: [standaloneSystem] },
+    layout: {
+      ...source.layout,
+      orbitRadii: { [orbit.id]: { horizontal: 4200, vertical: 1900 } },
+      orbitRotations: { [orbit.id]: 31 },
+      objectAngles: { [distantPlanet.id]: 1.1 },
+    },
+  }
+  const legacyExport = JSON.parse(JSON.stringify(exportStarSystem(sourceWithGeometry, standaloneSystem.id))) as {
+    version: number
+    system: { objects: Array<Record<string, unknown>> }
+  }
+  legacyExport.version = 3
+  for (const object of legacyExport.system.objects) {
+    delete object.playerText
+    delete object.playerFieldMasks
+  }
+  const harness = makeFileActions(initial)
+  const input = fakeImportInput(JSON.stringify(legacyExport))
+  const chosenAnchor = { x: -4.25, y: 1.75 }
+
+  try {
+    await harness.files.importJsonFile(input.event)
+    const placement = harness.files.standaloneImportPlacement.value
+    if (!placement) throw new Error('The legacy system should be available for placement.')
+    expect(placement.system.id).not.toBe(standaloneSystem.id)
+    const projectionSystem = JSON.parse(JSON.stringify(placement.system)) as StarSystem
+    const projectionAnchor = { ...placement.anchor }
+    const projectionGeometry = JSON.parse(JSON.stringify(placement.geometry)) as Parameters<typeof projectWardenSystem>[2]
+    const projection = projectWardenSystem(projectionSystem, projectionAnchor, projectionGeometry)
+    expect(projection.envelope.width).toBeGreaterThan(1000)
+    expect(placement.geometry.orbitRotations).toEqual({ [placement.system.orbits[0]!.id]: 31 })
+    expect(Object.values(placement.geometry.orbitRadii)).toEqual([{ horizontal: 4200, vertical: 1900 }])
+
+    expect(harness.files.previewStandaloneImportAnchor(chosenAnchor)).toBe(true)
+    harness.files.reviewStandaloneImportPlacement()
+    expect(harness.files.importReview.value.open).toBe(true)
+    expect(harness.files.standaloneImportPlacement.value).toBeNull()
+    await harness.files.confirmJsonImport()
+
+    const importedSystem = harness.workspace.value?.cluster.systems.find(system => system.name === 'Iria')
+    if (!importedSystem) throw new Error('The confirmed system copy is missing from the Cluster.')
+    const importedOrbit = importedSystem.orbits[0]
+    expect(importedOrbit).toBeTruthy()
+    expect(harness.workspace.value?.layout.systemPositions[importedSystem.id]).toEqual(chosenAnchor)
+    expect(importedOrbit && harness.workspace.value?.layout.orbitRotations[importedOrbit.id]).toBe(31)
+    expect(importedOrbit && harness.workspace.value?.layout.orbitRadii[importedOrbit.id])
+      .toEqual({ horizontal: 4200, vertical: 1900 })
+
+    const reopened = restoreLocalWorkspace(createWorkspaceSnapshot(harness.workspace.value!))
+    expect(reopened?.layout.systemPositions[importedSystem.id]).toEqual(chosenAnchor)
+    expect(importedOrbit && reopened?.layout.orbitRotations[importedOrbit.id]).toBe(31)
+    expect(importedOrbit && reopened?.layout.orbitRadii[importedOrbit.id])
+      .toEqual({ horizontal: 4200, vertical: 1900 })
+  } finally {
+    input.restore()
+    harness.history.dispose()
+  }
+})
+
+test('standalone placement cannot enter review after its captured workspace is replaced @pure', async () => {
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const replacement = createLocalWorkspace('New Reach', 'Different System')
+  const source = createLocalWorkspace('Far Reach', 'Iria')
+  const sourceSystem = source.cluster.systems[0]
+  if (!sourceSystem) throw new Error('The stale placement fixture needs a source system.')
+  const harness = makeFileActions(initial)
+  const input = fakeImportInput(JSON.stringify(exportStarSystem(source, sourceSystem.id)))
+
+  try {
+    await harness.files.importJsonFile(input.event)
+    expect(harness.files.standaloneImportPlacementEnabled.value).toBe(true)
+    harness.replaceWorkspace(replacement)
+    expect(harness.files.standaloneImportPlacementEnabled.value).toBe(false)
+    harness.files.reviewStandaloneImportPlacement()
+
+    expect(harness.files.standaloneImportPlacement.value).toBeNull()
+    expect(harness.files.importReview.value.open).toBe(false)
+    expect(harness.workspace.value).toEqual(createWorkspaceSnapshot(replacement))
+  } finally {
+    input.restore()
+    harness.history.dispose()
+  }
+})
+
+test('a workspace replacement while standalone file text is pending prevents placement admission @pure', async () => {
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const replacement = createLocalWorkspace('New Reach', 'Different System')
+  const source = createLocalWorkspace('Far Reach', 'Iria')
+  const sourceSystem = source.cluster.systems[0]
+  if (!sourceSystem) throw new Error('The stale file-read fixture needs a source system.')
+  let finishRead: ((text: string) => void) | undefined
+  let markReadStarted: (() => void) | undefined
+  const readStarted = new Promise<void>((resolve) => { markReadStarted = resolve })
+  const input = fakeImportInput(
+    JSON.stringify(exportStarSystem(source, sourceSystem.id)),
+    () => new Promise<string>((resolve) => {
+      finishRead = resolve
+      markReadStarted?.()
+    }),
+  )
+  const harness = makeFileActions(initial)
+
+  try {
+    const importAttempt = harness.files.importJsonFile(input.event)
+    await readStarted
+    harness.replaceWorkspace(replacement)
+    finishRead?.(JSON.stringify(exportStarSystem(source, sourceSystem.id)))
+    await importAttempt
+
+    expect(harness.files.standaloneImportPlacement.value).toBeNull()
+    expect(harness.files.importReview.value.open).toBe(false)
+    expect(harness.workspace.value).toEqual(createWorkspaceSnapshot(replacement))
+  } finally {
+    input.restore()
+    harness.history.dispose()
+  }
+})
 
 function makeCascadeWorkspace(): LocalWorkspace {
   let workspace = createLocalWorkspace('Kestrel Reach', 'A')
@@ -225,6 +399,7 @@ test('Orbit deletion round-trips its nested cascade, station links, routes, orde
   expect(survivingSystem.objects.map(object => object.name)).toEqual(['Primary Star', 'Herma', 'Surviving Gate'])
   expect(survivingSystem.orbits).toEqual([{ ...system.orbits[1], order: 1 }])
   expect(deletion.cluster.routes.map(route => route.fromPointId)).toEqual([
+    null,
     system.objects.find(object => object.name === 'Surviving Gate')!.id,
   ])
   expect(survivingSystem.objects.find(object => object.name === 'Surviving Gate')?.jumpStationId).toBeNull()
@@ -499,6 +674,7 @@ test('an import reopens consequence review when shared Fields change while draft
 
   try {
     await harness.files.importJsonFile(input.event)
+    harness.files.reviewStandaloneImportPlacement()
     expect(harness.files.importReview.value.open).toBe(true)
     const importAttempt = harness.files.confirmJsonImport()
     await importAttempt
@@ -549,6 +725,7 @@ test('an import capacity cancellation keeps the reviewed copy available without 
 
   try {
     await harness.files.importJsonFile(input.event)
+    harness.files.reviewStandaloneImportPlacement()
     const confirmation = harness.files.confirmJsonImport()
     await Promise.resolve()
     expect(harness.history.getStatus()).toMatchObject({ isBusy: true, isConfirmingCapacity: true })
@@ -582,6 +759,7 @@ test('a stale import capacity answer cannot publish into a replacement workspace
 
   try {
     await harness.files.importJsonFile(input.event)
+    harness.files.reviewStandaloneImportPlacement()
     const confirmation = harness.files.confirmJsonImport()
     await Promise.resolve()
     expect(harness.history.getStatus().isConfirmingCapacity).toBe(true)
@@ -603,7 +781,7 @@ test('reviewed system deletion restores the same cascade through the editor Undo
   test.setTimeout(60_000)
   await captureMapExportBlobs(page)
   await createSingleSystemWorkspace(page)
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
   await addClusterSystem(page)
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
   await openWorkspaceHierarchy(page, 'Jump Cluster contents')

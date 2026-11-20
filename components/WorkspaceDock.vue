@@ -129,8 +129,9 @@
         @cancel="emit('cancel-orbit-center-move')"
       />
       <p id="workspace-map-tool-shortcut-help" class="sr-only" role="note">
-        Focus the map or a map item to use these shortcuts: N Navigate, S Select, M Move, and A open Add. Text entry, map controls, and dialogs keep their own keys.
+        Focus the map or a map item to use these shortcuts: S Select, M Move, and A open Add. Text entry, map controls, and dialogs keep their own keys.
       </p>
+      <slot name="placement" />
     </div>
   </nav>
 </template>
@@ -140,7 +141,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Compon
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import type {
-  MapInteractionMode,
   SystemObjectMoveCandidate,
   SystemCreationSession,
   SystemObjectMoveDestinationOption,
@@ -216,9 +216,8 @@ const emit = defineEmits<{
 const store = useEditorUiStore()
 const commands = useEditorCommands()
 
-const modes: Array<{ value: MapInteractionMode; label: string; shortcut: string; icon: string }> = [
+const modes: Array<{ value: 'select' | 'move'; label: string; shortcut: string; icon: string }> = [
   { value: 'select', label: 'Select', shortcut: 'S', icon: 'i-lucide-mouse-pointer-2' },
-  { value: 'navigate', label: 'Navigate', shortcut: 'N', icon: 'i-lucide-hand' },
   { value: 'move', label: 'Move', shortcut: 'M', icon: 'i-lucide-move' },
 ]
 const shortcutTooltipUi = {

@@ -2,6 +2,9 @@
   <div
     ref="canvasRoot"
     class="workspace-map-canvas"
+    :class="{ 'is-orbit-add-armed': hasOrbitAddIntent() }"
+    :data-workspace-id="props.workspace.id"
+    :data-cluster-id="props.workspace.cluster.id"
     @pointerdown.capture="onPointerDownCapture"
     @mousedown.capture="onMouseDownCapture"
     @mouseup.capture="onMouseUpCapture"
@@ -27,8 +30,69 @@
         height: `${selectionRectangle.height}px`,
       }"
     />
+    <ContinuousWardenMap
+      v-if="props.activeView === 'cluster' && props.continuousMap"
+      ref="continuousWardenMapRef"
+      :cluster="props.workspace.cluster"
+      :workspace="props.workspace"
+      :system-positions="props.workspace.layout.systemPositions"
+      :unresolved-exit-positions="props.workspace.layout.unresolvedExitPositions"
+      :dimmed-object-ids="props.dimmedObjectIds ?? []"
+      :applied-dimmed-object-ids="props.appliedDimmedObjectIds ?? []"
+      :presentation="matchingDraftWorkspace"
+      :object-angles="props.workspace.layout.objectAngles"
+      :orbit-radii="props.workspace.layout.orbitRadii"
+      :orbit-rotations="props.workspace.layout.orbitRotations"
+      :selected-system-id="props.inspectedTarget?.kind === 'system' || props.inspectedTarget?.kind === 'object' || props.inspectedTarget?.kind === 'orbit'
+        ? props.inspectedTarget.systemId
+        : props.selectedSystemId"
+      :selected-object-ids="props.selectedObjectIds"
+      :begin-selected-object-drag="commands.move.beginSelectedObjectDrag"
+      :inspected-target="props.inspectedTarget ?? null"
+      :selected-route-id="props.selectedRouteId"
+      :mode="props.mode"
+      :creation-type="props.creationType ?? null"
+      :orbit-creation-preview="props.orbitCreationPreview"
+      :creation-other-type="props.creationOtherType ?? null"
+      :object-add-pinned-owner-id="props.objectAddPinnedOwnerId ?? null"
+      :is-entity-command-blocked="props.isEntityCommandBlocked"
+      :orbit-adjustment-preview="matchingOrbitAdjustmentPreview"
+      :cluster-add-type="props.clusterAddType ?? null"
+      :cluster-chooser-open="props.clusterChooserOpen ?? false"
+      :cluster-move-targeting="props.clusterMoveTargeting ?? false"
+      :move-targeting="props.moveTargeting ?? false"
+      :standalone-import-placement-enabled="props.standaloneImportPlacementEnabled ?? false"
+      :standalone-import-placement="props.standaloneImportPlacement ?? null"
+      :system-object-transfer-preview="matchingSystemObjectTransferPreview"
+      :keyboard-owned-overlay-open="props.keyboardOwnedOverlayOpen ?? false"
+      :get-usable-client-rect="measureUnobstructedClientRect"
+      :initial-viewport="props.initialViewport"
+      touch-navigation
+      @activate-system="handleSystemActivation"
+      @select-object="(systemId, objectId) => emit('select-continuous-object', systemId, objectId, props.mode !== 'move')"
+      @select-orbit="(systemId, orbitId) => emit('select-continuous-orbit', systemId, orbitId, props.mode !== 'move')"
+      @select-route="handleRouteSelection"
+      @cluster-target="forwardClusterTarget"
+      @continuous-object-add-target="emit('continuous-object-add-target', $event)"
+      @continuous-orbit-add-target="(owners, requiresChoice, workspace) => emit('continuous-orbit-add-target', owners, requiresChoice, workspace)"
+      @orbit-adjustment="forwardOrbitAdjustment"
+      @entity-command-blocked="emit('entity-command-blocked', $event)"
+      @move-object-in-system="forwardMoveObjectInSystem"
+      @resize-system-frame="forwardResizeSystemFrame"
+      @transfer-object-on-drop="forwardObjectDropTransfer"
+      @move-orbit-center="forwardMoveOrbitCenter"
+      @orbit-center-candidates="forwardOrbitCenterCandidates"
+      @resize-orbit="forwardResizeOrbit"
+      @rotate-orbit="forwardRotateOrbit"
+      @standalone-import-placement-anchor="forwardStandaloneImportPlacementAnchor"
+      @move-target="forwardMoveTarget"
+      @move-system="forwardMoveSystem"
+      @move-unresolved-exit="(id, point) => emit('move-unresolved-exit', id, point)"
+      @editing-gesture-change="orbitInput.setChildGestureActive"
+      @viewport-change="emitViewport"
+    />
     <ClusterMap
-      v-if="props.activeView === 'cluster'"
+      v-else-if="props.activeView === 'cluster'"
       ref="clusterMapRef"
       :cluster="props.workspace.cluster"
       :system-positions="props.workspace.layout.systemPositions"
@@ -100,6 +164,24 @@
       @editing-gesture-change="orbitInput.setChildGestureActive"
       @viewport-change="handleSystemViewportChange"
     />
+    <div
+      v-if="activeSystemTransferLease"
+      class="system-transfer-placement-prompt"
+      data-map-obstruction
+      role="status"
+      aria-live="polite"
+    >
+      <span>Move the preview with the arrow keys and press Enter, or click or tap the map to choose its position. Press Escape to cancel.</span>
+      <UButton
+        type="button"
+        color="neutral"
+        variant="outline"
+        size="sm"
+        class="pointer-events-auto shrink-0"
+        data-system-transfer-control
+        @click.stop="cancelSystemTransferPlacement()"
+      >Cancel map placement</UButton>
+    </div>
   </div>
 </template>
 
@@ -111,16 +193,21 @@ import type {
   OrbitRadii,
   Point,
   StarSystem,
+  SystemObjectTransferPlacement,
+  SystemFrameInsets,
 } from '../domain/workspace'
+import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
 import type {
   MapInteractionMode,
   MapHistoryTarget,
   OrbitCenterMoveCandidate,
+  OrbitCreationMapPreview,
   OrbitPlacementPreview,
   SystemCreationCandidate,
   SystemCreationPreview,
   SystemCreationType,
   SystemObjectMoveCandidate,
+  SystemObjectMoveTarget,
 } from '../composables/editor-workflows/types'
 import type { WardenClusterMapPresentation, WardenSystemMapPresentation } from './maps/warden-map-presentation'
 import type { EntityCommand } from '../composables/editor-workflows/types'
@@ -129,21 +216,34 @@ import type {
   OrbitAdjustmentIntent,
   OrbitAdjustmentPreview,
 } from '../composables/editor-workflows/continuous-orbit-adjustments'
-import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { MapImageExportOptions, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { MapImageScope } from '../utils/map-image-scope'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import type { PublicationMenuLease, PublicationTarget } from '../composables/editor-workflows/publication-types'
 import type { MapViewport } from '../utils/map-zoom'
 import type { SearchTarget } from '../utils/workspace-search'
+import type { InspectedMapTarget } from '../stores/editor-ui'
+import type { ContinuousObjectAddTarget } from '../utils/continuous-map-editing'
+import type {
+  SystemObjectTransferDrop,
+  SystemObjectTransferMapAnchor,
+  SystemObjectTransferMapPlacementLease,
+  SystemObjectTransferMapPointerPreview,
+  SystemObjectTransferMapPreview,
+} from '../composables/editor-workflows/system-object-transfer-types'
 import { clientRectToSvgViewportRect, MAP_ZOOM_MIN_SCALE, type SvgViewportRect } from '../utils/map-zoom'
 import { MAP_TOUCH_PAN_THRESHOLD_PX } from './maps/map-touch-navigation'
 import { largestUnobstructedClientRect, type ClientRectBounds } from '../utils/map-usable-area'
 import { createOwnedTouchReleaseGuard } from './maps/owned-touch-release'
 import { useOrbitPlacementInput } from './maps/useOrbitPlacementInput'
 import ClusterMap from './ClusterMap.vue'
+import ContinuousWardenMap from './ContinuousWardenMap.vue'
 import SystemMap from './SystemMap.vue'
 
 const props = defineProps<{
   activeView: 'cluster' | 'system'
+  continuousMap?: boolean
+  inspectedTarget?: InspectedMapTarget | null
   mapKey: string
   initialViewport: MapViewport | null
   workspace: LocalWorkspace
@@ -155,12 +255,16 @@ const props = defineProps<{
   selectedObjectIds: readonly string[]
   selectedOrbitId: string | null
   dimmedObjectIds?: readonly string[]
+  appliedDimmedObjectIds?: readonly string[]
   selectedRouteId: string | null
   mode: MapInteractionMode
   isObjectMoveBlocked?: (objectId: string) => boolean
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
   feedbackElement?: HTMLElement | null
   creationType?: SystemCreationType | null
+  orbitCreationPreview?: OrbitCreationMapPreview | null
+  creationOtherType?: string | null
+  objectAddPinnedOwnerId?: string | null
   creationPreview?: SystemCreationPreview | null
   creationChooserOpen?: boolean
   clusterAddType?: 'system' | 'route' | null
@@ -169,6 +273,11 @@ const props = defineProps<{
   orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
   /** A focused placement controller currently owns scene clicks and arrow keys. */
   moveTargeting?: boolean
+  standaloneImportPlacementEnabled?: boolean
+  standaloneImportPlacement?: StandaloneImportPlacementView | null
+  keyboardOwnedOverlayOpen?: boolean
+  systemObjectTransferPreview?: SystemObjectTransferMapPreview | null
+  systemObjectTransferMapLease?: SystemObjectTransferMapPlacementLease | null
 }>()
 const commands = useEditorCommands()
 
@@ -201,6 +310,8 @@ const systemMapPresentation = computed<WardenSystemMapPresentation | null>(() =>
 
 const emit = defineEmits<{
   'navigate-system': [id: string]
+  'select-continuous-object': [systemId: string, objectId: string, openInspector?: boolean]
+  'select-continuous-orbit': [systemId: string, orbitId: string, openInspector?: boolean]
   'select-cluster-system': [id: string]
   'move-select-cluster-system': [id: string]
   'select-route': [id: string]
@@ -212,7 +323,7 @@ const emit = defineEmits<{
   'orbit-adjustment': [intent: OrbitAdjustmentIntent]
   'object-move-blocked': [id: string]
   'object-move-candidates': [id: string, candidates: SystemObjectMoveCandidate[]]
-  'orbit-center-candidates': [id: string, candidates: OrbitCenterMoveCandidate[]]
+  'orbit-center-candidates': [id: string, candidates: OrbitCenterMoveCandidate[], systemId?: string]
   'entity-command-blocked': [command: EntityCommand]
   'move-system': [id: string, position: Point]
   'move-unresolved-exit': [id: string, position: Point]
@@ -220,43 +331,79 @@ const emit = defineEmits<{
   'move-nudge': [delta: Point]
   'cancel-map-move': []
   'cluster-target': [point: Point, systemIds: string[]]
+  'continuous-object-add-target': [request: ContinuousObjectAddTarget]
+  'continuous-orbit-add-target': [owners: readonly { systemId: string; candidates: SystemCreationCandidate[] }[], requiresChoice: boolean, workspace: LocalWorkspace]
+  'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace, frameInsets?: SystemFrameInsets]
+  'resize-system-frame': [systemId: string, insets: SystemFrameInsets, workspaceSnapshot: LocalWorkspace]
+  'transfer-object-on-drop': [drop: SystemObjectTransferDrop]
+  'standalone-import-placement-anchor': [anchor: Point]
+  'cancel-standalone-import-placement': []
   'cancel-cluster-preview': []
   'cancel-object-placement-preview': []
   'cancel-orbit-placement-preview': []
   'move-object': [id: string, position: Point]
-  'move-orbit-center': [id: string, center: Point, hostId: string | null]
+  'move-orbit-center': [id: string, center: Point, hostId: string | null, systemId?: string, sourceGeometry?: string]
   'rotate-object': [id: string, angle: number]
-  'resize-orbit': [id: string, radii: OrbitRadii]
-  'rotate-orbit': [id: string, rotation: number]
+  'resize-orbit': [id: string, radii: OrbitRadii, systemId?: string, sourceGeometry?: string]
+  'rotate-orbit': [id: string, rotation: number, systemId?: string, sourceGeometry?: string]
   'place-object-in-orbit': [id: string, orbitId: string, angle: number]
   'creation-target': [candidates: SystemCreationCandidate[]]
   'creation-drop-target': [type: SystemCreationType, candidates: SystemCreationCandidate[]]
   'cancel-creation-preview': []
   'editing-gesture-change': [active: boolean]
   'viewport-change': [change: { key: string; viewport: MapViewport }]
+  'system-transfer-placement-preview': [preview: SystemObjectTransferMapPointerPreview]
+  'system-transfer-placement-complete': [anchor: SystemObjectTransferMapAnchor]
+  'system-transfer-placement-cancel': [lease: SystemObjectTransferMapPlacementLease]
 }>()
 
 type ClusterMapHandle = InstanceType<typeof ClusterMap>
+type ContinuousWardenMapHandle = InstanceType<typeof ContinuousWardenMap>
 type SystemMapInstance = InstanceType<typeof SystemMap>
 const clusterMapRef = shallowRef<ClusterMapHandle | null>(null)
+const continuousWardenMapRef = shallowRef<ContinuousWardenMapHandle | null>(null)
 const systemMapRef = shallowRef<SystemMapInstance | null>(null)
 const canvasRoot = shallowRef<HTMLElement | null>(null)
-const currentMap = () => props.activeView === 'cluster' ? clusterMapRef.value : systemMapRef.value
+const currentClusterMap = () => props.continuousMap ? continuousWardenMapRef.value : clusterMapRef.value
+const currentMap = () => props.activeView === 'cluster' ? currentClusterMap() : systemMapRef.value
 
 function dismissSearchLocator(): void {
-  systemMapRef.value?.dismissSearchLocator()
+  if (props.continuousMap) continuousWardenMapRef.value?.dismissSearchLocator()
+  else systemMapRef.value?.dismissSearchLocator()
+}
+
+function noteManualCameraInteraction(): void {
+  cameraInteractionVersion += 1
 }
 
 const matchingOrbitAdjustmentPreview = computed(() => {
   const preview = props.orbitAdjustmentPreview
-  const system = props.system
-  return props.activeView === 'system' && system && preview
-    && preview.identity.workspaceId === props.workspace.id
-    && preview.identity.systemId === system.id
+  if (!preview || preview.identity.workspaceId !== props.workspace.id) return null
+  if (props.activeView === 'system') {
+    return props.system?.id === preview.identity.systemId ? preview : null
+  }
+  return props.continuousMap && props.workspace.cluster.systems.some(system => system.id === preview.identity.systemId
+    && system.orbits.some(orbit => orbit.id === preview.identity.orbitId))
     ? preview
     : null
 })
+const matchingSystemObjectTransferPreview = computed(() => {
+  const preview = props.systemObjectTransferPreview
+  if (props.activeView !== 'cluster' || props.continuousMap !== true || !preview
+    || preview.previewWorkspace.id !== props.workspace.id
+    || preview.previewWorkspace.cluster.id !== props.workspace.cluster.id
+    || !props.workspace.cluster.systems.some(system => system.id === preview.destinationSystemId)) return null
+  return preview
+})
+const activeSystemTransferLease = computed(() => props.systemObjectTransferMapLease ?? null)
 let activePointerPan: { id: number; button: number; x: number; y: number; moved: boolean } | null = null
+let activeSystemTransferPointer: {
+  lease: SystemObjectTransferMapPlacementLease
+  pointerId: number
+} | null = null
+const systemTransferSuppressedReleaseIds = new Set<number>()
+let transferTouchContact: { touchId: number; x: number; y: number } | null = null
+let systemTransferKeyboardPoint: Point | null = null
 let activeMousePointerId: number | null = null
 let editingGestureActive = false
 let orbitOrChildGestureActive = false
@@ -272,6 +419,7 @@ let pointerLongPress: {
   y: number
   target: EventTarget | null
   addHold: boolean
+  toggleSelection: boolean
   timer: ReturnType<typeof setTimeout>
 } | null = null
 let consumedAddPointerId: number | null = null
@@ -286,6 +434,7 @@ let suppressNextClick = false
 let suppressClickTimer: ReturnType<typeof setTimeout> | undefined
 let suppressNextContextMenu = false
 let suppressContextMenuTimer: ReturnType<typeof setTimeout> | undefined
+let cameraInteractionVersion = 0
 let pendingRightClickContextMenu: {
   pointerId: number
   target: EventTarget | null
@@ -299,6 +448,7 @@ let touchReleaseGuard: ReturnType<typeof createOwnedTouchReleaseGuard> | null = 
 let selectionRectangleGesture: {
   pointerId: number
   svg: SVGSVGElement
+  view: 'system' | 'continuous'
   mapKey: string
   systemId: string | undefined
   start: Point
@@ -320,34 +470,46 @@ function setOrbitOrChildGestureActive(active: boolean): void {
 }
 
 function canContinueSelectionRectangle(gesture: NonNullable<typeof selectionRectangleGesture>): boolean {
+  const expectedMap = gesture.view === 'system'
+    ? props.activeView === 'system'
+    : props.activeView === 'cluster' && props.continuousMap === true
   return gesture.svg.isConnected
-    && props.activeView === 'system'
+    && expectedMap
     && props.mode === 'select'
     && !props.moveTargeting
     && !props.creationType
     && !props.creationChooserOpen
+    && !props.clusterAddType
+    && !props.clusterChooserOpen
+    && !props.clusterMoveTargeting
+    && !props.standaloneImportPlacementEnabled
     && props.mapKey === gesture.mapKey
-    && props.system?.id === gesture.systemId
+    && (gesture.view === 'continuous' || props.system?.id === gesture.systemId)
 }
 
-function isSystemMapEmptySpace(target: EventTarget | null): { svg: SVGSVGElement; canvas: HTMLElement } | null {
-  if (props.activeView !== 'system' || props.mode !== 'select' || props.moveTargeting
-    || props.creationType || props.creationChooserOpen) return null
-  if (!(target instanceof Element) || !canvasRoot.value
-    || target.closest('.system-object, .orbit-mark, .orbit-hit-target, .orbit-edit-control')) return null
-  const svg = target.closest<SVGSVGElement>('svg.system-map-svg')
-  return svg && canvasRoot.value.contains(svg) ? { svg, canvas: canvasRoot.value } : null
+function isSelectableMapEmptySpace(target: EventTarget | null): { svg: SVGSVGElement; canvas: HTMLElement; view: 'system' | 'continuous' } | null {
+  const systemView = props.activeView === 'system'
+  const continuousView = props.activeView === 'cluster' && props.continuousMap === true
+  if ((!systemView && !continuousView) || props.mode !== 'select' || props.moveTargeting
+    || props.creationType || props.creationChooserOpen || props.clusterAddType
+    || props.clusterChooserOpen || props.clusterMoveTargeting || props.standaloneImportPlacementEnabled) return null
+  if (!(target instanceof Element) || !canvasRoot.value || isMapEntityTarget(target)) return null
+  const svg = target.closest<SVGSVGElement>(systemView ? 'svg.system-map-svg' : 'svg.continuous-warden-map-svg')
+  return svg && canvasRoot.value.contains(svg)
+    ? { svg, canvas: canvasRoot.value, view: systemView ? 'system' : 'continuous' }
+    : null
 }
 
 function beginSelectionRectangle(event: PointerEvent): boolean {
   if (event.pointerType === 'touch' || event.button !== 0 || !event.isPrimary
-    || event.ctrlKey || event.metaKey || event.altKey) return false
-  const target = isSystemMapEmptySpace(event.target)
+    || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false
+  const target = isSelectableMapEmptySpace(event.target)
   if (!target) return false
   if (selectionRectangleGesture) finishSelectionRectangle(true)
   selectionRectangleGesture = {
     pointerId: event.pointerId,
     svg: target.svg,
+    view: target.view,
     mapKey: props.mapKey,
     systemId: props.system?.id,
     start: { x: event.clientX, y: event.clientY },
@@ -401,21 +563,42 @@ function finishSelectionRectangle(cancelled: boolean): void {
     void commands.navigation.replaceObjectSelection([])
     return
   }
-  void commands.navigation.replaceObjectSelection(systemMapRef.value?.getObjectIdsWithinClientRect({
+  const rect = {
     left: Math.min(gesture.start.x, gesture.current.x),
     top: Math.min(gesture.start.y, gesture.current.y),
     right: Math.max(gesture.start.x, gesture.current.x),
     bottom: Math.max(gesture.start.y, gesture.current.y),
-  }) ?? [])
+  }
+  const objectIds = gesture.view === 'continuous'
+    ? continuousWardenMapRef.value?.getObjectIdsWithinClientRect(rect)
+    : systemMapRef.value?.getObjectIdsWithinClientRect(rect)
+  void commands.navigation.replaceObjectSelection(objectIds ?? [])
 }
 
 const orbitInput = useOrbitPlacementInput({
   root: () => canvasRoot.value,
-  map: () => systemMapRef.value,
-  isSystemView: () => props.activeView === 'system',
+  map: () => props.continuousMap ? continuousWardenMapRef.value : systemMapRef.value,
+  isSystemView: () => props.continuousMap === true || props.activeView === 'system',
   mapKey: () => props.mapKey,
   hasAddOrbitIntent: hasOrbitAddIntent,
-  begin: scenePoint => commands.creation.beginOrbitDrag(scenePoint),
+  begin: (event) => {
+    if (!props.continuousMap) {
+      const map = systemMapRef.value
+      const point = map?.clientPointToScene(event.clientX, event.clientY)
+      return map && point && commands.creation.beginOrbitDrag(point) ? map : null
+    }
+    const map = continuousWardenMapRef.value
+    const start = map?.getOrbitDragStart(event)
+    if (!map || !start || !commands.creation.beginOrbitDrag(start.point, start.candidates, start)) return null
+    return {
+      clientPointToScene: (x, y) => continuousWardenMapRef.value === map
+        ? map.orbitDragPointFromClient(start.systemId, x, y)
+        : null,
+      getOrbitDragSceneClearance: () => continuousWardenMapRef.value === map
+        ? map.getOrbitDragSceneClearance(start.systemId)
+        : null,
+    }
+  },
   update: (scenePoint, clearance) => commands.creation.updateOrbitDrag(scenePoint, clearance),
   complete: () => commands.creation.completeOrbitDrag(),
   cancel: () => commands.creation.cancelOrbitDrag(),
@@ -466,6 +649,16 @@ function clearPointerLongPress(): void {
 function onWindowClickCapture(event: MouseEvent): void { orbitInput.onClickCapture(event) }
 
 function onWindowPointerDownCapture(event: PointerEvent): void {
+  // A reused pointer ID starts a different sequence.
+  systemTransferSuppressedReleaseIds.delete(event.pointerId)
+  if (activeSystemTransferPointer) {
+    cancelSystemTransferPlacement(activeSystemTransferPointer.lease)
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    return
+  }
+  if (props.systemObjectTransferMapLease && event.target instanceof Element
+    && event.target.closest('svg.continuous-warden-map-svg')) return
   orbitInput.onGlobalPointerDown(event)
 }
 
@@ -473,9 +666,17 @@ function onDocumentKeyDownCapture(event: KeyboardEvent): void {
   orbitInput.onEscape(event)
 }
 
-function onLostPointerCapture(event: PointerEvent): void { orbitInput.onLostPointerCapture(event) }
+function onLostPointerCapture(event: PointerEvent): void {
+  const active = activeSystemTransferPointer
+  if (active?.pointerId === event.pointerId) {
+    cancelSystemTransferPlacement(active.lease)
+    return
+  }
+  orbitInput.onLostPointerCapture(event)
+}
 
 function onWheelCapture(event: WheelEvent): void {
+  noteManualCameraInteraction()
   pendingRightClickContextMenu = null
   dismissSearchLocator()
   orbitInput.onWheelCapture(event)
@@ -484,6 +685,8 @@ function onWheelCapture(event: WheelEvent): void {
 function cancelMapGesture(): void { currentMap()?.cancelActiveGesture() }
 
 function cancelCanvasGesture(suppressRelease = false, cancelClusterPreview = true): void {
+  if (activeSystemTransferPointer) cancelSystemTransferPlacement(activeSystemTransferPointer.lease)
+  else if (props.systemObjectTransferMapLease) cancelSystemTransferPlacement(props.systemObjectTransferMapLease)
   const orbitPointerId = orbitInput.pointerId()
   pendingRightClickContextMenu = null
   orbitInput.cancel()
@@ -515,7 +718,9 @@ function cancelForFocusInterruption(): void {
   cancelCanvasGesture(true, false)
 }
 
-function onWindowBlur(): void { cancelForFocusInterruption() }
+function onWindowBlur(): void {
+  cancelForFocusInterruption()
+}
 
 function onDocumentVisibilityChange(): void {
   if (document.visibilityState === 'hidden') cancelForFocusInterruption()
@@ -528,23 +733,69 @@ function hasClusterAddIntent(): boolean {
 }
 
 function hasMapAddIntent(): boolean {
-  return hasClusterAddIntent() || (props.activeView === 'system' && props.creationType != null)
+  return props.standaloneImportPlacementEnabled === true
+    || hasClusterAddIntent()
+    || hasContinuousObjectAddIntent()
+    || hasOrbitAddIntent()
+    || (props.activeView === 'system' && props.creationType != null)
+}
+
+function hasContinuousObjectAddIntent(): boolean {
+  return props.activeView === 'cluster' && props.continuousMap && props.creationType?.kind === 'object'
+}
+
+function forwardMoveObjectInSystem(
+  systemId: string,
+  objectId: string,
+  position: Point,
+  workspaceSnapshot: LocalWorkspace,
+  frameInsets?: SystemFrameInsets,
+): void {
+  holdClickSuppression()
+  emit('move-object-in-system', systemId, objectId, position, workspaceSnapshot, frameInsets)
+}
+
+function forwardResizeSystemFrame(systemId: string, insets: SystemFrameInsets, workspaceSnapshot: LocalWorkspace): void {
+  if (props.mode !== 'move') return
+  holdClickSuppression()
+  emit('resize-system-frame', systemId, insets, workspaceSnapshot)
+}
+
+function forwardObjectDropTransfer(drop: SystemObjectTransferDrop): void {
+  if (props.mode !== 'move') return
+  holdClickSuppression()
+  emit('transfer-object-on-drop', drop)
 }
 
 function hasOrbitAddIntent(): boolean {
-  return props.activeView === 'system'
+  return (props.activeView === 'system' || props.continuousMap === true)
     && props.creationType?.kind === 'orbit'
     && !props.creationChooserOpen
+    && !props.clusterChooserOpen
     && !props.moveTargeting
 }
 
 function isMapEntityTarget(target: EventTarget | null): boolean {
   return target instanceof Element
-    && !!target.closest('.cluster-system-node, .cluster-route, .system-object, .orbit-mark, .orbit-hit-target, .orbit-edit-control')
+    && !!target.closest(
+      '.cluster-system-node, .cluster-route, .system-object, .orbit-mark, .orbit-hit-target, .orbit-edit-control, '
+      + '.continuous-warden-object, .continuous-warden-orbit-target, .continuous-warden-orbit-edit-handle, '
+      + '[data-system-resize-handle]',
+    )
 }
 
 function longPressInspection(target: EventTarget | null): (() => void) | null {
   if (!(target instanceof Element)) return null
+  const objectTarget = target.closest<SVGGElement>('.continuous-warden-object[data-system-id][data-object-id]')
+  const objectSystemId = objectTarget?.getAttribute('data-system-id')
+  const continuousObjectId = objectTarget?.getAttribute('data-object-id')
+  if (objectSystemId && continuousObjectId) return () => emit('select-continuous-object', objectSystemId, continuousObjectId)
+  const orbitTarget = target.closest<SVGElement>(
+    '.continuous-warden-orbit-target[data-system-id][data-orbit-id], .continuous-warden-orbit-edit-handle[data-system-id][data-orbit-id]',
+  )
+  const orbitSystemId = orbitTarget?.getAttribute('data-system-id')
+  const continuousOrbitId = orbitTarget?.getAttribute('data-orbit-id')
+  if (orbitSystemId && continuousOrbitId) return () => emit('select-continuous-orbit', orbitSystemId, continuousOrbitId)
   const systemId = target.closest<SVGGElement>('.cluster-system-node')?.getAttribute('data-system-id')
   if (systemId) {
     return () => emit('select-cluster-system', systemId)
@@ -559,6 +810,12 @@ function longPressInspection(target: EventTarget | null): (() => void) | null {
   }
   const orbitId = target.closest<SVGGElement>('.orbit-mark, .orbit-hit-target, .orbit-edit-control')?.getAttribute('data-orbit-id')
   return orbitId ? () => emit('select-orbit', orbitId) : null
+}
+
+function continuousObjectSelectionTarget(target: EventTarget | null): string | null {
+  if (!(target instanceof Element) || props.activeView !== 'cluster' || !props.continuousMap
+    || props.mode !== 'select' || hasMapAddIntent() || props.moveTargeting || props.clusterMoveTargeting) return null
+  return target.closest<SVGGElement>('.continuous-warden-object[data-object-id]')?.getAttribute('data-object-id') ?? null
 }
 
 function inspectLongPress(target: EventTarget | null): void {
@@ -582,6 +839,8 @@ function beginLivePointerSequence(event: PointerEvent, isMouseButtonChord: boole
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
+  if (beginSystemTransferPointerPlacement(event)) return
+  if (event.target instanceof Element && event.target.closest('[data-system-transfer-control]')) return
   dismissSearchLocator()
   pendingRightClickContextMenu = null
   publicationMenuLease?.close()
@@ -606,11 +865,13 @@ function onPointerDownCapture(event: PointerEvent): void {
   }
   const entityPress = event.button === 0 && isMapEntityTarget(event.target)
   const addHold = hasMapAddIntent() && entityPress
+  const toggleSelection = event.pointerType === 'pen'
+    && props.mode === 'select' && continuousObjectSelectionTarget(event.target) !== null
   const inspectHold = !hasMapAddIntent()
     && !props.moveTargeting
     && (props.mode === 'navigate' || props.mode === 'move')
     && entityPress
-  if (addHold || inspectHold) {
+  if (addHold || inspectHold || toggleSelection) {
     clearPointerLongPress()
     const pointerId = event.pointerId
     const target = event.target
@@ -622,6 +883,13 @@ function onPointerDownCapture(event: PointerEvent): void {
         cancelMapGesture()
         return
       }
+      if (toggleSelection) {
+        const objectId = continuousObjectSelectionTarget(target)
+        cancelMapGesture()
+        holdClickSuppression()
+        if (objectId) void commands.navigation.toggleObjectSelection(objectId)
+        return
+      }
       if (props.activeView === 'cluster') emit('cancel-cluster-preview')
       if (props.activeView === 'system') {
         emit('cancel-object-placement-preview')
@@ -631,11 +899,12 @@ function onPointerDownCapture(event: PointerEvent): void {
       holdClickSuppression()
       inspectLongPress(target)
     }, 560)
-    pointerLongPress = { id: pointerId, x: event.clientX, y: event.clientY, target, addHold, timer }
+    pointerLongPress = { id: pointerId, x: event.clientX, y: event.clientY, target, addHold, toggleSelection, timer }
   }
   const isRightPan = event.button === 2
-  const isBackgroundPan = props.mode === 'move' && !props.moveTargeting && event.button === 0 && !isMapEntityTarget(event.target)
-  const isNavigationPan = props.mode !== 'move' && event.button === 0
+  const isBackgroundPan = props.mode === 'move' && !hasContinuousObjectAddIntent() && !props.moveTargeting
+    && event.button === 0 && !isMapEntityTarget(event.target)
+  const isNavigationPan = props.mode !== 'move' && !hasContinuousObjectAddIntent() && event.button === 0
   if (!isRightPan && !isBackgroundPan && !isNavigationPan) return
 
   if (isRightPan && props.moveTargeting) emit('cancel-map-move')
@@ -646,8 +915,213 @@ function onPointerDownCapture(event: PointerEvent): void {
   event.stopImmediatePropagation()
 }
 
+function isSystemTransferDestination(systemId: string): boolean {
+  return props.activeView === 'cluster'
+    && props.continuousMap === true
+    && props.workspace.cluster.systems.some(system => system.id === systemId)
+    && continuousWardenMapRef.value?.isSystemTransferDestination(systemId) === true
+}
+
+function captureSystemTransferMapOwner(systemId: string): object | null {
+  const map = continuousWardenMapRef.value
+  return !mapDisposed && mapReady && isSystemTransferDestination(systemId) ? map : null
+}
+
+function isSystemTransferMapOwnerCurrent(systemId: string, owner: object): boolean {
+  return captureSystemTransferMapOwner(systemId) === owner
+}
+
+function systemTransferPointAtClient(systemId: string, clientX: number, clientY: number): Point | null {
+  if (!isSystemTransferDestination(systemId)) return null
+  return continuousWardenMapRef.value?.systemTransferPointAtClient(systemId, clientX, clientY) ?? null
+}
+
+function systemTransferPlacementAtClient(
+  lease: SystemObjectTransferMapPlacementLease,
+  clientX: number,
+  clientY: number,
+): SystemObjectTransferPlacement | null {
+  if (!isSystemTransferDestination(lease.destinationSystemId)) return null
+  return continuousWardenMapRef.value?.systemTransferPlacementAtClient(
+    lease.destinationSystemId,
+    lease.rootObjectId,
+    lease.placementCandidate,
+    clientX,
+    clientY,
+  ) ?? null
+}
+
+function frameSystemTransferDestination(systemId: string): boolean {
+  if (!isSystemTransferDestination(systemId)) return false
+  const svg = canvasRoot.value?.querySelector<SVGSVGElement>('svg.continuous-warden-map-svg')
+  const usableClientRect = measureUnobstructedClientRect()
+  if (!svg || !usableClientRect) return false
+  const mapBounds = svg.getBoundingClientRect()
+  const promptReserve = window.matchMedia('(max-width: 760px)').matches ? 118 : 72
+  const transferUsableRect = clientRectToSvgViewportRect(svg, {
+    ...usableClientRect,
+    bottom: Math.min(usableClientRect.bottom, mapBounds.bottom - promptReserve),
+  })
+  if (!transferUsableRect) return false
+  noteManualCameraInteraction()
+  return continuousWardenMapRef.value?.frameSystemTransferDestination(systemId, transferUsableRect) ?? false
+}
+
+function setSystemObjectTransferPreview(preview: SystemObjectTransferMapPreview | null): void {
+  if (props.activeView === 'cluster' && props.continuousMap) {
+    continuousWardenMapRef.value?.setSystemObjectTransferPreview(preview)
+  }
+}
+
+function beginSystemTransferPointerPlacement(event: PointerEvent): boolean {
+  if (activeSystemTransferPointer) {
+    if (activeSystemTransferPointer.pointerId !== event.pointerId) {
+      cancelSystemTransferPlacement(activeSystemTransferPointer.lease)
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    return true
+  }
+  const lease = props.systemObjectTransferMapLease
+  const target = event.target
+  const mapSvg = target instanceof Element ? target.closest('svg.continuous-warden-map-svg') : null
+  if (!lease || !mapSvg || event.button !== 0 || !event.isPrimary) return false
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  if (!isSystemTransferMapOwnerCurrent(lease.destinationSystemId, lease.mapOwner)
+    || props.workspace !== lease.workspaceReference) {
+    cancelSystemTransferPlacement(lease)
+    return true
+  }
+  systemTransferKeyboardPoint = null
+  activeSystemTransferPointer = { lease, pointerId: event.pointerId }
+  emitSystemTransferPointerPreview(lease, systemTransferPlacementAtClient(lease, event.clientX, event.clientY))
+  try { canvasRoot.value?.setPointerCapture(event.pointerId) } catch { /* Synthetic input may not permit capture. */ }
+  return true
+}
+
+function emitSystemTransferPointerPreview(
+  lease: SystemObjectTransferMapPlacementLease,
+  placement: SystemObjectTransferPlacement | null,
+): void {
+  const preview: SystemObjectTransferMapPointerPreview = { lease, placement }
+  emit('system-transfer-placement-preview', preview)
+}
+
+function completeSystemTransferPlacement(
+  lease: SystemObjectTransferMapPlacementLease,
+  placement: SystemObjectTransferPlacement,
+): void {
+  activeSystemTransferPointer = null
+  systemTransferKeyboardPoint = null
+  holdClickSuppression()
+  emitSystemTransferPointerPreview(lease, placement)
+  const anchor: SystemObjectTransferMapAnchor = { lease, placement }
+  emit('system-transfer-placement-complete', anchor)
+}
+
+function suppressSystemTransferRelease(pointerId: number | null): void {
+  if (pointerId !== null) {
+    systemTransferSuppressedReleaseIds.add(pointerId)
+    const sequence = livePointerSequences.get(pointerId)
+    if (sequence) sequence.cancelledRelease = true
+  }
+  const touchContact = transferTouchContact
+  if (touchContact) {
+    const touchPointerId = touchReleaseGuard?.pointerIdForTouch(touchContact.touchId) ?? null
+    if (pointerId === null || touchPointerId === pointerId) {
+      touchReleaseGuard?.arm({
+        touchId: touchContact.touchId,
+        pointerId: touchPointerId,
+        x: touchContact.x,
+        y: touchContact.y,
+      })
+    }
+    transferTouchContact = null
+  }
+  if (pointerId !== null || touchContact) holdClickSuppression()
+}
+
+function cancelSystemTransferPlacement(
+  lease: SystemObjectTransferMapPlacementLease | null = props.systemObjectTransferMapLease ?? null,
+): void {
+  if (!lease) return
+  if (activeSystemTransferPointer?.lease === lease) {
+    const pointerId = activeSystemTransferPointer.pointerId
+    activeSystemTransferPointer = null
+    suppressSystemTransferRelease(pointerId)
+    try {
+      if (canvasRoot.value?.hasPointerCapture(pointerId)) canvasRoot.value.releasePointerCapture(pointerId)
+    } catch { /* Pointer capture may already be released. */ }
+  } else {
+    suppressSystemTransferRelease(null)
+  }
+  systemTransferKeyboardPoint = null
+  emitSystemTransferPointerPreview(lease, null)
+  emit('system-transfer-placement-cancel', lease)
+}
+
+function moveKeyboardTransferPreview(event: KeyboardEvent): boolean {
+  const lease = props.systemObjectTransferMapLease
+  if (!lease || !isSystemTransferMapOwnerCurrent(lease.destinationSystemId, lease.mapOwner)) return false
+  if (event.defaultPrevented || event.isComposing || event.keyCode === 229
+    || props.keyboardOwnedOverlayOpen || eventOwnedByKeyboardPopup(event)) return false
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    cancelSystemTransferPlacement(lease)
+    return true
+  }
+  const target = event.target
+  const ownsMapFocus = target instanceof Element && !!target.closest('svg.continuous-warden-map-svg')
+  if (!ownsMapFocus) return false
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    const svg = canvasRoot.value?.querySelector<SVGSVGElement>('svg.continuous-warden-map-svg')
+    if (!svg) return true
+    const bounds = svg.getBoundingClientRect()
+    const point = systemTransferKeyboardPoint ?? { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
+    const delta = event.shiftKey ? 24 : 8
+    systemTransferKeyboardPoint = {
+      x: Math.max(bounds.left + 1, Math.min(bounds.right - 1, point.x + (event.key === 'ArrowLeft' ? -delta : event.key === 'ArrowRight' ? delta : 0))),
+      y: Math.max(bounds.top + 1, Math.min(bounds.bottom - 1, point.y + (event.key === 'ArrowUp' ? -delta : event.key === 'ArrowDown' ? delta : 0))),
+    }
+    emitSystemTransferPointerPreview(
+      lease,
+      systemTransferPlacementAtClient(lease, systemTransferKeyboardPoint.x, systemTransferKeyboardPoint.y),
+    )
+    return true
+  }
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    const svg = canvasRoot.value?.querySelector<SVGSVGElement>('svg.continuous-warden-map-svg')
+    if (!svg) return true
+    const bounds = svg.getBoundingClientRect()
+    const clientPoint = systemTransferKeyboardPoint ?? { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
+    const placement = systemTransferPlacementAtClient(lease, clientPoint.x, clientPoint.y)
+    if (placement) completeSystemTransferPlacement(lease, placement)
+    else emitSystemTransferPointerPreview(lease, null)
+    return true
+  }
+  return false
+}
+
 /** Takes over a held left-button gesture when the browser reports right-button chord only as mousedown. */
 function onMouseDownCapture(event: MouseEvent): void {
+  if (activeSystemTransferPointer
+    || props.systemObjectTransferMapLease && event.target instanceof Element
+      && event.target.closest('svg.continuous-warden-map-svg')) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    return
+  }
   publicationMenuLease?.close()
   publicationMenuLease = null
   if (event.button === 0 && orbitInput.hasActivePointer()) {
@@ -683,6 +1157,30 @@ function onMouseUpCapture(event: MouseEvent): void {
 }
 
 function onKeyDownCapture(event: KeyboardEvent): void {
+  if (!event.defaultPrevented && isStandaloneImportMapKeyEvent(event)) {
+    if (event.key === 'Escape') {
+      dismissSearchLocator()
+      event.preventDefault()
+      event.stopPropagation()
+      emit('cancel-standalone-import-placement')
+      return
+    }
+    const panDeltas: Record<string, [number, number]> = {
+      ArrowLeft: [-80, 0],
+      ArrowRight: [80, 0],
+      ArrowUp: [0, -80],
+      ArrowDown: [0, 80],
+    }
+    const delta = panDeltas[event.key]
+    if (delta) {
+      dismissSearchLocator()
+      event.preventDefault()
+      event.stopPropagation()
+      panBy(delta[0], delta[1])
+      return
+    }
+  }
+
   if (event.target instanceof SVGElement && !event.isComposing
     && (['Enter', ' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'ContextMenu'].includes(event.key)
       || (event.key === 'F10' && event.shiftKey)
@@ -694,7 +1192,8 @@ function onKeyDownCapture(event: KeyboardEvent): void {
     const bounds = event.target.getBoundingClientRect()
     if (showPublicationMenu(event, { x: bounds.left, y: bounds.bottom })) return
   }
-  if (props.moveTargeting && props.mode === 'move' && event.target instanceof SVGElement) {
+  if ((props.moveTargeting || props.clusterMoveTargeting)
+    && props.mode === 'move' && event.target instanceof SVGElement) {
     const step = event.shiftKey ? 10 : 1
     const nudges: Record<string, Point> = {
       ArrowLeft: { x: -step, y: 0 },
@@ -710,7 +1209,9 @@ function onKeyDownCapture(event: KeyboardEvent): void {
       return
     }
   }
-  if (event.key === 'Escape' && props.activeView === 'system' && props.mode === 'select') {
+  if (event.key === 'Escape'
+    && (props.activeView === 'system' || props.activeView === 'cluster' && props.continuousMap)
+    && props.mode === 'select') {
     if (selectionRectangleGesture) {
       event.preventDefault()
       event.stopPropagation()
@@ -718,18 +1219,21 @@ function onKeyDownCapture(event: KeyboardEvent): void {
       return
     }
   }
-  if (event.key === 'Escape' && props.activeView === 'system') {
-    const focusedSystemMap = event.target instanceof Element
-      ? event.target.closest<SVGSVGElement>('svg.system-map-svg')
+  const continuousSelectionMap = props.activeView === 'cluster' && props.continuousMap === true
+  if (event.key === 'Escape' && (props.activeView === 'system' || continuousSelectionMap)) {
+    const focusedSelectionMap = event.target instanceof Element
+      ? event.target.closest<SVGSVGElement>(continuousSelectionMap
+        ? 'svg.continuous-warden-map-svg'
+        : 'svg.system-map-svg')
       : null
     const clearSelectionInSelect = props.mode === 'select'
-      && (props.selectedObjectIds.length > 0 || props.selectedObjectId !== null)
+      && (props.selectedObjectIds.length > 0 || !continuousSelectionMap && props.selectedObjectId !== null)
     const clearGroupInMove = props.mode === 'move' && props.selectedObjectIds.length > 1
       && !props.moveTargeting && !props.creationType && !props.creationChooserOpen
     if ((clearSelectionInSelect || clearGroupInMove)
       && !activePointerPan && !touchStart && !touchPanStarted && livePointerSequences.size === 0
       && !editingGestureActive
-      && focusedSystemMap && canvasRoot.value?.contains(focusedSystemMap)) {
+      && focusedSelectionMap && canvasRoot.value?.contains(focusedSelectionMap)) {
       event.preventDefault()
       event.stopPropagation()
       void commands.navigation.replaceObjectSelection([])
@@ -747,23 +1251,69 @@ function onKeyDownCapture(event: KeyboardEvent): void {
   if (!delta) return
   event.preventDefault()
   event.stopPropagation()
-  currentMap()?.panBy(delta[0], delta[1])
+  panBy(delta[0], delta[1])
+}
+
+function eventOwnedByKeyboardPopup(event: KeyboardEvent): boolean {
+  return event.composedPath().some(target => target instanceof Element && (
+    ['alertdialog', 'dialog', 'listbox', 'menu', 'menuitem', 'menuitemcheckbox', 'menuitemradio']
+      .includes(target.getAttribute('role') ?? '')
+    || target.getAttribute('role') === 'combobox' && target.getAttribute('aria-expanded') === 'true'
+  ))
+}
+
+function isStandaloneImportMapKeyEvent(event: KeyboardEvent): boolean {
+  return !event.isComposing
+    && event.keyCode !== 229
+    && props.standaloneImportPlacementEnabled === true
+    && !props.keyboardOwnedOverlayOpen
+    && !eventOwnedByKeyboardPopup(event)
+    && event.target instanceof SVGElement
+    && !!event.target.closest('svg.continuous-warden-map-svg')
 }
 
 function onWindowKeyDownCapture(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || !selectionRectangleGesture) return
+  if (moveKeyboardTransferPreview(event)) return
+  const ownsGesture = selectionRectangleGesture !== null
+    || editingGestureActive
+    || activePointerPan !== null
+    || touchPanStarted
+    || orbitInput.hasActivePointer()
+  const cancelStandaloneImport = event.key === 'Escape'
+    && !event.defaultPrevented && isStandaloneImportMapKeyEvent(event)
+  if (event.key !== 'Escape' || (!ownsGesture && !cancelStandaloneImport)) return
   event.preventDefault()
   event.stopPropagation()
   event.stopImmediatePropagation()
+  if (cancelStandaloneImport) {
+    dismissSearchLocator()
+    emit('cancel-standalone-import-placement')
+  }
   cancelCanvasGesture(true)
 }
 
 /** Forwards a scene-space destination only while the active Move controller owns targeting. */
 function forwardMoveTarget(point: Point): void {
-  if (props.moveTargeting && props.mode === 'move' && !suppressNextClick) emit('move-target', point)
+  if ((props.moveTargeting || props.clusterMoveTargeting)
+    && props.mode === 'move' && !suppressNextClick) emit('move-target', point)
 }
 
 function onWindowPointerMove(event: PointerEvent): void {
+  const transferPointer = activeSystemTransferPointer
+  if (transferPointer?.pointerId === event.pointerId) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    if (!isSystemTransferMapOwnerCurrent(transferPointer.lease.destinationSystemId, transferPointer.lease.mapOwner)
+      || props.workspace !== transferPointer.lease.workspaceReference) {
+      cancelSystemTransferPlacement(transferPointer.lease)
+      return
+    }
+    emitSystemTransferPointerPreview(
+      transferPointer.lease,
+      systemTransferPlacementAtClient(transferPointer.lease, event.clientX, event.clientY),
+    )
+    return
+  }
   if (orbitInput.onPointerMove(event)) return
 
   if (pointerLongPress?.id === event.pointerId
@@ -787,6 +1337,7 @@ function onWindowPointerMove(event: PointerEvent): void {
   if (!pan.moved && Math.hypot(dx, dy) < 4) return
   const firstPanMove = !pan.moved
   pan.moved = true
+  if (firstPanMove) noteManualCameraInteraction()
   if (firstPanMove && props.activeView === 'cluster') emit('cancel-cluster-preview')
   if (pan.button === 2) {
     if (pendingRightClickContextMenu?.pointerId === pan.id) pendingRightClickContextMenu = null
@@ -798,6 +1349,35 @@ function onWindowPointerMove(event: PointerEvent): void {
 }
 
 function onWindowPointerUp(event: PointerEvent): void {
+  const transferPointer = activeSystemTransferPointer
+  if (transferPointer?.pointerId === event.pointerId) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    if (event.type !== 'pointercancel' && event.buttons !== 0) return
+    const { lease } = transferPointer
+    const placement = event.type === 'pointerup' && event.button === 0
+      && props.workspace === lease.workspaceReference
+      && isSystemTransferMapOwnerCurrent(lease.destinationSystemId, lease.mapOwner)
+      && continuousWardenMapRef.value?.isClientPointOnMap(event.clientX, event.clientY)
+      ? systemTransferPlacementAtClient(lease, event.clientX, event.clientY)
+      : null
+    if (placement) completeSystemTransferPlacement(lease, placement)
+    else cancelSystemTransferPlacement(lease)
+    // Cancellation guards the terminal click. This release has already been consumed.
+    systemTransferSuppressedReleaseIds.delete(event.pointerId)
+    livePointerSequences.delete(event.pointerId)
+    return
+  }
+  if (systemTransferSuppressedReleaseIds.has(event.pointerId)) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    holdClickSuppression()
+    if (event.type === 'pointercancel' || event.buttons === 0) {
+      systemTransferSuppressedReleaseIds.delete(event.pointerId)
+      livePointerSequences.delete(event.pointerId)
+    }
+    return
+  }
   if (orbitInput.onPointerUp(event)) return
   if (event.type === 'pointercancel') {
     if (pendingRightClickContextMenu?.pointerId === event.pointerId) pendingRightClickContextMenu = null
@@ -826,7 +1406,7 @@ function onWindowPointerUp(event: PointerEvent): void {
     const gesture = selectionRectangleGesture
     updateSelectionRectangle(event)
     finishSelectionRectangle(!canContinueSelectionRectangle(gesture)
-      || (!gesture.moved && !isSystemMapEmptySpace(event.target)))
+      || (!gesture.moved && !isSelectableMapEmptySpace(event.target)))
     return
   }
   if (ownsActiveMousePointer && !activePointerPan && isDisabledObstructionRelease(event)) {
@@ -904,12 +1484,21 @@ function publicationTargetAt(target: EventTarget | null): { target: PublicationT
   if (props.moveTargeting || props.clusterChooserOpen
     || props.clusterMoveTargeting
     || (props.activeView === 'cluster' && props.clusterAddType != null)
+    || (props.activeView === 'cluster' && props.continuousMap && props.creationType != null)
     || (props.activeView === 'system' && (props.creationType != null || props.creationChooserOpen))) {
     return null
   }
   if (!(target instanceof Element)) return null
 
   if (props.activeView === 'cluster') {
+    if (props.continuousMap) {
+      const objectMark = target.closest<SVGGElement>('.continuous-warden-object[data-system-id][data-object-id]')
+      const objectId = objectMark?.getAttribute('data-object-id')
+      const systemId = objectMark?.getAttribute('data-system-id')
+      if (objectId && systemId && objectMark) {
+        return { target: { kind: 'object', id: objectId, systemId }, mark: objectMark }
+      }
+    }
     const mark = target.closest<SVGGElement>('.cluster-system-node[data-system-id]')
     const systemId = mark?.getAttribute('data-system-id')
     return systemId && mark
@@ -960,18 +1549,38 @@ function onClickCapture(event: MouseEvent): void {
     if (suppressClickTimer) clearTimeout(suppressClickTimer)
     return
   }
-  if (event.detail > 0 && isSystemMapEmptySpace(event.target)) {
+  const modifiedContinuousObjectId = props.mode === 'select'
+    && (event.shiftKey || event.ctrlKey || event.metaKey)
+    ? continuousObjectSelectionTarget(event.target)
+    : null
+  if (event.detail > 0 && modifiedContinuousObjectId) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    void commands.navigation.toggleObjectSelection(modifiedContinuousObjectId)
+    return
+  }
+  if (event.detail > 0 && isSelectableMapEmptySpace(event.target)) {
     void commands.navigation.replaceObjectSelection([])
   }
 }
 
 function onTouchStartCapture(event: TouchEvent): void {
+  if (props.systemObjectTransferMapLease && event.target instanceof Element
+    && event.target.closest('svg.continuous-warden-map-svg')) {
+    const touch = event.changedTouches[0] ?? event.touches[0]
+    if (touch) transferTouchContact = { touchId: touch.identifier, x: touch.clientX, y: touch.clientY }
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    return
+  }
   dismissSearchLocator()
   publicationMenuLease?.close()
   publicationMenuLease = null
   if (orbitInput.isTouchPending() && event.touches.length === 1) return
   if (orbitInput.onTouchStartCapture(event)) return
   if (event.touches.length !== 1) {
+    if (event.touches.length > 1) noteManualCameraInteraction()
     clearLongPress()
     touchStart = null
     touchPanStarted = false
@@ -994,6 +1603,24 @@ function onTouchStartCapture(event: TouchEvent): void {
       longPressTimer = undefined
       // Consume placement on release while leaving this contact available to pan.
       consumedAddTouchId = touchId
+    }, 560)
+    return
+  }
+  const selectionToggleObjectId = props.mode === 'select'
+    ? continuousObjectSelectionTarget(event.target)
+    : null
+  if (selectionToggleObjectId) {
+    const touchId = touch.identifier
+    longPressTimer = setTimeout(() => {
+      const contact = touchStart
+      if (!contact || contact.id !== touchId) return
+      longPressTimer = undefined
+      const touchPointerId = touchReleaseGuard?.pointerIdForTouch(touchId) ?? null
+      cancelMapGesture()
+      touchReleaseGuard?.arm({ touchId, pointerId: touchPointerId, x: contact.x, y: contact.y })
+      holdClickSuppression()
+      void commands.navigation.toggleObjectSelection(selectionToggleObjectId)
+      touchStart = null
     }, 560)
     return
   }
@@ -1035,6 +1662,7 @@ function onTouchMoveCapture(event: TouchEvent): void {
     if (touchStart && touch && !touchPanStarted
       && Math.hypot(touch.clientX - touchStart.x, touch.clientY - touchStart.y) > MAP_TOUCH_PAN_THRESHOLD_PX) {
       touchPanStarted = true
+      noteManualCameraInteraction()
       clearLongPress()
       if (props.activeView === 'cluster') emit('cancel-cluster-preview')
       if (props.activeView === 'system') {
@@ -1048,6 +1676,10 @@ function onTouchMoveCapture(event: TouchEvent): void {
 }
 
 function onTouchEndCapture(event: TouchEvent): void {
+  if (transferTouchContact
+    && Array.from(event.changedTouches).some(touch => touch.identifier === transferTouchContact?.touchId)) {
+    transferTouchContact = null
+  }
   if (orbitInput.onTouchEndCapture(event)) return
   if (consumedAddTouchId !== null
     && Array.from(event.changedTouches).some(touch => touch.identifier === consumedAddTouchId)) {
@@ -1066,7 +1698,8 @@ function onTouchEndCapture(event: TouchEvent): void {
 
 function handleSystemActivation(systemId: string): void {
   if (hasClusterAddIntent()) return
-  if (props.mode === 'navigate') emit('navigate-system', systemId)
+  if (props.mode === 'navigate' && props.continuousMap) emit('select-cluster-system', systemId)
+  else if (props.mode === 'navigate') emit('navigate-system', systemId)
   else if (props.mode === 'select') emit('select-cluster-system', systemId)
   else if (props.mode === 'move') emit('move-select-cluster-system', systemId)
 }
@@ -1091,8 +1724,15 @@ function handleOrbitSelection(orbitId: string): void {
 
 /** Enriches one active-system Orbit input with the workspace identity owned by this map surface. */
 function forwardOrbitAdjustment(input: OrbitAdjustmentInput): void {
+  const continuousOwnerMatches = props.activeView === 'cluster' && props.continuousMap
+    && props.workspace.cluster.systems.some(candidate => candidate.id === input.systemId
+      && candidate.orbits.some(orbit => orbit.id === input.orbitId))
   const system = props.system
-  if (props.activeView !== 'system' || !system || system.id !== input.systemId) return
+  const activeOwnerMatches = props.activeView === 'system' && system?.id === input.systemId
+    || continuousOwnerMatches
+  if (props.mode !== 'move' || !activeOwnerMatches
+    || props.creationType != null || props.creationChooserOpen || props.clusterAddType != null || props.clusterChooserOpen
+    || props.moveTargeting || props.clusterMoveTargeting) return
   emit('orbit-adjustment', { ...input, workspaceId: props.workspace.id })
 }
 
@@ -1103,20 +1743,40 @@ function forwardClusterTarget(point: Point, systemIds: string[]): void {
     || props.clusterChooserOpen) return
   emit('cluster-target', point, systemIds)
 }
+function forwardStandaloneImportPlacementAnchor(anchor: Point): void {
+  if (props.activeView !== 'cluster' || !props.continuousMap || !props.standaloneImportPlacementEnabled) return
+  emit('standalone-import-placement-anchor', anchor)
+}
+function frameStandaloneImportPlacement(): boolean {
+  if (!props.continuousMap || props.activeView !== 'cluster' || !props.standaloneImportPlacementEnabled) return false
+  const map = continuousWardenMapRef.value
+  const usableRect = measureUnobstructedViewport()
+  if (!map || !usableRect) return false
+  noteManualCameraInteraction()
+  return map.frameStandaloneImportPlacement(usableRect)
+}
 function forwardMoveObject(id: string, position: Point): void { if (props.mode === 'move') emit('move-object', id, position) }
 function forwardBlockedObjectMove(id: string): void { emit('object-move-blocked', id) }
 function forwardObjectMoveCandidates(id: string, candidates: SystemObjectMoveCandidate[]): void {
   if (props.activeView === 'system' && props.mode === 'move') emit('object-move-candidates', id, candidates)
 }
-function forwardOrbitCenterCandidates(id: string, candidates: OrbitCenterMoveCandidate[]): void {
-  if (props.activeView === 'system' && props.mode === 'move') emit('orbit-center-candidates', id, candidates)
+function forwardOrbitCenterCandidates(id: string, candidates: OrbitCenterMoveCandidate[], systemId?: string): void {
+  if (props.activeView === 'system' && props.mode === 'move') {
+    emit('orbit-center-candidates', id, candidates, systemId ?? props.system?.id)
+  } else if (props.activeView === 'cluster' && props.continuousMap && props.mode === 'move' && systemId) {
+    emit('orbit-center-candidates', id, candidates, systemId)
+  }
 }
-function forwardMoveOrbitCenter(id: string, center: Point, hostId: string | null): void {
-  if (props.mode === 'move') emit('move-orbit-center', id, center, hostId)
+function forwardMoveOrbitCenter(id: string, center: Point, hostId: string | null, systemId?: string, sourceGeometry?: string): void {
+  if (props.mode === 'move') emit('move-orbit-center', id, center, hostId, systemId ?? props.system?.id, sourceGeometry)
 }
 function forwardRotateObject(id: string, angle: number): void { if (props.mode === 'move') emit('rotate-object', id, angle) }
-function forwardResizeOrbit(id: string, radii: OrbitRadii): void { if (props.mode === 'move') emit('resize-orbit', id, radii) }
-function forwardRotateOrbit(id: string, rotation: number): void { if (props.mode === 'move') emit('rotate-orbit', id, rotation) }
+function forwardResizeOrbit(id: string, radii: OrbitRadii, systemId?: string, sourceGeometry?: string): void {
+  if (props.mode === 'move') emit('resize-orbit', id, radii, systemId ?? props.system?.id, sourceGeometry)
+}
+function forwardRotateOrbit(id: string, rotation: number, systemId?: string, sourceGeometry?: string): void {
+  if (props.mode === 'move') emit('rotate-orbit', id, rotation, systemId ?? props.system?.id, sourceGeometry)
+}
 function forwardPlaceObject(id: string, orbitId: string, angle: number): void {
   if (props.mode === 'move') emit('place-object-in-orbit', id, orbitId, angle)
 }
@@ -1136,6 +1796,7 @@ function forwardCancelCreationPreview(): void {
 }
 
 function emitViewport(viewport: MapViewport): void {
+  if (props.continuousMap) orbitInput.refreshForViewportChange()
   if (mapReady) emit('viewport-change', { key: sourceMapKey, viewport })
 }
 
@@ -1144,7 +1805,7 @@ function handleSystemViewportChange(viewport: MapViewport): void {
   emitViewport(viewport)
 }
 
-function measureUnobstructedViewport(): SvgViewportRect | undefined {
+function measureUnobstructedClientRect(): ClientRectBounds | undefined {
   const svg = canvasRoot.value?.querySelector<SVGSVGElement>('svg')
   if (!svg) return undefined
   const svgBounds = svg.getBoundingClientRect()
@@ -1175,8 +1836,13 @@ function measureUnobstructedViewport(): SvgViewportRect | undefined {
     .filter(isUsableClientRect)
     .map(rect => ({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }))
   const usableClientRect = largestUnobstructedClientRect(svgRect, obstructions)
-  if (!usableClientRect) return undefined
-  return clientRectToSvgViewportRect(svg, usableClientRect)
+  return usableClientRect
+}
+
+function measureUnobstructedViewport(): SvgViewportRect | undefined {
+  const svg = canvasRoot.value?.querySelector<SVGSVGElement>('svg')
+  const usableClientRect = measureUnobstructedClientRect()
+  return svg && usableClientRect ? clientRectToSvgViewportRect(svg, usableClientRect) : undefined
 }
 
 function fitMap(usableRect?: SvgViewportRect): void {
@@ -1186,14 +1852,16 @@ function fitMap(usableRect?: SvgViewportRect): void {
   if (rect) map.fitMap(rect)
 }
 
-/** Fits the whole cluster or one visible system node inside the post-overlay usable map area. */
+/** Frames a Search destination inside the measured post-overlay usable map area. */
 function frameSearchTarget(target: SearchTarget): boolean {
-  const map = currentMap()
   const usableRect = measureUnobstructedViewport()
-  if (!map || !usableRect) return false
+  if (!usableRect) return false
   if (target.kind === 'cluster') {
-    map.fitMap(usableRect)
+    currentMap()?.fitMap(usableRect)
     return true
+  }
+  if (props.continuousMap && props.activeView === 'cluster') {
+    return continuousWardenMapRef.value?.frameSearchTarget(target, usableRect) ?? false
   }
   if (target.kind === 'object') {
     return props.activeView === 'system'
@@ -1208,6 +1876,27 @@ function frameSearchTarget(target: SearchTarget): boolean {
     : false
 }
 
+function centerInspectedTarget(target: InspectedMapTarget): boolean {
+  if (!props.continuousMap || props.activeView !== 'cluster') return false
+  const map = continuousWardenMapRef.value
+  const usableRect = measureUnobstructedViewport()
+  if (!map || !usableRect) return false
+  noteManualCameraInteraction()
+  return map.centerInspectedTarget(target, usableRect)
+}
+
+function panBy(dx: number, dy: number): void {
+  noteManualCameraInteraction()
+  currentMap()?.panBy(dx, dy)
+}
+
+function revealHistoryCluster(): boolean {
+  if (!props.continuousMap || props.activeView !== 'cluster') return false
+  const usableRect = measureUnobstructedViewport()
+  if (!usableRect) return false
+  return continuousWardenMapRef.value?.revealHistoryCluster(usableRect) ?? false
+}
+
 function whenReady(): Promise<boolean> {
   return mapReadinessResult === undefined ? mapReadiness : Promise.resolve(mapReadinessResult)
 }
@@ -1218,6 +1907,37 @@ function settleMapReadiness(ready: boolean): void {
   mapReady = ready
   resolveMapReadiness(ready)
 }
+
+function prepareSystemTransferKeyboardPlacement(lease: SystemObjectTransferMapPlacementLease): void {
+  if (props.systemObjectTransferMapLease !== lease) return
+  if (!isSystemTransferMapOwnerCurrent(lease.destinationSystemId, lease.mapOwner)
+    || props.workspace !== lease.workspaceReference) {
+    cancelSystemTransferPlacement(lease)
+    return
+  }
+  const svg = canvasRoot.value?.querySelector<SVGSVGElement>('svg.continuous-warden-map-svg')
+  if (!svg) {
+    cancelSystemTransferPlacement(lease)
+    return
+  }
+  const bounds = svg.getBoundingClientRect()
+  systemTransferKeyboardPoint = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
+  emitSystemTransferPointerPreview(
+    lease,
+    systemTransferPlacementAtClient(lease, systemTransferKeyboardPoint.x, systemTransferKeyboardPoint.y),
+  )
+  continuousWardenMapRef.value?.focusMap()
+}
+
+watch(() => props.systemObjectTransferMapLease, (lease, previousLease) => {
+  if (activeSystemTransferPointer && activeSystemTransferPointer.lease !== lease) {
+    cancelSystemTransferPlacement(activeSystemTransferPointer.lease)
+  }
+  systemTransferKeyboardPoint = null
+  if (!lease) return
+  if (previousLease === lease) return
+  void nextTick(() => prepareSystemTransferKeyboardPlacement(lease))
+}, { flush: 'sync' })
 
 function isUsableClientRect(rect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom' | 'width' | 'height'>): boolean {
   return [rect.left, rect.top, rect.right, rect.bottom, rect.width, rect.height].every(Number.isFinite)
@@ -1271,6 +1991,8 @@ onBeforeUnmount(() => {
   settleMapReadiness(false)
   cancelCanvasGesture()
   livePointerSequences.clear()
+  systemTransferSuppressedReleaseIds.clear()
+  transferTouchContact = null
   if (suppressClickTimer) clearTimeout(suppressClickTimer)
   if (suppressContextMenuTimer) clearTimeout(suppressContextMenuTimer)
   window.removeEventListener('pointermove', onWindowPointerMove, true)
@@ -1290,6 +2012,12 @@ watch(() => props.mode, () => {
   publicationMenuLease = null
   cancelCanvasGesture(true)
 }, { flush: 'sync' })
+watch(() => props.standaloneImportPlacementEnabled, (enabled, wasEnabled) => {
+  if (!wasEnabled || enabled) return
+  clearLongPress()
+  clearPointerLongPress()
+  for (const sequence of livePointerSequences.values()) sequence.cancelledRelease = true
+}, { flush: 'sync' })
 watch(() => props.creationType, () => {
   pendingRightClickContextMenu = null
   orbitInput.cancel()
@@ -1301,6 +2029,10 @@ watch(
   [
     () => props.creationChooserOpen,
     () => props.moveTargeting,
+    () => props.clusterAddType,
+    () => props.clusterChooserOpen,
+    () => props.clusterMoveTargeting,
+    () => props.standaloneImportPlacementEnabled,
   ],
   () => {
     pendingRightClickContextMenu = null
@@ -1339,45 +2071,106 @@ watch(
 )
 
 defineExpose({
-  exportImage: async (format: MapImageFormat, palette: MapImagePalette = 'active') => currentMap()?.exportImage(format, palette)
-    ?? Promise.reject(new Error('The map is not ready to export.')),
+  exportImage: async (
+    format: MapImageFormat,
+    palette: MapImagePalette = 'active',
+    options?: MapImageExportOptions,
+  ) => {
+    if (props.continuousMap && props.activeView === 'cluster') {
+      return continuousWardenMapRef.value?.exportImage(format, palette, options)
+        ?? Promise.reject(new Error('The map is not ready to export.'))
+    }
+    return currentMap()?.exportImage(format, palette)
+      ?? Promise.reject(new Error('The map is not ready to export.'))
+  },
+  getImageContextKey: (scope?: MapImageScope | null) => continuousWardenMapRef.value?.getImageContextKey(scope ?? null) ?? '',
   getViewport: () => currentMap()?.getViewport() ?? { x: 0, y: 0, k: 1 },
   getMinimumZoomScale: () => props.activeView === 'cluster'
-    ? clusterMapRef.value?.getMinimumZoomScale?.() ?? MAP_ZOOM_MIN_SCALE
+    ? currentClusterMap()?.getMinimumZoomScale?.() ?? MAP_ZOOM_MIN_SCALE
     : systemMapRef.value?.getMinimumZoomScale() ?? MAP_ZOOM_MIN_SCALE,
+  getCameraInteractionVersion: () => cameraInteractionVersion,
+  noteManualCameraInteraction,
   setViewport: (viewport: MapViewport) => currentMap()?.setViewport(viewport),
-  zoomBy: (factor: number) => currentMap()?.zoomBy(factor),
-  panBy: (dx: number, dy: number) => currentMap()?.panBy(dx, dy),
-  revealHistoryTarget: (target: MapHistoryTarget) => currentMap()?.revealHistoryTarget?.(target) ?? false,
+  zoomBy: (factor: number) => {
+    noteManualCameraInteraction()
+    currentMap()?.zoomBy(factor)
+  },
+  panBy,
+  revealHistoryTarget: (target: MapHistoryTarget) => {
+    const usableRect = props.continuousMap ? measureUnobstructedViewport() : undefined
+    return currentMap()?.revealHistoryTarget?.(target, usableRect) ?? false
+  },
+  revealHistoryCluster,
   whenReady,
   frameSearchTarget,
-  prepareSearchLocator: (objectId: string) => systemMapRef.value?.prepareSearchLocator(objectId),
+  isSystemTransferDestination,
+  captureSystemTransferMapOwner,
+  isSystemTransferMapOwnerCurrent,
+  systemTransferPointAtClient,
+  systemTransferPlacementAtClient,
+  frameSystemTransferDestination,
+  setSystemObjectTransferPreview,
+  centerInspectedTarget,
+  frameStandaloneImportPlacement,
+  prepareSearchLocator: (objectId: string) => props.continuousMap
+    ? continuousWardenMapRef.value?.prepareSearchLocator(objectId)
+    : systemMapRef.value?.prepareSearchLocator(objectId),
   dismissSearchLocator,
   focusMap: () => currentMap()?.focusMap?.(),
-  fitMap,
+  fitMap: () => {
+    noteManualCameraInteraction()
+    fitMap()
+  },
   cancelActiveGesture: () => cancelCanvasGesture(true),
   startViewPan: (event: MouseEvent) => currentMap()?.startViewPan(event),
   moveViewPan: (event: MouseEvent) => currentMap()?.moveViewPan(event),
   endViewPan: () => currentMap()?.endViewPan(),
-  setClusterSystemPositionPreview: (systemId: string, position: Point | null) => {
-    if (props.activeView === 'cluster') clusterMapRef.value?.setClusterSystemPositionPreview(systemId, position)
+  setClusterSystemPositionPreview: (systemId: string, position: Point | null, expectedVersion?: number) => {
+    if (props.activeView !== 'cluster') return
+    if (props.continuousMap) {
+      return continuousWardenMapRef.value?.setClusterSystemPositionPreview(systemId, position, expectedVersion)
+    }
+    clusterMapRef.value?.setClusterSystemPositionPreview?.(systemId, position)
+  },
+  getClusterSystemPositionPreviewVersion: (systemId: string) => {
+    if (props.activeView !== 'cluster' || !props.continuousMap) return undefined
+    return continuousWardenMapRef.value?.getClusterSystemPositionPreviewVersion(systemId)
   },
   setUnresolvedExitPositionPreview: (routeId: string, position: Point | null) => {
-    if (props.activeView === 'cluster') clusterMapRef.value?.setUnresolvedExitPositionPreview(routeId, position)
+    if (props.activeView === 'cluster') currentClusterMap()?.setUnresolvedExitPositionPreview(routeId, position)
   },
-  setObjectPlacementPreview: (objectId: string, scenePoint: Point | null) => {
-    if (props.activeView === 'system') systemMapRef.value?.setObjectPlacementPreview(objectId, scenePoint)
+  setObjectPlacementPreview: (objectId: string, scenePoint: Point | null, systemId?: string) => {
+    if (props.activeView === 'cluster' && props.continuousMap && systemId) {
+      continuousWardenMapRef.value?.setObjectPlacementPreview(systemId, objectId, scenePoint)
+    } else if (props.activeView === 'system') systemMapRef.value?.setObjectPlacementPreview(objectId, scenePoint)
   },
-  setOrbitPlacementPreview: (orbitId: string, preview: OrbitPlacementPreview | null) => {
-    if (props.activeView === 'system') systemMapRef.value?.setOrbitPlacementPreview(orbitId, preview)
+  setObjectMoveTargetPreview: (objectId: string, target: SystemObjectMoveTarget | null, systemId?: string) => {
+    if (props.activeView === 'cluster' && props.continuousMap && systemId) {
+      continuousWardenMapRef.value?.setObjectMoveTargetPreview(systemId, objectId, target)
+    }
   },
-  setOrbitCenterMovePreview: (orbitId: string, scenePoint: Point | null) => {
-    if (props.activeView === 'system') systemMapRef.value?.setOrbitCenterMovePreview(orbitId, scenePoint)
+  setOrbitPlacementPreview: (orbitId: string, preview: OrbitPlacementPreview | null, systemId?: string) => {
+    if (props.activeView === 'cluster' && props.continuousMap && systemId) {
+      continuousWardenMapRef.value?.setOrbitPlacementPreview(systemId, orbitId, preview)
+    } else if (props.activeView === 'system') systemMapRef.value?.setOrbitPlacementPreview(orbitId, preview)
+  },
+  setOrbitCenterMovePreview: (orbitId: string, scenePoint: Point | null, systemId?: string) => {
+    if (props.activeView === 'cluster' && props.continuousMap && systemId) {
+      continuousWardenMapRef.value?.setOrbitCenterMovePreview(systemId, orbitId, scenePoint)
+    } else if (props.activeView === 'system') systemMapRef.value?.setOrbitCenterMovePreview(orbitId, scenePoint)
   },
   startTouchNavigation: (event: TouchEvent) => currentMap()?.startTouchNavigation(event),
   moveTouchNavigation: (event: TouchEvent) => currentMap()?.moveTouchNavigation(event),
   endTouchNavigation: (event: TouchEvent) => currentMap()?.endTouchNavigation(event),
-  getDetachedOrbitCenter: (orbitId: string) => systemMapRef.value?.getDetachedOrbitCenter(orbitId),
+  toSystemScenePoint: (systemId: string, clusterPoint: Point) => props.activeView === 'cluster' && props.continuousMap
+    ? continuousWardenMapRef.value?.toSystemScenePoint(systemId, clusterPoint) ?? null
+    : props.activeView === 'system' && props.system?.id === systemId ? clusterPoint : null,
+  getDetachedOrbitCenter: (orbitId: string, systemId?: string) => {
+    if (props.activeView === 'cluster' && props.continuousMap && systemId) {
+      return continuousWardenMapRef.value?.getDetachedCenter(orbitId, systemId)
+    }
+    return systemMapRef.value?.getDetachedOrbitCenter(orbitId)
+  },
   getCreationCandidates: (point: Point, type: SystemCreationType) =>
     systemMapRef.value?.getCreationCandidates(point, type) ?? [],
 })
@@ -1398,6 +2191,38 @@ defineExpose({
 .workspace-map-canvas > :deep(.map-view) {
   min-height: 0;
   flex: 1 1 auto;
+}
+
+.workspace-map-canvas.is-orbit-add-armed :deep(svg.continuous-warden-map-svg),
+.workspace-map-canvas.is-orbit-add-armed :deep(svg.system-map-svg) {
+  user-select: none;
+}
+
+.system-transfer-placement-prompt {
+  position: absolute;
+  z-index: 30;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 0.5rem;
+  background: var(--panel-bg);
+  color: var(--map-text);
+  font-size: 0.875rem;
+  box-shadow: 0 2px 10px color-mix(in srgb, black 24%, transparent);
+  pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  .system-transfer-placement-prompt {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 
 .workspace-selection-rectangle {

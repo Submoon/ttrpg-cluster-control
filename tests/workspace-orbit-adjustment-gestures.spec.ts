@@ -1,42 +1,63 @@
 import { expect, test } from './fixtures'
 import {
   waitForWorkspaceSaved,
-  clickDockAction,
+  centerWorkspaceSelection,
+  clickWardenSystemPoint,
   createSingleSystemWorkspace,
+  dockAction,
+  hideWorkspaceInspector,
+  quitSystemAdd,
   setWorkspaceMapMode,
-  workspaceZoomControls,
+  wardenOrbitLocalGeometry,
+  wardenMap,
   workspaceZoomOutput,
 } from './helpers'
 
 async function orbitScreenPoint(
-  map: import('@playwright/test').Locator,
-  orbitLabel: string,
+  ring: import('@playwright/test').Locator,
   angle: number,
 ): Promise<{ x: number; y: number }> {
-  return map.evaluate((element, target) => {
-    const orbit = [...element.querySelectorAll<SVGGElement>('.orbit-mark')]
-      .find(candidate => candidate.getAttribute('aria-label') === target.orbitLabel)
-    const ellipse = orbit?.querySelector<SVGEllipseElement>('.orbit-ring')
-    const content = element.querySelector<SVGGElement>('.system-map-content')
-    const transform = content?.getScreenCTM()
-    if (!ellipse || !transform) throw new Error('Could not measure the Orbit wheel target.')
-    const rotation = Number(ellipse.getAttribute('transform')?.match(/^rotate\(([-+.\deE]+)/)?.[1] ?? 0)
-      * Math.PI / 180
-    const localX = Number(ellipse.getAttribute('rx')) * Math.cos(target.angle)
-    const localY = Number(ellipse.getAttribute('ry')) * Math.sin(target.angle)
-    const world = new DOMPoint(
-      Number(ellipse.getAttribute('cx')) + localX * Math.cos(rotation) - localY * Math.sin(rotation),
-      Number(ellipse.getAttribute('cy')) + localX * Math.sin(rotation) + localY * Math.cos(rotation),
+  return ring.evaluate((element, angle) => {
+    if (!(element instanceof SVGEllipseElement)) throw new Error('The Orbit wheel target is not an ellipse.')
+    const systemId = element.getAttribute('data-system-id')
+    const orbitId = element.getAttribute('data-orbit-id')
+    if (!systemId || !orbitId) throw new Error('The Orbit wheel target has no owner-qualified identity.')
+    const transform = element.getScreenCTM()
+    if (!transform) throw new Error('Could not measure the Warden Orbit wheel target.')
+    const rx = element.rx.baseVal.value
+    const ry = element.ry.baseVal.value
+    const screenRadius = Math.max(
+      Math.hypot(transform.a * rx, transform.b * rx),
+      Math.hypot(transform.c * ry, transform.d * ry),
     )
-    const screen = world.matrixTransform(transform)
-    return { x: screen.x, y: screen.y }
-  }, { orbitLabel, angle })
+    const sampleCount = Math.max(64, Math.ceil(4 * Math.PI * screenRadius))
+    // A mathematical ellipse point can fall in a dash gap or behind an edit handle.
+    for (let sample = 0; sample < sampleCount; sample += 1) {
+      const offset = Math.ceil(sample / 2) * (sample % 2 ? 1 : -1) * Math.PI * 2 / sampleCount
+      const screen = new DOMPoint(
+        element.cx.baseVal.value + rx * Math.cos(angle + offset),
+        element.cy.baseVal.value + ry * Math.sin(angle + offset),
+      ).matrixTransform(transform)
+      for (const dx of [0, -1, 1]) {
+        for (const dy of [0, -1, 1]) {
+          const point = { x: Math.round(screen.x) + dx, y: Math.round(screen.y) + dy }
+          if (document.elementFromPoint(point.x, point.y) === element) return point
+        }
+      }
+    }
+    throw new Error(`Orbit ${orbitId} in system ${systemId} has no frontmost painted ring pixel for native wheel input.`)
+  }, angle)
 }
 
 test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adjustment', async ({ page }, testInfo) => {
   await page.clock.install()
-  await createSingleSystemWorkspace(page)
-  await clickDockAction(page, 'Add orbit', { target: { kind: 'center', x: 0.3, y: 0.3 } })
+  const { systemId } = await createSingleSystemWorkspace(page)
+  await (await dockAction(page, 'Add orbit')).click()
+  await clickWardenSystemPoint(page, systemId, { x: .3, y: .3 })
+  await quitSystemAdd(page)
+  const map = wardenMap(page)
+  const ring = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"]`)
+  await expect(ring).toHaveCount(1)
   const desktopViewport = page.viewportSize()
   const historyButton = page.getByRole('button', { name: 'History', exact: true })
   await historyButton.click()
@@ -45,45 +66,51 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
   await testInfo.attach('history-desktop', { body: await page.screenshot(), contentType: 'image/png' })
   await page.keyboard.press('Escape')
   await page.setViewportSize({ width: 390, height: 844 })
-  const compactInspectorClose = page.getByRole('button', { name: 'Hide inspector', exact: true })
-  await compactInspectorClose.click()
+  await hideWorkspaceInspector(page)
   await expect(page.getByRole('dialog', { name: 'Object inspector' })).toBeHidden()
+  // Establish detail at compact width before testing a held adjustment through responsive reflow.
+  await centerWorkspaceSelection(page)
   await historyButton.click()
   await expect(historyDialog).toBeVisible()
   await testInfo.attach('history-compact-390x844', { body: await page.screenshot(), contentType: 'image/png' })
   await page.keyboard.press('Escape')
   if (desktopViewport) await page.setViewportSize(desktopViewport)
+  await ring.focus()
+  await page.keyboard.press('Enter')
+  await hideWorkspaceInspector(page)
   await setWorkspaceMapMode(page, 'Move')
-  const hierarchyClose = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
-  if (await hierarchyClose.isVisible()) await hierarchyClose.click()
+  const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
+  if (await hierarchyToggle.getAttribute('aria-expanded') === 'true') await hierarchyToggle.click()
 
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
-  const orbitLabel = 'Orbit 1 around unoccupied center'
-  const orbit = map.getByRole('group', { name: orbitLabel, exact: true })
-  const ring = orbit.locator('.orbit-ring')
-  const resize = orbit.getByRole('slider', { name: `Resize ${orbitLabel}`, exact: true })
-  const rotate = orbit.getByRole('slider', { name: `Rotate ${orbitLabel}`, exact: true })
+  const orbitId = await ring.getAttribute('data-orbit-id')
+  if (!orbitId) throw new Error('The created Warden Orbit has no domain identity.')
+  const handles = map.locator(`[data-system-id="${systemId}"][data-orbit-id="${orbitId}"]`)
+  const resize = handles.and(map.getByRole('slider', { name: 'Resize horizontal radius of Select Orbit 1', exact: true }))
+  const rotate = handles.and(map.getByRole('slider', { name: 'Rotate Select Orbit 1', exact: true }))
   const undo = page.locator('.workspace-history-controls').getByRole('button', { name: /^Undo(?:\b|:)/ })
   const redo = page.locator('.workspace-history-controls').getByRole('button', { name: /^Redo(?:\b|:)/ })
 
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  const initialRadius = Number(await ring.getAttribute('rx'))
-  const initialVerticalRadius = Number(await ring.getAttribute('ry'))
+  await centerWorkspaceSelection(page)
+  const initialRadii = (await wardenOrbitLocalGeometry(ring, systemId)).radii
+  const initialRadius = initialRadii.horizontal
+  const initialVerticalRadius = initialRadii.vertical
   const initialRotation = Number(await rotate.getAttribute('aria-valuenow'))
   const initialZoom = (await workspaceZoomOutput(page).textContent())?.trim()
-  const wheelPoint = await orbitScreenPoint(map, orbitLabel, 0.7)
-  const wheelHitTarget = await page.evaluate((point) => {
+  const wheelPoint = await orbitScreenPoint(ring, 0.7)
+  const wheelHitTarget = await map.evaluate((map, point) => {
     const target = document.elementFromPoint(point.x, point.y)
     return {
       point,
       tag: target?.tagName,
       className: target instanceof Element ? target.getAttribute('class') : null,
-      orbitId: target instanceof Element ? target.closest('.orbit-mark')?.getAttribute('data-orbit-id') : null,
-      mapContainsTarget: target instanceof Element && !!document.querySelector('[aria-label="Vesper star system map"]')?.contains(target),
+      orbitId: target instanceof Element ? target.closest('.continuous-warden-orbit-target')?.getAttribute('data-orbit-id') : null,
+      systemId: target instanceof Element ? target.closest('.continuous-warden-orbit-target')?.getAttribute('data-system-id') : null,
+      mapContainsTarget: target instanceof Element && map.contains(target),
     }
   }, wheelPoint)
   expect(wheelHitTarget.mapContainsTarget).toBe(true)
-  expect(wheelHitTarget.orbitId).toBe(await orbit.getAttribute('data-orbit-id'))
+  expect(wheelHitTarget.orbitId).toBe(orbitId)
+  expect(wheelHitTarget.systemId).toBe(systemId)
 
   // Preserve one history-grouping window despite variable real browser-event delivery latency.
   const futurePageEpoch = await page.evaluate(() => Date.now() + 10_000)
@@ -92,6 +119,10 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
     await page.keyboard.down('Control')
     await page.mouse.move(wheelPoint.x, wheelPoint.y)
     await page.mouse.wheel(0, 100)
+    await expect(rotate).toHaveAttribute('aria-valuenow', String((initialRotation + 5) % 360))
+    // The first rotation moves dashed paint; measure the next native hit from that live preview.
+    const nextWheelPoint = await orbitScreenPoint(ring, 0.7)
+    await page.mouse.move(nextWheelPoint.x, nextWheelPoint.y)
     await page.mouse.wheel(0, 100)
     await page.keyboard.up('Control')
     await page.clock.runFor(32)
@@ -99,6 +130,7 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
     await expect(undo).toBeDisabled()
     await expect(workspaceZoomOutput(page)).toHaveText(initialZoom ?? '100%')
   } finally {
+    await page.keyboard.up('Control')
     await page.clock.resume()
   }
   await expect(undo).toBeEnabled()
@@ -108,7 +140,8 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
 
   await undo.click()
   await expect(rotate).toHaveAttribute('aria-valuenow', String(initialRotation))
-  await expect(ring).toHaveAttribute('rx', String(initialRadius))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(initialRadius, 3)
   await expect(redo).toBeEnabled()
 
   const horizontalBeforeKeyboard = Number(await resize.getAttribute('aria-valuenow'))
@@ -116,25 +149,32 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
   await page.keyboard.down('ArrowRight')
   await expect(resize).toBeFocused()
   await page.keyboard.down('ArrowRight')
-  await expect(ring).toHaveAttribute('rx', String(horizontalBeforeKeyboard + 2))
-  await expect(ring).toHaveAttribute('ry', String(initialVerticalRadius))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(horizontalBeforeKeyboard + 2, 3)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.vertical)
+    .toBeCloseTo(initialVerticalRadius, 3)
   await expect(resize).toBeFocused()
   await expect(undo).toBeDisabled()
   await waitForWorkspaceSaved(page)
   await testInfo.attach('held-orbit-key-repeat', { body: await page.screenshot(), contentType: 'image/png' })
   await page.setViewportSize({ width: 390, height: 844 })
-  await expect(ring).toHaveAttribute('rx', String(horizontalBeforeKeyboard + 2))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(horizontalBeforeKeyboard + 2, 3)
   await expect(undo).toBeDisabled()
   await waitForWorkspaceSaved(page)
   await page.keyboard.up('ArrowRight')
   await expect(undo).toBeEnabled()
-  await expect(ring).toHaveAttribute('rx', String(horizontalBeforeKeyboard + 2))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(horizontalBeforeKeyboard + 2, 3)
   if (desktopViewport) await page.setViewportSize(desktopViewport)
 
   await undo.click()
-  await expect(ring).toHaveAttribute('rx', String(horizontalBeforeKeyboard))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(horizontalBeforeKeyboard, 3)
   await expect(redo).toBeEnabled()
   await redo.click()
-  await expect(ring).toHaveAttribute('rx', String(horizontalBeforeKeyboard + 2))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(horizontalBeforeKeyboard + 2, 3)
   await expect(undo).toBeEnabled()
+  await waitForWorkspaceSaved(page)
 })

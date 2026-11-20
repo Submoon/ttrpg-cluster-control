@@ -1,35 +1,50 @@
 import { expect, test } from './fixtures'
 import {
-  waitForWorkspaceSaved,
-  clickDockAction,
+  centerWorkspaceSelection,
+  clickWardenSystemPoint,
   createSingleSystemWorkspace,
+  dockAction,
+  hideWorkspaceInspector,
   openWorkspaceHierarchy,
-  returnToClusterMap,
+  quitSystemAdd,
   setWorkspaceMapMode,
-  workspaceZoomControls,
+  waitForWorkspaceSaved,
+  waitForWorkspaceStartup,
+  wardenOrbitLocalGeometry,
+  wardenMap,
 } from './helpers'
+
+function orbitRotationAngle(transform: string | null): number {
+  const angle = transform?.match(/rotate\(\s*([-+.\deE]+)/)?.[1]
+  return angle === undefined ? 0 : Number(angle)
+}
 
 test('History list scrolls without moving and resets after reload', async ({ page }) => {
   test.setTimeout(180_000)
-  const { systemName } = await createSingleSystemWorkspace(page, { viewport: { width: 1280, height: 900 } })
-  await clickDockAction(page, 'Add orbit', { target: { kind: 'center', x: 0.3, y: 0.3 } })
-  const hierarchyClose = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
-  if (await hierarchyClose.isVisible()) await hierarchyClose.click()
-
+  const { systemId, systemName } = await createSingleSystemWorkspace(page, { viewport: { width: 1280, height: 900 } })
+  const map = wardenMap(page)
+  const ring = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"]`)
+  await (await dockAction(page, 'Add orbit')).click()
+  await expect(page.getByRole('group', { name: 'Orbit creation controls', exact: true })).toBeVisible()
+  await clickWardenSystemPoint(page, systemId, { x: 0.3, y: 0.3 })
+  await expect(ring).toHaveCount(1)
+  const orbitId = await ring.getAttribute('data-orbit-id')
+  if (!orbitId) throw new Error('The unoccupied Orbit must expose its identity.')
+  await quitSystemAdd(page)
   await setWorkspaceMapMode(page, 'Move')
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  const map = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
-  const orbitLabel = 'Orbit 1 around unoccupied center'
-  const orbit = map.getByRole('group', { name: orbitLabel, exact: true })
-  const ring = orbit.locator('.orbit-ring')
-  const resize = orbit.getByRole('slider', { name: `Resize ${orbitLabel}`, exact: true })
-  const rotate = orbit.getByRole('slider', { name: `Rotate ${orbitLabel}`, exact: true })
+  await ring.press('Enter')
+  await hideWorkspaceInspector(page)
+  const resize = map.locator(
+    `.continuous-warden-orbit-edit-handle[data-system-id="${systemId}"][data-orbit-id="${orbitId}"][data-resize-axis="horizontal"]`,
+  )
+  await expect(resize).toBeVisible()
   const undo = page.locator('.workspace-history-controls').getByRole('button', { name: /^Undo(?:\b|:)/, includeHidden: true })
   const redo = page.locator('.workspace-history-controls').getByRole('button', { name: /^Redo(?:\b|:)/, includeHidden: true })
   await expect(undo).toBeEnabled()
   await waitForWorkspaceSaved(page)
 
-  const initialHorizontalRadius = Number(await resize.getAttribute('aria-valuenow'))
+  const initialRadii = (await wardenOrbitLocalGeometry(ring, systemId)).radii
+  const initialHorizontalRadius = initialRadii.horizontal
   // Enough entries to overflow the dialog at this viewport; the coordinator checks eviction.
   const adjustmentCount = 12
   expect(initialHorizontalRadius + adjustmentCount).toBeLessThanOrEqual(400)
@@ -38,16 +53,21 @@ test('History list scrolls without moving and resets after reload', async ({ pag
   for (let adjustment = 0; adjustment < adjustmentCount; adjustment += 1) {
     await page.keyboard.press('ArrowRight')
   }
-  await expect(resize).toHaveAttribute('aria-valuenow', String(initialHorizontalRadius + adjustmentCount))
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(initialHorizontalRadius + adjustmentCount, 3)
   await waitForWorkspaceSaved(page)
 
   const historyButton = page.getByRole('button', { name: 'History', exact: true })
   const historyControls = page.locator('.workspace-history-controls')
   const historyFeedback = historyControls.getByRole('status')
+  const appliedGeometry = await wardenOrbitLocalGeometry(ring, systemId)
+  const appliedRadii = appliedGeometry.radii
   const appliedState = {
-    horizontalRadius: await ring.getAttribute('rx'),
-    verticalRadius: await ring.getAttribute('ry'),
-    rotation: await rotate.getAttribute('aria-valuenow'),
+    center: appliedGeometry.center,
+    rotationAngle: orbitRotationAngle(await ring.getAttribute('transform')),
+    horizontalRadius: appliedRadii.horizontal,
+    verticalRadius: appliedRadii.vertical,
+    ringTransform: await ring.getAttribute('transform'),
     undoLabel: await undo.getAttribute('aria-label'),
     historyFeedback: await historyFeedback.innerText(),
   }
@@ -88,9 +108,11 @@ test('History list scrolls without moving and resets after reload', async ({ pag
   await expect(redo).toBeDisabled()
   await expect(undo).toHaveAttribute('aria-label', appliedState.undoLabel ?? '')
   await expect(historyFeedback).toHaveText(appliedState.historyFeedback ?? '')
-  await expect(ring).toHaveAttribute('rx', appliedState.horizontalRadius ?? '')
-  await expect(ring).toHaveAttribute('ry', appliedState.verticalRadius ?? '')
-  await expect(rotate).toHaveAttribute('aria-valuenow', appliedState.rotation ?? '')
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(appliedState.horizontalRadius, 3)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.vertical)
+    .toBeCloseTo(appliedState.verticalRadius, 3)
+  await expect(ring).toHaveAttribute('transform', appliedState.ringTransform ?? '')
 
   await historyButton.click()
   await expect.poll(() => retainedActions.innerText()).toBe(retainedActionText)
@@ -101,25 +123,26 @@ test('History list scrolls without moving and resets after reload', async ({ pag
   await expect(redo).toBeDisabled()
 
   await page.reload()
-  await returnToClusterMap(page)
-  const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  const systemEntry = clusterHierarchy.getByRole('navigation', { name: 'Star systems', exact: true })
-    .getByRole('button', { name: `Open ${systemName} system map`, exact: true })
-  await systemEntry.click()
-  const restoredMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
-  await expect(restoredMap).toBeVisible()
-  const restoredHierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
-  await restoredHierarchy.getByRole('treeitem', { name: new RegExp(`^${orbitLabel}`) }).click()
-  if (await hierarchyClose.isVisible()) await hierarchyClose.click()
+  await waitForWorkspaceStartup(page)
+  const hierarchy = await openWorkspaceHierarchy(page)
+  await hierarchy.getByRole('button', { name: `Inspect ${systemName}`, exact: true }).click()
+  const orbitRow = hierarchy.getByRole('treeitem', { name: /^Orbit 1 around unoccupied center/ })
+  await orbitRow.click()
+  await centerWorkspaceSelection(page)
+  await hideWorkspaceInspector(page)
   await setWorkspaceMapMode(page, 'Move')
-  const restoredOrbit = restoredMap.getByRole('group', { name: orbitLabel, exact: true })
-  const restoredRing = restoredOrbit.locator('.orbit-ring')
-  const restoredResize = restoredOrbit.getByRole('slider', { name: `Resize ${orbitLabel}`, exact: true })
-  const restoredRotate = restoredOrbit.getByRole('slider', { name: `Rotate ${orbitLabel}`, exact: true })
-  await expect(restoredRing).toHaveAttribute('rx', appliedState.horizontalRadius ?? '')
-  await expect(restoredRing).toHaveAttribute('ry', appliedState.verticalRadius ?? '')
-  await expect(restoredRotate).toHaveAttribute('aria-valuenow', appliedState.rotation ?? '')
-  await expect(restoredResize).toHaveAttribute('aria-valuenow', appliedState.horizontalRadius ?? '')
+  await expect(ring).toHaveAttribute('data-orbit-id', orbitId)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeCloseTo(appliedState.horizontalRadius, 3)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.vertical)
+    .toBeCloseTo(appliedState.verticalRadius, 3)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.x)
+    .toBeCloseTo(appliedState.center.x, 3)
+  await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).center.y)
+    .toBeCloseTo(appliedState.center.y, 3)
+  await expect.poll(async () => orbitRotationAngle(await ring.getAttribute('transform')))
+    .toBeCloseTo(appliedState.rotationAngle, 3)
+  await expect(resize).toBeVisible()
   await expect(undo).toBeDisabled()
   await expect(redo).toBeDisabled()
 

@@ -137,6 +137,18 @@
             <p class="section-kicker">SYSTEM STRUCTURE</p>
             <h3 id="object-placement-heading">Placement and relationships</h3>
           </div>
+          <UButton
+            v-if="props.systemTransferEnabled"
+            class="workspace-control"
+            color="neutral"
+            variant="outline"
+            size="xs"
+            type="button"
+            :disabled="props.saving || props.transferBusy || !selectedSystem"
+            @click="requestSystemTransfer"
+          >
+            Change system…
+          </UButton>
         </div>
         <fieldset class="entity-inspector-fields entity-inspector-fields--paired" :disabled="!objectSession || props.saving">
           <UFormField label="Placement" class="entity-inspector-full-row" :error="fieldError('placement')">
@@ -183,6 +195,7 @@
               :id="controlId(`playerFieldMask:${nativeFieldIds.atmosphere}`)"
               :model-value="isPlayerFieldMasked(nativeFieldIds.atmosphere)"
               label="Hide this value from players"
+              aria-label="Hide this value from players"
               aria-description="For Atmosphere."
               @update:model-value="value => updatePlayerFieldMask(nativeFieldIds.atmosphere, value)"
             />
@@ -200,6 +213,7 @@
               :id="controlId(`playerFieldMask:${nativeFieldIds.portClass}`)"
               :model-value="isPlayerFieldMasked(nativeFieldIds.portClass)"
               label="Hide this value from players"
+              aria-label="Hide this value from players"
               aria-description="For Port class."
               @update:model-value="value => updatePlayerFieldMask(nativeFieldIds.portClass, value)"
             />
@@ -266,6 +280,7 @@
               :id="controlId(`playerFieldMask:${field.id}`)"
               :model-value="isPlayerFieldMasked(field.id)"
               label="Hide this value from players"
+              aria-label="Hide this value from players"
               :aria-description="`For ${field.name}.`"
               @update:model-value="value => updatePlayerFieldMask(field.id, value)"
             />
@@ -372,6 +387,7 @@ import {
   type SystemObject,
 } from '../../domain/workspace'
 import type { EntityInspectorSession, ObjectDraft, ObjectInspectorFocusRequest } from '../../composables/editor-workflows/types'
+import type { SystemObjectTransferIntent } from '../../composables/editor-workflows/system-object-transfer-types'
 import { objectDraftValuesFor } from '../../composables/editor-workflows/entity-draft-values'
 import { catalogueFamilyLabel, catalogueSubtypeLabel } from '../../utils/catalogue-labels'
 import { objectMark } from '../../utils/catalogue-marks'
@@ -397,6 +413,8 @@ const props = defineProps<{
   saveError: string | null
   exportError: string
   publicationBusy?: boolean
+  transferBusy?: boolean
+  systemTransferEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -412,6 +430,7 @@ const emit = defineEmits<{
   'resume-chart-draft': []
   'retry-save': []
   'export-current-json': []
+  'system-transfer-intent': [intent: Extract<SystemObjectTransferIntent, { kind: 'open' }>]
 }>()
 const commands = useEditorCommands()
 const colorMode = useColorMode()
@@ -420,6 +439,12 @@ const defaultMarkerColor = computed(() => colorMode.value === 'dark' ? '#e8eee7'
 const selectedObject = computed(() => props.selectedObject)
 const presentedObject = computed(() => props.draftObject ?? props.selectedObject)
 const selectedSystem = computed(() => props.selectedSystem)
+function requestSystemTransfer(): void {
+  const system = selectedSystem.value
+  const object = selectedObject.value
+  if (!system || !object || props.transferBusy || props.saving) return
+  emit('system-transfer-intent', { kind: 'open', sourceSystemId: system.id, rootObjectId: object.id })
+}
 const objectSession = computed(() => {
   const session = props.session
   if (!session || session.kind !== 'object' || session.targetId !== selectedObject.value?.id) return null

@@ -24,13 +24,21 @@
     :portal="!props.embedded"
   />
   <MapFilesPopover v-model:open="filesOpen" :scope="props.fileScope" :portal="!props.embedded">
+    <URadioGroup
+      v-if="props.scopedImages"
+      v-model="imageScope"
+      legend="Image area"
+      :items="imageScopeItems"
+      color="neutral"
+      size="sm"
+    />
     <div class="grid grid-cols-2 gap-2">
       <UButton
         class="workspace-control justify-center"
         color="neutral"
         variant="outline"
         size="sm"
-        :aria-label="`Export ${props.fileScope} PNG`"
+        :aria-label="`Export ${imageScopeLabel} PNG`"
         @click="exportImage('png')"
       >PNG</UButton>
       <UButton
@@ -38,7 +46,7 @@
         color="neutral"
         variant="outline"
         size="sm"
-        :aria-label="`Export ${props.fileScope} SVG`"
+        :aria-label="`Export ${imageScopeLabel} SVG`"
         @click="exportImage('svg')"
       >SVG</UButton>
     </div>
@@ -48,8 +56,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { MapImageScope } from '../utils/map-image-scope'
 import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
 import type { MapObjectTypeOption } from '../utils/map-type-filters'
 import type { PlayerSearchTarget } from '../utils/player-search'
@@ -66,6 +75,8 @@ const props = defineProps<{
   canOpenSearchShortcut: () => boolean
   getShortcutOwningDialog: () => HTMLElement | null
   fileScope: string
+  scopedImages?: boolean
+  canExportSystemImage?: boolean
   exportError: string
   embedded?: boolean
   showTypeFilters: boolean
@@ -73,7 +84,7 @@ const props = defineProps<{
   fieldFilterOptions: readonly FieldFilterOption[]
   compact: boolean
 }>()
-const emit = defineEmits<{ 'export-image': [format: MapImageFormat, palette: MapImagePalette] }>()
+const emit = defineEmits<{ 'export-image': [format: MapImageFormat, palette: MapImagePalette, scope?: MapImageScope] }>()
 
 const searchOpen = defineModel<boolean>('searchOpen', { required: true })
 const searchQuery = defineModel<string>('searchQuery', { required: true })
@@ -83,6 +94,19 @@ const selectedTypes = defineModel<string[]>('selectedTypes', { required: true })
 const fieldConditions = defineModel<FieldCondition[]>('fieldConditions', { required: true })
 const search = ref<{ whenClosingFocusSettled: () => Promise<void> } | null>(null)
 const printLight = ref(false)
+const requestedScope = ref<MapImageScope>('cluster')
+const imageScopeItems = computed<Array<{ label: string; value: MapImageScope; disabled?: boolean }>>(() => [
+  { label: 'Entire Cluster', value: 'cluster' },
+  { label: 'Selected system', value: 'system', disabled: !props.canExportSystemImage },
+  { label: 'Current viewport', value: 'viewport' },
+])
+const imageScope = computed({
+  get: () => requestedScope.value === 'system' && !props.canExportSystemImage ? 'cluster' : requestedScope.value,
+  set: (scope: MapImageScope) => { requestedScope.value = scope },
+})
+const imageScopeLabel = computed(() => props.scopedImages
+  ? imageScopeItems.value.find(item => item.value === imageScope.value)?.label ?? props.fileScope
+  : props.fileScope)
 
 watch(filesOpen, open => {
   if (!open) {
@@ -103,7 +127,7 @@ watch(typeFilterOpen, open => {
 function exportImage(format: MapImageFormat): void {
   const palette = printLight.value ? 'print-light' : 'active'
   printLight.value = false
-  emit('export-image', format, palette)
+  emit('export-image', format, palette, props.scopedImages ? imageScope.value : undefined)
 }
 
 function whenSearchClosingFocusSettled(): Promise<void> {

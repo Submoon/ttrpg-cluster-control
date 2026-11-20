@@ -1,61 +1,52 @@
 import { expect, test } from './fixtures'
 import {
+  captureMapExportBlobs,
+  clickWardenSystemPoint,
   createSingleSystemWorkspace,
-  clickNormalizedSystemPoint,
+  downloadJson,
   openWorkspaceHierarchy,
+  quitSystemAdd,
   selectCatalogueObjectButton,
-  selectInspectorOption,
+  waitForWorkspaceSaved,
+  wardenMap,
+  wardenObjectMark,
 } from './helpers'
 
-type Point = { x: number; y: number }
-
-
-
-
-
-
-
-
-
-
-
-async function addObjectAt(page: import('@playwright/test').Page, subtype: 'planet' | 'moon', point: Point): Promise<void> {
-  const label = subtype === 'planet' ? 'Planet' : 'Moon'
-  const controls = page.getByRole('group', { name: `${label} creation controls`, exact: true })
-  const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
-  if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
-  await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), 'Free map position')
-  await placementToggle.click()
-  await clickNormalizedSystemPoint(page, page.getByRole('group', { name: /star system map$/ }), point)
-}
-
-async function beginObjectAdd(page: import('@playwright/test').Page, subtype: 'planet' | 'moon'): Promise<void> {
-  await (await selectCatalogueObjectButton(page, subtype)).click()
-  await expect(page.getByRole('group', {
-    name: `${subtype === 'planet' ? 'Planet' : 'Moon'} creation controls`,
-    exact: true,
-  })).toBeVisible()
-}
-
-
-
-test('Stay keeps a dirty object draft and does not publish or select a new object Add', async ({ page }) => {
-  await createSingleSystemWorkspace(page)
+test('an independent Add saves while Stay keeps the inspected object draft', async ({ page }) => {
+  await captureMapExportBlobs(page)
+  const { systemId } = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
+  const before = await downloadJson(page, 'Export Jump Cluster JSON')
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Select A, Primary Star in Vesper', exact: true }).click()
 
-  const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
+  const inspector = page.getByRole('region', { name: 'Object inspector', exact: true })
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   await inspector.getByLabel('Name', { exact: true }).fill('Unapplied Primary Star')
-  await beginObjectAdd(page, 'planet')
-  await addObjectAt(page, 'planet', { x: 0.25, y: 0.25 })
+  await (await selectCatalogueObjectButton(page, 'planet')).click()
+  const status = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
+    .locator('.workspace-add-status')
+  await expect(status).toContainText(/planet/i)
+  const delivered = await clickWardenSystemPoint(page, systemId, { x: 0.41, y: 0.64 })
+  await expect(wardenMap(page).locator('.continuous-warden-object')).toHaveCount(2)
+  await waitForWorkspaceSaved(page)
+  const after = await downloadJson(page, 'Export Jump Cluster JSON')
+  const savedOwner = after.cluster?.systems.find(system => system.id === systemId)
+  const added = savedOwner?.objects.find(object => object.subtype === 'planet')
+  expect(savedOwner?.objects[0]).toEqual(before.cluster?.systems[0]?.objects[0])
+  if (!added || added.placement.kind !== 'system') throw new Error('The added Planet needs a saved position in Vesper.')
+  expect(added.placement.x).toBeCloseTo(delivered.x, 5)
+  expect(added.placement.y).toBeCloseTo(delivered.y, 5)
+  await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Unapplied Primary Star')
 
+  await quitSystemAdd(page)
+  await wardenObjectMark(page, systemId, added.id).press('Enter')
   const guard = page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })
-  await expect(guard.getByRole('button', { name: 'Stay here', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Stay here', exact: true }).click()
   await expect(guard).toBeHidden()
-  await expect(hierarchy.getByRole('treeitem', { name: 'Select A, Unapplied Primary Star', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(hierarchy.getByRole('treeitem', {
+    name: 'Select A, Unapplied Primary Star in Vesper', exact: true,
+  })).toHaveAttribute('aria-selected', 'true')
   await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Unapplied Primary Star')
-  await expect(page.getByRole('group', { name: 'Vesper star system map', exact: true }).locator('.system-object')).toHaveCount(1)
-  await expect(page.getByRole('group', { name: 'Planet creation controls', exact: true })).toBeVisible()
+  await expect(wardenObjectMark(page, systemId, added.id)).toHaveAttribute('aria-pressed', 'false')
+  expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(after)
 })

@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
 import { expectPaletteOptionActive } from './scenarios/search-palette'
-import { createSingleSystemWorkspace } from './helpers'
+import { createSingleSystemWorkspace, wardenMap, wardenObjectMark, workspaceMapContextType } from './helpers'
 
 
 
@@ -8,18 +8,18 @@ import { createSingleSystemWorkspace } from './helpers'
 
 
 test('a real Inspector draft survives search Stay and compact Discard reveals without covering the map', async ({ page }, testInfo) => {
-  await createSingleSystemWorkspace(page)
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page)
 
-  const systemMap = page.getByRole('group', { name: 'Vesper star system map', exact: true, includeHidden: true })
-  const systemContent = systemMap.locator('.system-map-content')
+  const map = wardenMap(page)
+  const systemContent = map.locator('.cluster-map-content')
   const initialViewport = await systemContent.getAttribute('transform')
   if (!initialViewport) throw new Error('The active system map has no rendered viewport transform.')
-  const primaryStar = systemMap.getByRole('button', { name: 'Select A, Primary Star (Star)', exact: true })
-  await primaryStar.click()
+  const primaryStar = wardenObjectMark(page, systemId, primaryObjectId)
+  await primaryStar.press('Enter')
 
   const inspector = page.locator('#workspace-inspector-panel')
   await expect(inspector).toBeVisible()
-  await expect(systemMap.locator('.system-object.is-selected')).toHaveCount(1)
+  await expect(primaryStar).toHaveAttribute('aria-pressed', 'true')
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   const objectName = inspector.getByLabel('Name', { exact: true })
   await objectName.fill('Primary Star draft')
@@ -38,9 +38,9 @@ test('a real Inspector draft survives search Stay and compact Discard reveals wi
   await expect(guard).toHaveCount(0)
   await expect(query).toHaveValue('Kestrel')
   await expect(query).toBeFocused()
-  await expect(page.locator('.workspace-map-heading > span')).toHaveText('Star System')
+  await expect(workspaceMapContextType(page)).toHaveText('Jump Cluster')
   await expect(systemContent).toHaveAttribute('transform', initialViewport)
-  await expect(systemMap.locator('.system-object.is-selected')).toHaveCount(1)
+  await expect(primaryStar).toHaveAttribute('aria-pressed', 'true')
 
   await page.keyboard.press('Escape')
   await expect(searchDialog).toHaveCount(0)
@@ -67,12 +67,12 @@ test('a real Inspector draft survives search Stay and compact Discard reveals wi
   await expect(guard.getByRole('button', { name: 'Discard edits and continue', exact: true })).toBeVisible()
   await guard.getByRole('button', { name: 'Discard edits and continue', exact: true }).click()
 
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
-  await expect(clusterMap).toBeVisible()
+  await expect(map).toHaveAccessibleName('Kestrel Reach continuous map')
   await expect(searchDialog).toHaveCount(0)
   await expect(inspector).toBeHidden()
   await expect(page.getByRole('button', { name: 'Inspect', exact: true })).toHaveAttribute('aria-expanded', 'false')
-  await expect(clusterMap).toBeFocused()
+  await expect(map).toBeFocused()
+  await expect(map.locator('.continuous-warden-object[aria-pressed="true"]')).toHaveCount(0)
 
   const compactRevealScreenshot = testInfo.outputPath('search-inspector-draft-reveal-compact.png')
   await page.screenshot({ path: compactRevealScreenshot, animations: 'disabled' })

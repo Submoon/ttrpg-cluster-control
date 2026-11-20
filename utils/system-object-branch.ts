@@ -1,6 +1,8 @@
 /** Applied-data branch membership and camera bounds for one system object and its hosted descendants. */
 import type { StarSystem } from '../domain/workspace'
 import type { SvgViewportRect } from './map-zoom'
+import { resolveSystemObjectBranch } from '../domain/workspace-object-branch'
+import type { SystemObjectBranch } from '../domain/workspace-object-branch'
 import {
   objectPositions,
   orbitRadii,
@@ -8,10 +10,8 @@ import {
   type SystemMapGeometry,
 } from './system-map-geometry'
 
-export interface SystemObjectBranch {
-  objectIds: string[]
-  orbitIds: string[]
-}
+export { resolveSystemObjectBranch }
+export type { SystemObjectBranch }
 
 export interface MeasuredSystemObjectBranch extends SystemObjectBranch {
   bounds: SvgViewportRect
@@ -35,50 +35,6 @@ function unionBounds(current: SvgViewportRect | undefined, next: SvgViewportRect
   const right = Math.max(current.x + current.width, next.x + next.width)
   const bottom = Math.max(current.y + current.height, next.y + next.height)
   return { x: left, y: top, width: right - left, height: bottom - top }
-}
-
-/**
- * Resolves only an object's hosted Orbit descendants. Parent placements, siblings, Station links and
- * Jump Route references are outside this directed branch. Visited IDs also make malformed cycles safe.
- */
-export function resolveSystemObjectBranch(
-  system: StarSystem,
-  targetObjectId: string,
-): SystemObjectBranch | undefined {
-  const objectsById = new Map(system.objects.map(object => [object.id, object]))
-  if (!objectsById.has(targetObjectId)) return undefined
-
-  const hostedOrbits = new Map<string, string[]>()
-  for (const orbit of system.orbits) {
-    if (orbit.hostId === null) continue
-    const orbitIds = hostedOrbits.get(orbit.hostId) ?? []
-    orbitIds.push(orbit.id)
-    hostedOrbits.set(orbit.hostId, orbitIds)
-  }
-
-  const objectsByOrbit = new Map<string, string[]>()
-  for (const object of system.objects) {
-    if (object.placement.kind !== 'orbit') continue
-    const objectIds = objectsByOrbit.get(object.placement.orbitId) ?? []
-    objectIds.push(object.id)
-    objectsByOrbit.set(object.placement.orbitId, objectIds)
-  }
-
-  const objectIds = new Set<string>()
-  const orbitIds = new Set<string>()
-  function visit(objectId: string): void {
-    if (objectIds.has(objectId)) return
-    objectIds.add(objectId)
-
-    for (const orbitId of hostedOrbits.get(objectId) ?? []) {
-      if (orbitIds.has(orbitId)) continue
-      orbitIds.add(orbitId)
-      for (const childId of objectsByOrbit.get(orbitId) ?? []) visit(childId)
-    }
-  }
-
-  visit(targetObjectId)
-  return { objectIds: [...objectIds], orbitIds: [...orbitIds] }
 }
 
 /**

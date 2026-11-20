@@ -1,13 +1,15 @@
 import { inject, provide, type InjectionKey } from 'vue'
 import type { JumpRoute, Point } from '../../domain/workspace'
-import type { MapInteractionMode } from './types'
+import type { OrbitDragOwner, SystemCreationCandidate } from './types'
 import type { PublicationMenuLease, PublicationMenuOptions, PublicationMenuRequest, PublicationRequest } from './publication-types'
 import type { WorkspaceMutationResult } from './workspace-mutations'
 import type { SelectedObjectDrag } from './selected-object-drag'
+import type { InspectedMapTarget } from '../../stores/editor-ui'
 
 export interface EditorCommandContext {
   navigation: {
     selectSystem(systemId: string): Promise<void>
+    inspectContinuousTarget(target: Extract<InspectedMapTarget, { kind: 'system' | 'object' | 'orbit' }>, openInspector?: boolean): Promise<boolean>
     selectObject(objectId: string, openInspector?: boolean): Promise<void>
     replaceObjectSelection(objectIds: readonly string[], isCurrent?: () => boolean): Promise<boolean>
     toggleObjectSelection(objectId: string): Promise<void>
@@ -30,7 +32,7 @@ export interface EditorCommandContext {
      * A successful reservation clears an older preview and placement errors, but keeps the armed Add
      * session and numeric Placement inputs; it does not change or persist workspace data.
      */
-    beginOrbitDrag(scenePoint: Point): boolean
+    beginOrbitDrag(scenePoint: Point, candidates?: SystemCreationCandidate[], owner?: OrbitDragOwner): boolean
     /**
      * Replaces the transient drag preview using the pointer's scene point and current painted-ring clearance.
      * Invalid or stale reservation context is cancelled; this command never publishes workspace data.
@@ -49,10 +51,10 @@ export interface EditorCommandContext {
     cancelOrbitDrag(): void
   }
   map: {
-    changeMode(mode: MapInteractionMode, isCurrent?: () => boolean): void
+    changeMode(mode: 'select' | 'move', isCurrent?: () => boolean): void
   }
   move: {
-    beginSelectedObjectDrag(anchorId: string): SelectedObjectDrag | null
+    beginSelectedObjectDrag(anchorId: string, continuousSystemScales?: ReadonlyMap<string, number>): SelectedObjectDrag | null
   }
   publication: {
     set(request: PublicationRequest): Promise<WorkspaceMutationResult>

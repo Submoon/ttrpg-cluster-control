@@ -1,11 +1,12 @@
 import { expect, preparedCampaignTest as test } from './fixtures'
 import {
+  clusterCircleScenePosition,
   waitForWorkspaceSaved,
+  waitForWorkspaceStartup,
   clickDockAction,
   downloadImage,
   downloadJson,
   openWorkspaceHierarchy,
-  returnToClusterMap,
   selectInspectorOption,
   setWorkspaceMapMode,
   workspaceZoomControls,
@@ -37,13 +38,26 @@ async function clickClusterScenePoint(
   await page.mouse.click(screen.x, screen.y)
 }
 
-async function targetPosition(
+async function targetPosition(target: import('@playwright/test').Locator): Promise<Point> {
+  return clusterCircleScenePosition(target)
+}
+
+function positionDistance(point: Point | undefined, expected: Point): number {
+  return point ? Math.hypot(point.x - expected.x, point.y - expected.y) : Infinity
+}
+
+async function targetOverflowOfMap(
+  map: import('@playwright/test').Locator,
   target: import('@playwright/test').Locator,
-): Promise<Point> {
-  return target.evaluate((element) => ({
-    x: Number(element.getAttribute('cx')),
-    y: Number(element.getAttribute('cy')),
-  }))
+): Promise<number> {
+  const [mapBounds, markerBounds] = await Promise.all([map.boundingBox(), target.boundingBox()])
+  if (!mapBounds || !markerBounds) throw new Error('The map or unresolved marker has no bounds.')
+  return Math.max(
+    mapBounds.x - markerBounds.x,
+    mapBounds.y - markerBounds.y,
+    markerBounds.x + markerBounds.width - mapBounds.x - mapBounds.width,
+    markerBounds.y + markerBounds.height - mapBounds.y - mapBounds.height,
+  )
 }
 
 async function dragToClusterScenePoint(
@@ -61,6 +75,51 @@ async function dragToClusterScenePoint(
   await page.mouse.up()
 }
 
+async function pinchDuringExitDrag(
+  page: import('@playwright/test').Page,
+  map: import('@playwright/test').Locator,
+  target: import('@playwright/test').Locator,
+): Promise<void> {
+  const bounds = await target.boundingBox()
+  const mapBounds = await map.boundingBox()
+  if (!bounds || !mapBounds) throw new Error('The unresolved target is not visible for touch input.')
+  const first = { id: 1, x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+  const towardCenter = first.x < mapBounds.x + mapBounds.width / 2 ? 1 : -1
+  const dragged = { ...first, x: first.x + 28 * towardCenter }
+  const second = { id: 2, x: dragged.x + 100 * towardCenter, y: dragged.y + 20 }
+  const initialPosition = await targetPosition(target)
+  const scene = map.locator('.cluster-map-content')
+  const initialCamera = await scene.getAttribute('transform')
+  const cdp = await page.context().newCDPSession(page)
+  let touchContactsActive = false
+
+  try {
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 })
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [first] })
+    touchContactsActive = true
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [dragged] })
+    await expect.poll(async () => positionDistance(await targetPosition(target), initialPosition)).toBeGreaterThan(.01)
+
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [dragged, second] })
+    await expect.poll(async () => positionDistance(await targetPosition(target), initialPosition)).toBeLessThan(.01)
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [dragged, { ...second, x: second.x + 36 * towardCenter }],
+    })
+    await expect.poll(() => scene.getAttribute('transform')).not.toBe(initialCamera)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    touchContactsActive = false
+    await expect.poll(async () => positionDistance(await targetPosition(target), initialPosition)).toBeLessThan(.01)
+  } finally {
+    try {
+      if (touchContactsActive) await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })
+      await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false })
+    } finally {
+      await cdp.detach()
+    }
+  }
+}
+
 test('the Warden can move an unresolved target, preview cancellation, save it, and resolve it independently', async ({ campaignWorkspacePage: page }) => {
   test.setTimeout(60000)
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
@@ -69,15 +128,18 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   await clickDockAction(page, 'Add Jump Route')
   const inspector = page.getByRole('complementary', { name: 'Jump Route inspector', exact: true })
   await page.getByRole('spinbutton', { name: 'Jump level', exact: true }).fill('3')
+  await selectInspectorOption(page.getByLabel('From system'), 'Vesper Prime')
   await selectInspectorOption(page.getByLabel('From Jump Point'), 'Vesper Departure (Vesper Prime)')
   await selectInspectorOption(page.getByLabel('Route destination'), 'Unresolved external exit')
   await page.getByLabel('Unknown destination label').fill('The Rim')
   await inspector.getByRole('button', { name: 'Create Jump Route', exact: true }).click()
   await waitForWorkspaceSaved(page)
 
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map', exact: true })
+  const clusterMap = page.locator('svg.continuous-warden-map-svg')
+  const zoomControls = workspaceZoomControls(page)
+  const fit = zoomControls.getByRole('button', { name: 'Fit map', exact: true })
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
-  const unresolvedRoute = before.cluster?.routes.find(route => route.toPointId === null)
+  const unresolvedRoute = before.cluster?.routes.find(route => route.toSystemId === null)
   expect(unresolvedRoute).toBeTruthy()
   if (!unresolvedRoute) throw new Error('The created external route was not exported.')
   const routeMark = clusterMap.locator(`.cluster-route[data-route-id="${unresolvedRoute.id}"]`)
@@ -96,30 +158,56 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   await setWorkspaceMapMode(page, 'Move')
   await target.click()
   await expect(routeMark).toHaveClass(/is-selected/)
+  await test.step('A second touch rolls back the live marker and zooms the same map', async () => {
+    await pinchDuringExitDrag(page, clusterMap, target)
+    const afterPinch = await downloadJson(page, 'Export Jump Cluster JSON')
+    expect(afterPinch.layout.unresolvedExitPositions?.[unresolvedRoute.id]).toBeUndefined()
+    expect(afterPinch.cluster?.routes.find(route => route.id === unresolvedRoute.id)).toEqual(unresolvedRoute)
+    await fit.click()
+  })
   const dragDestination = { x: 720, y: 390 }
+  const sceneOrigin = await screenPointForClusterScenePoint(clusterMap, { x: 0, y: 0 })
+  const sceneUnit = await screenPointForClusterScenePoint(clusterMap, { x: 1, y: 0 })
+  const pixelsPerSceneUnit = Math.hypot(sceneUnit.x - sceneOrigin.x, sceneUnit.y - sceneOrigin.y)
   await dragToClusterScenePoint(page, clusterMap, target, dragDestination)
   // Native pointer coordinates round to screen pixels before the map transforms them back.
   await expect.poll(async () => {
     const position = await targetPosition(target)
-    return Math.hypot(position.x - dragDestination.x, position.y - dragDestination.y)
+    return Math.hypot(position.x - dragDestination.x, position.y - dragDestination.y) * pixelsPerSceneUnit
   }).toBeLessThan(2)
+  await waitForWorkspaceSaved(page)
   const draggedPosition = await targetPosition(target)
   const routeLine = routeMark.locator('.cluster-route-line')
-  await expect(routeLine).toHaveAttribute('d', new RegExp(`${draggedPosition.x} ${draggedPosition.y}$`))
-  await expect(routeMark.locator('.cluster-exit-label')).toHaveText('Unknown: The Rim')
+  await expect.poll(() => routeLine.evaluate(element => {
+    if (!(element instanceof SVGPathElement)) return Infinity
+    const marker = element.parentElement?.querySelector<SVGCircleElement>('.cluster-exit-mark')
+    const pathMatrix = element.getScreenCTM()
+    const markerMatrix = marker?.getScreenCTM()
+    if (!marker || !pathMatrix || !markerMatrix) return Infinity
+    const end = element.getPointAtLength(element.getTotalLength()).matrixTransform(pathMatrix)
+    const center = new DOMPoint(marker.cx.baseVal.value, marker.cy.baseVal.value).matrixTransform(markerMatrix)
+    return Math.hypot(end.x - center.x, end.y - center.y)
+  })).toBeLessThan(.1)
+  await expect(routeMark.locator('.cluster-route-destination-caption')).toHaveText('The Rim')
 
   await page.getByRole('button', { name: 'Move on map', exact: true }).click()
   await clickClusterScenePoint(page, clusterMap, { x: 760, y: 350 })
+  await expect.poll(async () => positionDistance(await targetPosition(target), draggedPosition)).toBeGreaterThan(.01)
   const pointerPreview = await targetPosition(target)
   await page.keyboard.press('Shift+ArrowLeft')
   await expect.poll(async () => (await targetPosition(target)).x).toBeLessThan(pointerPreview.x)
-  const previewPosition = await targetPosition(target)
-  const previewSvg = await downloadImage(page, 'image/svg+xml')
-  expect(previewSvg.text).toContain(`cx="${draggedPosition.x}"`)
-  expect(previewSvg.text).not.toContain(`cx="${previewPosition.x}"`)
+  const previewSvg = await downloadImage(page, 'image/svg+xml', 'Entire Cluster')
+  const exportedPosition = await page.evaluate(({ source, routeId }) => {
+    if (!source) throw new Error('The Warden SVG download has no SVG text.')
+    const svg = new DOMParser().parseFromString(source, 'image/svg+xml')
+    const marker = svg.querySelector(`.cluster-route[data-route-id="${CSS.escape(routeId)}"] .cluster-exit-mark`)
+    if (!marker) throw new Error('The Warden SVG download is missing the route marker.')
+    return { x: Number(marker.getAttribute('cx')), y: Number(marker.getAttribute('cy')) }
+  }, { source: previewSvg.text, routeId: unresolvedRoute.id })
+  expect(positionDistance(exportedPosition, draggedPosition)).toBeLessThan(.01)
 
   await page.getByRole('button', { name: 'Cancel move', exact: true }).click()
-  await expect.poll(() => targetPosition(target)).toEqual(draggedPosition)
+  await expect.poll(async () => positionDistance(await targetPosition(target), draggedPosition)).toBeLessThan(.01)
   await waitForWorkspaceSaved(page)
 
   await page.getByRole('button', { name: 'Move on map', exact: true }).click()
@@ -133,51 +221,40 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
   const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
   await expect(undo).toBeEnabled()
-  const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
+  // Inspect and frame another target on the same camera before revealing the route through Undo.
+  await setWorkspaceMapMode(page, 'Select')
+  const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  await clusterHierarchy.getByRole('button', { name: `Inspect ${originSystem.name}`, exact: true }).click()
+  await zoomControls.getByRole('button', { name: 'Center selected target', exact: true }).click()
+  const zoomIn = zoomControls.getByRole('button', { name: 'Zoom in', exact: true })
   for (let step = 0; step < 16; step += 1) {
     if (await zoomIn.isDisabled()) break
     await zoomIn.click()
   }
-  const clusterZoomBeforeReveal = await workspaceZoomControls(page).getByRole('status').innerText()
-
-  // Undo while inside the source system must restore the global route action in its Cluster context.
-  await setWorkspaceMapMode(page, 'Navigate')
-  const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await clusterHierarchy.getByRole('button', {
-    name: `Open ${originSystem.name} system map`,
-    exact: true,
-  }).click()
-  await expect(page.getByRole('group', { name: `${originSystem.name} star system map`, exact: true })).toBeVisible()
+  await expect.poll(() => targetOverflowOfMap(clusterMap, target)).toBeGreaterThan(0)
+  const clusterZoomBeforeReveal = await zoomControls.getByRole('status').innerText()
   await undo.click()
   await expect(clusterMap).toBeVisible()
   await waitForWorkspaceSaved(page)
   await expect(routeMark).toHaveClass(/is-selected/)
-  await expect.poll(() => targetPosition(target)).toEqual(draggedPosition)
-  await expect.poll(async () => {
-    const [mapBounds, markerBounds] = await Promise.all([clusterMap.boundingBox(), target.boundingBox()])
-    if (!mapBounds || !markerBounds) return Number.POSITIVE_INFINITY
-    return Math.max(
-      mapBounds.x - markerBounds.x,
-      mapBounds.y - markerBounds.y,
-      markerBounds.x + markerBounds.width - mapBounds.x - mapBounds.width,
-      markerBounds.y + markerBounds.height - mapBounds.y - mapBounds.height,
-    )
-  }).toBeLessThanOrEqual(0)
-  await expect(workspaceZoomControls(page).getByRole('status')).toHaveText(clusterZoomBeforeReveal)
+  await expect.poll(async () => positionDistance(await targetPosition(target), draggedPosition)).toBeLessThan(.01)
+  await expect.poll(() => targetOverflowOfMap(clusterMap, target)).toBeLessThanOrEqual(0)
+  await expect(zoomControls.getByRole('status')).toHaveText(clusterZoomBeforeReveal)
 
   await expect(redo).toBeEnabled()
   await redo.click()
-  await expect.poll(() => targetPosition(target)).toEqual(confirmedPosition)
+  await expect.poll(async () => positionDistance(await targetPosition(target), confirmedPosition)).toBeLessThan(.01)
   await waitForWorkspaceSaved(page)
 
   await page.reload()
-  await returnToClusterMap(page)
+  await waitForWorkspaceStartup(page)
+  await expect(clusterMap).toBeVisible()
   await expect(hierarchyToggle).toHaveAttribute('aria-expanded', 'true')
   await hierarchyToggle.click()
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+  await fit.click()
   await waitForWorkspaceSaved(page)
   const reloadedExport = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(reloadedExport.layout.unresolvedExitPositions?.[unresolvedRoute.id]).toEqual(confirmedPosition)
+  expect(positionDistance(reloadedExport.layout.unresolvedExitPositions?.[unresolvedRoute.id], confirmedPosition)).toBeLessThan(.01)
   expect(reloadedExport.cluster?.routes.find(route => route.id === unresolvedRoute.id)).toEqual(unresolvedRoute)
 
   await setWorkspaceMapMode(page, 'Select')
@@ -199,30 +276,36 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   await reloadedInspector.getByRole('button', { name: 'Apply Jump Route', exact: true }).click()
   const appliedDraftExport = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(appliedDraftExport.cluster?.routes.find(route => route.id === unresolvedRoute.id)?.jumpLevel).toBe(4)
-  expect(appliedDraftExport.layout.unresolvedExitPositions?.[unresolvedRoute.id]).toEqual(movedWithAppliedDraft)
+  expect(positionDistance(appliedDraftExport.layout.unresolvedExitPositions?.[unresolvedRoute.id], movedWithAppliedDraft)).toBeLessThan(.01)
 
   await setWorkspaceMapMode(page, 'Select')
   await target.click()
   await reloadedInspector.getByRole('button', { name: 'Edit Jump Route', exact: true }).click()
   const routeDestination = page.getByLabel('Route destination')
   const toPoint = page.getByLabel('To Jump Point')
-  await selectInspectorOption(routeDestination, 'Known Jump Point')
+  await selectInspectorOption(routeDestination, 'Known system')
+  await selectInspectorOption(page.getByLabel('To system'), 'Harrow')
   await selectInspectorOption(toPoint, 'Harrow Arrival (Harrow)')
   await expect(reloadedInspector.getByText('Unapplied route changes', { exact: true })).toBeVisible()
   await reloadedInspector.getByRole('button', { name: 'Apply Jump Route', exact: true }).click()
   const resolvedExport = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(resolvedExport.cluster?.routes.find(route => route.id === unresolvedRoute.id)?.toPointId).toBe(arrival.id)
+  const resolvedRoute = resolvedExport.cluster?.routes.find(route => route.id === unresolvedRoute.id)
+  expect(resolvedRoute?.toPointId).toBe(arrival.id)
+  expect(resolvedRoute?.toSystemId).toBe(before.cluster?.systems.find(system => system.name === 'Harrow')?.id)
   expect(resolvedExport.layout.unresolvedExitPositions?.[unresolvedRoute.id]).toBeUndefined()
   await expect(target).toHaveCount(0)
 
   await setWorkspaceMapMode(page, 'Select')
-  await routeMark.click()
+  await routeMark.focus()
+  await page.keyboard.press('Enter')
   await reloadedInspector.getByRole('button', { name: 'Edit Jump Route', exact: true }).click()
   await selectInspectorOption(page.getByLabel('Route destination'), 'Unresolved external exit')
   await page.getByLabel('Unknown destination label').fill('The Rim')
   await reloadedInspector.getByRole('button', { name: 'Apply Jump Route', exact: true }).click()
   const unresolvedAgain = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(unresolvedAgain.cluster?.routes.find(route => route.id === unresolvedRoute.id)?.toPointId).toBeNull()
+  const unresolvedAgainRoute = unresolvedAgain.cluster?.routes.find(route => route.id === unresolvedRoute.id)
+  expect(unresolvedAgainRoute?.toSystemId).toBeNull()
+  expect(unresolvedAgainRoute?.toPointId).toBeNull()
   expect(unresolvedAgain.layout.unresolvedExitPositions?.[unresolvedRoute.id]).toBeUndefined()
   await expect(target).toBeVisible()
 })

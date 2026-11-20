@@ -1,5 +1,7 @@
+import { readFile } from 'node:fs/promises'
 import { expect, type Locator } from '@playwright/test'
-import type { PublicationMode } from '../domain/workspace'
+import type { JumpRoute, PublicationMode, SystemFrameInsets } from '../domain/workspace'
+import { CONTINUOUS_MAP_LOCAL_ORIGIN, CONTINUOUS_MAP_SYSTEM_SCALE } from '../utils/continuous-map-projection'
 
 export type PublicationModeLabel = 'Hidden' | 'Unknown presence' | 'Known type' | 'Revealed'
 
@@ -42,7 +44,7 @@ export type MapCameraTransform = { x: number; y: number; k: number }
 export function parseMapCameraTransform(transform: string | null): MapCameraTransform {
   const number = String.raw`[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?`
   const match = transform
-    ? new RegExp(`^translate\\(\\s*(${number})\\s*,\\s*(${number})\\s*\\)\\s*scale\\(\\s*(${number})\\s*\\)$`, 'i').exec(transform)
+    ? new RegExp(`^translate\\(\\s*(${number})(?:\\s*,\\s*|\\s+)(${number})\\s*\\)\\s*scale\\(\\s*(${number})\\s*\\)$`, 'i').exec(transform)
     : null
   if (!match) throw new Error(`Could not read the map camera from "${transform}".`)
   return { x: Number(match[1]), y: Number(match[2]), k: Number(match[3]) }
@@ -258,6 +260,7 @@ export type ExportedObject = {
   id: string
   /** Raw legacy exports omit publication; current complete exports include it. */
   publication?: PublicationMode
+  markerColor?: string
   name: string
   family: string
   subtype: string
@@ -281,25 +284,15 @@ export type ExportedSystem = {
   orbits: Array<{ id: string; hostId: string | null; center?: WorldPoint; order: number }>
 }
 
-export type ExportedRoute = {
-  id: string
-  playerShared?: boolean
-  name?: string
-  jumpLevel?: number
-  fromPointId: string
-  toPointId: string | null
-  unresolvedExit?: string
-}
-
 export type ExportedCustomFieldApplicabilityTarget =
   | { kind: 'category'; family: string }
   | { kind: 'subtype'; family: string; subtype: string }
 
-export type ExportedMap = {
+export type ExportedMap<Route = JumpRoute> = {
   format: string
   version: number
   type: 'cluster' | 'system'
-  cluster?: { id: string; name: string; playerTitle?: string; systems: ExportedSystem[]; routes: ExportedRoute[] }
+  cluster?: { id: string; name: string; playerTitle?: string; systems: ExportedSystem[]; routes: Route[] }
   system?: ExportedSystem
   objectFieldSettings: {
     atmosphereOptions: string[]
@@ -317,6 +310,7 @@ export type ExportedMap = {
   layout: {
     version: number
     systemPositions?: Record<string, WorldPoint>
+    systemFrames?: Record<string, SystemFrameInsets>
     unresolvedExitPositions?: Record<string, WorldPoint>
     orbitRadii: Record<string, number | { horizontal: number; vertical: number }>
     orbitEllipseRadii?: Record<string, { horizontal: number; vertical: number }>
@@ -326,6 +320,35 @@ export type ExportedMap = {
 }
 
 export type ScreenPoint = { x: number; y: number }
+
+/** Finds a real hit on the object, including a visible rim when its center is covered. */
+export async function exposedContinuousObjectHitPoint(
+  object: import('@playwright/test').Locator,
+): Promise<ScreenPoint | null> {
+  return object.locator('.continuous-warden-object-hit-target').evaluate(circle => {
+    if (!(circle instanceof SVGCircleElement)) return null
+    const owner = circle.closest('.continuous-warden-object')
+    const matrix = circle.getScreenCTM()
+    if (!owner || !matrix || getComputedStyle(circle).visibility === 'hidden') return null
+    const center = new DOMPoint(circle.cx.baseVal.value, circle.cy.baseVal.value)
+    const radius = circle.r.baseVal.value
+    const pixels = [center]
+    for (const fraction of [.45, .68, .87]) {
+      for (let index = 0; index < 16; index += 1) {
+        const angle = index * Math.PI / 8
+        pixels.push(new DOMPoint(
+          center.x + Math.cos(angle) * radius * fraction,
+          center.y + Math.sin(angle) * radius * fraction,
+        ))
+      }
+    }
+    for (const pixel of pixels) {
+      const { x, y } = pixel.matrixTransform(matrix)
+      if (document.elementFromPoint(x, y)?.closest('.continuous-warden-object') === owner) return { x, y }
+    }
+    return null
+  })
+}
 
 type AffineTransform = Readonly<{
   a: number
@@ -346,6 +369,20 @@ export type MouseDragDelivery = Readonly<{
   down: ScreenPoint
   up: ScreenPoint
 }>
+
+/** Reads a painted circle in Cluster coordinates, regardless of its rendering layer. */
+export async function clusterCircleScenePosition(circle: Locator): Promise<ScreenPoint> {
+  return circle.evaluate(element => {
+    if (!(element instanceof SVGCircleElement)) throw new Error('The Cluster marker is missing its circle.')
+    const markerMatrix = element.getScreenCTM()
+    const sceneMatrix = element.ownerSVGElement?.querySelector<SVGGElement>('.cluster-map-content')?.getScreenCTM()
+    if (!markerMatrix || !sceneMatrix) throw new Error('The Cluster marker coordinate spaces are unavailable.')
+    const point = new DOMPoint(Number(element.getAttribute('cx')), Number(element.getAttribute('cy')))
+      .matrixTransform(markerMatrix)
+      .matrixTransform(sceneMatrix.inverse())
+    return { x: point.x, y: point.y }
+  })
+}
 
 /** Captures an SVG element's current screen transform as portable affine values. */
 export async function snapshotSvgCoordinates(
@@ -864,13 +901,127 @@ export function workspaceZoomOutput(page: import('@playwright/test').Page): impo
   return workspaceZoomControls(page).locator('output').first()
 }
 
+export function wardenMap(page: import('@playwright/test').Page): Locator {
+  return page.locator('svg.continuous-warden-map-svg')
+}
+
+export function wardenSystemMark(page: import('@playwright/test').Page, systemId: string): Locator {
+  return wardenMap(page).locator(`.continuous-warden-system-anchor${domainIdentitySelector('data-system-id', systemId)}`)
+}
+
+export function wardenObjectMark(page: import('@playwright/test').Page, systemId: string, objectId: string): Locator {
+  return wardenMap(page).locator(
+    `.continuous-warden-object${domainIdentitySelector('data-system-id', systemId)}${domainIdentitySelector('data-object-id', objectId)}`,
+  )
+}
+
+/** Converts an owner's legacy local SVG units through its rendered anchor and the common camera. */
+export async function wardenLocalCoordinates(page: import('@playwright/test').Page, systemId: string): Promise<{
+  toClient(point: WorldPoint): ScreenPoint
+  fromClient(point: ScreenPoint): WorldPoint
+}> {
+  const mapCoordinates = await snapshotSvgCoordinates(wardenMap(page).locator('.cluster-map-content'))
+  const markCoordinates = await snapshotSvgCoordinates(wardenSystemMark(page, systemId))
+  const anchor = mapCoordinates.fromClient(markCoordinates.toClient({ x: 0, y: 0 }))
+  return {
+    toClient: point => mapCoordinates.toClient({
+      x: anchor.x + (point.x - CONTINUOUS_MAP_LOCAL_ORIGIN.x) * CONTINUOUS_MAP_SYSTEM_SCALE,
+      y: anchor.y + (point.y - CONTINUOUS_MAP_LOCAL_ORIGIN.y) * CONTINUOUS_MAP_SYSTEM_SCALE,
+    }),
+    fromClient: (point) => {
+      const scenePoint = mapCoordinates.fromClient(point)
+      return {
+        x: CONTINUOUS_MAP_LOCAL_ORIGIN.x + (scenePoint.x - anchor.x) / CONTINUOUS_MAP_SYSTEM_SCALE,
+        y: CONTINUOUS_MAP_LOCAL_ORIGIN.y + (scenePoint.y - anchor.y) / CONTINUOUS_MAP_SYSTEM_SCALE,
+      }
+    },
+  }
+}
+
+/** Measures a painted object's anchor in its owner's local geometry, independent of the paint layer. */
+export async function wardenObjectLocalPosition(mark: Locator): Promise<WorldPoint> {
+  const systemId = await mark.getAttribute('data-system-id')
+  if (!systemId) throw new Error('The painted object has no owning system.')
+  const coordinates = await wardenLocalCoordinates(mark.page(), systemId)
+  const painted = await snapshotSvgCoordinates(mark)
+  return coordinates.fromClient(painted.toClient({ x: 0, y: 0 }))
+}
+
+/** Measures painted Orbit radii in owner-local units, independently of viewport projection. */
+export async function wardenOrbitLocalRadii(mark: Locator): Promise<{ horizontal: number; vertical: number }> {
+  return (await wardenOrbitLocalGeometry(mark)).radii
+}
+
+/** Measures committed or preview Orbit paint in owner-local units across camera changes. */
+export async function wardenOrbitLocalGeometry(mark: Locator, systemId?: string): Promise<{
+  center: WorldPoint
+  radii: { horizontal: number; vertical: number }
+}> {
+  const ownerId = systemId ?? await mark.evaluate(element =>
+    element.getAttribute('data-system-id') ?? element.closest('.continuous-warden-system')?.getAttribute('data-system-id'))
+  if (!ownerId) throw new Error('The painted Orbit has no owning system.')
+  const coordinates = await wardenLocalCoordinates(mark.page(), ownerId)
+  const axes = await mark.evaluate(element => {
+    if (!(element instanceof SVGEllipseElement)) throw new Error('The Orbit has no ellipse.')
+    const matrix = element.getScreenCTM()
+    if (!matrix) throw new Error('The Orbit has no painted coordinate space.')
+    const cx = element.cx.baseVal.value
+    const cy = element.cy.baseVal.value
+    const screen = (x: number, y: number) => {
+      const point = new DOMPoint(x, y).matrixTransform(matrix)
+      return { x: point.x, y: point.y }
+    }
+    return { center: screen(cx, cy), horizontal: screen(cx + element.rx.baseVal.value, cy), vertical: screen(cx, cy + element.ry.baseVal.value) }
+  })
+  const center = coordinates.fromClient(axes.center)
+  const horizontal = coordinates.fromClient(axes.horizontal)
+  const vertical = coordinates.fromClient(axes.vertical)
+  return {
+    center,
+    radii: {
+      horizontal: Math.hypot(horizontal.x - center.x, horizontal.y - center.y),
+      vertical: Math.hypot(vertical.x - center.x, vertical.y - center.y),
+    },
+  }
+}
+
+/** Delivers a native click to a normalized point in an explicit system's local layout. */
+export async function clickWardenSystemPoint(
+  page: import('@playwright/test').Page,
+  systemId: string,
+  point: WorldPoint,
+): Promise<WorldPoint> {
+  const coordinates = await wardenLocalCoordinates(page, systemId)
+  const client = coordinates.toClient({ x: 64 + 832 * point.x, y: 72 + 416 * point.y })
+  const deliveredClient = { x: Math.round(client.x), y: Math.round(client.y) }
+  const hitsMap = await wardenMap(page).evaluate((map, input) =>
+    map.contains(document.elementFromPoint(input.x, input.y)), deliveredClient)
+  if (!hitsMap) throw new Error(`System point (${point.x}, ${point.y}) does not hit the visible Warden map.`)
+  await page.mouse.click(deliveredClient.x, deliveredClient.y)
+  const delivered = coordinates.fromClient(deliveredClient)
+  return { x: (delivered.x - 64) / 832, y: (delivered.y - 72) / 416 }
+}
+
+/** Frames the selected entity through the same map controls on desktop and compact viewports. */
+export async function centerWorkspaceSelection(page: import('@playwright/test').Page): Promise<void> {
+  const compactClose = page.getByRole('button', { name: 'Close inspector panel', exact: true })
+  if (await compactClose.isVisible()) await compactClose.click()
+  await workspaceZoomControls(page).getByRole('button', { name: 'Center selected target', exact: true }).click()
+}
+
+/** Frames the Cluster without changing the inspected target or its draft. */
+export async function fitWorkspaceMap(page: import('@playwright/test').Page): Promise<void> {
+  await dismissAddChooser(page)
+  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+}
+
 export type SingleSystemWorkspaceOptions = {
   clusterName?: string
   systemName?: string
   viewport?: { width: number; height: number }
 }
 
-/** Creates a fresh one-system workspace and leaves its system map ready for interaction. */
+/** Creates a fresh one-system workspace and frames its detail on the Cluster canvas. */
 export async function createSingleSystemWorkspace(
   page: import('@playwright/test').Page,
   options: SingleSystemWorkspaceOptions = {},
@@ -885,18 +1036,16 @@ export async function createSingleSystemWorkspace(
   await page.getByLabel('Jump Cluster', { exact: true }).fill(clusterName)
   await page.getByLabel('First star system', { exact: true }).fill(systemName)
   await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
-  await expect(page.getByRole('group', { name: `${systemName} star system map`, exact: true })).toBeVisible()
-
-  await returnToClusterMap(page)
-  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  const systems = hierarchy.getByRole('navigation', { name: 'Star systems', exact: true })
-  const systemEntry = systems.getByRole('button', { name: /^Open .* system map$/ })
-  await expect(systemEntry).toHaveCount(1)
-  await expect(systemEntry).toHaveAccessibleName(`Open ${systemName} system map`)
-  await systemEntry.click()
-  const compactHierarchyClose = page.getByRole('button', { name: 'Close hierarchy panel', exact: true })
-  if (await compactHierarchyClose.isVisible().catch(() => false)) await compactHierarchyClose.click()
-  await expect(page.getByRole('group', { name: `${systemName} star system map`, exact: true })).toBeVisible()
+  const map = wardenMap(page)
+  await expect(map).toHaveAccessibleName(`${clusterName} continuous map`)
+  await fitWorkspaceMap(page)
+  const system = map.locator('.continuous-warden-system-anchor[data-system-id]')
+  await expect(system).toHaveCount(1)
+  const systemId = await system.getAttribute('data-system-id')
+  if (!systemId) throw new Error('The created system anchor is missing its domain identity.')
+  await map.locator('.continuous-warden-name-target')
+    .and(map.getByRole('button', { name: `Select ${systemName}`, exact: true })).click()
+  await centerWorkspaceSelection(page)
 
   for (const panel of ['hierarchy', 'inspector'] as const) {
     const compactClose = page.getByRole('button', { name: `Close ${panel} panel`, exact: true })
@@ -914,12 +1063,10 @@ export async function createSingleSystemWorkspace(
 
   await expect(page.getByRole('group', { name: 'Map interaction mode' })
     .getByRole('button', { name: 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true')
-  const systemMap = page.getByRole('group', { name: `${systemName} star system map`, exact: true })
-  const systemId = await systemMap.getAttribute('data-system-id')
-  const primaryObjects = systemMap.locator('.system-object[data-object-id]')
+  const primaryObjects = map.locator(`.continuous-warden-object${domainIdentitySelector('data-system-id', systemId)}`)
   await expect(primaryObjects).toHaveCount(1)
   const primaryObjectId = await primaryObjects.first().getAttribute('data-object-id')
-  if (!systemId || !primaryObjectId) throw new Error('The created system map is missing its domain identities.')
+  if (!primaryObjectId) throw new Error('The primary Star is missing its domain identity.')
   return { clusterName, systemName, systemId, primaryObjectId }
 }
 
@@ -953,7 +1100,7 @@ export async function openWorkspaceZoomNavigation(
  */
 export async function openWorkspaceHierarchy(
   page: import('@playwright/test').Page,
-  name: 'System hierarchy' | 'Jump Cluster contents' = 'System hierarchy',
+  name: 'System hierarchy' | 'Jump Cluster contents' = 'Jump Cluster contents',
 ): Promise<import('@playwright/test').Locator> {
   const toggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   await expect(toggle).toBeVisible()
@@ -1076,8 +1223,8 @@ export async function addClusterSystem(
   page: import('@playwright/test').Page,
   options: { open?: boolean; position?: WorldPoint } = {},
 ): Promise<string | undefined> {
-  const clusterMap = page.getByRole('group', { name: /Jump Cluster map$/ })
-  const systemMarks = clusterMap.locator('.cluster-system-node[data-system-id]')
+  const clusterMap = wardenMap(page)
+  const systemMarks = clusterMap.locator('.continuous-warden-system-anchor[data-system-id]')
   await expect(clusterMap).toBeVisible()
   await expect(systemMarks.first()).toBeAttached()
   const existingSystemIds = new Set(await domainIdentityValues(systemMarks, 'data-system-id'))
@@ -1093,17 +1240,12 @@ export async function addClusterSystem(
 
   if (!options.open) return systemId
 
-  await setWorkspaceMapMode(page, 'Navigate')
-  await expect(clusterMap).toBeVisible()
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  const createdAction = systemMarks.and(clusterMap.locator(domainIdentitySelector('data-system-id', systemId)))
+  await fitWorkspaceMap(page)
+  const createdAction = clusterMap.locator(`.continuous-warden-name-target${domainIdentitySelector('data-system-id', systemId)}`)
   await expect(createdAction).toBeVisible()
-  await expect(createdAction).toHaveAttribute('role', 'button')
-  await expect(createdAction).toHaveAccessibleName(/^Open .+ system map$/)
   await createdAction.click()
-  const openedSystemMap = page.getByRole('group', { name: /star system map$/ })
-  await expect(openedSystemMap).toBeVisible()
-  await expect(openedSystemMap).toHaveAttribute('data-system-id', systemId)
+  await expect(createdAction).toHaveClass(/is-selected/)
+  await centerWorkspaceSelection(page)
   return systemId
 }
 
@@ -1160,13 +1302,15 @@ export async function reviewJumpClusterBackup(
   return jumpClusterRestoreReviewDialog(page)
 }
 
-/** Opens a standalone system file for the existing reviewed append workflow. */
+/** Opens a standalone system file and reviews the proposed anchor. */
 export async function reviewStarSystemImport(
   page: import('@playwright/test').Page,
   name: string,
   content: string,
 ): Promise<import('@playwright/test').Locator> {
   await setJsonFile(await openStarSystemImportPicker(page), name, content)
+  const placement = page.getByRole('group', { name: 'Standalone star system placement controls', exact: true })
+  await placement.getByRole('button', { name: 'Review placement', exact: true }).click()
   return importReviewDialog(page)
 }
 
@@ -1242,11 +1386,8 @@ export async function downloadJson(
     else await action.click()
     const download = await downloadPromise
     if (input === 'keyboard') expect(download.suggestedFilename()).toMatch(/\.json$/i)
-    const json = await page.evaluate(async () => {
-      const blob = (window as DownloadWindow).__mapExportBlobs?.shift()
-      if (!blob) throw new Error('Could not read the downloaded JSON file.')
-      return blob.text()
-    })
+    const json = await readFile(await download.path(), 'utf8')
+    await page.evaluate(() => { (window as DownloadWindow).__mapExportBlobs?.shift() })
     return JSON.parse(json) as ExportedMap
   } finally {
     if (input === 'pointer') await setHeaderMapActionsOpen(page, false)
@@ -1370,38 +1511,41 @@ export type DownloadedImage = {
 export async function downloadImage(
   page: import('@playwright/test').Page,
   mimeType: 'image/svg+xml' | 'image/png',
+  scope?: 'Entire Cluster' | 'Selected system' | 'Current viewport',
 ): Promise<DownloadedImage> {
   const images = await openMapFilesSection(page, 'Export an image')
+  if (scope) {
+    const scopeMenu = page.getByRole('menuitem', { name: /^Warden image scope/ })
+    if (await scopeMenu.count()) {
+      await scopeMenu.hover()
+      await page.getByRole('menuitem', { name: scope, exact: true }).click()
+    }
+  }
   const action = mimeType === 'image/png' ? 'Warden PNG' : 'Warden SVG'
   try {
     const downloadPromise = page.waitForEvent('download')
     await images.getByRole('menuitem', { name: action, exact: true }).click()
-    await downloadPromise
-    return page.evaluate(async (expectedType) => {
+    const file = await readFile(await (await downloadPromise).path())
+    const sourceSvgText = await page.evaluate(async (expectedType) => {
       const blobs = (window as DownloadWindow).__mapExportBlobs ?? []
       const index = blobs.findIndex(blob => blob.type.startsWith(expectedType))
-      if (index < 0) throw new Error(`Could not read the downloaded ${expectedType} file.`)
-      const blob = blobs[index]
-      if (!blob) throw new Error(`Could not read the downloaded ${expectedType} file.`)
-      blobs.splice(index, 1)
-
-      if (expectedType === 'image/svg+xml') {
-        return { type: blob.type, size: blob.size, text: await blob.text() }
-      }
-
-      const bytes = new Uint8Array(await blob.slice(0, 24).arrayBuffer())
-      const dimensions = new DataView(bytes.buffer)
+      if (index >= 0) blobs.splice(index, 1)
+      if (expectedType === 'image/svg+xml') return undefined
       const intermediateSvg = blobs.findIndex(item => item.type.startsWith('image/svg+xml'))
       const sourceSvg = intermediateSvg >= 0 ? blobs.splice(intermediateSvg, 1)[0] : undefined
-      return {
-        type: blob.type,
-        size: blob.size,
-        sourceSvgText: sourceSvg ? await sourceSvg.text() : undefined,
-        signature: Array.from(bytes.slice(0, 8)),
-        width: dimensions.getUint32(16),
-        height: dimensions.getUint32(20),
-      }
+      return sourceSvg?.text()
     }, mimeType)
+    if (mimeType === 'image/svg+xml') {
+      return { type: mimeType, size: file.length, text: file.toString('utf8') }
+    }
+    return {
+      type: mimeType,
+      size: file.length,
+      sourceSvgText,
+      signature: Array.from(file.subarray(0, 8)),
+      width: file.readUInt32BE(16),
+      height: file.readUInt32BE(20),
+    }
   } finally {
     await setHeaderMapActionsOpen(page, false)
   }

@@ -1,7 +1,7 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 import type { MapInteractionMode } from './editor-workflows/types'
 
-type MapToolMode = Extract<MapInteractionMode, 'navigate' | 'select' | 'move'>
+type MapToolMode = Extract<MapInteractionMode, 'select' | 'move'>
 
 interface MapToolShortcutOptions {
   workspaceEnabled(): boolean
@@ -15,8 +15,16 @@ interface MapToolShortcutOptions {
   focusActiveMap(): void
 }
 
-const mapRootSelector = 'svg.cluster-map-svg, svg.system-map-svg'
-const mapMarkSelector = '.cluster-system-node, .cluster-route, .system-object, .orbit-hit-target'
+const mapRootSelector = 'svg.continuous-warden-map-svg'
+const mapMarkSelector = '.cluster-system-node, .cluster-route, .continuous-warden-object, .continuous-warden-orbit-target'
+
+export function mapModeForShortcut(key: string): MapToolMode | null {
+  switch (key) {
+    case 's': return 'select'
+    case 'm': return 'move'
+    default: return null
+  }
+}
 
 /** Owns map-scoped, single-letter tool shortcuts and their temporary browser input state. */
 export function useMapToolShortcuts(options: MapToolShortcutOptions): { isMapInputActive(): boolean } {
@@ -55,15 +63,6 @@ export function useMapToolShortcuts(options: MapToolShortcutOptions): { isMapInp
       || document.activeElement !== document.body || !document.hasFocus()
       || options.activeMapKey() !== contextKey) return
     options.focusActiveMap()
-  }
-
-  function mapModeForShortcut(key: string): MapToolMode | null {
-    switch (key) {
-      case 'n': return 'navigate'
-      case 's': return 'select'
-      case 'm': return 'move'
-      default: return null
-    }
   }
 
   function isMapShortcutTarget(target: EventTarget | null): boolean {

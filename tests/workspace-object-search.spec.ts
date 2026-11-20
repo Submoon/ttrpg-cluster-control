@@ -1,6 +1,9 @@
 import { expect, test, type Locator, type Page } from './fixtures'
 
 import { expectPaletteOptionActive } from './scenarios/search-palette'
+import { expectPaintedInsideUsableMap, measurePaintedBounds } from './scenarios/search-assertions'
+import { largestUnobstructedClientRect } from '../utils/map-usable-area'
+import { CONTINUOUS_MAP_SYSTEM_SCALE } from '../utils/continuous-map-projection'
 import {
   createLocalWorkspace,
   createOrbit,
@@ -9,19 +12,17 @@ import {
   type StarSystem,
 } from '../domain/workspace'
 import {
+  captureMapExportBlobs,
+  centerWorkspaceSelection,
   createSingleSystemWorkspace,
+  downloadJson,
+  hideWorkspaceInspector,
+  openWorkspaceHierarchy,
   resolveImportReview,
-  returnToClusterMap,
   reviewStarSystemImport,
   setWorkspaceMapMode,
+  wardenMap,
 } from './helpers'
-
-interface ScreenRect {
-  left: number
-  top: number
-  right: number
-  bottom: number
-}
 
 async function tapVisibleTarget(
   cdp: import('@playwright/test').CDPSession,
@@ -43,69 +44,14 @@ async function tapVisibleTarget(
 
 async function expectBranchPaintInsideUsableMap(
   page: Page,
-  systemMap: Locator,
+  map: Locator,
+  owner: Locator,
+  branchRings: Locator,
   branchNames: readonly string[],
 ): Promise<void> {
-  const mapBounds = await systemMap.boundingBox()
-  if (!mapBounds) throw new Error('The visible star system map has no measured bounds.')
-  const mapScreenRect: ScreenRect = {
-    left: mapBounds.x,
-    top: mapBounds.y,
-    right: mapBounds.x + mapBounds.width,
-    bottom: mapBounds.y + mapBounds.height,
-  }
-  const obstructionBounds: ScreenRect[] = []
-  const obstructions = page.locator('[data-map-obstruction]')
-  for (let index = 0; index < await obstructions.count(); index += 1) {
-    const obstruction = obstructions.nth(index)
-    const visible = await obstruction.evaluate(element => {
-      if (!element.isConnected || element.closest('[inert]') || element.closest('[aria-hidden="true"]')) return false
-      if (element.getClientRects().length === 0) return false
-      const style = window.getComputedStyle(element)
-      return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0'
-    })
-    if (!visible) continue
-    const bounds = await obstruction.boundingBox()
-    if (!bounds || bounds.width <= 0 || bounds.height <= 0) continue
-    obstructionBounds.push({
-      left: bounds.x,
-      top: bounds.y,
-      right: bounds.x + bounds.width,
-      bottom: bounds.y + bounds.height,
-    })
-  }
-
-  const branchRings = systemMap.locator(
-    '.orbit-mark[aria-label*="around Leaf Reliquary"] .orbit-ring, '
-      + '.orbit-mark[aria-label*="around Nested Beacon East"] .orbit-ring, '
-      + '.orbit-mark[aria-label*="around Nested Beacon West"] .orbit-ring',
-  )
   await expect(branchRings).toHaveCount(4)
-  const painted = [
-    ...await Promise.all(Array.from({ length: await branchRings.count() }, (_, index) =>
-      branchRings.nth(index).boundingBox(),
-    )),
-  ]
-  for (const branchName of branchNames) {
-    const label = await systemMap.locator('.object-name').filter({ hasText: branchName }).boundingBox()
-    if (!label) throw new Error(`The visible branch label ${branchName} has no measured bounds.`)
-    painted.push(label)
-  }
-
-  for (const bounds of painted) {
-    if (!bounds) throw new Error('A painted branch element has no measured bounds.')
-    expect(bounds.x).toBeGreaterThanOrEqual(mapScreenRect.left - 1)
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(mapScreenRect.right + 1)
-    expect(bounds.y).toBeGreaterThanOrEqual(mapScreenRect.top - 1)
-    expect(bounds.y + bounds.height).toBeLessThanOrEqual(mapScreenRect.bottom + 1)
-    for (const obstruction of obstructionBounds) {
-      const overlapsObstruction = bounds.x < obstruction.right
-        && bounds.x + bounds.width > obstruction.left
-        && bounds.y < obstruction.bottom
-        && bounds.y + bounds.height > obstruction.top
-      expect(overlapsObstruction).toBe(false)
-    }
-  }
+  const labels = branchNames.map(name => owner.locator('.continuous-warden-object-name').and(owner.getByText(name, { exact: true })))
+  await expectPaintedInsideUsableMap(page, map, [...await branchRings.all(), ...labels])
 }
 
 function branchSearchMap(): {
@@ -230,28 +176,47 @@ async function importAndOpenBranchSearchSystem(
   page: Page,
   fixture: ReturnType<typeof branchSearchMap>,
   fileName: string,
-): Promise<Locator> {
+) {
+  await captureMapExportBlobs(page)
   await createSingleSystemWorkspace(page)
   const review = await reviewStarSystemImport(page, fileName, fixture.content)
   await resolveImportReview(review, 'confirm')
 
-  await returnToClusterMap(page)
-  await setWorkspaceMapMode(page, 'Navigate')
-  const importedSystem = page.getByRole('button', { name: `Open ${fixture.systemName} system map`, exact: true })
-  await importedSystem.click()
-  return page.getByRole('group', { name: `${fixture.systemName} star system map`, exact: true })
+  const backup = await downloadJson(page, 'Export Jump Cluster JSON')
+  const system = backup.cluster?.systems.find(candidate => candidate.name === fixture.systemName)
+  if (!system) throw new Error('The reviewed import is missing its Branch Vesper owner.')
+  const target = system.objects.find(object => object.name === fixture.targetName)
+  if (!target) throw new Error('The reviewed import is missing its branch root object.')
+  const hosts = new Set(system.objects
+    .filter(object => [fixture.targetName, ...fixture.branchNames].includes(object.name))
+    .map(object => object.id))
+  const ringSelectors = system.orbits
+    .filter(orbit => orbit.hostId !== null && hosts.has(orbit.hostId))
+    .map(orbit => `.continuous-warden-orbit-target[data-orbit-id="${orbit.id}"]`)
+  expect(ringSelectors).toHaveLength(4)
+
+  const hierarchy = await openWorkspaceHierarchy(page)
+  await hierarchy.getByRole('button', { name: `Inspect ${fixture.systemName}`, exact: true }).click()
+  const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
+  if (await hierarchyToggle.getAttribute('aria-expanded') === 'true') await hierarchyToggle.click()
+  await centerWorkspaceSelection(page)
+  await hideWorkspaceInspector(page)
+  const map = wardenMap(page)
+  const owner = map.locator(`.continuous-warden-system[data-system-id="${system.id}"]`)
+  return { map, owner, targetObjectId: target.id, branchRings: owner.locator(ringSelectors.join(', ')) }
 }
 
 
 
-test('search frames a rotated recursive branch and excludes its parent and sibling', async ({ page }, testInfo) => {
+test('search centers a rotated recursive branch at sufficient current zoom without framing its relatives', async ({ page }, testInfo) => {
+  test.setTimeout(60_000)
   const fixture = branchSearchMap()
-  const systemMap = await importAndOpenBranchSearchSystem(page, fixture, 'branch-atlas-large.json')
+  const { map, owner, branchRings } = await importAndOpenBranchSearchSystem(page, fixture, 'branch-atlas-large.json')
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
   const filters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
   await filters.getByRole('checkbox', { name: 'Planet', exact: true }).check()
   await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
-  const content = systemMap.locator('.system-map-content')
+  const content = map.locator('.cluster-map-content')
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   await inspectToggle.click()
   const inspector = page.locator('#workspace-inspector-panel')
@@ -272,65 +237,61 @@ test('search frames a rotated recursive branch and excludes its parent and sibli
   await result.click()
 
   await expect(searchDialog).toHaveCount(0)
-  await expect(systemMap).toBeFocused()
-  const selectedTarget = systemMap.locator('.system-object').filter({ hasText: fixture.targetName })
+  await expect(map).toBeFocused()
+  const selectedTarget = owner.locator('.continuous-warden-object').filter({ hasText: fixture.targetName })
   await expect(selectedTarget).toHaveClass(/is-selected/)
   await expect(selectedTarget).not.toHaveClass(/is-dimmed/)
-  await expect(systemMap.locator('.system-object').filter({ hasText: fixture.branchNames[0] })).toHaveClass(/is-dimmed/)
-  await expect(systemMap.locator('[data-map-search-locator]')).toHaveCount(0)
+  await expect(owner.locator('.continuous-warden-object').filter({ hasText: fixture.branchNames[0] })).toHaveClass(/is-dimmed/)
+  await expect(map.locator('[data-map-search-locator]')).toHaveCount(0)
   const frameScale = scaleFromTransform(await content.getAttribute('transform'))
-  expect(frameScale).toBeLessThan(0.25)
+  expect(frameScale).toBe(scaleFromTransform(beforeFrame))
+  expect(frameScale * CONTINUOUS_MAP_SYSTEM_SCALE).toBeLessThan(0.25)
   expect(await content.getAttribute('transform')).not.toBe(beforeFrame)
 
-  const targetOrbits = systemMap.locator(
-    '.orbit-mark[aria-label*="around Leaf Reliquary"] .orbit-ring, '
-      + '.orbit-mark[aria-label*="around Nested Beacon East"] .orbit-ring, '
-      + '.orbit-mark[aria-label*="around Nested Beacon West"] .orbit-ring',
-  )
-  await expect(targetOrbits).toHaveCount(4)
-  const mapBounds = await systemMap.boundingBox()
-  if (!mapBounds) throw new Error('The active system map has no visible bounds.')
-
-  const obstructions = page.locator('[data-map-obstruction]')
-  for (let orbitIndex = 0; orbitIndex < await targetOrbits.count(); orbitIndex += 1) {
-    const orbitBounds = await targetOrbits.nth(orbitIndex).boundingBox()
-    if (!orbitBounds) throw new Error('A hosted branch Orbit has no visible bounds.')
-    expect(orbitBounds.x).toBeGreaterThanOrEqual(mapBounds.x)
-    expect(orbitBounds.x + orbitBounds.width).toBeLessThanOrEqual(mapBounds.x + mapBounds.width)
-    expect(orbitBounds.y).toBeGreaterThanOrEqual(mapBounds.y)
-    expect(orbitBounds.y + orbitBounds.height).toBeLessThanOrEqual(mapBounds.y + mapBounds.height)
-
-    for (let index = 0; index < await obstructions.count(); index += 1) {
-      const obstruction = obstructions.nth(index)
-      if (!(await obstruction.isVisible().catch(() => false))) continue
-      const bounds = await obstruction.boundingBox()
-      if (!bounds || bounds.width <= 0 || bounds.height <= 0) continue
-      const overlapsOrbit = orbitBounds.x < bounds.x + bounds.width
-        && orbitBounds.x + orbitBounds.width > bounds.x
-        && orbitBounds.y < bounds.y + bounds.height
-        && orbitBounds.y + orbitBounds.height > bounds.y
-      expect(overlapsOrbit).toBe(false)
+  await expectBranchPaintInsideUsableMap(page, map, owner, branchRings, [fixture.targetName, ...fixture.branchNames])
+  const painted = await Promise.all([
+    ...await branchRings.all(),
+    ...[fixture.targetName, ...fixture.branchNames].map(name => owner.locator('.continuous-warden-object-name')
+      .and(owner.getByText(name, { exact: true }))),
+  ].map(measurePaintedBounds))
+  const rectangles = painted.map(bounds => {
+    if (!bounds) throw new Error('The framed branch must have measurable paint.')
+    return bounds
+  })
+  const branchBounds = {
+    left: Math.min(...rectangles.map(bounds => bounds.x)),
+    right: Math.max(...rectangles.map(bounds => bounds.x + bounds.width)),
+    top: Math.min(...rectangles.map(bounds => bounds.y)),
+    bottom: Math.max(...rectangles.map(bounds => bounds.y + bounds.height)),
+  }
+  const { drawable, obstructions } = await map.evaluate(element => {
+    const rect = (node: Element) => {
+      const bounds = node.getBoundingClientRect()
+      return { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom }
     }
-  }
-
-  for (const branchName of [fixture.targetName, ...fixture.branchNames]) {
-    const label = systemMap.locator('.object-name').filter({ hasText: branchName })
-    const bounds = await label.boundingBox()
-    if (!bounds) throw new Error(`The framed branch label ${branchName} has no visible bounds.`)
-    expect(bounds.x).toBeGreaterThanOrEqual(mapBounds.x)
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(mapBounds.x + mapBounds.width)
-    expect(bounds.y).toBeGreaterThanOrEqual(mapBounds.y)
-    expect(bounds.y + bounds.height).toBeLessThanOrEqual(mapBounds.y + mapBounds.height)
-  }
-
+    return {
+      drawable: rect(element),
+      obstructions: [...document.querySelectorAll('[data-map-obstruction]')]
+        .filter(node => !node.closest('[inert], [aria-hidden="true"]') && node.getClientRects().length > 0
+          && getComputedStyle(node).visibility !== 'hidden' && getComputedStyle(node).opacity !== '0')
+        .map(rect),
+    }
+  })
+  const usable = largestUnobstructedClientRect(drawable, obstructions)
+  if (!usable) throw new Error('The framed branch needs unobstructed map space.')
+  const branchCenter = { x: (branchBounds.left + branchBounds.right) / 2, y: (branchBounds.top + branchBounds.bottom) / 2 }
+  // Native curve sampling and non-scaling strokes differ from the local framing envelope by under two CSS pixels.
+  expect(Math.abs(branchCenter.x - (usable.left + usable.right) / 2)).toBeLessThan(2)
+  expect(Math.abs(branchCenter.y - (usable.top + usable.bottom) / 2)).toBeLessThan(2)
   for (const excludedName of [fixture.parentName, fixture.siblingName]) {
-    const excluded = systemMap.locator('.system-object').filter({ hasText: excludedName })
+    const excluded = owner.locator('.continuous-warden-object').filter({ hasText: excludedName })
     const bounds = await excluded.boundingBox()
     if (!bounds) throw new Error(`The excluded map object ${excludedName} has no measurable bounds.`)
-    expect(bounds.x + bounds.width < mapBounds.x
-      || bounds.x > mapBounds.x + mapBounds.width
-      || bounds.y + bounds.height < mapBounds.y
-      || bounds.y > mapBounds.y + mapBounds.height).toBe(true)
+    const includingRelativeCenter = {
+      x: (Math.min(branchBounds.left, bounds.x) + Math.max(branchBounds.right, bounds.x + bounds.width)) / 2,
+      y: (Math.min(branchBounds.top, bounds.y) + Math.max(branchBounds.bottom, bounds.y + bounds.height)) / 2,
+    }
+    expect(Math.hypot(includingRelativeCenter.x - branchCenter.x, includingRelativeCenter.y - branchCenter.y)).toBeGreaterThan(4)
   }
 
   const screenshotPath = testInfo.outputPath('object-search-large-rotated-branch.png')
@@ -340,16 +301,10 @@ test('search frames a rotated recursive branch and excludes its parent and sibli
 
 
 test('compact Location-key search preserves a dirty same-object draft and returns focus after touch selection', async ({ page }, testInfo) => {
-  test.setTimeout(45_000)
+  test.setTimeout(60_000)
   const fixture = branchSearchMap()
-  await createSingleSystemWorkspace(page)
-  const review = await reviewStarSystemImport(page, 'branch-atlas-draft.json', fixture.content)
-  await resolveImportReview(review, 'confirm')
-
-  await returnToClusterMap(page)
-  await setWorkspaceMapMode(page, 'Navigate')
-  await page.getByRole('button', { name: `Open ${fixture.systemName} system map`, exact: true }).click()
-  const systemMap = page.getByRole('group', { name: `${fixture.systemName} star system map`, exact: true })
+  const draftName = `${fixture.targetName} draft`
+  const { map, owner, targetObjectId, branchRings } = await importAndOpenBranchSearchSystem(page, fixture, 'branch-atlas-draft.json')
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   const searchDialog = page.getByRole('dialog', { name: 'Search workspace', exact: true })
@@ -357,7 +312,7 @@ test('compact Location-key search preserves a dirty same-object draft and return
   await query.fill(fixture.targetName)
   await searchDialog.getByRole('option', { name: new RegExp(fixture.targetName) }).click()
   await expect(searchDialog).toHaveCount(0)
-  await expect(systemMap).toBeFocused()
+  await expect(map).toBeFocused()
 
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
   const filters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
@@ -370,7 +325,7 @@ test('compact Location-key search preserves a dirty same-object draft and return
   await expect(inspector).toBeVisible()
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   const objectName = inspector.getByLabel('Name', { exact: true })
-  await objectName.fill('Leaf Reliquary draft')
+  await objectName.fill(draftName)
   await expect(inspector.getByText('Unapplied changes', { exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: 'Search', exact: true }).click()
@@ -447,18 +402,19 @@ test('compact Location-key search preserves a dirty same-object draft and return
   }
 
   await expect(searchDialog).toHaveCount(0)
-  await expect(systemMap).toBeFocused()
-  const selectedTarget = systemMap.locator('.system-object').filter({ hasText: fixture.targetName })
+  await expect(map).toBeFocused()
+  const selectedTarget = owner.locator(`.continuous-warden-object[data-object-id="${targetObjectId}"]`)
+  await expect(selectedTarget).toHaveAccessibleName(`Select ${fixture.targetLocationKey}, ${draftName}`)
   await expect(selectedTarget).toHaveClass(/is-selected/)
   await expect(selectedTarget).toHaveClass(/is-dimmed/)
-  const locator = systemMap.locator('[data-map-search-locator]')
+  const locator = map.locator('[data-map-search-locator]')
   await expect(locator).toBeVisible()
   const locatorBounds = await locator.boundingBox()
   expect(locatorBounds?.width).toBeGreaterThanOrEqual(19)
   await expect(inspector).toBeHidden()
   await expect(inspectToggle).toHaveAttribute('aria-expanded', 'false')
 
-  await expectBranchPaintInsideUsableMap(page, systemMap, [fixture.targetName, ...fixture.branchNames])
+  await expectBranchPaintInsideUsableMap(page, map, owner, branchRings, [draftName, ...fixture.branchNames])
   const portraitFrameScreenshot = testInfo.outputPath('object-search-portrait-framed-branch.png')
   await page.screenshot({ path: portraitFrameScreenshot, animations: 'disabled' })
   await testInfo.attach('object-search-portrait-framed-branch', {
@@ -483,13 +439,17 @@ test('compact Location-key search preserves a dirty same-object draft and return
   await expect(searchDialog).toHaveCount(0)
 
   await expect(locator).toBeVisible()
-  await systemMap.dispatchEvent('wheel', { deltaY: -120, bubbles: true, cancelable: true })
+  await map.dispatchEvent('wheel', { deltaY: -120, bubbles: true, cancelable: true })
   await expect(locator).toHaveCount(0)
   await setWorkspaceMapMode(page, 'Move')
   await expect(selectedTarget).toHaveClass(/is-dimmed/)
 
+  const applied = await downloadJson(page, 'Export Jump Cluster JSON')
+  const appliedTarget = applied.cluster?.systems.flatMap(system => system.objects)
+    .find(object => object.id === targetObjectId)
+  expect(appliedTarget?.name).toBe(fixture.targetName)
   await inspectToggle.click()
   await expect(inspector).toBeVisible()
-  await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('Leaf Reliquary draft')
+  await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue(draftName)
   await expect(inspector.getByText('Unapplied changes', { exact: true })).toBeVisible()
 })

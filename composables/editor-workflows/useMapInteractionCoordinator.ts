@@ -7,6 +7,7 @@ import type { useSystemObjectPlacement } from './useSystemObjectPlacement'
 import type { useEditorNavigation } from './useEditorNavigation'
 import type { useSystemCreationWorkflows } from './useSystemCreationWorkflows'
 import type { useEditorViewport } from './useEditorViewport'
+import { isExpectedContinuousOrbitHandoff, type ExpectedContinuousOrbitHandoff } from '../../utils/continuous-orbit-interaction'
 
 /** Coordinates complete asynchronous map-candidate selection and session handoff sequences. */
 export function useMapInteractionCoordinator(options: {
@@ -19,12 +20,25 @@ export function useMapInteractionCoordinator(options: {
   creation: ReturnType<typeof useSystemCreationWorkflows>
   viewport: ReturnType<typeof useEditorViewport>
   beginOrbitEdit(): Promise<void>
+  continuousMap?: Readonly<Ref<boolean>>
 }) {
-  const { workspace, store, selectedSystem, entity, navigation, placement, creation, viewport, beginOrbitEdit } = options
+  const { workspace, store, selectedSystem, entity, navigation, placement, creation, viewport, beginOrbitEdit, continuousMap } = options
   let objectMoveCandidateRequestId = 0
   let orbitCenterCandidateRequestId = 0
+  let expectedContinuousOrbitCandidate: (ExpectedContinuousOrbitHandoff & { requestId: number }) | null = null
 
-  watch([() => workspace.value?.cluster.id, () => store.activeView, () => store.selectedSystemId, () => store.mapMode], () => {
+  watch([() => workspace.value?.id, () => workspace.value?.cluster.id, () => store.activeView, () => store.selectedSystemId,
+    () => store.mapMode, () => store.inspectedTarget], () => {
+    const expected = expectedContinuousOrbitCandidate
+    if (expected && expected.requestId === orbitCenterCandidateRequestId && isExpectedContinuousOrbitHandoff(expected, {
+      continuousMap: continuousMap?.value === true,
+      activeView: store.activeView,
+      mapMode: store.mapMode,
+      workspaceId: workspace.value?.id,
+      clusterId: workspace.value?.cluster.id,
+      selectedSystemId: store.selectedSystemId,
+      inspectedTarget: store.inspectedTarget,
+    })) return
     objectMoveCandidateRequestId += 1
     orbitCenterCandidateRequestId += 1
   }, { flush: 'sync' })
@@ -55,31 +69,64 @@ export function useMapInteractionCoordinator(options: {
   }
 
   /** Selects, starts, and populates an unoccupied Orbit session after rechecking its captured context. */
-  async function handleOrbitCenterCandidates(orbitId: string, candidates: OrbitCenterMoveCandidate[]): Promise<void> {
+  async function handleOrbitCenterCandidates(
+    orbitId: string,
+    candidates: OrbitCenterMoveCandidate[],
+    explicitSystemId?: string,
+  ): Promise<void> {
     const requestId = ++orbitCenterCandidateRequestId
+    const workspaceId = workspace.value?.id
     const clusterId = workspace.value?.cluster.id
-    const systemId = store.selectedSystemId
+    const continuousOwner = continuousMap?.value === true && store.activeView === 'cluster'
+    const systemId = continuousOwner ? explicitSystemId : store.selectedSystemId
     const view = store.activeView
     const mode = store.mapMode
-    if (!clusterId || !systemId || view !== 'system' || mode !== 'move' || creation.creationSession.value) return
-    const sourceOrbit = selectedSystem.value?.orbits.find(orbit => orbit.id === orbitId)
+    const ownerSystem = systemId ? workspace.value?.cluster.systems.find(system => system.id === systemId) : undefined
+    if (!workspaceId || !clusterId || !systemId || (continuousOwner ? view !== 'cluster' : view !== 'system')
+      || mode !== 'move' || creation.creationSession.value) return
+    const sourceOrbit = ownerSystem?.orbits.find(orbit => orbit.id === orbitId)
     if (!sourceOrbit || sourceOrbit.hostId !== null) return
     const sourceSnapshot = JSON.stringify(sourceOrbit)
     const startingSession = entity.entitySession.value
-    if (startingSession && !(startingSession.kind === 'orbit' && startingSession.targetId === orbitId)) return
+    if (!continuousOwner && startingSession
+      && !(startingSession.kind === 'orbit' && startingSession.targetId === orbitId)) return
 
     const matchesCurrentContext = (): boolean => requestId === orbitCenterCandidateRequestId
+      && workspace.value?.id === workspaceId
       && workspace.value?.cluster.id === clusterId
       && store.activeView === view
       && store.selectedSystemId === systemId
       && store.mapMode === mode
+      && (!continuousOwner || (store.inspectedTarget?.kind === 'orbit'
+        && store.inspectedTarget.systemId === systemId && store.inspectedTarget.orbitId === orbitId))
       && creation.creationSession.value === null
     const sourceIsUnchanged = (): boolean => {
-      const current = selectedSystem.value?.orbits.find(orbit => orbit.id === orbitId)
+      const current = workspace.value?.cluster.systems.find(system => system.id === systemId)
+        ?.orbits.find(orbit => orbit.id === orbitId)
       return current?.hostId === null && JSON.stringify(current) === sourceSnapshot
     }
 
-    await navigation.selectOrbit(orbitId, false)
+    if (continuousOwner) {
+      const expected = {
+        requestId,
+        workspaceId,
+        clusterId,
+        systemId,
+        orbitId,
+        startingSelectedSystemId: store.selectedSystemId,
+        startingInspectedTarget: store.inspectedTarget,
+      }
+      expectedContinuousOrbitCandidate = expected
+      try {
+        const ownsHandoff = (): boolean => requestId === orbitCenterCandidateRequestId
+          && expectedContinuousOrbitCandidate === expected
+        if (!await navigation.inspectContinuousTarget({ kind: 'orbit', systemId, orbitId }, false, ownsHandoff)) return
+      } finally {
+        if (expectedContinuousOrbitCandidate === expected) expectedContinuousOrbitCandidate = null
+      }
+    } else {
+      await navigation.selectOrbit(orbitId, false)
+    }
     if (!matchesCurrentContext() || store.selectedOrbitId !== orbitId || !sourceIsUnchanged()) return
     const selectedSession = entity.entitySession.value
     if (selectedSession && !(selectedSession.kind === 'orbit' && selectedSession.targetId === orbitId)) return

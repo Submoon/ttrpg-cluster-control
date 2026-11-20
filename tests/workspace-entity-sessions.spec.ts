@@ -3,15 +3,17 @@ import entitySessionFixture from './fixtures/workspace-entity-sessions.json' wit
 import { resolveImportReview, reviewStarSystemImport, waitForWorkspaceSaved } from './helpers'
 import {
   captureMapExportBlobs,
+  centerWorkspaceSelection,
   downloadJson,
   openWorkspaceHierarchy,
-  returnToClusterMap,
   setHeaderMapActionsOpen,
+  wardenMap,
 } from './helpers'
 
 async function openSessionLab(page: Page): Promise<{
   hierarchy: Awaited<ReturnType<typeof openWorkspaceHierarchy>>
   map: import('@playwright/test').Locator
+  systemId: string
   inspector: import('@playwright/test').Locator
 }> {
   await captureMapExportBlobs(page)
@@ -21,7 +23,6 @@ async function openSessionLab(page: Page): Promise<{
   await page.getByLabel('First star system', { exact: true }).fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
-  await returnToClusterMap(page)
 
   const importPreview = await reviewStarSystemImport(page, 'entity-session-lab.json', JSON.stringify(entitySessionFixture))
   const importSummary = await importPreview.innerText()
@@ -29,25 +30,26 @@ async function openSessionLab(page: Page): Promise<{
   await resolveImportReview(importPreview, 'confirm')
   await setHeaderMapActionsOpen(page, false)
 
-  const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  const system = clusterHierarchy.getByRole('button', { name: 'Open Session Lab system map', exact: true })
-  await expect(system).toBeVisible()
-  await system.click()
-
-  const hierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
+  const backup = await downloadJson(page, 'Export Jump Cluster JSON')
+  const system = backup.cluster?.systems.find(system => system.name === 'Session Lab')
+  if (!system) throw new Error('The reviewed import did not add Session Lab.')
+  const hierarchy = await openWorkspaceHierarchy(page)
+  await hierarchy.getByRole('button', { name: 'Inspect Session Lab', exact: true }).click()
+  await centerWorkspaceSelection(page)
   return {
     hierarchy,
-    map: page.getByRole('group', { name: 'Session Lab star system map', exact: true }),
+    map: wardenMap(page).locator(`.continuous-warden-system[data-system-id="${system.id}"]`),
+    systemId: system.id,
     inspector: page.getByRole('complementary', { name: 'Object inspector', exact: true }),
   }
 }
 
 test('object transitions keep Stay, Apply and Discard distinct, while a clean edit leaves directly', async ({ page }) => {
-  const { hierarchy, inspector, map } = await openSessionLab(page)
-  const iria = hierarchy.getByRole('treeitem', { name: 'Select PL-01, Applied Iria', exact: true })
-  const previewMarker = (name: string) => map.getByRole('button', { name: `Select PL-01, ${name} (Planet)`, exact: true })
-  const nix = hierarchy.getByRole('treeitem', { name: 'Select MO-01, Nix', exact: true })
-  await hierarchy.getByRole('treeitem', { name: 'Select PL-01, Iria', exact: true }).click()
+  const { hierarchy, inspector, map, systemId } = await openSessionLab(page)
+  const iria = hierarchy.getByRole('treeitem', { name: 'Select PL-01, Applied Iria in Session Lab', exact: true })
+  const previewMarker = (name: string) => map.getByRole('button', { name: `Select PL-01, ${name}`, exact: true })
+  const nix = hierarchy.getByRole('treeitem', { name: 'Select MO-01, Nix in Session Lab', exact: true })
+  await hierarchy.getByRole('treeitem', { name: 'Select PL-01, Iria in Session Lab', exact: true }).click()
   await inspector.getByRole('button', { name: 'Edit map object', exact: true }).click()
   await inspector.getByLabel('Name', { exact: true }).fill('Applied Iria')
   await expect(previewMarker('Applied Iria')).toBeVisible()
@@ -82,8 +84,9 @@ test('object transitions keep Stay, Apply and Discard distinct, while a clean ed
   await expect(nix).toHaveAttribute('aria-selected', 'true')
   await expect(previewMarker('Applied Iria')).toBeVisible()
 
-  const exported = await downloadJson(page, 'Export star system JSON')
-  expect(exported.system!.objects.map(object => object.name)).toContain('Applied Iria')
-  expect(exported.system!.objects.map(object => object.name)).toContain('Nix')
-  expect(exported.system!.objects.map(object => object.name)).not.toContain('Discarded Iria draft')
+  const exported = await downloadJson(page, 'Export Jump Cluster JSON')
+  const appliedNames = exported.cluster?.systems.find(system => system.id === systemId)?.objects.map(object => object.name)
+  expect(appliedNames).toContain('Applied Iria')
+  expect(appliedNames).toContain('Nix')
+  expect(appliedNames).not.toContain('Discarded Iria draft')
 })

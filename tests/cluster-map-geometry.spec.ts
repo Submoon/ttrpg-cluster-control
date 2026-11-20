@@ -40,7 +40,9 @@ test('unresolved route geometry uses its saved scene target without clamping it'
   ])
   const route: JumpRoute = {
     id: 'route-a',
+    fromSystemId: fromSystem.id,
     fromPointId: fromPoint.id,
+    toSystemId: null,
     toPointId: null,
     unresolvedExit: 'Rim',
     playerShared: false,
@@ -85,7 +87,9 @@ test('automatic unresolved targets stay near each origin and spread across all o
   ])
   const unresolved = (id: string, fromPointId: string): JumpRoute => ({
     id,
+    fromSystemId: jumpPoints.get(fromPointId)!.system.id,
     fromPointId,
+    toSystemId: null,
     toPointId: null,
     unresolvedExit: id,
     playerShared: false,
@@ -95,7 +99,9 @@ test('automatic unresolved targets stay near each origin and spread across all o
   const interveningOtherSystem = unresolved('route-right-interleaved', rightPoint.id)
   const interveningResolvedRoute: JumpRoute = {
     id: 'route-known-interleaved',
+    fromSystemId: leftSystem.id,
     fromPointId: leftPointA.id,
+    toSystemId: rightSystem.id,
     toPointId: destinationPoint.id,
     playerShared: false,
     jumpLevel: 3,
@@ -180,7 +186,9 @@ test('adjacent-row captions clear endpoint badges horizontally', { tag: '@pure' 
   const jumpPoints = new Map<string, JumpPointReference>([[point.id, { point, system }]])
   const first: JumpRoute = {
     id: 'route-first',
+    fromSystemId: system.id,
     fromPointId: point.id,
+    toSystemId: null,
     toPointId: null,
     unresolvedExit: 'First',
     playerShared: false,
@@ -214,7 +222,9 @@ test('negative-row endpoint captions stay above their source card', { tag: '@pur
   const jumpPoints = new Map<string, JumpPointReference>([[point.id, { point, system }]])
   const first: JumpRoute = {
     id: 'route-first',
+    fromSystemId: system.id,
     fromPointId: point.id,
+    toSystemId: null,
     toPointId: null,
     unresolvedExit: 'First',
     playerShared: false,
@@ -248,7 +258,9 @@ test('automatic targets follow source previews while manual and temporary target
   ])
   const route: JumpRoute = {
     id: 'route-a',
+    fromSystemId: fromSystem.id,
     fromPointId: fromPoint.id,
+    toSystemId: null,
     toPointId: null,
     unresolvedExit: 'Rim',
     playerShared: false,
@@ -288,7 +300,9 @@ test('extreme but representable automatic origins keep the near-source defaults'
   const jumpPoints = new Map<string, JumpPointReference>([[point.id, { point, system }]])
   const route: JumpRoute = {
     id: 'route-a',
+    fromSystemId: system.id,
     fromPointId: point.id,
+    toSystemId: null,
     toPointId: null,
     unresolvedExit: 'Rim',
     playerShared: false,
@@ -326,7 +340,9 @@ test('scene geometry accepts distant points but rejects renderer-clamped coordin
   fromSystem.objects.push(fromPoint)
   const firstRoute: JumpRoute = {
     id: 'route-a',
+    fromSystemId: fromSystem.id,
     fromPointId: fromPoint.id,
+    toSystemId: null,
     toPointId: null,
     unresolvedExit: 'Rim',
     playerShared: false,

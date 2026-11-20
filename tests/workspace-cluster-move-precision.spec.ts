@@ -4,7 +4,9 @@ import {
   captureMapExportBlobs,
   clickNormalizedClusterPoint,
   downloadJson,
-  returnToClusterMap,
+  fitWorkspaceMap,
+  wardenMap,
+  wardenSystemMark,
   workspaceNavigation,
   type WorldPoint,
 } from './helpers'
@@ -15,7 +17,7 @@ async function createWorkspace(page: import('@playwright/test').Page): Promise<v
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
 }
 
 function expectPosition(actual: WorldPoint | undefined, expected: WorldPoint): void {
@@ -33,7 +35,7 @@ test('Move System previews map and keyboard destinations, cancels without changi
   if (await inspector.isVisible()) await inspectToggle.click()
   await expect(inspector).toBeHidden()
 
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
+  const clusterMap = wardenMap(page)
   const mapContext = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
   await expect(clusterMap).toBeVisible()
   const beforeMove = await downloadJson(page, 'Export Jump Cluster JSON')
@@ -43,17 +45,29 @@ test('Move System previews map and keyboard destinations, cancels without changi
   if (!source) throw new Error('The cluster export does not contain Vesper.')
   const originalPosition = beforeMove.layout.systemPositions?.[source.id]
   expect(originalPosition).toBeDefined()
-  const sourceNode = clusterMap.getByRole('button', { name: 'Select Vesper system', exact: true })
+  const sourceNode = wardenSystemMark(page, source.id)
 
   const moveMode = workspaceNavigation(page)
     .getByRole('group', { name: 'Map interaction mode', exact: true })
     .getByRole('button', { name: 'Move', exact: true })
   await moveMode.click()
-  await sourceNode.click()
+  const sourceName = clusterMap.locator(`.continuous-warden-name-target[data-system-id="${source.id}"]`)
+  const nameBounds = await sourceName.locator('.continuous-warden-name-background').boundingBox()
+  if (!nameBounds) throw new Error('Vesper needs a visible painted system name for native selection.')
+  const selectionPoint = { x: Math.round(nameBounds.x + nameBounds.width / 2), y: Math.round(nameBounds.y + nameBounds.height / 2) }
+  // A revealed Primary Star can cover the anchor center; the painted name remains the system target.
+  expect(await sourceName.evaluate((element, point) => element.contains(document.elementFromPoint(point.x, point.y)), selectionPoint)).toBe(true)
+  await page.mouse.click(selectionPoint.x, selectionPoint.y)
   await expect(sourceNode).toHaveClass(/is-selected/)
   await expect(inspector).toBeHidden()
-  const originalTransform = await sourceNode.getAttribute('transform')
-  expect(originalTransform).toBeTruthy()
+  const anchorPosition = () => sourceNode.evaluate(element => {
+    const transforms = (element as SVGGElement).transform.baseVal
+    if (!transforms.numberOfItems) throw new Error('The system anchor has no scene translation.')
+    // The following badge scale tracks the camera independently of this scene translation.
+    const matrix = transforms.getItem(0).matrix
+    return { x: matrix.e, y: matrix.f }
+  })
+  const originalAnchor = await anchorPosition()
 
   await expect(page.getByRole('textbox', { name: /System position [XY]/ })).toHaveCount(0)
   const moveOnMap = workspaceNavigation(page).getByRole('button', { name: 'Move selected system on map', exact: true })
@@ -63,19 +77,19 @@ test('Move System previews map and keyboard destinations, cancels without changi
   await expect.poll(() => clusterMap.evaluate(map => document.activeElement === map)).toBe(true)
   await clickNormalizedClusterPoint(page, clusterMap, mapTarget)
   await expect(mapContext.locator('.workspace-add-status')).toContainText(/move.*preview/i)
-  await expect(sourceNode).not.toHaveAttribute('transform', originalTransform!)
+  await expect.poll(anchorPosition).not.toEqual(originalAnchor)
   const afterMapPreview = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterMapPreview).toEqual(beforeMove)
 
   await page.getByRole('button', { name: 'Cancel system move', exact: true }).click()
-  await expect(sourceNode).toHaveAttribute('transform', originalTransform!)
+  await expect.poll(anchorPosition).toEqual(originalAnchor)
   const afterMapCancel = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterMapCancel).toEqual(beforeMove)
 
   await moveOnMap.click()
   await page.keyboard.press('ArrowRight')
   await expect(mapContext.locator('.workspace-add-status')).toContainText(/move.*preview/i)
-  await expect(sourceNode).not.toHaveAttribute('transform', originalTransform!)
+  await expect.poll(anchorPosition).not.toEqual(originalAnchor)
   await page.getByRole('button', { name: 'Confirm system move', exact: true }).click()
   const afterConfirm = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterConfirm.cluster?.systems).toHaveLength(beforeMove.cluster?.systems.length ?? 0)
@@ -84,7 +98,7 @@ test('Move System previews map and keyboard destinations, cancels without changi
   await waitForWorkspaceSaved(page)
 
   await page.reload()
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
   if (await inspector.isVisible()) await inspectToggle.click()
   await expect(inspector).toBeHidden()
   const afterReload = await downloadJson(page, 'Export Jump Cluster JSON')

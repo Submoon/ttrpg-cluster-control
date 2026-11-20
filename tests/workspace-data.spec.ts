@@ -4,30 +4,35 @@ import {
   captureMapExportBlobs,
   abortNextWorkspaceWrite,
   activeWorkspaceFeedback,
+  centerWorkspaceSelection,
   clickDockAction,
+  clickWardenSystemPoint,
+  createSingleSystemWorkspace,
   downloadJson,
   editMapObject,
+  fitWorkspaceMap,
   hideWorkspaceInspector,
   jumpClusterBackupInput,
   openChartDetailsEditor,
   openMapFilesSection,
   openWorkspaceHierarchy,
-  resolveImportReview,
+  readInspectorSelection,
   resolveJumpClusterRestoreReview,
   reviewJumpClusterBackup,
-  reviewStarSystemImport,
-  returnToClusterMap,
+  quitSystemAdd,
   saveMapObject,
   selectInspectorOption,
+  selectCatalogueObjectButton,
   setHeaderMapActionsOpen,
   setJsonFile,
-  setWorkspaceMapMode,
   addCustomFieldThroughDialog,
-  addCatalogueObject,
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
+  wardenMap,
+  wardenObjectMark,
 } from './helpers'
-import { createLocalWorkspace, restoreLocalWorkspace } from '../domain/workspace'
+import { addStarSystem, createLocalWorkspace, createSystemObject, restoreLocalWorkspace } from '../domain/workspace'
+import { createWorkspaceSnapshot } from '../utils/workspace-storage'
 
 async function readWorkspaceRecoveryRecords(page: import('@playwright/test').Page): Promise<{ current: unknown; backup: unknown }> {
   return await page.evaluate(async () => {
@@ -95,16 +100,20 @@ test('older saved Jump Routes and circle/ellipse layouts restore and reject inva
             description: '',
             placement: { kind: 'system', x: 0.5, y: 0.5 },
           },
-          {
-            id: 'destination',
-            family: 'JumpPoint',
-            subtype: 'jump-point',
-            locationKey: 'JP.2',
-            name: 'Harrow Entry',
-            description: '',
-            placement: { kind: 'system', x: 0.7, y: 0.5 },
-          },
         ],
+        orbits: [],
+      }, {
+        id: 'harrow',
+        name: 'Harrow',
+        objects: [{
+          id: 'destination',
+          family: 'JumpPoint',
+          subtype: 'jump-point',
+          locationKey: 'JP.2',
+          name: 'Harrow Entry',
+          description: '',
+          placement: { kind: 'system', x: 0.7, y: 0.5 },
+        }],
         orbits: [],
       }],
       routes: [{
@@ -114,14 +123,16 @@ test('older saved Jump Routes and circle/ellipse layouts restore and reject inva
         toPointId: 'destination',
       }],
     },
-    layout: { systemPositions: { vesper: { x: 0.5, y: 0.5 } } },
+    layout: { systemPositions: { vesper: { x: 0.25, y: 0.5 }, harrow: { x: 0.75, y: 0.5 } } },
   }
   const restored = restoreLocalWorkspace(savedWorkspace)
 
   expect(restored?.cluster.routes).toMatchObject([{
     id: 'route',
     jumpLevel: 1,
+    fromSystemId: 'vesper',
     fromPointId: 'origin',
+    toSystemId: 'harrow',
     toPointId: 'destination',
   }])
   expect(restored?.layout.orbitRotations).toEqual({})
@@ -132,10 +143,12 @@ test('older saved Jump Routes and circle/ellipse layouts restore and reject inva
       ...savedWorkspace.cluster,
       systems: savedWorkspace.cluster.systems.map(system => ({
         ...system,
-        orbits: [
-          { id: 'legacy-circle', hostId: 'origin', order: 1 },
-          { id: 'legacy-ellipse', hostId: 'origin', order: 2 },
-        ],
+        orbits: system.id === 'vesper'
+          ? [
+              { id: 'legacy-circle', hostId: 'origin', order: 1 },
+              { id: 'legacy-ellipse', hostId: 'origin', order: 2 },
+            ]
+          : [],
       })),
     },
     layout: {
@@ -160,6 +173,161 @@ test('older saved Jump Routes and circle/ellipse layouts restore and reject inva
       },
     })).toBeNull()
   }
+})
+
+test('version 4 route restoration infers systems and preserves route identity and exit placement @pure', () => {
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const appended = addStarSystem(initial, 'Harrow')
+  const [originSystem, destinationSystem] = appended.workspace.cluster.systems
+  if (!originSystem || !destinationSystem) throw new Error('The route fixture needs two systems.')
+  const originPoint = createSystemObject(originSystem, 'jump-point')
+  const destinationPoint = createSystemObject(destinationSystem, 'jump-point')
+  const current = {
+    ...appended.workspace,
+    cluster: {
+      ...appended.workspace.cluster,
+      systems: [
+        { ...originSystem, objects: [...originSystem.objects, originPoint] },
+        { ...destinationSystem, objects: [...destinationSystem.objects, destinationPoint] },
+      ],
+      routes: [],
+    },
+  }
+  const externalPosition = { x: 920, y: -310 }
+  const legacy = {
+    ...current,
+    version: 4,
+    cluster: {
+      ...current.cluster,
+      routes: [
+        {
+          id: 'saved-route-id',
+          name: 'Known Link',
+          jumpLevel: 6,
+          fromPointId: originPoint.id,
+          toPointId: destinationPoint.id,
+          playerShared: true,
+        },
+        {
+          id: 'saved-exit-id',
+          jumpLevel: 2,
+          fromPointId: destinationPoint.id,
+          toPointId: null,
+          unresolvedExit: 'The Quiet Expanse',
+          playerShared: false,
+        },
+      ],
+    },
+    layout: {
+      ...current.layout,
+      unresolvedExitPositions: { 'saved-exit-id': externalPosition },
+    },
+  }
+
+  const restored = restoreLocalWorkspace(legacy)
+
+  expect(restored).toMatchObject({
+    version: 5,
+    cluster: {
+      routes: [
+        {
+          id: 'saved-route-id',
+          name: 'Known Link',
+          jumpLevel: 6,
+          fromSystemId: originSystem.id,
+          fromPointId: originPoint.id,
+          toSystemId: destinationSystem.id,
+          toPointId: destinationPoint.id,
+          playerShared: true,
+        },
+        {
+          id: 'saved-exit-id',
+          fromSystemId: destinationSystem.id,
+          fromPointId: destinationPoint.id,
+          toSystemId: null,
+          toPointId: null,
+          unresolvedExit: 'The Quiet Expanse',
+        },
+      ],
+    },
+    layout: { unresolvedExitPositions: { 'saved-exit-id': externalPosition } },
+  })
+})
+
+test('legacy same-system routes lose only their route metadata and corrupt loops remain invalid @pure', () => {
+  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = workspace.cluster.systems[0]!
+  const firstPoint = createSystemObject(system, 'jump-point')
+  const secondPoint = createSystemObject({ ...system, objects: [...system.objects, firstPoint] }, 'jump-point')
+  const legacy = {
+    ...workspace,
+    version: 4,
+    cluster: {
+      ...workspace.cluster,
+      systems: [{ ...system, objects: [...system.objects, firstPoint, secondPoint] }],
+      routes: [{
+        id: 'legacy-loop-id',
+        jumpLevel: 3,
+        fromPointId: firstPoint.id,
+        toPointId: secondPoint.id,
+        playerShared: true,
+      }],
+    },
+    layout: {
+      ...workspace.layout,
+      unresolvedExitPositions: { 'legacy-loop-id': { x: 1000, y: 300 } },
+    },
+  }
+
+  const restored = restoreLocalWorkspace(legacy)
+  const missingEndpoint = structuredClone(legacy)
+  ;(missingEndpoint.cluster.routes[0] as { fromPointId: string }).fromPointId = 'missing-jump-point'
+  const entityIdCollision = structuredClone(legacy)
+  ;(entityIdCollision.cluster.routes[0] as { id: string }).id = firstPoint.id
+  const fieldIdCollision = structuredClone(legacy)
+  const settings = fieldIdCollision.objectFieldSettings as { customFields: Array<Record<string, unknown>> }
+  settings.customFields.push({ id: 'legacy-loop-id', name: 'Campaign Field', type: 'text', playerShared: false })
+
+  expect(restored?.cluster.routes).toEqual([])
+  expect(restored?.cluster.systems[0]?.objects.map(object => object.id)).toContain(firstPoint.id)
+  expect(restored?.layout.unresolvedExitPositions).toEqual({})
+  expect(restoreLocalWorkspace(missingEndpoint)).toBeNull()
+  expect(restoreLocalWorkspace(entityIdCollision)).toBeNull()
+  expect(restoreLocalWorkspace(fieldIdCollision)).toBeNull()
+})
+
+test('workspace snapshots reject stale legacy routes instead of migrating the detached mutation @pure', () => {
+  const base = addStarSystem(createLocalWorkspace('Snapshot Reach', 'Vesper'), 'Harrow').workspace
+  const [originSystem, destinationSystem] = base.cluster.systems
+  if (!originSystem || !destinationSystem) throw new Error('The snapshot fixture needs two systems.')
+  const originPoint = createSystemObject(originSystem, 'jump-point')
+  const destinationPoint = createSystemObject(destinationSystem, 'jump-point')
+  const legacyCandidate = {
+    ...base,
+    version: 4,
+    cluster: {
+      ...base.cluster,
+      systems: [
+        { ...originSystem, objects: [...originSystem.objects, originPoint] },
+        { ...destinationSystem, objects: [...destinationSystem.objects, destinationPoint] },
+      ],
+      routes: [{
+        id: 'stale-route',
+        jumpLevel: 2,
+        fromPointId: originPoint.id,
+        toPointId: destinationPoint.id,
+        playerShared: false,
+      }],
+    },
+  } as unknown as ReturnType<typeof createLocalWorkspace>
+
+  expect(restoreLocalWorkspace(legacyCandidate)?.cluster.routes[0]).toMatchObject({
+    fromSystemId: originSystem.id,
+    toSystemId: destinationSystem.id,
+    fromPointId: originPoint.id,
+    toPointId: destinationPoint.id,
+  })
+  expect(() => createWorkspaceSnapshot(legacyCandidate)).toThrow('The workspace is invalid and cannot be saved.')
 })
 
 test('restoring a workspace removes legacy object targets without deleting values @pure', () => {
@@ -204,14 +372,14 @@ test('restoring a workspace removes legacy object targets without deleting value
 })
 
 
-test('the Warden can validate and restore a complete Jump Cluster backup', async ({ page }) => {
+test('the default Warden map restores a legacy backup with retained layout and valid route attachments', async ({ page }) => {
   test.setTimeout(90_000)
   await captureMapExportBlobs(page)
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await returnToClusterMap(page)
+  await fitWorkspaceMap(page)
 
   const activeEditor = await openChartDetailsEditor(page)
   await activeEditor.getByLabel('Jump Cluster', { exact: true }).fill('Active Reach')
@@ -220,6 +388,23 @@ test('the Warden can validate and restore a complete Jump Cluster backup', async
   await hideWorkspaceInspector(page)
 
   const initialExport = await downloadJson(page, 'Export Jump Cluster JSON')
+  const incoming = structuredClone(campaignBaselineFixture)
+  const vesper = incoming.cluster.systems[0]
+  const departure = vesper?.objects.find(object => object.id === 'campaign-baseline-departure')
+  if (!vesper || !departure) throw new Error('The backup fixture needs the Vesper departure point.')
+  vesper.objects.push({
+    id: 'legacy-loop-point',
+    family: 'JumpPoint',
+    subtype: 'jump-point',
+    locationKey: 'JP-02',
+    name: 'Legacy return point',
+    description: '',
+    placement: { kind: 'system', x: 0.68, y: 0.56 },
+  })
+  incoming.cluster.routes.push({
+    id: 'legacy-loop-route', jumpLevel: 2, fromPointId: departure.id, toPointId: 'legacy-loop-point',
+  })
+  const legacyBackupText = JSON.stringify(incoming)
   const restoreOptions = await openMapFilesSection(page, 'Import or restore')
   const invalidFileChooser = page.waitForEvent('filechooser')
   await restoreOptions.getByRole('menuitem', { name: 'Restore Jump Cluster from JSON', exact: true }).click()
@@ -231,9 +416,9 @@ test('the Warden can validate and restore a complete Jump Cluster backup', async
 
   await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const systemList = page.getByRole('navigation', { name: 'Star systems' })
-  await expect(systemList.getByRole('button', { name: 'Open Vesper system map' })).toHaveCount(1)
+  await expect(systemList.getByRole('button', { name: 'Inspect Vesper' })).toHaveCount(1)
 
-  const canceledPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
+  const canceledPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', legacyBackupText)
   await expect(canceledPreview).toContainText('Active Reach')
   await expect(canceledPreview).toContainText('Kestrel Reach Prime')
   await resolveJumpClusterRestoreReview(canceledPreview, 'cancel')
@@ -252,9 +437,9 @@ test('the Warden can validate and restore a complete Jump Cluster backup', async
   try {
     await staleTab.goto('/')
     await waitForWorkspaceStartup(staleTab)
-    await returnToClusterMap(staleTab)
+    await fitWorkspaceMap(staleTab)
 
-    const draftReview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
+    const draftReview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', legacyBackupText)
     await expect(draftReview).toContainText('Unapplied editor drafts are open.')
     await expect(draftReview.getByRole('checkbox', {
       name: /discard current drafts if the replacement succeeds/i,
@@ -266,7 +451,7 @@ test('the Warden can validate and restore a complete Jump Cluster backup', async
     await expect(resumedDraftEditor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
     await hideWorkspaceInspector(page)
 
-    const acceptedPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
+    const acceptedPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', legacyBackupText)
     await expect(acceptedPreview.getByRole('checkbox', {
       name: /discard current drafts if the replacement succeeds/i,
       exact: true,
@@ -285,7 +470,7 @@ test('the Warden can validate and restore a complete Jump Cluster backup', async
     await expect(draftAfterFailedReplacement.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
     await hideWorkspaceInspector(page)
 
-    const retryPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', JSON.stringify(campaignBaselineFixture))
+    const retryPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', legacyBackupText)
     await resolveJumpClusterRestoreReview(retryPreview, 'confirm', true)
     await expect(retryPreview).toBeHidden()
     await waitForWorkspaceSaved(page)
@@ -323,12 +508,11 @@ test('the Warden can validate and restore a complete Jump Cluster backup', async
   }
 
   await page.reload()
-  await returnToClusterMap(page)
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })
-  await setWorkspaceMapMode(page, 'Navigate')
-  await expect(clusterMap.getByRole('button', {
-    name: /Jump Level 1.*Vesper Departure.*Harrow Arrival/,
-  })).toBeVisible()
+  await fitWorkspaceMap(page)
+  const map = wardenMap(page)
+  await expect(map).toHaveAccessibleName('Kestrel Reach Prime continuous map')
+  await expect(map.locator('.cluster-route[data-route-id="campaign-baseline-route"]')).toBeVisible()
+  await expect(map.locator('.cluster-route[data-route-id="legacy-loop-route"]')).toHaveCount(0)
 
   const importedExport = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(importedExport.cluster?.id).toBe(campaignBaselineFixture.cluster.id)
@@ -344,60 +528,30 @@ test('the Warden can validate and restore a complete Jump Cluster backup', async
   expect(importedDeparture.id).toBe('campaign-baseline-departure')
   expect(importedArrival.id).toBe('campaign-baseline-arrival')
   expect(importedRoute).toMatchObject({
+    id: 'campaign-baseline-route',
+    fromSystemId: importedVesper.id,
+    toSystemId: importedHarrow.id,
     jumpLevel: 1,
     fromPointId: importedDeparture.id,
     toPointId: importedArrival.id,
   })
 
-  await clusterMap.getByRole('button', { name: 'Open Vesper Prime system map' }).last().click()
+  expect(importedExport.cluster?.routes).toHaveLength(1)
+  expect(importedVesper.objects.map(object => object.id)).toContain('legacy-loop-point')
+  expect(importedExport.layout.systemPositions).toEqual(campaignBaselineFixture.layout.systemPositions)
+  expect(importedExport.layout.orbitRadii).toMatchObject(campaignBaselineFixture.layout.orbitRadii)
+  expect(importedExport.layout.objectAngles).toEqual(campaignBaselineFixture.layout.objectAngles)
+
   const importedHierarchy = await openWorkspaceHierarchy(page)
+  await importedHierarchy.getByRole('button', { name: 'Inspect Vesper Prime', exact: true }).click()
   await importedHierarchy.getByRole('treeitem', { name: /Select PL-01, Iria/ }).click()
   await expect(page.getByLabel('Warden notes')).toHaveValue('Existing campaign record.')
-})
-
-test('the Warden can explicitly add a standalone system without adding cluster routes', async ({ page }) => {
-  await captureMapExportBlobs(page)
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-
-  const exportedSystem = await downloadJson(page, 'Export star system JSON')
-  const preview = await reviewStarSystemImport(page, 'system-copy.json', JSON.stringify(exportedSystem))
-  const previewSummary = await preview.innerText()
-  expect(previewSummary).toContain('Star systems: 1')
-  expect(previewSummary).toContain('Jump Routes: 0')
-  expect(previewSummary).toContain('Primary Star')
-  await resolveImportReview(preview, 'confirm')
-
-  await returnToClusterMap(page)
-  await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  const systems = page.getByRole('navigation', { name: 'Star systems' })
-  await expect(systems.getByRole('button', { name: 'Open Vesper system map' })).toHaveCount(2)
-  const exportedCluster = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(exportedCluster.cluster?.systems).toHaveLength(2)
-  expect(exportedCluster.cluster?.routes).toHaveLength(0)
-  const exportedSystems = exportedCluster.cluster?.systems
-  if (!exportedSystems || exportedSystems.length !== 2) {
-    throw new Error('The exported Cluster does not contain both star systems.')
-  }
-  const [firstSystem, secondSystem] = exportedSystems
-  const firstObject = firstSystem?.objects[0]
-  const secondObject = secondSystem?.objects[0]
-  if (!firstSystem || !secondSystem || !firstObject || !secondObject) {
-    throw new Error('The exported star systems do not contain their expected objects.')
-  }
-  expect(firstSystem.id).not.toBe(secondSystem.id)
-  expect(firstObject.id).not.toBe(secondObject.id)
 })
 
 test('public campaign creation persists a custom value and unresolved route through reload', async ({ page }) => {
   test.setTimeout(60_000)
   await captureMapExportBlobs(page)
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
+  const { systemId } = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
 
   const chartNames = await openChartDetailsEditor(page)
   await chartNames.getByLabel('Jump Cluster').fill('Kestrel Reach Prime')
@@ -405,21 +559,39 @@ test('public campaign creation persists a custom value and unresolved route thro
   await chartNames.getByRole('button', { name: 'Apply details' }).click()
   await addCustomFieldThroughDialog(page, 'Warden notes', 'text')
 
-  await addCatalogueObject(page, 'jump-point')
+  const hierarchy = await openWorkspaceHierarchy(page)
+  await hierarchy.getByRole('button', { name: 'Inspect Vesper Prime', exact: true }).click()
+  await centerWorkspaceSelection(page)
+  await hideWorkspaceInspector(page)
+  const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
+  if (await hierarchyToggle.getAttribute('aria-expanded') === 'true') await hierarchyToggle.click()
+  await (await selectCatalogueObjectButton(page, 'jump-point')).click()
+  await clickWardenSystemPoint(page, systemId, { x: .9, y: .9 })
+  await page.getByRole('dialog', { name: 'Choose the owning system', exact: true })
+    .getByRole('button', { name: 'Add Jump Point to Vesper Prime', exact: true }).click()
+  await quitSystemAdd(page)
+  const added = await downloadJson(page, 'Export Jump Cluster JSON')
+  const jumpPoint = added.cluster?.systems.find(system => system.id === systemId)?.objects.find(object => object.subtype === 'jump-point')
+  if (!jumpPoint) throw new Error('The public Add flow did not create the campaign Jump Point.')
+  await wardenObjectMark(page, systemId, jumpPoint.id).press('Enter')
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Vesper Departure')
   await page.getByLabel('Warden notes').fill('A durable campaign note.')
   await saveMapObject(page)
 
-  await returnToClusterMap(page)
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })
+  const clusterMap = wardenMap(page)
+  await expect(clusterMap).toHaveAccessibleName('Kestrel Reach Prime continuous map')
   await clickDockAction(page, 'Add Jump Route')
   const routeInspector = page.getByRole('complementary', { name: 'Jump Route inspector' })
+  await expect(routeInspector.getByRole('heading', { name: 'Connect Systems', exact: true })).toBeVisible()
+  await clickWardenSystemPoint(page, systemId, { x: .5, y: .5 })
+  await expect.poll(() => readInspectorSelection(routeInspector.getByLabel('From system'))).toBe('Vesper Prime')
   await routeInspector.getByRole('spinbutton', { name: 'Jump level' }).fill('12')
   await selectInspectorOption(routeInspector.getByLabel('From Jump Point'), 'Vesper Departure (Vesper Prime)')
   await selectInspectorOption(routeInspector.getByLabel('Route destination'), 'Unresolved external exit')
   await routeInspector.getByLabel('Unknown destination label').fill('The Quiet Expanse')
   await routeInspector.getByRole('button', { name: 'Create Jump Route', exact: true }).click()
+  await fitWorkspaceMap(page)
   await expect(clusterMap.getByRole('button', {
     name: /Select Jump Level 12 route from Vesper Departure \(Vesper Prime\) to unknown destination: The Quiet Expanse/,
   })).toBeVisible()
@@ -432,16 +604,19 @@ test('public campaign creation persists a custom value and unresolved route thro
   expect(exportedPoint.customFieldValues?.[exportedField.id]).toBe('A durable campaign note.')
   expect(beforeReload.cluster!.routes).toEqual([expect.objectContaining({
     jumpLevel: 12,
+    fromSystemId: systemId,
     fromPointId: exportedPoint.id,
+    toSystemId: null,
     toPointId: null,
     unresolvedExit: 'The Quiet Expanse',
   })])
 
   await page.reload()
-  await returnToClusterMap(page)
+  await waitForWorkspaceStartup(page)
+  await fitWorkspaceMap(page)
   const afterReload = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterReload).toEqual(beforeReload)
-  await expect(page.getByRole('group', { name: 'Kestrel Reach Prime Jump Cluster map' })
+  await expect(wardenMap(page)
     .getByRole('button', {
       name: /Select Jump Level 12 route from Vesper Departure \(Vesper Prime\) to unknown destination: The Quiet Expanse/,
     }))

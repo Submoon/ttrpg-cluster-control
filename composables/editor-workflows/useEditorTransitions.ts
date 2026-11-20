@@ -40,6 +40,7 @@ export function useEditorTransitions(options: {
     resolve: (accepted: boolean) => void
     choiceInFlight: boolean
     isCurrent: () => boolean
+    onDraftApplied?: () => void
   } | null = null
 
   /**
@@ -79,6 +80,7 @@ export function useEditorTransitions(options: {
         resolve,
         choiceInFlight: false,
         isCurrent,
+        onDraftApplied: transition.onDraftApplied,
       }
       transitionGuard.value = chartNeedsResolution ? 'chart' : 'inspector'
     })
@@ -173,6 +175,7 @@ export function useEditorTransitions(options: {
             return
           }
           if (pendingTransition !== pending) return
+          pending.onDraftApplied?.()
           if (chart.session.value) {
             finishPendingTransition(false)
             return
@@ -200,6 +203,7 @@ export function useEditorTransitions(options: {
             return
           }
           if (pendingTransition !== pending) return
+          pending.onDraftApplied?.()
           if (!pending.isCurrent()) {
             finishPendingTransition(false)
             return
@@ -235,6 +239,7 @@ export function useEditorTransitions(options: {
             return
           }
           if (pendingTransition !== pending) return
+          pending.onDraftApplied?.()
           if (entity.session.value) {
             finishPendingTransition(false)
             return

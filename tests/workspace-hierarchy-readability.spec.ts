@@ -4,9 +4,9 @@ import {
   createSingleSystemWorkspace,
   openWorkspaceHierarchy,
   resolveImportReview,
-  returnToClusterMap,
+  hideWorkspaceInspector,
   reviewStarSystemImport,
-  setWorkspaceMapMode,
+  wardenMap,
 } from './helpers'
 
 async function touchTarget(page: Page, target: Locator): Promise<void> {
@@ -89,38 +89,35 @@ test('deep object and Orbit rows stay readable at the minimum Hierarchy width @p
   await resolveImportReview(review, 'confirm')
   await expect(review).toHaveCount(0)
 
-  await returnToClusterMap(page)
-  await setWorkspaceMapMode(page, 'Navigate')
-  const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await clusterHierarchy.getByRole('button', {
-    name: `Open ${deepHierarchyFixture.system.name} system map`,
-    exact: true,
-  }).click()
-  await expect(page.getByRole('group', {
-    name: `${deepHierarchyFixture.system.name} star system map`,
-    exact: true,
-  })).toBeVisible()
+  const hierarchy = await openWorkspaceHierarchy(page)
+  const systemName = deepHierarchyFixture.system.name
+  await hierarchy.getByRole('button', { name: `Inspect ${systemName}`, exact: true }).click()
+  await hideWorkspaceInspector(page)
+  await expect(wardenMap(page)).toHaveAccessibleName('Kestrel Reach continuous map')
 
-  const hierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
-  const tree = hierarchy.getByRole('tree', { name: 'Map object and Orbit hierarchy', exact: true })
-  const items = tree.getByRole('treeitem')
+  const treeName = 'Kestrel Reach object and Orbit hierarchy'
+  const tree = hierarchy.getByRole('tree', { name: treeName, exact: true })
+  const owner = tree.getByRole('treeitem', { name: systemName, exact: true })
+  await expect(owner).toHaveAttribute('aria-expanded', 'true')
+  const ownerChildren = owner.locator('..').locator(':scope > [role="group"]')
+  const items = ownerChildren.getByRole('treeitem')
   await expect(items).toHaveCount(34)
 
-  const deepestObject = tree.getByRole('treeitem', { name: /^Select PL-06-ICE-BELT-09,/ })
-  await expect(deepestObject).toHaveAttribute('aria-level', '11')
+  const deepestObject = ownerChildren.getByRole('treeitem', { name: /^Select PL-06-ICE-BELT-09,/ })
+  await expect(deepestObject).toHaveAttribute('aria-level', '12')
   await expect(deepestObject.locator('.tree-expand-control')).toBeVisible()
-  const nearBottomExpandedObject = tree.getByRole('treeitem', { name: /^Select DEEP-09-ARCHIVE-KEY,/ })
-  await expect(nearBottomExpandedObject).toHaveAttribute('aria-level', '29')
+  const nearBottomExpandedObject = ownerChildren.getByRole('treeitem', { name: /^Select DEEP-09-ARCHIVE-KEY,/ })
+  await expect(nearBottomExpandedObject).toHaveAttribute('aria-level', '30')
   await expect(nearBottomExpandedObject.locator('.tree-expand-control')).toBeVisible()
-  const thirtyFirstLevelObject = tree.getByRole('treeitem', { name: /^Select DEEP-10-ARCHIVE-KEY,/ })
-  await expect(thirtyFirstLevelObject).toHaveAttribute('aria-level', '31')
-  await expect(thirtyFirstLevelObject.locator('.tree-expand-control')).toHaveCount(0)
-  const emptyOrbit = tree.getByRole('treeitem', { name: /^Orbit 2 around New moon 1 — Pale Harbor, 0 objects$/ })
-  await expect(emptyOrbit).toHaveAttribute('aria-level', '6')
+  const deepestLeaf = ownerChildren.getByRole('treeitem', { name: /^Select DEEP-10-ARCHIVE-KEY,/ })
+  await expect(deepestLeaf).toHaveAttribute('aria-level', '32')
+  await expect(deepestLeaf.locator('.tree-expand-control')).toHaveCount(0)
+  const emptyOrbit = ownerChildren.getByRole('treeitem', { name: /^Orbit 2 around New moon 1 — Pale Harbor, 0 objects$/ })
+  await expect(emptyOrbit).toHaveAttribute('aria-level', '7')
   const levels = await items.evaluateAll(elements => elements.map(element => Number(element.getAttribute('aria-level'))))
-  expect(Math.max(...levels)).toBe(31)
+  expect(Math.max(...levels)).toBe(32)
 
-  await thirtyFirstLevelObject.scrollIntoViewIfNeeded()
+  await deepestLeaf.scrollIntoViewIfNeeded()
   const normalScreenshot = testInfo.outputPath('hierarchy-deep-branch-normal-width.png')
   await page.screenshot({ path: normalScreenshot, animations: 'disabled' })
   await testInfo.attach('hierarchy-deep-branch-normal-width', {
@@ -128,13 +125,13 @@ test('deep object and Orbit rows stay readable at the minimum Hierarchy width @p
     contentType: 'image/png',
   })
 
-  const resizeHandle = hierarchy.getByRole('separator', { name: 'Resize system hierarchy panel', exact: true })
+  const resizeHandle = hierarchy.getByRole('separator', { name: 'Resize jump cluster contents panel', exact: true })
   const minimumWidth = await resizeHandle.getAttribute('aria-valuemin')
   await resizeHandle.focus()
   await page.keyboard.press('Home')
   await expect(resizeHandle).toHaveAttribute('aria-valuenow', minimumWidth ?? '220')
 
-  await thirtyFirstLevelObject.scrollIntoViewIfNeeded()
+  await deepestLeaf.scrollIntoViewIfNeeded()
   const minimumScreenshot = testInfo.outputPath('hierarchy-deep-branch-minimum-width.png')
   await page.screenshot({ path: minimumScreenshot, animations: 'disabled' })
   await testInfo.attach('hierarchy-deep-branch-minimum-width', {
@@ -144,41 +141,40 @@ test('deep object and Orbit rows stay readable at the minimum Hierarchy width @p
 
   await expectUnclippedObjectName(deepestObject)
   await expectUnclippedObjectName(nearBottomExpandedObject)
-  await expectUnclippedObjectName(thirtyFirstLevelObject)
+  await expectUnclippedObjectName(deepestLeaf)
   await expect(deepestObject.locator('.tree-object-name'))
     .toHaveText('New planet 6 — Icebound Outer Observatory')
   await expect(deepestObject.locator('.key-tag')).toHaveText('PL-06-ICE-BELT-09')
-  await expect(deepestObject.locator('.tree-type-label')).toHaveText('Celestial body / Planet')
-  await expect(deepestObject.locator('.tree-parent-context'))
-    .toHaveText('Orbit 1 around New moon 3 — Survey Station')
+  await expect(deepestObject.getByText('Celestial body / Planet', { exact: true })).toBeVisible()
+  await expect(deepestObject.getByText('Orbit 1 around New moon 3 — Survey Station', { exact: true })).toBeVisible()
   await expect(deepestObject).toHaveAttribute('aria-description', /Celestial body \/ Planet\. Orbit 1 around New moon 3/)
-  await expect(thirtyFirstLevelObject.locator('.tree-object-name'))
+  await expect(deepestLeaf.locator('.tree-object-name'))
     .toHaveText('Deep moon 10 — Cryogenic Archive Node')
-  await expect(thirtyFirstLevelObject.locator('.key-tag')).toHaveText('DEEP-10-ARCHIVE-KEY')
-  await expect(thirtyFirstLevelObject.locator('.tree-type-label')).toHaveText('Celestial body / Moon')
-  await expect(thirtyFirstLevelObject.locator('.tree-parent-context'))
-    .toHaveText('Orbit 1 around Deep planet 9 — Cryogenic Archive Node')
-  await expect(thirtyFirstLevelObject)
+  await expect(deepestLeaf.locator('.key-tag')).toHaveText('DEEP-10-ARCHIVE-KEY')
+  await expect(deepestLeaf.getByText('Celestial body / Moon', { exact: true })).toBeVisible()
+  await expect(deepestLeaf.getByText('Orbit 1 around Deep planet 9 — Cryogenic Archive Node', { exact: true })).toBeVisible()
+  await expect(deepestLeaf)
     .toHaveAttribute('aria-description', /Celestial body \/ Moon\. Orbit 1 around Deep planet 9/)
-  for (const selector of ['.key-tag', '.tree-type-label', '.tree-parent-context']) {
-    await expectNoHorizontalOverflow(deepestObject.locator(selector))
-    await expectNoHorizontalOverflow(thirtyFirstLevelObject.locator(selector))
+  for (const row of [deepestObject, deepestLeaf]) {
+    await expect(row.getByText(systemName, { exact: true })).toBeVisible()
+    await expectNoHorizontalOverflow(row.locator('.key-tag'))
+    await expectNoHorizontalOverflow(row.getByText(/^Celestial body \/ (?:Planet|Moon)$/))
+    await expectNoHorizontalOverflow(row.getByText(/^Orbit 1 around /))
   }
 
   await hierarchy.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
   await page.setViewportSize({ width: 390, height: 844 })
-  const compactHierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
-  const compactTree = compactHierarchy.getByRole('tree', { name: 'Map object and Orbit hierarchy', exact: true })
+  const compactHierarchy = await openWorkspaceHierarchy(page)
+  const compactTree = compactHierarchy.getByRole('tree', { name: treeName, exact: true })
   const compactDeepestObject = compactTree.getByRole('treeitem', { name: /^Select DEEP-10-ARCHIVE-KEY,/ })
   await expect(compactHierarchy).toHaveAttribute('role', 'dialog')
   await compactDeepestObject.scrollIntoViewIfNeeded()
-  await expect(compactDeepestObject).toHaveAttribute('aria-level', '31')
+  await expect(compactDeepestObject).toHaveAttribute('aria-level', '32')
   await expect(compactDeepestObject.locator('.tree-object-name'))
     .toHaveText('Deep moon 10 — Cryogenic Archive Node')
   await expect(compactDeepestObject.locator('.key-tag')).toHaveText('DEEP-10-ARCHIVE-KEY')
-  await expect(compactDeepestObject.locator('.tree-type-label')).toHaveText('Celestial body / Moon')
-  await expect(compactDeepestObject.locator('.tree-parent-context'))
-    .toHaveText('Orbit 1 around Deep planet 9 — Cryogenic Archive Node')
+  await expect(compactDeepestObject.getByText('Celestial body / Moon', { exact: true })).toBeVisible()
+  await expect(compactDeepestObject.getByText('Orbit 1 around Deep planet 9 — Cryogenic Archive Node', { exact: true })).toBeVisible()
   await expect(compactDeepestObject)
     .toHaveAttribute('aria-description', /Celestial body \/ Moon\. Orbit 1 around Deep planet 9/)
   await expectNoHorizontalOverflow(compactDeepestObject.locator('.tree-object-name'))
@@ -195,8 +191,8 @@ test('deep object and Orbit rows stay readable at the minimum Hierarchy width @p
     .toContainText('DEEP-10-ARCHIVE-KEY')
   await compactInspector.getByRole('button', { name: 'Hide inspector', exact: true }).click()
 
-  const selectedHierarchy = await openWorkspaceHierarchy(page, 'System hierarchy')
-  const selectedTree = selectedHierarchy.getByRole('tree', { name: 'Map object and Orbit hierarchy', exact: true })
+  const selectedHierarchy = await openWorkspaceHierarchy(page)
+  const selectedTree = selectedHierarchy.getByRole('tree', { name: treeName, exact: true })
   const selectedDeepestObject = selectedTree.getByRole('treeitem', { name: /^Select DEEP-10-ARCHIVE-KEY,/ })
   await selectedDeepestObject.scrollIntoViewIfNeeded()
   await expect(selectedDeepestObject).toHaveAttribute('aria-selected', 'true')

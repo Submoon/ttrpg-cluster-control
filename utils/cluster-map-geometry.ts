@@ -54,7 +54,8 @@ export function clusterRouteLabelWidth(route: JumpRoute): number {
   return clusterRoutePresentationLabelWidth(route.jumpLevel)
 }
 
-function automaticExitPosition(start: Point, ordinal: number): Point {
+/** Keeps automatic exits in legacy stored-order slots relative to their system anchor. */
+export function clusterAutomaticExitPosition(start: Point, ordinal: number): Point {
   return {
     x: start.x + 135 + Math.floor(ordinal / AUTOMATIC_EXIT_ROWS.length) * 180,
     y: start.y + AUTOMATIC_EXIT_ROWS[ordinal % AUTOMATIC_EXIT_ROWS.length]!,
@@ -251,7 +252,7 @@ export function requiredJumpPoint(
 
 /**
  * Builds a scene-space route path, labels, and optional unresolved-exit marker.
- * @param route Logical Jump Route to draw.
+ * @param route System-to-system Jump Route to draw.
  * @param cluster Owning Cluster, used to preserve route bends and space automatic exits per origin system.
  * @param jumpPoints Current logical endpoints.
  * @param systemPositions Durable normalized positions for endpoint systems.
@@ -259,7 +260,7 @@ export function requiredJumpPoint(
  * @param unresolvedExitPositions Optional durable scene-space targets keyed by unresolved route ID.
  * @param exitPositionOverrides Optional temporary scene-space targets keyed by unresolved route ID.
  * @returns SVG path data and label coordinates in Cluster-map scene units.
- * @throws If the route is absent from the Cluster, a Jump Point is missing, or a required system position is missing.
+ * @throws If the route is absent from the Cluster or a required endpoint system position is missing.
  */
 export function clusterRouteGeometry(
   route: JumpRoute,
@@ -276,37 +277,39 @@ export function clusterRouteGeometry(
     throw new Error(`Jump Route "${route.id}" does not belong to the supplied Cluster routes.`)
   }
 
-  const from = requiredJumpPoint(jumpPoints, route.fromPointId)
-  const start = clusterSystemPosition(systemPositions, from.system.id, positionOverrides)
-  const to = route.toPointId === null
+  const from = cluster.systems.find(system => system.id === route.fromSystemId)
+  if (!from) throw new Error(`Jump Route "${route.id}" references a missing origin system.`)
+  const fromPoint = route.fromPointId === null ? undefined : requiredJumpPoint(jumpPoints, route.fromPointId)
+  if (fromPoint && fromPoint.system.id !== from.id) {
+    throw new Error(`Jump Route "${route.id}" references an origin Jump Point in another system.`)
+  }
+  const start = clusterSystemPosition(systemPositions, route.fromSystemId, positionOverrides)
+  const to = route.toSystemId === null
     ? undefined
-    : requiredJumpPoint(jumpPoints, route.toPointId)
-
-  if (to?.system.id === from.system.id) {
-    const controlY = start.y - 126 - (index % 2) * 20
-    return {
-      path: `M ${start.x - 46} ${start.y - 38} Q ${start.x} ${controlY} ${start.x + 46} ${start.y - 38}`,
-      labelX: start.x,
-      labelY: controlY + 20,
-    }
+    : cluster.systems.find(system => system.id === route.toSystemId)
+  if (route.toSystemId !== null && !to) {
+    throw new Error(`Jump Route "${route.id}" references a missing destination system.`)
+  }
+  const toPoint = route.toPointId === null ? undefined : requiredJumpPoint(jumpPoints, route.toPointId)
+  if (toPoint && toPoint.system.id !== to?.id) {
+    throw new Error(`Jump Route "${route.id}" references a destination Jump Point in another system.`)
   }
 
-  const savedExitPoint = route.toPointId === null
+  const savedExitPoint = route.toSystemId === null
     ? unresolvedExitPositions?.[route.id]
     : undefined
   let unresolvedExitOrdinal = 0
   for (const sibling of routes.slice(0, index)) {
-    if (sibling.toPointId !== null) continue
-    const siblingFrom = requiredJumpPoint(jumpPoints, sibling.fromPointId)
-    if (siblingFrom.system.id === from.system.id) unresolvedExitOrdinal += 1
+    if (sibling.toSystemId !== null) continue
+    if (sibling.fromSystemId === route.fromSystemId) unresolvedExitOrdinal += 1
   }
   const exitPoint = to
     ? undefined
     : exitPositionOverrides?.get(route.id)
       ?? savedExitPoint
-      ?? automaticExitPosition(start, unresolvedExitOrdinal)
+      ?? clusterAutomaticExitPosition(start, unresolvedExitOrdinal)
   const end = to
-    ? clusterSystemPosition(systemPositions, to.system.id, positionOverrides)
+    ? clusterSystemPosition(systemPositions, to.id, positionOverrides)
     : exitPoint!
   const dx = end.x - start.x
   const dy = end.y - start.y
@@ -336,7 +339,7 @@ export function clusterRouteGeometry(
   const routeLabelY = to
     ? curve.labelY
     : exitPoint!.y + CLUSTER_ROUTE_PRESENTATION.curve.labelOffsetY
-  const exitLabel = exitPoint && route.toPointId === null
+  const exitLabel = exitPoint && route.toSystemId === null
     ? clusterUnresolvedExitLabelGeometry(route.unresolvedExit, exitPoint, start)
     : undefined
   return {
@@ -357,13 +360,23 @@ export function clusterRouteGeometry(
  */
 export function clusterRouteLabel(
   route: JumpRoute,
+  cluster: JumpCluster,
   jumpPoints: ReadonlyMap<string, JumpPointReference>,
 ): string {
-  const from = requiredJumpPoint(jumpPoints, route.fromPointId)
-  const origin = `${from.point.name} (${from.system.name})`
-  if (route.toPointId !== null) {
-    const to = requiredJumpPoint(jumpPoints, route.toPointId)
-    return `Select Jump Level ${route.jumpLevel} route from ${origin} to ${to.point.name} (${to.system.name})`
+  const from = routeSystem(cluster, route.fromSystemId)
+  const fromPoint = route.fromPointId === null ? undefined : requiredJumpPoint(jumpPoints, route.fromPointId)
+  const origin = fromPoint ? `${fromPoint.point.name} (${from.name})` : from.name
+  if (route.toSystemId !== null) {
+    const to = routeSystem(cluster, route.toSystemId)
+    const toPoint = route.toPointId === null ? undefined : requiredJumpPoint(jumpPoints, route.toPointId)
+    const destination = toPoint ? `${toPoint.point.name} (${to.name})` : to.name
+    return `Select Jump Level ${route.jumpLevel} route from ${origin} to ${destination}`
   }
   return `Select Jump Level ${route.jumpLevel} route from ${origin} to unknown destination: ${route.unresolvedExit}`
+}
+
+function routeSystem(cluster: JumpCluster, systemId: string) {
+  const system = cluster.systems.find(candidate => candidate.id === systemId)
+  if (!system) throw new Error(`Jump Route references a missing system "${systemId}".`)
+  return system
 }

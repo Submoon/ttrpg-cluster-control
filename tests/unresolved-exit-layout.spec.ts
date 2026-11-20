@@ -3,10 +3,10 @@ import {
   addStarSystem,
   createLocalWorkspace,
   exportJumpCluster,
+  isLocalWorkspace,
   jumpPointsInCluster,
   planMapEntityDeletion,
   prepareJsonImport,
-  replaceWorkspaceSystem,
   restoreLocalWorkspace,
 } from '../domain/workspace'
 import {
@@ -29,7 +29,9 @@ function unresolvedWorkspace() {
   } as const
   const route = {
     id: 'route-a',
+    fromSystemId: workspace.cluster.systems[0]!.id,
     fromPointId: point.id,
+    toSystemId: null,
     toPointId: null,
     unresolvedExit: 'Rim',
     playerShared: false, jumpLevel: 2,
@@ -115,7 +117,7 @@ test('workspace validation rejects finite exit anchors whose shared scene bounds
 
   expect(restoreLocalWorkspace(oppositeFiniteExits)).toBeNull()
   expect(() => prepareJsonImport(createLocalWorkspace('Other Reach', 'Other system'), imported))
-    .toThrow('Choose a valid version 1, version 2, version 3, or version 4 Jump Cluster or star system JSON export.')
+    .toThrow('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
 })
 
 test('workspace validation rejects finite coordinates outside the SVG renderer numeric range', { tag: '@pure' }, () => {
@@ -252,17 +254,75 @@ test('append import remaps each unresolved target to its independent route ident
   expect(secondImport.layout.unresolvedExitPositions?.[route.id]).toBeUndefined()
 })
 
-test('dependent Jump Point deletion removes its route target layout', { tag: '@pure' }, () => {
+test('deleting a Jump Point detaches route endpoints and system deletion removes every incident route @pure', { tag: '@pure' }, () => {
   const { workspace, route, point } = unresolvedWorkspace()
-  const { workspace: withSecondSystem } = addStarSystem(workspace, 'Harrow')
-  const plan = planMapEntityDeletion(withSecondSystem, {
+  const withSecondSystem = addStarSystem(workspace, 'Harrow').workspace
+  const [originSystem, destinationSystem] = withSecondSystem.cluster.systems
+  if (!originSystem || !destinationSystem) throw new Error('The route fixture needs two systems.')
+  const destinationPoint = {
+    ...point,
+    id: 'point-b',
+    locationKey: 'JP2',
+    name: 'Harrow Entry',
+  }
+  const knownRoute = {
+    id: 'route-known',
+    jumpLevel: 3,
+    fromSystemId: originSystem.id,
+    fromPointId: point.id,
+    toSystemId: destinationSystem.id,
+    toPointId: destinationPoint.id,
+    playerShared: false,
+  } as const
+  const anchorOnlyRoute = {
+    id: 'route-anchor-only',
+    jumpLevel: 4,
+    fromSystemId: originSystem.id,
+    fromPointId: null,
+    toSystemId: destinationSystem.id,
+    toPointId: null,
+    playerShared: false,
+  } as const
+  const duplicateExternalRoute = { ...route, id: 'route-duplicate-external' }
+  const withRoutes = {
+    ...withSecondSystem,
+    cluster: {
+      ...withSecondSystem.cluster,
+      systems: withSecondSystem.cluster.systems.map(system => system.id === destinationSystem.id
+        ? { ...system, objects: [...system.objects, destinationPoint] }
+        : system),
+      routes: [route, duplicateExternalRoute, knownRoute, anchorOnlyRoute],
+    },
+  }
+  const plan = planMapEntityDeletion(withRoutes, {
     kind: 'object',
-    systemId: workspace.cluster.systems[0]!.id,
+    systemId: originSystem.id,
     objectId: point.id,
   })
-  const replacement = replaceWorkspaceSystem(plan.workspace, plan.workspace.cluster.systems[0]!)
+  const detachedExternal = plan.workspace.cluster.routes.find(candidate => candidate.id === route.id)
+  const detachedKnown = plan.workspace.cluster.routes.find(candidate => candidate.id === knownRoute.id)
 
-  expect(plan.removedRouteIds).toContain(route.id)
-  expect(plan.workspace.layout.unresolvedExitPositions?.[route.id]).toBeUndefined()
-  expect(replacement.layout.unresolvedExitPositions?.[route.id]).toBeUndefined()
+  expect(plan.removedRouteIds).toEqual([])
+  expect(plan.detachedRouteAttachments).toEqual([
+    { routeId: route.id, end: 'from', pointId: point.id, systemId: originSystem.id },
+    { routeId: duplicateExternalRoute.id, end: 'from', pointId: point.id, systemId: originSystem.id },
+    { routeId: knownRoute.id, end: 'from', pointId: point.id, systemId: originSystem.id },
+  ])
+  const detachmentEffects = plan.affectedEntities.filter(effect =>
+    effect.startsWith('Detach origin Jump Point from Jump Route'))
+  expect(detachmentEffects).toHaveLength(3)
+  expect(detachmentEffects.filter(effect => effect.includes('identical route'))).toHaveLength(2)
+  expect(new Set(detachmentEffects).size).toBe(3)
+  expect(detachedExternal?.fromPointId).toBeNull()
+  expect(detachedKnown).toMatchObject({ fromPointId: null, toPointId: destinationPoint.id })
+  expect(plan.workspace.layout.unresolvedExitPositions?.[route.id]).toEqual({ x: 1250, y: -340 })
+  expect(isLocalWorkspace(plan.workspace)).toBe(true)
+
+  const systemDeletion = planMapEntityDeletion(plan.workspace, { kind: 'system', systemId: originSystem.id })
+  expect(systemDeletion.removedRouteIds).toEqual([
+    route.id, duplicateExternalRoute.id, knownRoute.id, anchorOnlyRoute.id,
+  ])
+  expect(systemDeletion.workspace.cluster.routes).toEqual([])
+  expect(systemDeletion.workspace.layout.unresolvedExitPositions?.[route.id]).toBeUndefined()
+  expect(isLocalWorkspace(systemDeletion.workspace)).toBe(true)
 })

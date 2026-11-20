@@ -45,7 +45,8 @@ export class PlayerDocumentError extends Error {
 }
 
 const PLAYER_FORMAT = 'ttrpg-cluster-control-player'
-const PLAYER_VERSION = 1
+const LEGACY_PLAYER_VERSION = 1
+const PLAYER_VERSION = 2
 export const MAX_PLAYER_JSON_BYTES = 4 * 1024 * 1024
 const MAX_JSON_DEPTH = 64
 const MAX_TEXT_BYTES = 256 * 1024
@@ -346,9 +347,18 @@ export function parsePlayerJson(text: string): PlayerClusterDocument {
 
 /** Validates unknown player data and rebuilds a detached document without extension properties. */
 export function restorePlayerDocument(input: unknown): PlayerClusterDocument {
+  const document = reconstructPlayerDocument(input)
+  return isRecord(input) && input.version === LEGACY_PLAYER_VERSION
+    ? { ...document, routes: document.routes.filter(route => !isResolvedSameSystemLoop(route)) }
+    : document
+}
+
+/** Reconstructs and validates the complete schema before any legacy admission cleanup. */
+function reconstructPlayerDocument(input: unknown): PlayerClusterDocument {
   if (!isRecord(input)) return invalidDocument()
   if (input.format !== PLAYER_FORMAT) return fail('unsupported-format')
-  if (input.version !== PLAYER_VERSION) return fail('unsupported-version')
+  if (input.version !== LEGACY_PLAYER_VERSION && input.version !== PLAYER_VERSION) return fail('unsupported-version')
+  const hasRouteAttachments = input.version === PLAYER_VERSION
 
   if (!Array.isArray(input.systems)) return invalidDocument()
   if (input.systems.length === 0) return fail('empty-document')
@@ -377,13 +387,14 @@ export function restorePlayerDocument(input: unknown): PlayerClusterDocument {
   outputBudget.startArray()
   const routes: PlayerRoute[] = []
   for (const candidate of input.routes) {
-    routes.push(restoreRoute(candidate, outputBudget))
+    routes.push(restoreRoute(candidate, outputBudget, hasRouteAttachments))
   }
   outputBudget.endArray()
   outputBudget.endObject()
   outputBudget.finish()
   assertUniqueIds(systems, routes)
   assertClusterReferences(systems, routes)
+  if (hasRouteAttachments && routes.some(isResolvedSameSystemLoop)) return invalidDocument()
 
   return {
     format: PLAYER_FORMAT,
@@ -396,11 +407,16 @@ export function restorePlayerDocument(input: unknown): PlayerClusterDocument {
 
 /** Serializes a validated player document after rebuilding its allowlisted public shape. */
 export function serializePlayerJson(document: PlayerClusterDocument): string {
-  const safeDocument = restorePlayerDocument(document)
+  const safeDocument = reconstructPlayerDocument(document)
+  if (safeDocument.routes.some(isResolvedSameSystemLoop)) return invalidDocument()
   const serialized = JSON.stringify(safeDocument)
   if (typeof serialized !== 'string') return invalidDocument()
   if (byteLength(serialized) > MAX_PLAYER_JSON_BYTES) return tooLarge()
   return serialized
+}
+
+function isResolvedSameSystemLoop(route: PlayerRoute): boolean {
+  return route.destination.kind === 'system' && route.fromSystemId === route.destination.systemId
 }
 
 function restoreSystemMarker(
@@ -723,13 +739,20 @@ function readFieldType(value: unknown): CustomFieldType {
   return invalidDocument()
 }
 
-function restoreRoute(value: unknown, budget: SerializedJsonBudget): PlayerRoute {
+function restoreRoute(
+  value: unknown,
+  budget: SerializedJsonBudget,
+  hasRouteAttachments: boolean,
+): PlayerRoute {
   if (!isRecord(value) || !isRecord(value.destination)) return invalidDocument()
   const id = readPublicId(value.id, 'route')
   if (typeof value.jumpLevel !== 'number' || !Number.isSafeInteger(value.jumpLevel) || value.jumpLevel < 1) {
     return invalidDocument()
   }
   const fromSystemId = readPublicId(value.fromSystemId, 'system')
+  const fromPointId = hasRouteAttachments && value.fromPointId !== undefined
+    ? readPublicId(value.fromPointId, 'object')
+    : undefined
   budget.startObject()
   budget.addKey('id')
   budget.addString(id)
@@ -737,24 +760,37 @@ function restoreRoute(value: unknown, budget: SerializedJsonBudget): PlayerRoute
   budget.addNumber(value.jumpLevel)
   budget.addKey('fromSystemId')
   budget.addString(fromSystemId)
+  if (fromPointId !== undefined) {
+    budget.addKey('fromPointId')
+    budget.addString(fromPointId)
+  }
   budget.addKey('destination')
   if (value.destination.kind === 'system') {
     const systemId = readPublicId(value.destination.systemId, 'system')
+    const pointId = hasRouteAttachments && value.destination.pointId !== undefined
+      ? readPublicId(value.destination.pointId, 'object')
+      : undefined
     budget.startObject()
     budget.addKey('kind')
     budget.addString('system')
     budget.addKey('systemId')
     budget.addString(systemId)
+    if (pointId !== undefined) {
+      budget.addKey('pointId')
+      budget.addString(pointId)
+    }
     budget.endObject()
     budget.endObject()
     return {
       id,
       jumpLevel: value.jumpLevel,
       fromSystemId,
-      destination: { kind: 'system', systemId },
+      ...(fromPointId === undefined ? {} : { fromPointId }),
+      destination: { kind: 'system', systemId, ...(pointId === undefined ? {} : { pointId }) },
     }
   }
   if (value.destination.kind === 'unknown' && value.destination.label === 'Unknown destination') {
+    if (hasRouteAttachments && value.destination.pointId !== undefined) return invalidDocument()
     budget.startObject()
     budget.addKey('kind')
     budget.addString('unknown')
@@ -768,6 +804,7 @@ function restoreRoute(value: unknown, budget: SerializedJsonBudget): PlayerRoute
       id,
       jumpLevel: value.jumpLevel,
       fromSystemId,
+      ...(fromPointId === undefined ? {} : { fromPointId }),
       destination: {
         kind: 'unknown',
         position,
@@ -795,11 +832,24 @@ function assertUniqueIds(systems: readonly PlayerSystemMarker[], routes: readonl
 function assertClusterReferences(systems: readonly PlayerSystemMarker[], routes: readonly PlayerRoute[]): void {
   const systemsById = uniqueById(systems)
   for (const route of routes) {
-    if (!systemsById.has(route.fromSystemId)) return invalidDocument()
+    const fromSystem = systemsById.get(route.fromSystemId)
+    if (!fromSystem) return invalidDocument()
+    if (route.fromPointId !== undefined) assertPlayerRoutePoint(fromSystem, route.fromPointId)
     if (route.destination.kind === 'system' && !systemsById.has(route.destination.systemId)) {
       return invalidDocument()
     }
+    if (route.destination.kind === 'system' && route.destination.pointId !== undefined) {
+      const destination = systemsById.get(route.destination.systemId)
+      if (!destination) return invalidDocument()
+      assertPlayerRoutePoint(destination, route.destination.pointId)
+    }
   }
+}
+
+function assertPlayerRoutePoint(system: PlayerSystemMarker, pointId: string): void {
+  if (system.disclosure !== 'revealed') return invalidDocument()
+  const point = system.map.objects.find(object => object.id === pointId)
+  if (!point || point.disclosure !== 'revealed' || point.family !== 'JumpPoint') return invalidDocument()
 }
 
 function assertAcyclicObjectHosts(

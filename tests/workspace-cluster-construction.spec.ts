@@ -1,9 +1,10 @@
 import { expect, test } from './fixtures'
 import {
   captureMapExportBlobs,
+  createSingleSystemWorkspace,
   downloadJson,
   dockAction,
-  returnToClusterMap,
+  wardenMap,
   workspaceNavigation,
   workspaceZoomControls,
   type ExportedMap,
@@ -11,11 +12,7 @@ import {
 } from './helpers'
 
 async function createWorkspace(page: import('@playwright/test').Page): Promise<void> {
-  await page.setViewportSize({ width: 1440, height: 960 })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
+  await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
 }
 
 async function clickNormalizedClusterPoint(
@@ -119,14 +116,13 @@ function expectPositionsAdded(
 test('Add System places two systems at targeted cluster points and reloads their coordinates', async ({ page }) => {
   await captureMapExportBlobs(page)
   await createWorkspace(page)
-  await returnToClusterMap(page)
 
   const inspector = page.locator('#workspace-inspector-panel')
   const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
   if (await inspector.isVisible()) await inspectToggle.click()
   await expect(inspector).toBeHidden()
 
-  const clusterMap = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
+  const clusterMap = wardenMap(page)
   await expect(clusterMap).toBeVisible()
   const beforeAdding = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(beforeAdding.type).toBe('cluster')
@@ -136,21 +132,21 @@ test('Add System places two systems at targeted cluster points and reloads their
 
   // Add System is a placement mode: choosing it keeps this map active and does not open Inspect.
   await expect(clusterMap).toBeVisible()
-  await expect(page.getByRole('group', { name: /star system map$/i })).toHaveCount(0)
+  await expect(clusterMap).toHaveCount(1)
   await expect(inspector).toBeHidden()
   await expectSystemAddArmed(page)
 
   const firstPoint = { x: 0.45, y: 0.1 }
   const firstDeliveredPoint = await clickNormalizedClusterPoint(page, clusterMap, firstPoint)
   await expect(clusterMap).toBeVisible()
-  await expect(page.getByRole('group', { name: /star system map$/i })).toHaveCount(0)
+  await expect(clusterMap).toHaveCount(1)
   await expect(inspector).toBeHidden()
   await expectSystemAddArmed(page)
 
   const secondPoint = { x: 0.84, y: 0.78 }
   const secondDeliveredPoint = await clickNormalizedClusterPoint(page, clusterMap, secondPoint)
   await expect(clusterMap).toBeVisible()
-  await expect(page.getByRole('group', { name: /star system map$/i })).toHaveCount(0)
+  await expect(clusterMap).toHaveCount(1)
   await expect(inspector).toBeHidden()
   await expectSystemAddArmed(page)
 
@@ -164,10 +160,9 @@ test('Add System places two systems at targeted cluster points and reloads their
   const secondCreatedId = createdIds[1]!
 
   await page.reload()
-  await returnToClusterMap(page)
   if (await inspector.isVisible()) await inspectToggle.click()
   await expect(inspector).toBeHidden()
-  await expect(page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })).toBeVisible()
+  await expect(clusterMap).toBeVisible()
   const afterReload = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(afterReload.cluster?.systems).toHaveLength(3)
   expectSystemPosition(afterReload.layout.systemPositions?.[firstCreatedId], firstDeliveredPoint)
@@ -178,9 +173,8 @@ test('Add System places two systems at targeted cluster points and reloads their
 test('Add System can be created from the keyboard at the panned Cluster viewport center', async ({ page }) => {
   await captureMapExportBlobs(page)
   await createWorkspace(page)
-  await returnToClusterMap(page)
 
-  const map = page.getByRole('group', { name: 'Kestrel Reach Jump Cluster map', exact: true })
+  const map = wardenMap(page)
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
   const firstSystem = before.cluster?.systems[0]
   expect(firstSystem).toBeDefined()
@@ -193,9 +187,7 @@ test('Add System can be created from the keyboard at the panned Cluster viewport
   await expect(map).toBeFocused()
   const content = map.locator('.cluster-map-content')
   const viewportBeforePan = await content.getAttribute('transform')
-  for (let index = 0; index < 10; index += 1) await page.keyboard.press('ArrowLeft')
-  await expect.poll(() => content.getAttribute('transform')).not.toBe(viewportBeforePan)
-  const keyboardTarget = await map.evaluate((element) => {
+  const readKeyboardTarget = () => map.evaluate((element) => {
     const contentElement = element.querySelector<SVGGElement>('.cluster-map-content')
     const matrix = contentElement?.getScreenCTM()
     if (!matrix) throw new Error('The Cluster map content is not attached to the document.')
@@ -204,6 +196,13 @@ test('Add System can be created from the keyboard at the panned Cluster viewport
       .matrixTransform(matrix.inverse())
     return { x: (point.x - 112) / 736, y: (point.y - 96) / 368 }
   })
+  let keyboardTarget = await readKeyboardTarget()
+  // Detail framing changes the pan distance per key; stop when the delivered center clears the existing system.
+  for (let index = 0; index < 64 && Math.abs(keyboardTarget.x - firstPosition.x) * 736 < 156; index += 1) {
+    await page.keyboard.press('ArrowLeft')
+    keyboardTarget = await readKeyboardTarget()
+  }
+  await expect(content).not.toHaveAttribute('transform', viewportBeforePan ?? '')
   expect(keyboardTarget.x).toBeGreaterThanOrEqual(0)
   expect(keyboardTarget.x).toBeLessThanOrEqual(1)
   expect(Math.abs(keyboardTarget.x - firstPosition.x) * 736).toBeGreaterThanOrEqual(156)
@@ -216,6 +215,6 @@ test('Add System can be created from the keyboard at the panned Cluster viewport
   const addedPosition = after.layout.systemPositions?.[addedSystem!.id]
   expect(addedPosition).toBeDefined()
   expect(Math.abs(addedPosition!.x - firstPosition.x) * 736).toBeGreaterThanOrEqual(156)
-  expect(addedPosition!.y).toBeCloseTo(firstPosition.y, 2)
+  expectSystemPosition(addedPosition, keyboardTarget)
   await expect(page.getByRole('textbox', { name: /System position [XY]/ })).toHaveCount(0)
 })

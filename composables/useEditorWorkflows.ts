@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { EditorWorkflowOptions, EntityCommand, ObjectInspectorFocusRequest } from './editor-workflows/types'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useClusterSystemPlacement } from './editor-workflows/useClusterSystemPlacement'
@@ -26,6 +26,10 @@ import { usePublicationMenu } from './usePublicationMenu'
 import type { PublicationMenuRequest } from './editor-workflows/publication-types'
 import type { SearchResult } from '../utils/workspace-search'
 import { useWardenFilterCriteria } from './useWardenFilterCriteria'
+import { useSystemObjectTransferWorkflow } from './editor-workflows/useSystemObjectTransferWorkflow'
+import { resolveSystemObjectHistoryTarget } from '../domain/workspace'
+import type { SystemObjectTransferReview } from '../domain/workspace'
+import type { SystemObjectTransferIntent } from './editor-workflows/system-object-transfer-types'
 
 type EditorWorkflowsOptions = EditorWorkflowOptions & {
   /** Rechecks page-owned modal and keyboard focus owners before restoring a menu opener. */
@@ -111,7 +115,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const placementGuard = computed(() => {
     const applied = workspace.value
     const draft = wardenDraftWorkspace.value
-    const system = selectedSystemForChart.value
+    const ownerId = entity.entitySession.value?.systemId ?? selectedSystemForChart.value?.id
+    const system = applied?.cluster.systems.find(candidate => candidate.id === ownerId)
     const projected = draft?.cluster.systems.find(candidate => candidate.id === system?.id)
     if (!applied || !draft || !system || !projected) return null
     if (projected === system && applied.layout === draft.layout) return null
@@ -189,10 +194,11 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const mapControls = useEditorMapControls(workspace, store, {
     orbitPlacementPreview: entity.orbitPlacementPreview,
     entitySession: entity.entitySession,
-  })
+  }, options.continuousMap)
   const viewport = useEditorViewport(store)
   const navigation = useEditorNavigation({
     workspace,
+    continuousMap: options.continuousMap,
     waitForSearchPresentation: options.waitForSearchPresentation,
     captureAddCleanup: () => {
       const clearSystemCreation = systemCreation.captureSearchContextCleanup()
@@ -212,9 +218,106 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     editorError,
     beforeWorkspaceOperation,
   })
+  const appliedRevision = computed(() => options.appliedRevision?.value ?? 0)
+
+  function revealTransferredObject(objectId: string): void {
+    const currentWorkspace = workspace.value
+    if (!currentWorkspace) return
+    const target = resolveSystemObjectHistoryTarget(currentWorkspace, objectId)
+    if (!target) return
+    const revealCamera = async (): Promise<void> => {
+      await nextTick()
+      if (workspace.value !== currentWorkspace) return
+      mapControls.revealHistoryTarget(target)
+    }
+    if (options.continuousMap?.value) {
+      void navigation.inspectContinuousTarget({
+        kind: 'object',
+        systemId: target.systemId,
+        objectId: target.id,
+      }).then(accepted => accepted ? revealCamera() : undefined)
+      return
+    }
+    void navigation.selectSystem(target.systemId).then(async () => {
+      if (workspace.value !== currentWorkspace || store.activeView !== 'system'
+        || store.selectedSystemId !== target.systemId) return
+      await navigation.selectObject(target.id, true, { leaveChart: false })
+      await revealCamera()
+    })
+  }
+
+  function dropAffectsRouteDraft(review: SystemObjectTransferReview): boolean {
+    // Transfer removes these points from their source system, the same dependency
+    // change a route draft must resolve before deleting an endpoint.
+    return route.isRouteCommandBlocked({
+      kind: 'deletion',
+      target: { kind: 'object', systemId: review.request.sourceSystemId, objectId: review.request.rootObjectId },
+      affectedObjectIds: review.branch.objectIds,
+      affectedRouteIds: review.detachedRouteAttachments.map(attachment => attachment.routeId),
+    })
+  }
+
+  const systemTransfer = useSystemObjectTransferWorkflow({
+    workspace,
+    appliedRevision,
+    history: mutations,
+    resolveBeforeTransfer: () => transitions.resolveTransition(),
+    resolveBeforeDrop: (review, ownsDrop, onDraftApplied) => transitions.resolveTransition({
+      leaveChart: false,
+      leaveEntitySession: entity.wouldInvalidateEntitySession(review.previewWorkspace),
+      leaveRouteSession: dropAffectsRouteDraft(review),
+      onDraftApplied,
+    }, ownsDrop),
+    canApplyDrop: review => !entity.wouldInvalidateEntitySession(review.previewWorkspace) && !dropAffectsRouteDraft(review),
+    captureDropInspection: ({ request, branch }) => {
+      const inspected = store.inspectedTarget
+      if ((inspected?.kind !== 'object' && inspected?.kind !== 'orbit') || inspected.systemId !== request.sourceSystemId) return
+      const movesWithBranch = inspected.kind === 'object'
+        ? branch.objectIds.includes(inspected.objectId)
+        : branch.orbitIds.includes(inspected.orbitId)
+      if (!movesWithBranch) return
+      const target = { ...inspected, systemId: request.destinationSystemId }
+      return () => { void navigation.inspectContinuousTarget(target, false) }
+    },
+    beforeWorkspaceOperation,
+    prepareDestinationMap: async (systemId, isCurrent) => {
+      if (!isCurrent()) return false
+      if (options.continuousMap?.value) {
+        if (!await navigation.inspectContinuousTarget({ kind: 'system', systemId }, false, isCurrent)) return false
+      } else {
+        await navigation.selectSystem(systemId)
+        if (!isCurrent() || store.activeView !== 'system' || store.selectedSystemId !== systemId) return false
+      }
+      if (!isCurrent()) return false
+      if (viewport.isCompactViewport.value) store.setCompactPanel(null)
+      await nextTick()
+      const map = mapControls.placementMapRef.value
+      if (!map || !map.whenReady || !await map.whenReady() || !isCurrent()
+        || !map.isSystemTransferDestination?.(systemId)) return false
+      return map.frameSystemTransferDestination?.(systemId) ?? false
+    },
+    hasDestinationGeometryDraft: systemId => entity.entitySession.value?.systemId === systemId
+      || orbitAdjustments.preview.value?.identity.systemId === systemId,
+    captureDestinationMapOwner: systemId => {
+      const map = mapControls.placementMapRef.value
+      return map?.isSystemTransferDestination?.(systemId)
+        ? map.captureSystemTransferMapOwner?.(systemId) ?? null
+        : null
+    },
+    isDestinationMapOwnerCurrent: (systemId, owner) => {
+      const map = mapControls.placementMapRef.value
+      return map?.isSystemTransferDestination?.(systemId) === true
+        && map.isSystemTransferMapOwnerCurrent?.(systemId, owner) === true
+    },
+    onApplied: target => revealTransferredObject(target.rootObjectId),
+  })
+  watch(workspaceContextId, () => systemTransfer.dispose(), { flush: 'sync' })
+  watch(systemTransfer.lastError, error => { if (error) editorError.value = error })
+  onBeforeUnmount(() => systemTransfer.dispose())
   const publicationMenu = usePublicationMenu({
     workspace,
     store,
+    continuousMap: options.continuousMap,
     canRestoreFocus: options.canRestorePublicationFocus,
     prepareContextObjectSelection: navigation.selectContextObject,
   })
@@ -245,7 +348,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const map = useMapWorkflows({
     workspace,
     mutations,
-    systemMapRef: mapControls.systemMapRef,
+    systemMapRef: mapControls.placementMapRef,
+    continuousMap: options.continuousMap,
     resolveTransition: transitions.resolveTransition,
     beginObjectSession: entity.beginObjectSession,
     beginOrbitSession: entity.beginOrbitSession,
@@ -290,7 +394,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const systemObjectPlacement = useSystemObjectPlacement({
     workspace,
     creationActive: computed(() => systemCreation.creationSession.value !== null),
-    systemMapRef: mapControls.systemMapRef,
+    systemMapRef: mapControls.placementMapRef,
+    continuousMap: options.continuousMap,
     mutations,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
     beforeWorkspaceOperation,
@@ -306,7 +411,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const orbitCenterPlacement = useOrbitCenterPlacement({
     workspace,
     creationActive: computed(() => systemCreation.creationSession.value !== null),
-    systemMapRef: mapControls.systemMapRef,
+    systemMapRef: mapControls.placementMapRef,
+    continuousMap: options.continuousMap,
     isEntityCommandBlocked: navigation.isEntityCommandBlocked,
     moveOrbitCenter: map.moveMapOrbitCenter,
   })
@@ -357,9 +463,13 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     creation: systemCreation,
     viewport,
     beginOrbitEdit: map.beginOrbitEdit,
+    continuousMap: options.continuousMap,
   })
 
   const historyGuards = computed(() => {
+    if (systemTransfer.session.value) return systemTransfer.session.value.placingOnMap
+      ? 'Finish or cancel the transfer map placement first.'
+      : 'Apply or cancel the open transfer review first.'
     if (entity.hasModifiedEntitySession.value) return 'Apply or discard the modified Inspector draft first.'
     if (route.hasModifiedRouteSession.value) return 'Apply or discard the modified Jump Route draft first.'
     if (charts.hasChangedNames.value) return 'Apply or discard the modified Jump Cluster details draft first.'
@@ -401,6 +511,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
 
   /** Ends editor-owned drafts, reviews and targeting only after a complete replacement is durable. */
   function resetForWorkspaceReplacement(): void {
+    systemTransfer.dispose()
     transitions.cancelPendingTransition()
     const chartSession = charts.session.value
     if (chartSession) charts.discard(chartSession.id)
@@ -422,12 +533,13 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     store.reset(workspaceContextId.value)
   }
 
-  async function quitAdd(): Promise<void> {
-    if (!await beforeWorkspaceOperation()) return
+  async function quitAdd(isCurrent: () => boolean = () => true): Promise<boolean> {
+    if (!isCurrent() || !await beforeWorkspaceOperation() || !isCurrent()) return false
     route.cancelRouteCreation()
     clusterSystemPlacement.quitClusterAdd()
     systemCreation.quitAdd()
     store.setMode('select')
+    return true
   }
 
   function acknowledgeObjectInspectorFocusRequest(requestId: number): void {
@@ -480,11 +592,14 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       routeSession: route.routeSession,
       hasModifiedRouteSession: route.hasModifiedRouteSession,
       offerRouteSystems: route.offerRouteSystems,
+      chooseRouteSystem: route.chooseRouteSystem,
       chooseRoutePoint: route.chooseRoutePoint,
       updateRouteInput: route.updateRouteInput,
       applyRouteSession,
       discardRouteSession,
       cancelRouteCreation: route.cancelRouteCreation,
+      systemTransferSession: systemTransfer.session,
+      handleSystemTransferIntent: (intent: SystemObjectTransferIntent) => systemTransfer.handleIntent(intent),
     },
     charts: {
       session: charts.session,
@@ -535,6 +650,9 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       map: {
         moveSystem: map.moveSystem,
         moveMapObject: map.moveMapObject,
+        moveMapObjectInSystem: map.moveMapObjectInSystem,
+        resizeSystemFrame: map.resizeSystemFrame,
+        addMapObjectInSystem: map.addMapObjectInSystem,
         placeMapObjectInOrbit: map.placeMapObjectInOrbit,
         rotateMapObject: map.rotateMapObject,
         resizeMapOrbit: map.resizeMapOrbit,
@@ -544,6 +662,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       },
       creation: {
         creationSession: systemCreation.creationSession,
+        orbitDragPreview: systemCreation.orbitDragPreview,
         chooseCreationType: systemCreation.chooseCreationType,
         chooseCreationCandidate: systemCreation.chooseCreationCandidate,
         updateCreationInput: systemCreation.updateCreationInput,
@@ -615,9 +734,19 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       recordViewport: mapControls.recordViewport,
       setViewportPercentage: mapControls.setViewportPercentage,
       fitActiveMap: mapControls.fitActiveMap,
+      centerInspectedTarget: mapControls.centerInspectedTarget,
       zoomActiveMap: mapControls.zoomActiveMap,
       panActiveMap: mapControls.panActiveMap,
       setMapMode: navigation.setMapMode,
+    },
+    transfer: {
+      mapPreview: systemTransfer.mapPreview,
+      pendingMapPlacement: systemTransfer.pendingMapPlacement,
+      ownsMapPlacement: systemTransfer.ownsMapPlacement,
+      previewMapPlacement: systemTransfer.previewMapPlacement,
+      completeMapPlacement: systemTransfer.completeMapPlacement,
+      dropObject: systemTransfer.dropObject,
+      handleIntent: (intent: SystemObjectTransferIntent) => systemTransfer.handleIntent(intent),
     },
     adjustments: {
       orbitAdjustmentPreview: orbitAdjustments.preview,
@@ -629,6 +758,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       editorError,
     },
     navigation: {
+      continuousMapEnabled: navigation.continuousMapEnabled,
       activeView: navigation.activeView,
       mapMode: navigation.mapMode,
       selectedSystemId: navigation.selectedSystemId,
@@ -640,6 +770,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       selectedSystem: navigation.selectedSystem,
       clusterSelectedSystem: navigation.clusterSelectedSystem,
       inspectedClusterSystem: navigation.inspectedClusterSystem,
+      inspectedTarget: navigation.inspectedTarget,
       selectedObject: navigation.selectedObject,
       selectedOrbit: navigation.selectedOrbit,
       selectedRoute: navigation.selectedRoute,
@@ -647,6 +778,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       showClusterMap: navigation.showClusterMap,
       selectSystem: navigation.selectSystem,
       selectClusterSystem: navigation.selectClusterSystem,
+      inspectContinuousTarget: navigation.inspectContinuousTarget,
       selectObject: navigation.selectObject,
       replaceObjectSelection: navigation.replaceObjectSelection,
       toggleObjectSelection: navigation.toggleObjectSelection,

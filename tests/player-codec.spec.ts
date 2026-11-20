@@ -92,7 +92,7 @@ function validPlayerDocument(): PlayerClusterDocument {
 
   return {
     format: 'ttrpg-cluster-control-player',
-    version: 1,
+    version: 2,
     title: 'Pilgrim Reach',
     systems: [
       { id: 'system-1', position: { x: 120, y: 100 }, disclosure: 'unknown', label: 'Unknown presence' },
@@ -203,6 +203,132 @@ test('player JSON codec round-trips public documents and drops unknown extension
   expect(restorePlayerDocument(extendedDocument)).toEqual(document)
 })
 
+test('player file admission removes resolved same-system loops after validating the complete document @pure', () => {
+  const document = validPlayerDocument()
+  const loop = {
+    id: 'route-3',
+    jumpLevel: 5,
+    fromSystemId: 'system-3',
+    destination: { kind: 'system' as const, systemId: 'system-3' },
+  }
+  const legacyDocument = {
+    ...document,
+    version: 1 as const,
+    routes: [
+      { ...document.routes[0]!, fromPointId: 'ignored-former-extension', destination: { ...document.routes[0]!.destination, pointId: 'ignored-former-extension' } },
+      { ...loop, fromPointId: { malformed: true }, destination: { ...loop.destination, pointId: 'ignored-former-extension' } },
+      document.routes[1]!,
+    ],
+  }
+
+  const parsedLegacy = parsePlayerJson(JSON.stringify(legacyDocument))
+  expect(parsedLegacy.version).toBe(2)
+  expect(parsedLegacy.routes).toEqual(document.routes)
+  expectPlayerDocumentError(
+    () => parsePlayerJson(JSON.stringify({ ...legacyDocument, routes: [...legacyDocument.routes, { ...loop, jumpLevel: 0 }] })),
+    'invalid-document',
+  )
+  expectPlayerDocumentError(() => parsePlayerJson(JSON.stringify({ ...document, routes: [...document.routes, loop] })), 'invalid-document')
+  expectPlayerDocumentError(() => serializePlayerJson({ ...document, routes: [...document.routes, loop] }), 'invalid-document')
+})
+
+function playerDocumentWithPublishedRouteAttachments(): PlayerClusterDocument {
+  const document = validPlayerDocument()
+  const systems = document.systems.map(system => system.id === 'system-2'
+    ? {
+        id: system.id,
+        position: system.position,
+        disclosure: 'revealed' as const,
+        type: 'star-system' as const,
+        label: 'Distant Haven',
+        map: {
+          objects: [
+            {
+              id: 'object-1',
+              position: { x: 240, y: 180 },
+              placement: { kind: 'system' as const },
+              disclosure: 'revealed' as const,
+              family: 'JumpPoint' as const,
+              subtype: 'jump-point',
+              label: 'North Gate',
+              playerText: '',
+              fields: [],
+            },
+          ],
+          orbits: [],
+        },
+      }
+    : system)
+  const routes = document.routes.map(route => route.id === 'route-1'
+    ? {
+        ...route,
+        fromPointId: 'object-3',
+        destination: { kind: 'system' as const, systemId: 'system-2', pointId: 'object-1' },
+      }
+    : route)
+  return { ...document, systems, routes }
+}
+
+test('player JSON v2 round-trips only attached Revealed Jump Points @pure', () => {
+  const document = playerDocumentWithPublishedRouteAttachments()
+  const serialized = serializePlayerJson(document)
+
+  expect(JSON.parse(serialized)).toMatchObject({
+    version: 2,
+    routes: [
+      { fromPointId: 'object-3', destination: { pointId: 'object-1' } },
+      { destination: { kind: 'unknown' } },
+    ],
+  })
+  expect(parsePlayerJson(serialized)).toEqual(document)
+  expect(restorePlayerDocument(document)).toEqual(document)
+})
+
+test('player JSON v2 rejects route attachments outside their own Revealed Jump Point maps @pure', () => {
+  const document = playerDocumentWithPublishedRouteAttachments()
+  const invalidOriginOwner = {
+    ...document,
+    routes: document.routes.map(route => route.id === 'route-1' ? { ...route, fromPointId: 'object-1' } : route),
+  }
+  const invalidOriginDisclosure = {
+    ...document,
+    routes: document.routes.map(route => route.id === 'route-1' ? { ...route, fromPointId: 'object-6' } : route),
+  }
+  const invalidOriginType = {
+    ...document,
+    routes: document.routes.map(route => route.id === 'route-1' ? { ...route, fromPointId: 'object-4' } : route),
+  }
+  const invalidDestinationOwner = {
+    ...document,
+    routes: document.routes.map(route => route.id === 'route-1'
+      ? { ...route, destination: { kind: 'system' as const, systemId: 'system-2', pointId: 'object-3' } }
+      : route),
+  }
+  const invalidDestinationDisclosure = {
+    ...document,
+    systems: document.systems.map(system => system.id === 'system-2' && system.disclosure === 'revealed'
+      ? { ...system, map: { ...system.map, objects: [{ ...system.map.objects[0]!, disclosure: 'known-type' as const, family: 'JumpPoint' as const, subtype: 'jump-point', label: 'Jump Point' }] } }
+      : system),
+  }
+  const invalidUnknownAttachment = {
+    ...document,
+    routes: document.routes.map(route => route.id === 'route-2'
+      ? { ...route, destination: { ...route.destination, pointId: 'object-1' } }
+      : route),
+  }
+
+  for (const invalid of [
+    invalidOriginOwner,
+    invalidOriginDisclosure,
+    invalidOriginType,
+    invalidDestinationOwner,
+    invalidDestinationDisclosure,
+    invalidUnknownAttachment,
+  ]) {
+    expectPlayerDocumentError(() => restorePlayerDocument(invalid), 'invalid-document')
+  }
+})
+
 test('player JSON admits all disclosure modes, permitted values, and public relationship graphs @pure', () => {
   const document = validPlayerDocument()
   const serialized = serializePlayerJson(document)
@@ -304,7 +430,7 @@ test('player JSON rejects malformed, unsupported, and unsafe data with fixed err
     privateMarker,
   )
   expectPlayerDocumentError(
-    () => restorePlayerDocument({ ...document, version: 2 }),
+    () => restorePlayerDocument({ ...document, version: 3 }),
     'unsupported-version',
   )
   expectPlayerDocumentError(
@@ -564,7 +690,7 @@ test('player JSON byte accounting includes the optional marker color property @p
     playerText: '',
     fields: [],
   }))
-  const document: PlayerClusterDocument = {
+  const legacyDocument: Omit<PlayerClusterDocument, 'version'> & { version: 1 } = {
     format: 'ttrpg-cluster-control-player',
     version: 1,
     title: 'Public Reach',
@@ -578,7 +704,10 @@ test('player JSON byte accounting includes the optional marker color property @p
     }],
     routes: [],
   }
-  const emptyTextBytes = new TextEncoder().encode(serializePlayerJson(document)).byteLength
+  const legacyProjectionBytes = () => new TextEncoder().encode(
+    serializePlayerJson(restorePlayerDocument(legacyDocument)),
+  ).byteLength
+  const emptyTextBytes = legacyProjectionBytes()
   const lastTextLength = MAX_PLAYER_JSON_BYTES - emptyTextBytes - 15 * textLimit
   for (const object of objects.slice(0, 15)) {
     if (object.disclosure !== 'revealed') throw new Error('Expected a Revealed object.')
@@ -588,7 +717,7 @@ test('player JSON byte accounting includes the optional marker color property @p
   if (!finalObject || finalObject.disclosure !== 'revealed') throw new Error('Expected a final Revealed object.')
   finalObject.playerText = 'x'.repeat(lastTextLength)
 
-  expect(new TextEncoder().encode(serializePlayerJson(document)).byteLength).toBe(MAX_PLAYER_JSON_BYTES)
+  expect(legacyProjectionBytes()).toBe(MAX_PLAYER_JSON_BYTES)
   Object.assign(objects[0]!, { markerColor: '#123456' })
-  expectPlayerDocumentError(() => restorePlayerDocument(document), 'too-large')
+  expectPlayerDocumentError(() => restorePlayerDocument(legacyDocument), 'too-large')
 })
