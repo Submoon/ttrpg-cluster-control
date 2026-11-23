@@ -145,17 +145,79 @@ test('a selected player system includes its full detail and bounded incoming and
   const nameTextIndex = image.svg.indexOf('River &amp; Vale</text>')
   const nameGroupStart = image.svg.lastIndexOf('<g transform="translate(', nameTextIndex)
   const nameGroup = image.svg.slice(nameGroupStart, nameTextIndex)
+  const nameX = Number(nameGroup.match(/translate\(([-\d.]+) /)?.[1])
   const nameY = Number(nameGroup.match(/translate\([^ ]+ ([^)]+)\)/)?.[1])
+  expect(nameX).toBeGreaterThan(400)
   expect(nameY).toBeLessThan(180)
   expect(nameGroup).not.toContain('<line ')
-  expect(image.svg).not.toContain('Remote Reach')
+  expect(image.svg).toContain('Jump-2')
+  expect(image.svg).toContain('Jump-3')
+  expect(image.svg).toContain('Remote Reach')
   expect(image.svg).not.toContain('Remote Gate')
   expect(image.svg).not.toContain('Unknown destination')
   expect(image.svg).not.toContain('Inspector text')
   expect(image.svg.match(/class="cluster-route-line player-image-route-stub"/g)).toHaveLength(3)
+  expect(image.svg.match(/class="player-image-system-route-caption"/g)).toHaveLength(3)
   expect(image.svg.match(/d="M 416 240 C [^"]+"/g)).toHaveLength(2)
   expect(image.svg).toContain('stroke-dasharray="6 5"')
+  const viewBox = image.svg.match(/viewBox="([^"]+)"/)?.[1]
+  if (!viewBox) throw new Error('The selected player image has no viewBox.')
+  const [viewX, viewY, viewWidth, viewHeight] = viewBox.split(/\s+/).map(Number)
+  const captionBounds: Array<{ x: number; y: number; width: number; height: number }> = []
+  for (const [, centerX, centerY, body] of image.svg.matchAll(/<g class="player-image-system-route-caption" transform="translate\(([-\d.]+) ([-\d.]+)\)">([\s\S]*?)<\/g>/gu)) {
+    const rect = body?.match(/<rect[^>]*x="([-\d.]+)"[^>]*y="([-\d.]+)"[^>]*width="([-\d.]+)"[^>]*height="([-\d.]+)"/)
+    if (!centerX || !centerY || !rect) throw new Error('The selected player route caption has no measurable bounds.')
+    const x = Number(centerX) + Number(rect[1])
+    const y = Number(centerY) + Number(rect[2])
+    const width = Number(rect[3])
+    const height = Number(rect[4])
+    captionBounds.push({ x, y, width, height })
+    expect(x).toBeGreaterThanOrEqual(viewX!)
+    expect(y).toBeGreaterThanOrEqual(viewY!)
+    expect(x + width).toBeLessThanOrEqual(viewX! + viewWidth!)
+    expect(y + height).toBeLessThanOrEqual(viewY! + viewHeight!)
+  }
+  const nameTransform = nameGroup.match(/transform="translate\(([-\d.]+) ([-\d.]+)\)"/)
+  const nameRectAttributes = nameGroup.match(/<rect([^>]*)>/)?.[1]
+  const nameAttribute = (attribute: string) => nameRectAttributes?.match(new RegExp(`${attribute}="([-\\d.]+)"`))?.[1]
+  if (!nameTransform || !nameRectAttributes || !nameAttribute('x') || !nameAttribute('width') || !nameAttribute('height')) {
+    throw new Error('The selected player title has no measurable bounds.')
+  }
+  const title = {
+    x: Number(nameTransform[1]) + Number(nameAttribute('x')),
+    y: Number(nameTransform[2]) + Number(nameAttribute('y') ?? 0),
+    width: Number(nameAttribute('width')),
+    height: Number(nameAttribute('height')),
+  }
+  for (const caption of captionBounds) {
+    const overlapsTitle = caption.x < title.x + title.width && caption.x + caption.width > title.x
+      && caption.y < title.y + title.height && caption.y + caption.height > title.y
+    expect(overlapsTitle).toBe(false)
+  }
   expect(image.width).toBeLessThan(500)
+})
+
+test('a selected player route reveals a destination name only for a Revealed opposite system @pure', () => {
+  const document = publicDocument()
+  document.systems[1] = {
+    id: 'system-2',
+    position: { x: 2600, y: 500 },
+    disclosure: 'known-type',
+    type: 'star-system',
+    label: 'Star system',
+  }
+  const image = serializeContinuousPlayerMapImage(
+    document,
+    { scope: 'system', systemId: 'system-1' },
+    'print-light',
+  )
+
+  expect(image.svg).toContain('Jump-2')
+  expect(image.svg).toContain('Jump-3')
+  expect(image.svg).not.toContain('Star system')
+  expect(image.svg).not.toContain('Remote Reach')
+  expect(image.svg).not.toContain('Remote Gate')
+  expect(image.svg).not.toContain('Unknown destination')
 })
 
 test('the current player image uses its drawable crop and dims repeated public IDs only in the filtered system @pure', () => {

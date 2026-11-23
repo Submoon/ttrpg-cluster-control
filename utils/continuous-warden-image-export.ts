@@ -32,6 +32,7 @@ import {
   type MapImageScope,
 } from './map-image-scope'
 import { clusterRoutePresentationLabel } from './cluster-route-presentation'
+import { continuousSystemRouteCaptionLayouts } from './continuous-system-route-caption'
 
 const exportPadding = 24
 const systemExportPadding = 12
@@ -257,6 +258,17 @@ export async function exportContinuousWardenMapImage(
       for (const attribute of Array.from(clone.attributes)) {
         if (attribute.name.startsWith('data-v-')) routeLayer.setAttribute(attribute.name, '')
       }
+      const selectedName = imageLabels.find(label => label.projection.id === selected?.id)
+      const systemRouteCaptions = selected && request.scope === 'system'
+        ? selectedSystemRouteCaptions(
+            request,
+            selected,
+            routeRecords,
+            routeGeometries,
+            scale,
+            selectedName ? [systemNameBounds(selectedName)] : [],
+          )
+        : new Map<string, ReturnType<typeof continuousSystemRouteCaptionLayouts>[number]>()
       for (const route of routeRecords) {
         const geometry = routeGeometries.get(route.id)
         if (!geometry) continue
@@ -264,6 +276,7 @@ export async function exportContinuousWardenMapImage(
         const path = incident
           ? trimMapImageRoute(geometry, route.fromSystemId === selected!.id ? 'start' : 'end', selectedRoutePrefixLength)
           : geometry
+        const systemRouteCaption = systemRouteCaptions.get(route.id)
         const routeLabel = incident
           ? null
           : request.scope === 'viewport'
@@ -276,8 +289,9 @@ export async function exportContinuousWardenMapImage(
           incident,
           routeLabel,
           sceneViewport,
-          request.scope === 'viewport' ? request.svgPixelScale : 1,
+          request.scope === 'viewport' ? request.svgPixelScale : request.scope === 'system' ? scale : 1,
           request.scope === 'cluster',
+          systemRouteCaption,
         )
       }
       content.append(routeLayer)
@@ -317,11 +331,12 @@ function scaleSystemNameForExport(
   const scale = Number.isFinite(outputScale) && outputScale > 0 ? outputScale : 1
   const titleScale = Math.min(1, (systemExportSvgMaximumEdge * 0.82) / label.width)
   const height = label.height * titleScale / scale
+  const width = label.width * titleScale / scale
   return {
     ...label,
-    centerX: selected.envelope.x + selected.envelope.width / 2,
+    centerX: selected.envelope.x + selected.envelope.width - width / 2 - 8 / scale,
     top: selected.envelope.y - height - 12 / scale,
-    width: label.width * titleScale / scale,
+    width,
     height,
     fontSize: label.fontSize * titleScale / scale,
     hasLeader: false,
@@ -354,6 +369,11 @@ function sceneFrames(
   displayFrames: ReadonlyMap<string, SvgViewportRect>,
   systemTextScale: number | null = 1,
 ) {
+  const selectedLabel = labels.find(label => label.projection.id === selected?.id)
+  const titleObstacles = selectedLabel ? [systemNameBounds(selectedLabel)] : []
+  const systemCaptions = selected && request.scope === 'system' && systemTextScale !== null
+    ? selectedSystemRouteCaptions(request, selected, routes, geometries, systemTextScale, titleObstacles)
+    : new Map<string, ReturnType<typeof continuousSystemRouteCaptionLayouts>[number]>()
   const routeBounds = routes.flatMap(route => {
     const geometry = geometries.get(route.id)
     if (!geometry) return []
@@ -364,7 +384,10 @@ function sceneFrames(
         route.fromSystemId === selected.id ? 'start' : 'end',
         selectedRoutePrefixLength,
       )
-      return [cubicBounds(prefix)]
+      const bounds: SvgViewportRect[] = [cubicBounds(prefix)]
+      const caption = systemCaptions.get(route.id)
+      if (caption) bounds.push(caption.bounds)
+      return bounds
     }
     const bounds = [geometry.bounds]
     bounds.push({
@@ -392,7 +415,6 @@ function sceneFrames(
     ...labelBounds,
     ...routeBounds,
   ]) ?? { x: 0, y: 0, width: 960, height: 560 }
-  const selectedLabel = labels.find(label => label.projection.id === selected?.id)
   const selectedSystem = selected
     ? mapImageBounds([
         selected.envelope,
@@ -661,6 +683,7 @@ function appendRoute(
   viewport: MapViewport,
   svgPixelScale: number,
   includeUnresolvedCaption: boolean,
+  systemRouteCaption?: ReturnType<typeof continuousSystemRouteCaptionLayouts>[number],
 ): void {
   const routeMark = createScopedElement(parent, 'g', `cluster-route${route.toSystemId === null ? ' is-unresolved' : ''}`)
   routeMark.setAttribute('data-route-id', route.id)
@@ -689,6 +712,7 @@ function appendRoute(
     badge.append(background, label)
     routeMark.append(badge)
   }
+  if (systemRouteCaption) appendSystemRouteCaption(routeMark, systemRouteCaption, viewport.k * svgPixelScale)
 
   if (route.toSystemId === null && !incident) {
     const marker = createScopedElement(parent, 'circle', 'cluster-exit-mark')
@@ -713,6 +737,84 @@ function appendRoute(
     }
   }
   parent.append(routeMark)
+}
+
+function appendSystemRouteCaption(
+  parent: SVGElement,
+  caption: ReturnType<typeof continuousSystemRouteCaptionLayouts>[number],
+  scenePixelScale: number,
+): void {
+  const scale = Math.max(0.0001, scenePixelScale)
+  const badge = createScopedElement(parent, 'g', 'continuous-warden-route-badge continuous-warden-system-route-caption')
+  badge.setAttribute('transform', `translate(${caption.x} ${caption.y}) scale(${1 / scale})`)
+  const background = createScopedElement(parent, 'rect', 'cluster-route-label-bg')
+  background.setAttribute('x', String(-caption.width * scale / 2))
+  background.setAttribute('y', String(-caption.height * scale / 2))
+  background.setAttribute('width', String(caption.width * scale))
+  background.setAttribute('height', String(caption.height * scale))
+  background.setAttribute('rx', '5')
+  const jumpLabel = createScopedElement(parent, 'text', 'cluster-route-label')
+  jumpLabel.setAttribute('font-size', String(caption.fontPixels))
+  jumpLabel.setAttribute('y', caption.destinationLabel ? '-2' : '4')
+  jumpLabel.textContent = caption.jumpLabel
+  badge.append(background, jumpLabel)
+  if (caption.destinationLabel) {
+    const destinationLabel = createScopedElement(parent, 'text', 'cluster-route-label')
+    destinationLabel.setAttribute('font-size', String(caption.fontPixels))
+    destinationLabel.setAttribute('y', String(caption.fontPixels + 2))
+    destinationLabel.textContent = caption.destinationLabel
+    badge.append(destinationLabel)
+  }
+  parent.append(badge)
+}
+
+function systemRouteDestination(
+  request: ContinuousWardenImageRequest,
+  route: JumpCluster['routes'][number],
+  selected: ContinuousWardenSystemProjection,
+): string {
+  if (route.toSystemId === null) return `Unknown: ${route.unresolvedExit}`
+  const remoteSystemId = route.toSystemId === selected.id ? route.fromSystemId : route.toSystemId
+  return request.cluster.systems.find(system => system.id === remoteSystemId)?.name ?? 'Star System'
+}
+
+function selectedSystemRouteCaptions(
+  request: ContinuousWardenImageRequest,
+  selected: ContinuousWardenSystemProjection,
+  routes: readonly JumpCluster['routes'][number][],
+  geometries: ReadonlyMap<string, ContinuousMapRouteGeometry>,
+  pixelsPerSceneUnit: number,
+  obstacles: readonly SvgViewportRect[] = [],
+): Map<string, ReturnType<typeof continuousSystemRouteCaptionLayouts>[number]> {
+  const inputs = routes.flatMap((route) => {
+    const geometry = geometries.get(route.id)
+    if (!geometry) return []
+    const prefix = trimMapImageRoute(
+      geometry,
+      route.fromSystemId === selected.id ? 'start' : 'end',
+      selectedRoutePrefixLength,
+    )
+    return [{
+      id: route.id,
+      request: {
+        jumpLevel: route.jumpLevel,
+        destinationLabel: systemRouteDestination(request, route, selected),
+        selectedAnchor: selected.anchor,
+        remoteEndpoint: prefix.end,
+      },
+    }]
+  })
+  const captions = continuousSystemRouteCaptionLayouts(inputs.map(input => input.request), pixelsPerSceneUnit, obstacles)
+  return new Map(inputs.map((input, index) => [input.id, captions[index]!]))
+}
+
+function systemNameBounds(label: ExportLabel): SvgViewportRect {
+  return {
+    x: label.centerX - label.width / 2,
+    y: label.top,
+    width: label.width,
+    height: label.height,
+  }
 }
 
 function continuousRouteLabelWidth(jumpLevel: number): number {

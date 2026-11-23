@@ -93,6 +93,7 @@ async function inspectContinuousImage(
   systemNames: string[]
   routeIds: string[]
   routeLabelIds: string[]
+  systemRouteCaptions: Record<string, string[]>
   routePaths: Record<string, string>
   dashedRouteIds: string[]
   detailedSystemIds: string[]
@@ -151,6 +152,14 @@ async function inspectContinuousImage(
       routeIds: routeMarks.map(route => route.getAttribute('data-route-id')!).filter(Boolean),
       routeLabelIds: routeMarks.filter(route => route.querySelector('.cluster-route-label-bg'))
         .map(route => route.getAttribute('data-route-id')!).filter(Boolean),
+      systemRouteCaptions: Object.fromEntries(routeMarks.flatMap(route => {
+        const id = route.getAttribute('data-route-id')
+        const caption = route.querySelector('.continuous-warden-system-route-caption')
+        const labels = caption
+          ? [...caption.querySelectorAll('.cluster-route-label')].map(label => label.textContent?.trim() ?? '')
+          : []
+        return id && labels.length ? [[id, labels] as const] : []
+      })),
       routePaths: Object.fromEntries(routeMarks.flatMap(route => {
         const id = route.getAttribute('data-route-id')
         const path = route.querySelector('.cluster-route-line')?.getAttribute('d')
@@ -649,7 +658,12 @@ test('the default Warden map exports all three scopes from applied layout and ca
     'ticket19-incoming-route',
   ])
   expect(selectedScene.dashedRouteIds.sort()).toEqual(selectedScene.routeIds.sort())
-  expect(selectedScene.routeLabelIds).toEqual([])
+  expect(selectedScene.routeLabelIds.sort()).toEqual(selectedScene.routeIds.sort())
+  expect(selectedScene.systemRouteCaptions['campaign-baseline-route']).toEqual(['Jump-1', 'Harrow'])
+  expect(selectedScene.systemRouteCaptions['ticket19-incoming-route']).toEqual(['Jump-3', 'Harrow'])
+  expect(selectedScene.systemRouteCaptions['campaign-baseline-unresolved-route']).toEqual([
+    'Jump-12', 'Unknown: Uncharted exit beyond the Perseus Reach and outer navigation boundary',
+  ])
   expect(selectedScene.dimmedObjectIds).toEqual([])
   expect(selectedScene.detailedSystemIds).toEqual(['campaign-baseline-vesper'])
   expect(selectedScene.editorFrameSystemIds).toEqual([])
@@ -657,7 +671,7 @@ test('the default Warden map exports all three scopes from applied layout and ca
   expect(selectedScene.objectIds.sort()).toEqual(selectedSystem.objects.map(object => object.id).sort())
   expect(selectedScene.orbitIds.sort()).toEqual(selectedSystem.orbits.map(orbit => orbit.id).sort())
   expect(selectedScene.viewBox[2]).toBeLessThan(2000)
-  expect(selectedScene.texts).not.toContain(longCaption)
+  expect(selectedScene.texts).toContain(longCaption)
   for (const routeId of selectedScene.routeIds) {
     const path = selectedScene.routePaths[routeId]
     if (!path) throw new Error(`The selected-system export is missing incident route ${routeId}.`)

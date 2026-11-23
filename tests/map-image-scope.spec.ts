@@ -174,6 +174,106 @@ test('a Move name clears the top-left resize hit area without changing its frame
   expect(position.y).toBeCloseTo(camera.y + frame.y * camera.k + 12)
 })
 
+test('a Move name stays inside a frame near the viewport edge and clears every resize target during its glide @pure', { tag: '@pure' }, () => {
+  const frame = { x: 113.25, y: 38.5, width: 200, height: 150 }
+  const camera = { x: 0, y: 0, k: 4 }
+  const viewportRect = { x: 0, y: 0, width: 600, height: 400 }
+  const label = { x: 542, y: 356, width: 100 }
+  const frameLeft = camera.x + frame.x * camera.k
+  const frameTop = camera.y + frame.y * camera.k
+  const frameRight = camera.x + (frame.x + frame.width) * camera.k
+  const frameBottom = camera.y + (frame.y + frame.height) * camera.k
+  const cornerInset = 18 * (1 - Math.SQRT1_2) * camera.k
+  const halfHandle = CONTINUOUS_SYSTEM_RESIZE_HANDLE_PIXELS / 2
+  const targets = [
+    { x: frameLeft + cornerInset, y: frameTop + cornerInset },
+    { x: frameRight - cornerInset, y: frameTop + cornerInset },
+    { x: frameLeft + cornerInset, y: frameBottom - cornerInset },
+    { x: frameRight - cornerInset, y: frameBottom - cornerInset },
+  ]
+
+  for (const progress of [0, .25, .5, .75, 1]) {
+    const position = continuousMapNameLabelFramePosition(
+      label,
+      frame,
+      camera,
+      1,
+      progress,
+      viewportRect,
+      12,
+      CONTINUOUS_SYSTEM_RESIZE_HANDLE_PIXELS,
+    )
+    const left = position.x - label.width / 2
+    const right = position.x + label.width / 2
+    const bottom = position.y + 36
+    for (const target of targets) {
+      const overlaps = left < target.x + halfHandle && right > target.x - halfHandle
+        && position.y < target.y + halfHandle && bottom > target.y - halfHandle
+      expect(overlaps).toBe(false)
+    }
+    expect(left).toBeGreaterThanOrEqual(viewportRect.x)
+    expect(right).toBeLessThanOrEqual(viewportRect.x + viewportRect.width)
+    expect(position.y).toBeGreaterThanOrEqual(frameTop)
+    expect(bottom).toBeLessThanOrEqual(frameBottom)
+  }
+})
+
+test('a long Move name moves below corner targets to remain inside a narrow frame @pure', { tag: '@pure' }, () => {
+  const frame = { x: 20, y: 20, width: 300, height: 300 }
+  const camera = { x: 0, y: 0, k: 1 }
+  const viewportRect = { x: 0, y: 0, width: 500, height: 400 }
+  const label = { x: 250, y: 180, width: 270 }
+  const position = continuousMapNameLabelFramePosition(
+    label,
+    frame,
+    camera,
+    1,
+    1,
+    viewportRect,
+    12,
+    CONTINUOUS_SYSTEM_RESIZE_HANDLE_PIXELS,
+  )
+  const frameTop = camera.y + frame.y * camera.k
+  const frameBottom = camera.y + (frame.y + frame.height) * camera.k
+
+  expect(position.y).toBeGreaterThan(frameTop + 12)
+  expect(position.x - label.width / 2).toBeGreaterThanOrEqual(camera.x + frame.x * camera.k + 12)
+  expect(position.x + label.width / 2).toBeLessThanOrEqual(camera.x + (frame.x + frame.width) * camera.k - 12)
+  expect(position.y + 36).toBeLessThanOrEqual(frameBottom - 12)
+})
+
+test('a Move name avoids resize targets when the detail glide crosses a corner @pure', { tag: '@pure' }, () => {
+  const frame = { x: 20, y: 20, width: 300, height: 300 }
+  const camera = { x: 0, y: 0, k: 1 }
+  const viewportRect = { x: 0, y: 0, width: 500, height: 400 }
+  const label = { x: 70, y: 100, width: 100 }
+  const cornerInset = 18 * (1 - Math.SQRT1_2)
+  const halfHandle = CONTINUOUS_SYSTEM_RESIZE_HANDLE_PIXELS / 2
+  const topLeftHandle = {
+    x: camera.x + (frame.x + cornerInset) * camera.k,
+    y: camera.y + (frame.y + cornerInset) * camera.k,
+  }
+
+  for (const progress of [0, .7, .8, .9, 1]) {
+    const position = continuousMapNameLabelFramePosition(
+      label,
+      frame,
+      camera,
+      1,
+      progress,
+      viewportRect,
+      12,
+      CONTINUOUS_SYSTEM_RESIZE_HANDLE_PIXELS,
+    )
+    const overlaps = position.x - label.width / 2 < topLeftHandle.x + halfHandle
+      && position.x + label.width / 2 > topLeftHandle.x - halfHandle
+      && position.y < topLeftHandle.y + halfHandle
+      && position.y + 36 > topLeftHandle.y - halfHandle
+
+    expect(overlaps).toBe(false)
+  }
+})
+
 test('a Move name stays viewport-clamped and moves above the handle only when the right-side fit fails @pure', { tag: '@pure' }, () => {
   const frame = { x: 150, y: 30, width: 100, height: 80 }
   const camera = { x: 10, y: 20, k: 1.7 }

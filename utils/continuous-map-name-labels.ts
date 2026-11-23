@@ -51,46 +51,234 @@ export function continuousMapNameLabelFramePosition(
 ): Pick<Point, 'x' | 'y'> {
   const scale = Number.isFinite(svgPixelScale) && svgPixelScale > 0 ? svgPixelScale : 1
   const amount = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0
+  if (amount === 0) return { x: label.x, y: label.y }
   const inset = Math.max(0, insetPixels) / scale
   let targetX = viewport.x + frame.x * viewport.k + inset + label.width / 2
   let targetY = viewport.y + frame.y * viewport.k + inset
-  let handleCenterX: number | undefined
-  let handleCenterY: number | undefined
-  let handleEdge = Number.NEGATIVE_INFINITY
   const handleGap = Math.max(0, resizeHandleGapPixels) / scale
   if (resizeHandleHitAreaPixels > 0 && frame.width > 0 && frame.height > 0) {
     const cornerRadius = Math.min(CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS, frame.width / 2, frame.height / 2)
     const cornerInset = cornerRadius * (1 - Math.SQRT1_2)
-    handleCenterX = viewport.x + (frame.x + cornerInset) * viewport.k
-    handleCenterY = viewport.y + (frame.y + cornerInset) * viewport.k
-    handleEdge = handleCenterX + resizeHandleHitAreaPixels / (2 * scale)
-    targetX = handleEdge + handleGap + label.width / 2
+    const handleCenterX = viewport.x + (frame.x + cornerInset) * viewport.k
+    const handleRight = handleCenterX + resizeHandleHitAreaPixels / (2 * scale)
+    targetX = handleRight + handleGap + label.width / 2
   }
   if (viewportRect) {
     const margin = CONTINUOUS_SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS / scale
     const halfWidth = label.width / 2
-    targetX = clampToViewport(
-      targetX,
-      viewportRect.x + margin + halfWidth,
-      viewportRect.x + viewportRect.width - margin - halfWidth,
-    )
-    targetY = clampToViewport(
-      targetY,
-      viewportRect.y + margin,
-      viewportRect.y + viewportRect.height - margin - CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / scale,
-    )
-    if (handleCenterY !== undefined && targetX - halfWidth < handleEdge) {
-      targetY = clampToViewport(
-        handleCenterY - resizeHandleHitAreaPixels / (2 * scale) - handleGap - CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / scale,
-        viewportRect.y + margin,
-        viewportRect.y + viewportRect.height - margin - CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / scale,
+    const minimumX = viewportRect.x + margin + halfWidth
+    const maximumX = viewportRect.x + viewportRect.width - margin - halfWidth
+    const minimumY = viewportRect.y + margin
+    const maximumY = viewportRect.y + viewportRect.height - margin - CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / scale
+    if (resizeHandleHitAreaPixels > 0 && frame.width > 0 && frame.height > 0) {
+      const position = moveNameInsideVisibleFrame(
+        frame,
+        viewport,
+        viewportRect,
+        scale,
+        targetX,
+        targetY,
+        label.width,
+        CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / scale,
+        inset,
+        resizeHandleHitAreaPixels / scale,
+        handleGap,
       )
+      targetX = position.x
+      targetY = position.y
+    } else {
+      targetX = clampToViewport(targetX, minimumX, maximumX)
+      targetY = clampToViewport(targetY, minimumY, maximumY)
     }
   }
-  return {
+  const position = {
     x: label.x + (targetX - label.x) * amount,
     y: label.y + (targetY - label.y) * amount,
   }
+  if (resizeHandleHitAreaPixels > 0 && frame.width > 0 && frame.height > 0 && viewportRect) {
+    const handleRects = projectedResizeButtonRects(frame, viewport, resizeHandleHitAreaPixels / scale)
+    if (overlapsResizeTarget(
+      position.x,
+      position.y,
+      label.width,
+      CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / scale,
+      handleRects,
+    )) {
+      return moveNameInsideVisibleFrame(
+        frame,
+        viewport,
+        viewportRect,
+        scale,
+        position.x,
+        position.y,
+        label.width,
+        CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / scale,
+        inset,
+        resizeHandleHitAreaPixels / scale,
+        handleGap,
+      )
+    }
+  }
+  return position
+}
+
+interface ResizeTargetRect {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+/** Keeps Move labels inside the visible frame before falling back around its native resize buttons. */
+function moveNameInsideVisibleFrame(
+  frame: SvgViewportRect,
+  viewport: MapViewport,
+  viewportRect: SvgViewportRect,
+  scale: number,
+  preferredX: number,
+  preferredY: number,
+  labelWidth: number,
+  labelHeight: number,
+  frameInset: number,
+  resizeButtonSize: number,
+  resizeButtonGap: number,
+): Pick<Point, 'x' | 'y'> {
+  const frameLeft = viewport.x + frame.x * viewport.k
+  const frameTop = viewport.y + frame.y * viewport.k
+  const frameRight = viewport.x + (frame.x + frame.width) * viewport.k
+  const frameBottom = viewport.y + (frame.y + frame.height) * viewport.k
+  const margin = CONTINUOUS_SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS / scale
+  const viewLeft = viewportRect.x
+  const viewTop = viewportRect.y
+  const viewRight = viewportRect.x + viewportRect.width
+  const viewBottom = viewportRect.y + viewportRect.height
+  const halfWidth = labelWidth / 2
+  const handleRects = projectedResizeButtonRects(frame, viewport, resizeButtonSize)
+
+  const insideLeft = Math.max(frameLeft + frameInset, viewLeft)
+  const insideTop = Math.max(frameTop + frameInset, viewTop)
+  const insideRight = Math.min(frameRight - frameInset, viewRight)
+  const insideBottom = Math.min(frameBottom - frameInset, viewBottom)
+  const minimumInsideX = insideLeft + halfWidth
+  const maximumInsideX = insideRight - halfWidth
+  const minimumInsideY = insideTop
+  const maximumInsideY = insideBottom - labelHeight
+  if (maximumInsideX >= minimumInsideX && maximumInsideY >= minimumInsideY) {
+    const preferredInsideX = clampToViewport(preferredX, minimumInsideX, maximumInsideX)
+    const preferredInsideY = clampToViewport(preferredY, minimumInsideY, maximumInsideY)
+    if (!overlapsResizeTarget(preferredInsideX, preferredInsideY, labelWidth, labelHeight, handleRects)) {
+      return { x: preferredInsideX, y: preferredInsideY }
+    }
+    const topButtonBottom = Math.max(handleRects[0]!.bottom, handleRects[1]!.bottom)
+    const bottomButtonTop = Math.min(handleRects[2]!.top, handleRects[3]!.top)
+    const xs = uniqueCoordinates([
+      preferredInsideX,
+      clampToViewport(handleRects[0]!.right + halfWidth, minimumInsideX, maximumInsideX),
+      clampToViewport(handleRects[1]!.left - halfWidth, minimumInsideX, maximumInsideX),
+      (minimumInsideX + maximumInsideX) / 2,
+      minimumInsideX,
+      maximumInsideX,
+    ])
+    const ys = uniqueCoordinates([
+      preferredInsideY,
+      minimumInsideY,
+      clampToViewport(topButtonBottom + resizeButtonGap, minimumInsideY, maximumInsideY),
+      clampToViewport(bottomButtonTop - resizeButtonGap - labelHeight, minimumInsideY, maximumInsideY),
+      (minimumInsideY + maximumInsideY) / 2,
+      maximumInsideY,
+    ])
+    let best: Pick<Point, 'x' | 'y'> | undefined
+    let bestScore = Number.POSITIVE_INFINITY
+    for (const x of xs) {
+      for (const y of ys) {
+        if (overlapsResizeTarget(x, y, labelWidth, labelHeight, handleRects)) continue
+        const deltaX = x - preferredX
+        const deltaY = y - preferredY
+        const score = deltaX * deltaX + deltaY * deltaY
+        if (score < bestScore) {
+          best = { x, y }
+          bestScore = score
+        }
+      }
+    }
+    if (best) return best
+  }
+
+  const minimumX = viewLeft + margin + halfWidth
+  const maximumX = viewRight - margin - halfWidth
+  const minimumY = viewTop + margin
+  const maximumY = viewBottom - margin - labelHeight
+  const topButtonTop = Math.min(handleRects[0]!.top, handleRects[1]!.top)
+  const topButtonBottom = Math.max(handleRects[0]!.bottom, handleRects[1]!.bottom)
+  const bottomButtonTop = Math.min(handleRects[2]!.top, handleRects[3]!.top)
+  const bottomButtonBottom = Math.max(handleRects[2]!.bottom, handleRects[3]!.bottom)
+  const fallbackXs = uniqueCoordinates([
+    clampToViewport(preferredX, minimumX, maximumX),
+    clampToViewport(handleRects[0]!.right + halfWidth, minimumX, maximumX),
+    clampToViewport(handleRects[1]!.left - halfWidth, minimumX, maximumX),
+    clampToViewport((frameLeft + frameRight) / 2, minimumX, maximumX),
+    minimumX,
+    maximumX,
+  ])
+  const fallbackYs = uniqueCoordinates([
+    clampToViewport(topButtonTop - resizeButtonGap - labelHeight, minimumY, maximumY),
+    clampToViewport(bottomButtonTop - resizeButtonGap - labelHeight, minimumY, maximumY),
+    clampToViewport(topButtonBottom + resizeButtonGap, minimumY, maximumY),
+    clampToViewport(bottomButtonBottom + resizeButtonGap, minimumY, maximumY),
+    clampToViewport(preferredY, minimumY, maximumY),
+  ])
+  for (const y of fallbackYs) {
+    const clear = fallbackXs
+      .filter(x => !overlapsResizeTarget(x, y, labelWidth, labelHeight, handleRects))
+      .sort((left, right) => Math.abs(left - preferredX) - Math.abs(right - preferredX))[0]
+    if (clear !== undefined) return { x: clear, y }
+  }
+  return {
+    x: clampToViewport(preferredX, minimumX, maximumX),
+    y: clampToViewport(preferredY, minimumY, maximumY),
+  }
+}
+
+function overlapsResizeTarget(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  targets: readonly ResizeTargetRect[],
+): boolean {
+  const left = x - width / 2
+  const right = x + width / 2
+  const bottom = y + height
+  return targets.some(target => left < target.right && right > target.left && y < target.bottom && bottom > target.top)
+}
+
+function projectedResizeButtonRects(
+  frame: SvgViewportRect,
+  viewport: MapViewport,
+  buttonSize: number,
+): ResizeTargetRect[] {
+  const left = viewport.x + frame.x * viewport.k
+  const top = viewport.y + frame.y * viewport.k
+  const right = viewport.x + (frame.x + frame.width) * viewport.k
+  const bottom = viewport.y + (frame.y + frame.height) * viewport.k
+  const halfButton = buttonSize / 2
+  const cornerInset = Math.min(CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS, frame.width / 2, frame.height / 2)
+    * (1 - Math.SQRT1_2) * viewport.k
+  return [
+    { x: left + cornerInset, y: top + cornerInset },
+    { x: right - cornerInset, y: top + cornerInset },
+    { x: left + cornerInset, y: bottom - cornerInset },
+    { x: right - cornerInset, y: bottom - cornerInset },
+  ].map(({ x, y }) => ({
+    left: x - halfButton,
+    top: y - halfButton,
+    right: x + halfButton,
+    bottom: y + halfButton,
+  }))
+}
+
+function uniqueCoordinates(coordinates: readonly number[]): number[] {
+  return coordinates.filter((coordinate, index) => coordinates.indexOf(coordinate) === index)
 }
 
 let textMeasureContext: CanvasRenderingContext2D | null | undefined

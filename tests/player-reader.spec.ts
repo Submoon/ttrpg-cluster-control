@@ -201,7 +201,7 @@ test('the default player reader opens shared links and files with one camera and
 
   const system = page.getByRole('region', { name: 'Player-visible continuous map', exact: true })
   const scene = system.locator('svg.player-continuous-map-scene')
-  const camera = scene.locator(':scope > g')
+  const camera = scene.locator(':scope > g[transform]')
   const publicSystemMarks = system.locator(`.player-continuous-system[data-player-system-id="${publicSystem.id}"]`)
   const publicSystemName = system.locator('.player-continuous-name-target')
     .and(system.getByRole('button', { name: 'Inspect Public System', exact: true }))
@@ -362,6 +362,12 @@ test('the default player reader opens shared links and files with one camera and
   }
   expect(exportedSvg).toContain('fill="#A13B7C"')
   expect(exportedSvg).not.toContain('map-search-locator')
+  const jumpCaptions = await page.evaluate(source => {
+    const svg = new DOMParser().parseFromString(source, 'image/svg+xml')
+    return [...svg.querySelectorAll('.player-image-system-route-caption')]
+      .map(caption => [...caption.querySelectorAll('text')].map(line => line.textContent))
+  }, exportedSvg)
+  expect(jumpCaptions).toContainEqual(['Jump-3', 'Remote System'])
   await expect(searchLocator).toBeVisible()
   await page.getByRole('button', { name: 'Map files', exact: true }).click()
 

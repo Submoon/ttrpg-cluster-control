@@ -27,6 +27,7 @@ import { buildContinuousMapRouteGeometries, type ContinuousMapRouteGeometry } fr
 import { continuousSystemFrames } from './continuous-system-frames'
 import { CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS, placeContinuousMapRouteLabels } from './continuous-map-route-labels'
 import { CLUSTER_ROUTE_PRESENTATION } from './cluster-route-presentation'
+import { continuousSystemRouteCaptionLayouts } from './continuous-system-route-caption'
 import { PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS } from './cluster-system-presentation'
 import { playerObjectPresentation } from './player-object-presentation'
 
@@ -99,7 +100,7 @@ export function serializeContinuousPlayerMapImage(
       : undefined
     return [{ ...route, geometry, ...(stub ? { stub } : {}) }]
   })
-  const geometryBounds = snapshot?.drawable ?? mapImageBounds([
+  const baseGeometryCandidates = [
     ...(selected
       ? [selectedContentBounds, ...routes.map(route => routeStubBounds(route.stub!))]
       : displayedSystems.map(systemImageBounds)),
@@ -111,6 +112,45 @@ export function serializeContinuousPlayerMapImage(
         y: route.geometry.end.y + anonymousBounds.y,
       } : null,
     ])),
+  ]
+  const baseGeometryBounds = snapshot?.drawable ?? mapImageBounds(baseGeometryCandidates)
+    ?? (selected ? pointBounds(selected.anchor) : fallbackBounds)
+  const titleSeedViewport = snapshot?.nameViewport ?? automaticNameViewport(displayedSystems, baseGeometryBounds)
+  const selectedTitleSeed = selected
+    ? layoutPlayerContinuousNameLabels(displayedSystems, camera, svgPixelScale, titleSeedViewport)
+      .find(label => label.systemId === selected.id)
+    : undefined
+  const selectedContentRight = selectedContentBounds
+    ? selectedContentBounds.x + selectedContentBounds.width
+    : selected?.anchor.x ?? 0
+  const selectedContentTop = selectedContentBounds?.y ?? selected?.anchor.y ?? 0
+  const selectedTitleBounds = selectedTitleSeed && selected
+    ? nameBounds({
+        ...selectedTitleSeed,
+        x: selectedContentRight - 8 - selectedTitleSeed.width / 2,
+        y: selectedContentTop - selectedTitleSeed.height - 8,
+      })
+    : undefined
+  const routeCaptions = selected
+    ? (() => {
+        const layouts = continuousSystemRouteCaptionLayouts(routes.map((route) => {
+          const remoteSystemId = route.toSystemId === selected.id ? route.fromSystemId : route.toSystemId
+          const remoteSystem = remoteSystemId ? publicMarkers.get(remoteSystemId) : undefined
+          const publicDestination = remoteSystem?.disclosure === 'revealed' ? remoteSystem.label : undefined
+          return {
+            jumpLevel: route.jumpLevel,
+            destinationLabel: publicDestination,
+            selectedAnchor: selected.anchor,
+            remoteEndpoint: route.stub!.end,
+          }
+        }), 1, selectedTitleBounds ? [selectedTitleBounds] : [])
+        return routes.map((route, index) => [route.id, layouts[index]!] as const)
+      })()
+    : []
+  const routeCaptionsById = new Map(routeCaptions)
+  const geometryBounds = snapshot?.drawable ?? mapImageBounds([
+    ...baseGeometryCandidates,
+    ...routeCaptions.map(([, caption]) => caption.bounds),
   ]) ?? (selected ? pointBounds(selected.anchor) : fallbackBounds)
   const nameViewport = snapshot?.nameViewport ?? automaticNameViewport(displayedSystems, geometryBounds)
   const nameSystems = snapshot
@@ -131,13 +171,13 @@ export function serializeContinuousPlayerMapImage(
     nameSystems, camera, svgPixelScale, nameViewport,
   ).map((label) => {
     if (selected) {
-      const centerX = selectedContentBounds
-        ? selectedContentBounds.x + selectedContentBounds.width / 2
+      const contentRight = selectedContentBounds
+        ? selectedContentBounds.x + selectedContentBounds.width
         : selected.anchor.x
       const contentTop = selectedContentBounds?.y ?? selected.anchor.y
       return {
         ...label,
-        x: centerX,
+        x: contentRight - 8 - label.width / 2,
         y: contentTop - label.height - 8,
         hasLeader: false,
       }
@@ -173,7 +213,7 @@ export function serializeContinuousPlayerMapImage(
   const dimmed = new Set(snapshot?.dimmedObjects?.ids)
   const scene = [
     ...routes.map(route => selected
-      ? routeStubSvg(route, paint)
+      ? routeStubSvg(route, routeCaptionsById.get(route.id), paint)
       : routeSvg(route, routeLabels?.get(route.id), scenePixelScale, paint)),
     ...displayedSystems.map(system => systemSvg(
       system,
@@ -360,10 +400,14 @@ function objectSvg(
   }, mark + text)
 }
 
-function routeStubSvg(route: ImageRoute, paint: PlayerMapPaint): string {
+function routeStubSvg(
+  route: ImageRoute,
+  caption: ReturnType<typeof continuousSystemRouteCaptionLayouts>[number] | undefined,
+  paint: PlayerMapPaint,
+): string {
   const prefix = route.stub!
   const stroke = route.unresolved ? paint.mapUnresolved : paint.mapRoute
-  return svgElement('path', {
+  const line = svgElement('path', {
     class: 'cluster-route-line player-image-route-stub',
     d: prefix.path,
     fill: 'none',
@@ -372,6 +416,48 @@ function routeStubSvg(route: ImageRoute, paint: PlayerMapPaint): string {
     'stroke-dasharray': '6 5',
     ...fixedStroke,
   })
+  const captionSvg = caption
+    ? systemRouteCaptionSvg(caption, paint)
+    : ''
+  return line + captionSvg
+}
+
+function systemRouteCaptionSvg(
+  caption: ReturnType<typeof continuousSystemRouteCaptionLayouts>[number],
+  paint: PlayerMapPaint,
+): string {
+  const background = svgElement('rect', {
+    x: -caption.width / 2,
+    y: -caption.height / 2,
+    width: caption.width,
+    height: caption.height,
+    rx: 5,
+    fill: paint.mapLabelBackground,
+    stroke: paint.mapLabelBorder,
+    'stroke-width': 1.25,
+    ...fixedStroke,
+  })
+  const firstLineY = caption.destinationLabel ? -2 : caption.fontPixels * .35
+  const jumpLabel = svgElement('text', {
+    y: firstLineY,
+    'text-anchor': 'middle',
+    fill: paint.mapText,
+    'font-family': 'Consolas, monospace',
+    'font-size': caption.fontPixels,
+  }, xml(caption.jumpLabel))
+  const destinationLabel = caption.destinationLabel
+    ? svgElement('text', {
+        y: caption.fontPixels + 2,
+        'text-anchor': 'middle',
+        fill: paint.mapText,
+        'font-family': 'Consolas, monospace',
+        'font-size': caption.fontPixels,
+      }, xml(caption.destinationLabel))
+    : ''
+  return svgElement('g', {
+    class: 'player-image-system-route-caption',
+    transform: `translate(${caption.x} ${caption.y})`,
+  }, background + jumpLabel + destinationLabel)
 }
 
 function nameSvg(name: PlayerContinuousNameLabel, svgPixelScale: number, paint: PlayerMapPaint): string {
