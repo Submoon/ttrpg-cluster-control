@@ -103,8 +103,8 @@ test('far unresolved exits stay reachable after Fit and export as a complete bou
   await zoom.getByRole('button', { name: 'Fit map', exact: true }).click()
   const fittedScale = Number((await workspaceZoomOutput(page).textContent())?.replace('%', ''))
   expect(fittedScale).toBeGreaterThan(0)
-  // This authored extent cannot fit at the historical 25% camera floor.
-  expect(fittedScale).toBeLessThan(25)
+  // Distant content can take the Warden camera below its usual zoom floor.
+  expect(fittedScale).toBeLessThan(5)
   await expectFittedFeatures(map)
   const fittedCamera = await map.locator('.cluster-map-content').getAttribute('transform')
   const hierarchy = await openWorkspaceHierarchy(page)

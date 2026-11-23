@@ -180,7 +180,9 @@
         :scope="mapFileScope"
         :active-view="activeView"
         :continuous-map="props.continuousMap"
+        :image-cluster-id="workspace.cluster.id"
         :selected-image-system-id="props.selectedImageSystemId"
+        :image-systems="imageSystems"
         :image-available="Boolean(activeMap)"
         :restore-loading="props.restoreLoading"
         :export-error="props.exportError"
@@ -293,6 +295,7 @@ const emit = defineEmits<{
     palette: MapImagePalette,
     scope: MapImageScope | null,
     selectedSystemId: string | null,
+    systemImageTarget: 'inspected' | 'explicit',
   ]
   'export-player-json': []
   'export-player-image': [format: MapImageFormat, palette: MapImagePalette]
@@ -330,6 +333,7 @@ const searchCriteriaValues = computed(() => mutableCriteriaValues(props.filterCr
 const systemImportFileInput = ref<HTMLInputElement | null>(null)
 const clusterRestoreFileInput = ref<HTMLInputElement | null>(null)
 const workspace = computed(() => props.workspace)
+const imageSystems = computed(() => workspace.value?.cluster.systems.map(({ id, name }) => ({ id, name })) ?? [])
 const selectedSystem = computed(() => props.selectedSystem)
 const activeView = computed(() => props.activeView)
 const hierarchyOpen = computed(() => props.hierarchyOpen)
@@ -363,9 +367,18 @@ watch(() => props.compactModalOpen, open => {
   if (open) headerMapActionsOpen.value = false
 })
 
-function exportMapImage(format: MapImageFormat, lightForPrinting: boolean, imageScope: MapImageScope): void {
+function exportMapImage(
+  format: MapImageFormat,
+  lightForPrinting: boolean,
+  imageScope: MapImageScope,
+  explicitSystemId: string | null = null,
+  systemImageTargetOverride: 'inspected' | 'explicit' = 'inspected',
+): void {
   const continuousMap = props.continuousMap ?? false
-  const selectedSystemId = continuousMap && imageScope === 'system' ? props.selectedImageSystemId ?? null : null
+  const selectedSystemId = continuousMap && imageScope === 'system'
+    ? explicitSystemId ?? props.selectedImageSystemId ?? null
+    : null
+  const systemImageTarget = systemImageTargetOverride
   const selectedImageSystem = selectedSystemId
     ? workspace.value?.cluster.systems.find(system => system.id === selectedSystemId)
     : undefined
@@ -375,7 +388,7 @@ function exportMapImage(format: MapImageFormat, lightForPrinting: boolean, image
     ? 'star-system'
     : 'jump-cluster'
   const palette: MapImagePalette = lightForPrinting ? 'print-light' : 'active'
-  emit('export-map-image', map, kind, format, palette, continuousMap ? imageScope : null, selectedSystemId)
+  emit('export-map-image', map, kind, format, palette, continuousMap ? imageScope : null, selectedSystemId, systemImageTarget)
 }
 
 function exportPlayerImage(format: MapImageFormat, lightForPrinting: boolean): void {

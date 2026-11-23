@@ -19,6 +19,7 @@ import { downloadBlob, exportFileName } from '../utils/browser-download'
 import type { WorkspaceMutationExecutor } from './editor-workflows/workspace-mutations'
 
 type MapKind = 'jump-cluster' | 'star-system'
+type SystemImageTarget = 'inspected' | 'explicit'
 
 interface CurrentMapImage {
   map: MapImageExporter | null
@@ -36,6 +37,7 @@ interface WorkspaceFileActionsOptions {
     kind: MapKind,
     scope: MapImageScope | null,
     selectedSystemId: string | null,
+    systemImageTarget: SystemImageTarget,
   ) => CurrentMapImage | null
   getAppliedRevision?: () => number
   getFieldDefinitionImportConflict: (candidate: LocalWorkspace) => { message: string } | null
@@ -293,10 +295,11 @@ export function useWorkspaceFiles({
     palette: MapImagePalette = 'active',
     scope: MapImageScope | null = null,
     selectedSystemId: string | null = null,
+    systemImageTarget: SystemImageTarget = 'inspected',
   ): Promise<void> {
     if (disposed || !map) return
     const initialWorkspace = workspace.value
-    const initialMap = getCurrentMapImage(kind, scope, selectedSystemId)
+    const initialMap = getCurrentMapImage(kind, scope, selectedSystemId, systemImageTarget)
     if (!initialWorkspace || !initialMap?.map || initialMap.map !== map
       || initialMap.kind !== kind || initialMap.scope !== scope
       || initialMap.selectedSystemId !== selectedSystemId) return
@@ -307,7 +310,7 @@ export function useWorkspaceFiles({
     let imageContextKey: string | undefined
     const isCurrent = (): boolean => {
       const currentWorkspace = workspace.value
-      const currentMap = getCurrentMapImage(kind, scope, selectedSystemId)
+      const currentMap = getCurrentMapImage(kind, scope, selectedSystemId, systemImageTarget)
       return !disposed
         && mapImageOperation === activeOperation
         && currentWorkspace !== null
@@ -326,7 +329,7 @@ export function useWorkspaceFiles({
       if (!isCurrent()) return
       appliedRevision = getAppliedRevision()
       imageContextKey = map.getImageContextKey?.(scope)
-      const current = getCurrentMapImage(kind, scope, selectedSystemId)
+      const current = getCurrentMapImage(kind, scope, selectedSystemId, systemImageTarget)
       if (!current?.name || !isCurrent()) return
       const image = await map.exportImage(format, palette, {
         scope,

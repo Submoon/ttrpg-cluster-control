@@ -683,21 +683,21 @@ export async function ensureMapDragPointsReachable(
     return sourceReachable && targetReachable
   }
 
-  const initialZoom = (await workspaceZoomOutput(page).textContent())?.trim()
+  const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out' })
+  const startedAtMinimum = await zoomOut.isDisabled()
   if (await isReachable()) return
 
   await closeChooserBeforeCameraChange()
   await page.getByRole('button', { name: 'Fit map', exact: true }).click()
-  if (initialZoom === '25%') {
+  if (startedAtMinimum) {
     await closeChooserBeforeCameraChange()
     await zoomOutMapToMinimum(page)
     if (!(await isReachable())) {
-      throw new Error('Map drag points are unreachable at the required 25% zoom after Fit.')
+      throw new Error('Map drag points are unreachable at the required minimum zoom after Fit.')
     }
     return
   }
 
-  const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out' })
   for (let attempt = 0; attempt < 64; attempt += 1) {
     if (await isReachable()) return
     await closeChooserBeforeCameraChange()
@@ -1077,7 +1077,7 @@ export async function zoomOutMapToMinimum(page: import('@playwright/test').Page)
   for (let step = 0; step < 64 && !(await zoomOut.isDisabled()); step += 1) {
     await zoomOut.click()
   }
-  await expect(workspaceZoomOutput(page)).toHaveText('25%')
+  await expect(zoomOut).toBeDisabled()
 }
 
 /** Opens the compact popover that contains the zoom slider and named pan controls. */

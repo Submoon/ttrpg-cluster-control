@@ -194,6 +194,38 @@ async function inspectContinuousImage(
   }, content)
 }
 
+async function measureSystemImageLabels(page: Page, source: string) {
+  return page.evaluate(async svg => {
+    // Load the downloaded SVG in its own document so editor CSS cannot affect its typography.
+    const frame = document.createElement('iframe')
+    frame.style.cssText = 'position:absolute;left:-20000px;width:4096px;height:4096px'
+    const loaded = new Promise<void>(resolve => frame.addEventListener('load', () => resolve(), { once: true }))
+    frame.srcdoc = svg
+    document.body.append(frame)
+    try {
+      await loaded
+      const root = frame.contentDocument?.querySelector('svg')
+      const view = frame.contentWindow
+      if (!root || !view) throw new Error('The system SVG could not be opened as a standalone image.')
+      const bounds = root.getBoundingClientRect()
+      return [...root.querySelectorAll<SVGTextElement>('.continuous-warden-object-name, .continuous-warden-object-key')]
+        .map(label => {
+          const transform = label.getScreenCTM()
+          if (!transform) throw new Error('The system image label has no rendered scale.')
+          const labelBounds = label.getBoundingClientRect()
+          return {
+            name: label.classList.contains('continuous-warden-object-name'),
+            pixels: parseFloat(view.getComputedStyle(label).fontSize) * Math.hypot(transform.a, transform.b),
+            insideImage: labelBounds.left >= bounds.left && labelBounds.right <= bounds.right
+              && labelBounds.top >= bounds.top && labelBounds.bottom <= bounds.bottom,
+          }
+        })
+    } finally {
+      frame.remove()
+    }
+  }, source)
+}
+
 async function setPrintChoice(page: import('@playwright/test').Page, enabled: boolean): Promise<void> {
   const images = await openMapFilesSection(page, 'Export an image')
   const printChoice = images.getByRole('menuitemcheckbox', { name: 'Light for printing', exact: true })
@@ -344,6 +376,8 @@ test('Warden system images keep applied geometry through drafts and preserve the
   expect(appliedScene.dimmedObjectIds).toEqual([])
   const title = appliedScene.systemNameBounds[system.id]
   if (!title) throw new Error('The long applied system name needs export bounds.')
+  // This system has a compact map even when its title contains 70 wide characters.
+  expect(appliedScene.height).toBeGreaterThan(appliedScene.width / 4)
   expect(title.x).toBeGreaterThanOrEqual(appliedScene.viewBox[0])
   expect(title.x + title.width).toBeLessThanOrEqual(appliedScene.viewBox[0] + appliedScene.viewBox[2])
   const viewport = await downloadImage(page, 'image/svg+xml', 'Current viewport')
@@ -411,6 +445,36 @@ test('Warden system images keep applied geometry through drafts and preserve the
   await setPrintChoice(page, false)
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(before)
   await expect(page.locator('html')).toHaveClass(/\bdark\b/)
+})
+
+test('a filtered system image can be downloaded from the compact menu without inspecting the system', async ({ page }) => {
+  await importCampaignWorkspace(page, campaignBaselineFixture, { width: 390, height: 844 })
+  const map = wardenMap(page)
+  const camera = map.locator('.cluster-map-content')
+  const before = await camera.getAttribute('transform')
+  const images = await openMapFilesSection(page, 'Export an image', 'keyboard')
+  const chooseSystem = images.getByRole('menuitem', { name: 'Export a system…', exact: true })
+  await chooseSystem.press('ArrowRight')
+  const systems = page.getByRole('menu', { name: 'Export a system…', exact: true })
+  const filter = systems.getByLabel('Filter systems', { exact: true })
+  await expect(filter).toBeVisible()
+  await expect(systems.getByRole('menuitem', { name: 'Vesper Prime', exact: true })).toBeVisible()
+  await filter.fill('har')
+  await expect(systems.getByRole('menuitem', { name: 'Vesper Prime', exact: true })).toHaveCount(0)
+  await systems.getByRole('menuitem', { name: 'Harrow', exact: true }).press('Enter')
+
+  const pendingDownload = page.waitForEvent('download')
+  await images.getByRole('menuitem', { name: 'Warden SVG', exact: true }).press('Enter')
+  const download = await pendingDownload
+  expect(download.suggestedFilename()).toBe('Harrow-star-system.svg')
+  const path = await download.path()
+  if (!path) throw new Error('The named system SVG was not downloaded.')
+  const scene = await inspectContinuousImage(page, await readFile(path, 'utf8'))
+  expect(scene.systemNames).toEqual(['Harrow'])
+  expect(scene.detailedSystemIds).toEqual(['campaign-baseline-harrow'])
+  expect(scene.editorFrameSystemIds).toEqual([])
+  await expect(camera).toHaveAttribute('transform', before ?? '')
+  await expect(page.getByRole('button', { name: 'Map files', exact: true })).toBeFocused()
 })
 
 test('the default Warden map exports all three scopes from applied layout and camera state', async ({ page }) => {
@@ -528,6 +592,16 @@ test('the default Warden map exports all three scopes from applied layout and ca
     expect(pngScene.systemIds.sort()).toEqual(scene.systemIds.sort())
     expect(pngScene.routeIds.sort()).toEqual(scene.routeIds.sort())
     expect(pngScene.routeLabelIds.sort()).toEqual(scene.routeLabelIds.sort())
+    if (scope.label === 'Selected system') {
+      expect(Math.max(scene.width, scene.height)).toBeGreaterThanOrEqual(1200)
+      expect(Math.max(png.width!, png.height!)).toBeGreaterThan(Math.max(scene.width, scene.height))
+      const labels = await measureSystemImageLabels(page, svg.text)
+      expect(labels.length).toBeGreaterThan(0)
+      for (const label of labels) {
+        expect(label.pixels).toBeGreaterThanOrEqual(label.name ? 11.75 : 8.75)
+        expect(label.insideImage).toBe(true)
+      }
+    }
   }
 
   const clusterScene = scopeScenes['Entire Cluster']

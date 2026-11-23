@@ -460,7 +460,7 @@ test('near-ring Warden Orbit targets remain operable at maximum zoom', async ({ 
   const controls = workspaceZoomControls(page)
   const zoomIn = controls.getByRole('button', { name: 'Zoom in', exact: true })
   for (let step = 0; step < 18 && await zoomIn.isEnabled(); step++) await zoomIn.click()
-  await expect(controls.locator('output').first()).toHaveText('1600%')
+  await expect(controls.locator('output').first()).toHaveText('320%')
   await expect(map.locator('.continuous-warden-orbit-visible-arc').first()).toBeVisible()
   await expect(map.getByRole('button', { name: 'Select Orbit 1', exact: true })).toHaveCount(1)
 

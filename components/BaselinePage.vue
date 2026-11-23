@@ -399,6 +399,7 @@
             <WorkspaceZoomControls
               :zoom-level="zoomLevel"
               :minimum-zoom-level="minimumZoomLevel"
+              :system-relative="continuousMap && activeView === 'cluster'"
               :center-available="inspectedTarget !== null"
               :compact-modal-open="compactPanelOpen"
               @zoom-by="zoomActiveMap"
@@ -2084,11 +2085,11 @@ const workspaceFiles = useWorkspaceFiles({
   workspace,
   selectedSystem: inspectorSelectedSystem,
   mutations,
-  getCurrentMapImage: (kind, scope, systemId) => {
+  getCurrentMapImage: (kind, scope, systemId, systemImageTarget) => {
     if (scope) {
       if (activeView.value !== 'cluster') return null
       if (scope === 'system') {
-        if (!systemId || systemId !== continuousInspectorSystemId.value) return null
+        if (!systemId || (systemImageTarget === 'inspected' && systemId !== continuousInspectorSystemId.value)) return null
         const system = workspace.value?.cluster.systems.find(candidate => candidate.id === systemId)
         if (!system) return null
         return {

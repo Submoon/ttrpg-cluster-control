@@ -358,11 +358,14 @@ test('continuous Orbit resize rolls back on Escape and accepts the next pointer 
   await page.mouse.move(mapBounds.x + mapBounds.width / 2, mapBounds.y + mapBounds.height / 2)
   await page.mouse.wheel(0, 1800)
   await expect(resize).toHaveCount(0)
-  const appliedPercentage = await map.locator('.cluster-map-content').evaluate(element => {
-    if (!(element instanceof SVGGElement)) throw new Error('The camera group has no SVG transform.')
-    return element.transform.baseVal.getItem(1).matrix.a * 100
-  })
-  await expect(workspaceZoomOutput(page)).toHaveText(`${Math.round(appliedPercentage)}%`)
+  await expect.poll(async () => {
+    const appliedPercentage = await map.locator('.cluster-map-content').evaluate(element => {
+      if (!(element instanceof SVGGElement)) throw new Error('The camera group has no SVG transform.')
+      return element.transform.baseVal.getItem(1).matrix.a * 20
+    })
+    const displayedPercentage = parseFloat((await workspaceZoomOutput(page).textContent()) ?? '')
+    return Math.abs(displayedPercentage - appliedPercentage)
+  }).toBeLessThanOrEqual(0.051)
   await expect.poll(() => map.evaluate(element => {
     const focused = document.activeElement
     return focused === element || (element.contains(focused) && focused?.classList.contains('continuous-warden-name-target'))

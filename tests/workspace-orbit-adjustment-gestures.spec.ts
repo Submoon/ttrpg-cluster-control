@@ -96,6 +96,7 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
   const initialVerticalRadius = initialRadii.vertical
   const initialRotation = Number(await rotate.getAttribute('aria-valuenow'))
   const initialZoom = (await workspaceZoomOutput(page).textContent())?.trim()
+  if (!initialZoom) throw new Error('The zoom readout must be available before editing the Orbit.')
   const wheelPoint = await orbitScreenPoint(ring, 0.7)
   const wheelHitTarget = await map.evaluate((map, point) => {
     const target = document.elementFromPoint(point.x, point.y)
@@ -128,7 +129,7 @@ test('held keyboard repeats and a Ctrl-wheel sequence each undo as one Orbit adj
     await page.clock.runFor(32)
     await expect(rotate).toHaveAttribute('aria-valuenow', String((initialRotation + 10) % 360))
     await expect(undo).toBeDisabled()
-    await expect(workspaceZoomOutput(page)).toHaveText(initialZoom ?? '100%')
+    await expect(workspaceZoomOutput(page)).toHaveText(initialZoom)
   } finally {
     await page.keyboard.up('Control')
     await page.clock.resume()

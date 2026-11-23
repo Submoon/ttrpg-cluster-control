@@ -6,7 +6,7 @@ import {
   wardenStarOverlapsAnchor,
   type ContinuousWardenSystemProjection,
 } from './continuous-map-projection'
-import type { ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
+import { continuousMapRouteCurve, type ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
 import { continuousSystemFrames } from './continuous-system-frames'
 import type { MapViewport, SvgViewportRect } from './map-zoom'
 import { CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS, placeContinuousMapRouteLabels } from './continuous-map-route-labels'
@@ -34,8 +34,11 @@ import {
 import { clusterRoutePresentationLabel } from './cluster-route-presentation'
 
 const exportPadding = 24
+const systemExportPadding = 12
+const systemExportSvgMaximumEdge = 1400
+const systemExportPngMinimumScale = 6
+const systemExportMaximumEdge = 4096
 const selectedRoutePrefixLength = 60
-const selectedRouteGutter = selectedRoutePrefixLength + 8
 const systemNameFontPixels = CONTINUOUS_SYSTEM_NAME_FONT_PIXELS
 const routeLabelFontPixels = 11
 const svgNamespace = 'http://www.w3.org/2000/svg'
@@ -149,6 +152,22 @@ export async function exportContinuousWardenMapImage(
     detailSystemIds,
     request.scope === 'system',
   )
+  const initialFrames = sceneFrames(
+    request,
+    selected,
+    request.scope === 'system' ? [] : labels,
+    routeRecords,
+    routeGeometries,
+    displayFrames,
+    request.scope === 'system' ? null : 1,
+  )
+  const initialFrame = mapImageScopeFrame(request.scope, initialFrames)
+  let scale = request.scope === 'system'
+    ? systemSvgOutputScale(initialFrame)
+    : request.scope === 'viewport' ? request.svgPixelScale : 1
+  let imageLabels = request.scope === 'system'
+    ? labels.map(label => scaleSystemNameForExport(label, selected!, scale))
+    : labels
   const viewportRouteLabels = request.scope === 'viewport'
     ? placeContinuousMapRouteLabels({
         routes: routeRecords.flatMap(route => {
@@ -167,15 +186,27 @@ export async function exportContinuousWardenMapImage(
         })),
       })
     : null
-  const frames = sceneFrames(request, selected, labels, routeRecords, routeGeometries, displayFrames)
-  const frame = mapImageScopeFrame(request.scope, frames)
-  const scale = request.scope === 'viewport' ? request.svgPixelScale : 1
-  const outputWidth = request.scope === 'viewport'
-    ? Math.max(1, Math.ceil(frame.width * scale))
-    : Math.ceil(frame.width)
-  const outputHeight = request.scope === 'viewport'
-    ? Math.max(1, Math.ceil(frame.height * scale))
-    : Math.ceil(frame.height)
+  let frames = request.scope === 'system'
+    ? sceneFrames(request, selected, imageLabels, routeRecords, routeGeometries, displayFrames, scale)
+    : initialFrames
+  let frame = mapImageScopeFrame(request.scope, frames)
+  if (request.scope === 'system') {
+    // Text bounds and the camera-independent SVG scale depend on each other. A few bounded passes
+    // settle the crop around the actual output-sized labels without letting them clip at the edge.
+    for (let iteration = 0; iteration < 24; iteration += 1) {
+      const nextScale = systemSvgOutputScale(frame)
+      if (Math.abs(nextScale - scale) < 0.001) break
+      scale = nextScale
+      imageLabels = labels.map(label => scaleSystemNameForExport(label, selected!, scale))
+      frames = sceneFrames(request, selected, imageLabels, routeRecords, routeGeometries, displayFrames, scale)
+      frame = mapImageScopeFrame(request.scope, frames)
+    }
+  }
+  const outputScale = request.scope === 'system' && request.format === 'png'
+    ? systemPngOutputScale(frame, scale)
+    : scale
+  const outputWidth = Math.max(1, Math.ceil(frame.width * outputScale))
+  const outputHeight = Math.max(1, Math.ceil(frame.height * outputScale))
   const appliedImageName = imageAccessibleName(request, selected)
   const exportFrame: MapImageSceneFrame = {
     ...frame,
@@ -264,17 +295,53 @@ export async function exportContinuousWardenMapImage(
           detailed,
           request.scope,
           sceneViewport,
-          request.svgPixelScale,
+          request.scope === 'system' ? scale : request.svgPixelScale,
           dimmedObjectIds,
         )
       }
       content.append(items)
 
       const nameLayer = createScopedElement(clone, 'g', 'continuous-warden-name-layer')
-      for (const label of labels) appendSystemName(nameLayer, label)
+      for (const label of imageLabels) appendSystemName(nameLayer, label)
       clone.append(nameLayer)
     },
     isCurrent,
+  )
+}
+
+function scaleSystemNameForExport(
+  label: ExportLabel,
+  selected: ContinuousWardenSystemProjection,
+  outputScale: number,
+): ExportLabel {
+  const scale = Number.isFinite(outputScale) && outputScale > 0 ? outputScale : 1
+  const titleScale = Math.min(1, (systemExportSvgMaximumEdge * 0.82) / label.width)
+  const height = label.height * titleScale / scale
+  return {
+    ...label,
+    centerX: selected.envelope.x + selected.envelope.width / 2,
+    top: selected.envelope.y - height - 12 / scale,
+    width: label.width * titleScale / scale,
+    height,
+    fontSize: label.fontSize * titleScale / scale,
+    hasLeader: false,
+    leaderY: selected.envelope.y - 6 / scale,
+  }
+}
+
+function systemSvgOutputScale(frame: SvgViewportRect): number {
+  const longestEdge = Math.max(frame.width, frame.height)
+  return Number.isFinite(longestEdge) && longestEdge > 0
+    ? systemExportSvgMaximumEdge / longestEdge
+    : 1
+}
+
+function systemPngOutputScale(frame: SvgViewportRect, svgScale: number): number {
+  const longestEdge = Math.max(frame.width, frame.height)
+  if (!Number.isFinite(longestEdge) || longestEdge <= 0) return svgScale
+  return Math.min(
+    Math.max(systemExportPngMinimumScale, svgScale * 2),
+    systemExportMaximumEdge / longestEdge,
   )
 }
 
@@ -285,10 +352,20 @@ function sceneFrames(
   routes: readonly JumpCluster['routes'][number][],
   geometries: ReadonlyMap<string, ContinuousMapRouteGeometry>,
   displayFrames: ReadonlyMap<string, SvgViewportRect>,
+  systemTextScale: number | null = 1,
 ) {
   const routeBounds = routes.flatMap(route => {
     const geometry = geometries.get(route.id)
-    if (!geometry || request.scope === 'system') return []
+    if (!geometry) return []
+    if (request.scope === 'system') {
+      if (!selected) return []
+      const prefix = trimMapImageRoute(
+        geometry,
+        route.fromSystemId === selected.id ? 'start' : 'end',
+        selectedRoutePrefixLength,
+      )
+      return [cubicBounds(prefix)]
+    }
     const bounds = [geometry.bounds]
     bounds.push({
       x: geometry.midpoint.x - continuousRouteLabelWidth(route.jumpLevel) / 2,
@@ -319,6 +396,10 @@ function sceneFrames(
   const selectedSystem = selected
     ? mapImageBounds([
         selected.envelope,
+        ...(request.scope === 'system' && systemTextScale !== null
+          ? systemDetailTextBounds(selected, systemTextScale)
+          : []),
+        ...(request.scope === 'system' ? routeBounds : []),
         selectedLabel ? {
           x: selectedLabel.centerX - selectedLabel.width / 2,
           y: selectedLabel.top,
@@ -332,9 +413,48 @@ function sceneFrames(
     overview,
     selectedSystem,
     viewport: request.viewportRect,
-    selectedSystemRouteGutter: selectedRouteGutter,
-    padding: exportPadding,
+    selectedSystemRouteGutter: 0,
+    padding: request.scope === 'system' ? systemExportPadding : exportPadding,
   }
+}
+
+function systemDetailTextBounds(
+  projection: ContinuousWardenSystemProjection,
+  outputScale: number,
+): SvgViewportRect[] {
+  const scale = Number.isFinite(outputScale) && outputScale > 0 ? outputScale : 1
+  return projection.objects.flatMap(object => {
+    const outputBaseline = (localY: number) => object.scenePosition.y + localY / scale
+    const textBounds = (
+      text: string,
+      fontSize: number,
+      family: string,
+      baseline: number,
+    ): SvgViewportRect => {
+      const width = Math.max(fontSize, estimateTextWidth(text, fontSize, family)) / scale
+      const height = fontSize * 1.55 / scale
+      return {
+        x: object.scenePosition.x - width / 2,
+        y: baseline - fontSize * 1.2 / scale,
+        width,
+        height,
+      }
+    }
+    return [
+      textBounds('⚠', 20, 'Consolas, monospace', outputBaseline(8)),
+      textBounds(object.locationKey, 9, 'Consolas, monospace', outputBaseline(31)),
+      textBounds(object.name, 12, 'Georgia, serif', outputBaseline(46)),
+    ]
+  })
+}
+
+function cubicBounds(geometry: ExportRouteGeometry): SvgViewportRect {
+  return continuousMapRouteCurve(
+    geometry.start,
+    geometry.control1,
+    geometry.control2,
+    geometry.end,
+  ).bounds
 }
 
 function layoutSystemNames(
@@ -434,8 +554,12 @@ function appendSystem(
   }
 
   const system = systems.find(candidate => candidate.id === projection.id)
-  const pixelsPerSceneUnit = scope === 'viewport' ? viewport.k * svgPixelScale : 1
-  if (detailed && system) appendSystemDetail(group, projection, system, dimmedObjectIds, pixelsPerSceneUnit)
+  const pixelsPerSceneUnit = scope === 'viewport'
+    ? viewport.k * svgPixelScale
+    : scope === 'system' ? svgPixelScale : 1
+  if (detailed && system) {
+    appendSystemDetail(group, projection, system, dimmedObjectIds, pixelsPerSceneUnit, scope === 'system')
+  }
 
   if (scope !== 'system') {
     const anchor = createScopedElement(parent, 'g', 'cluster-system-node continuous-warden-system-anchor')
@@ -465,6 +589,7 @@ function appendSystemDetail(
   system: StarSystem,
   dimmedObjectIds: ReadonlySet<string>,
   pixelsPerSceneUnit: number,
+  readableExportText: boolean,
 ): void {
   const detail = createScopedElement(parent, 'g', 'continuous-warden-system-detail')
   detail.setAttribute(
@@ -488,7 +613,9 @@ function appendSystemDetail(
 
   const items = createScopedElement(parent, 'g', 'system-map-items')
   const screenScale = projection.scale * pixelsPerSceneUnit
-  const textScale = continuousMapTextScale(screenScale, 20, 28)
+  const textScale = readableExportText
+    ? 1 / Math.max(0.0001, screenScale)
+    : continuousMapTextScale(screenScale, 20, 28)
   for (const object of projection.objects) {
     const sourceObject = system.objects.find(candidate => candidate.id === object.id)
     if (!sourceObject) continue
