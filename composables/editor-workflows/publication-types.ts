@@ -6,13 +6,21 @@ export interface PublicationTarget {
   systemId: string
 }
 
+export interface OrbitContextTarget {
+  kind: 'orbit'
+  id: string
+  systemId: string
+}
+
+export type EntityContextTarget = PublicationTarget | OrbitContextTarget | { kind: 'route'; id: string }
+
 export interface PublicationRequest {
-  targets: readonly PublicationTarget[]
+  targets: readonly (PublicationTarget | OrbitContextTarget)[]
   mode: PublicationMode
 }
 
 export interface PublicationMenuRequest {
-  target: PublicationTarget
+  target: EntityContextTarget
   clientPoint: { x: number; y: number }
   opener: HTMLElement | SVGElement
   source: 'map' | 'hierarchy' | 'inspector'

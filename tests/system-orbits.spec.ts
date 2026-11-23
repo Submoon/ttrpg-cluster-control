@@ -74,7 +74,7 @@ async function ellipticalOrbitAngle(
 
 async function inspectSystem(page: Page, name: string): Promise<string> {
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: `Inspect ${name}`, exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: `${name}`, exact: true }).click()
   await hideWorkspaceInspector(page)
   await centerWorkspaceSelection(page)
   const exported = await downloadJson(page, 'Export star system JSON')

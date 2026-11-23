@@ -224,7 +224,7 @@ test('the Warden can move an unresolved target, preview cancellation, save it, a
   // Inspect and frame another target on the same camera before revealing the route through Undo.
   await setWorkspaceMapMode(page, 'Select')
   const clusterHierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await clusterHierarchy.getByRole('button', { name: `Inspect ${originSystem.name}`, exact: true }).click()
+  await clusterHierarchy.getByRole('treeitem', { name: `${originSystem.name}`, exact: true }).click()
   await zoomControls.getByRole('button', { name: 'Center selected target', exact: true }).click()
   const zoomIn = zoomControls.getByRole('button', { name: 'Zoom in', exact: true })
   for (let step = 0; step < 16; step += 1) {

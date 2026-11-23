@@ -130,7 +130,7 @@ test('the system map expands beyond its initial bounds and exports the full appl
   if (!system || !primary || !planetObject || !orbitObject) throw new Error('The reviewed extent system needs its Star, Orbit, and Planet.')
   const openVesper = async () => {
     const hierarchy = await openWorkspaceHierarchy(page)
-    await hierarchy.getByRole('button', { name: `Inspect ${system.name}`, exact: true }).click()
+    await hierarchy.getByRole('treeitem', { name: `${system.name}`, exact: true }).click()
     await centerWorkspaceSelection(page)
     await hideWorkspaceInspector(page)
     const toggle = page.getByRole('button', { name: 'Hierarchy', exact: true })

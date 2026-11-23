@@ -91,7 +91,7 @@ test('deep object and Orbit rows stay readable at the minimum Hierarchy width @p
 
   const hierarchy = await openWorkspaceHierarchy(page)
   const systemName = deepHierarchyFixture.system.name
-  await hierarchy.getByRole('button', { name: `Inspect ${systemName}`, exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: `${systemName}`, exact: true }).click()
   await hideWorkspaceInspector(page)
   await expect(wardenMap(page)).toHaveAccessibleName('Kestrel Reach continuous map')
 

@@ -125,7 +125,7 @@ test('History list scrolls without moving and resets after reload', async ({ pag
   await page.reload()
   await waitForWorkspaceStartup(page)
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: `Inspect ${systemName}`, exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: `${systemName}`, exact: true }).click()
   const orbitRow = hierarchy.getByRole('treeitem', { name: /^Orbit 1 around unoccupied center/ })
   await orbitRow.click()
   await centerWorkspaceSelection(page)

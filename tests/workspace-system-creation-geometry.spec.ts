@@ -77,7 +77,7 @@ async function openDenseReach(page: Page): Promise<{ map: Locator; systemId: str
   await resolveImportReview(preview, 'confirm')
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Inspect Dense Reach', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Dense Reach', exact: true }).click()
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
   await hideWorkspaceInspector(page)
   const map = wardenMap(page)

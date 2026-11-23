@@ -367,7 +367,7 @@ test('Warden system images keep applied geometry through drafts and preserve the
   await expect(page.locator('html')).toHaveClass(/\bdark\b/)
   const map = wardenMap(page)
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: `Inspect ${system.name}`, exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: `${system.name}`, exact: true }).click()
   await centerWorkspaceSelection(page)
   await hideWorkspaceInspector(page)
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()

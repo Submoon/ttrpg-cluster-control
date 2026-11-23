@@ -196,7 +196,7 @@ async function importAndOpenBranchSearchSystem(
   expect(ringSelectors).toHaveLength(4)
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: `Inspect ${fixture.systemName}`, exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: `${fixture.systemName}`, exact: true }).click()
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   if (await hierarchyToggle.getAttribute('aria-expanded') === 'true') await hierarchyToggle.click()
   await centerWorkspaceSelection(page)

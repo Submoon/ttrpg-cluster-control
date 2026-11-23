@@ -414,9 +414,9 @@ test('the default Warden map restores a legacy backup with retained layout and v
   await expect(page.getByRole('alert').last()).toContainText('valid JSON')
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(initialExport)
 
-  await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  const systemList = page.getByRole('navigation', { name: 'Star systems' })
-  await expect(systemList.getByRole('button', { name: 'Inspect Vesper' })).toHaveCount(1)
+  const hierarchyBeforeRestore = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
+  await expect(hierarchyBeforeRestore.getByRole('navigation', { name: 'Star systems', exact: true })).toHaveCount(0)
+  await expect(hierarchyBeforeRestore.getByRole('treeitem', { name: 'Vesper', exact: true })).toHaveCount(1)
 
   const canceledPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', legacyBackupText)
   await expect(canceledPreview).toContainText('Active Reach')
@@ -543,7 +543,7 @@ test('the default Warden map restores a legacy backup with retained layout and v
   expect(importedExport.layout.objectAngles).toEqual(campaignBaselineFixture.layout.objectAngles)
 
   const importedHierarchy = await openWorkspaceHierarchy(page)
-  await importedHierarchy.getByRole('button', { name: 'Inspect Vesper Prime', exact: true }).click()
+  await importedHierarchy.getByRole('treeitem', { name: 'Vesper Prime', exact: true }).click()
   await importedHierarchy.getByRole('treeitem', { name: /Select PL-01, Iria/ }).click()
   await expect(page.getByLabel('Warden notes')).toHaveValue('Existing campaign record.')
 })
@@ -560,7 +560,7 @@ test('public campaign creation persists a custom value and unresolved route thro
   await addCustomFieldThroughDialog(page, 'Warden notes', 'text')
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Inspect Vesper Prime', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Vesper Prime', exact: true }).click()
   await centerWorkspaceSelection(page)
   await hideWorkspaceInspector(page)
   const hierarchyToggle = page.getByRole('button', { name: 'Hierarchy', exact: true })

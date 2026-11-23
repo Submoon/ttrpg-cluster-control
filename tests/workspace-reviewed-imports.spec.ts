@@ -78,7 +78,7 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   await waitForWorkspaceSaved(page)
   await fitWorkspaceMap(page)
 
-  const context = page.getByRole('navigation', { name: 'Map context and commands' })
+  const context = page.getByRole('region', { name: 'Current Jump Cluster', exact: true })
   await expect(context.getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
   const chartEditor = await openChartDetailsEditor(page)
   await chartEditor.getByLabel('Jump Cluster', { exact: true }).fill('Unapplied Reach')

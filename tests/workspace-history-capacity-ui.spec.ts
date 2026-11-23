@@ -50,7 +50,7 @@ test('an oversized edit requires explicit consent and cancellation preserves its
   await expect(consent).toBeHidden()
   await expect(names.getByLabel('Jump Cluster', { exact: true })).toHaveValue('Accepted large baseline')
   await hideWorkspaceInspector(page)
-  const mapContext = page.getByRole('navigation', { name: 'Map context and commands' })
+  const mapContext = page.getByRole('region', { name: 'Current Jump Cluster', exact: true })
   await expect(mapContext.getByRole('heading', { name: 'Accepted large baseline', exact: true })).toBeVisible()
   await expect(undo).toBeDisabled()
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft' }).click()

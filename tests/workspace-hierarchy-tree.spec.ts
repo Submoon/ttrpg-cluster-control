@@ -68,7 +68,7 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   if (!owner || !star || !planet || !departure) throw new Error('The campaign needs its three selectable Vesper records.')
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: `Inspect ${owner.name}`, exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: `${owner.name}`, exact: true }).click()
   await hideWorkspaceInspector(page)
   await centerWorkspaceSelection(page)
   const rowName = (object: typeof star) => `Select ${object.locationKey}, ${object.name} in ${owner.name}`
@@ -99,7 +99,7 @@ test('multi-select objects and preserve Hierarchy keyboard behavior through refl
   expect(await visibleIndicatorObjectIds(indicators)).toEqual(groupIds)
 
   await hideWorkspaceInspector(page)
-  const menu = page.getByRole('menu', { name: 'Player visibility', exact: true })
+  const menu = page.getByRole('menu', { name: 'Map item actions', exact: true })
   const moveMode = workspaceNavigation(page).getByRole('button', { name: 'Move', exact: true })
   const moveFromContextMenu = async (row: Locator) => {
     // At the detail threshold Iria is covered by its owner's name badge; Hierarchy keeps its context action accessible.
@@ -545,7 +545,7 @@ freshTest('a sparse Hierarchy context menu survives replacing its selected sibli
   const cameraBeforeContext = await camera.getAttribute('transform')
   await betaRow.focus()
   await betaRow.press('Shift+F10')
-  const menu = page.getByRole('menu', { name: 'Player visibility', exact: true })
+  const menu = page.getByRole('menu', { name: 'Map item actions', exact: true })
   await expect(menu.getByRole('menuitem', { name: 'Move selection', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(menu).toBeHidden()

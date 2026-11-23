@@ -149,7 +149,7 @@ test('object Inspectors follow selection and apply, discard, and reset marker co
   await page.reload()
   await waitForWorkspaceStartup(page)
   const clusterHierarchy = await openWorkspaceHierarchy(page)
-  await clusterHierarchy.getByRole('button', { name: 'Inspect Vesper', exact: true }).click()
+  await clusterHierarchy.getByRole('treeitem', { name: 'Vesper', exact: true }).click()
   await centerWorkspaceSelection(page)
   await expect(planetGlyph).toHaveCSS('fill', rgb)
   const durable = await downloadJson(page, 'Export Jump Cluster JSON')

@@ -79,7 +79,7 @@ test('History consultation stays read only across Undo and Redo and returns focu
 
   await undo.click()
   await expect(system).toHaveAccessibleName('Select Vesper')
-  await expect(page.getByRole('navigation', { name: 'Map context and commands' }).getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Current Jump Cluster', exact: true }).getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
   await expect(redo).toBeEnabled()
   await historyButton.click()
   await expect(retainedActions).toContainText(actionLabel)

@@ -14,7 +14,7 @@
       <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Jump Cluster details editing session</span>
     </div>
 
-    <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
+    <nav v-if="!props.continuousMap" class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
       <span class="subsection-label">STAR SYSTEMS</span>
       <p v-if="!props.workspace.cluster.systems.length" class="empty-copy my-[0.65rem]">No star systems yet.</p>
       <div
@@ -29,6 +29,7 @@
           :aria-label="props.continuousMap ? `Inspect ${system.name}` : `Open ${system.name} system map`"
           :aria-current="system.id === activeSystemId ? 'page' : undefined"
           :aria-description="publicationStatus(system.publication).description"
+          :data-system-id="system.id"
           @keydown.capture="openSystemContextMenuFromKeyboard($event, system)"
           @click="commands.navigation.selectSystem(system.id)"
         >
@@ -78,6 +79,9 @@
         type="button"
         :aria-label="`Select Jump Level ${route.jumpLevel}: ${commands.navigation.routeSummary(route)}`"
         :aria-current="route.id === store.selectedRouteId ? 'true' : undefined"
+        :data-route-id="route.id"
+        @contextmenu="openRouteContextMenu($event, route.id)"
+        @keydown.capture="openRouteContextMenuFromKeyboard($event, route.id)"
         @click="commands.navigation.selectRoute(route.id)"
       >
         <span class="orbit-mark w-[2.2rem] shrink-0 text-center text-[var(--map-muted)]" aria-hidden="true">R</span>
@@ -152,6 +156,9 @@
                 </span>
                 <span class="tree-object-name flex min-w-0 flex-1 items-start gap-1">
                   <span class="min-w-0 [overflow-wrap:anywhere]">{{ item.label }}</span>
+                  <UTooltip v-if="item.kind === 'system'" :text="publicationStatus(item.system.publication).description">
+                    <UIcon :name="publicationPresentation(item.system.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
+                  </UTooltip>
                   <template v-if="item.kind === 'object'">
                     <UTooltip :text="hierarchyObjectPublicationStatus(item).description">
                       <UIcon :name="publicationPresentation(item.row.object.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
@@ -175,6 +182,18 @@
               <small v-if="item.kind !== 'system'" class="mt-[0.12rem] block">{{ item.ownerSystemName }}</small>
             </span>
             <div class="col-start-2 row-start-1 flex min-w-0 flex-col items-center gap-0.5 self-center">
+              <UButton
+                v-if="item.kind === 'system'"
+                class="tree-publication-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :aria-label="`Change visibility for ${item.system.name}`"
+                :title="`Change visibility for ${item.system.name}`"
+                @click.stop="openSystemMenuFromButton($event, item.system)"
+              >
+                <UIcon name="i-lucide-eye" aria-hidden="true" />
+              </UButton>
               <UButton
                 v-if="item.kind === 'object'"
                 class="tree-publication-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
@@ -201,6 +220,19 @@
                 @click.stop="toggleHierarchyItemAndRestoreFocus($event, handleToggle)"
               >
                 <UIcon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" aria-hidden="true" />
+              </UButton>
+              <UButton
+                v-if="item.kind === 'system'"
+                class="quiet-button min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :aria-label="`Delete ${item.system.name} system`"
+                :title="props.workspace.cluster.systems.length === 1 ? 'A Jump Cluster must contain at least one star system.' : undefined"
+                :disabled="props.workspace.cluster.systems.length === 1 || props.saving"
+                @click.stop="commands.cluster.deleteSystem(item.system.id)"
+              >
+                <span aria-hidden="true">×</span>
               </UButton>
             </div>
             <UButton
@@ -239,7 +271,7 @@
       <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Jump Cluster details editing session</span>
     </div>
 
-    <nav class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
+    <nav v-if="!props.continuousMap" class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
       <span class="subsection-label">STAR SYSTEMS</span>
       <button
         v-for="system in props.workspace.cluster.systems"
@@ -248,6 +280,9 @@
         :class="{ active: system.id === activeSystemId }"
         type="button"
         :aria-current="system.id === activeSystemId ? 'page' : undefined"
+        :data-system-id="system.id"
+        @contextmenu="openSystemContextMenu($event, system)"
+        @keydown.capture="openSystemContextMenuFromKeyboard($event, system)"
         @click="commands.navigation.selectSystem(system.id)"
       >
         <span class="system-seal grid size-[1.65rem] shrink-0 place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
@@ -295,7 +330,9 @@
           })"
           :aria-label="item.ariaLabel"
           :aria-description="item.ariaDescription"
+          :data-hierarchy-key="item.key"
           :data-hierarchy-level="level"
+          :data-system-id="item.kind === 'system' ? item.system.id : item.ownerSystemId"
           :data-object-id="item.kind === 'object' ? item.row.object.id : undefined"
           :data-orbit-id="item.kind === 'orbit' ? item.row.orbit.id : undefined"
           :data-host-object-id="item.kind === 'orbit' ? item.row.host?.id : undefined"
@@ -341,11 +378,28 @@
           </template>
           <template v-else>
             <span class="tree-copy col-start-1 row-span-2 block min-w-0 [overflow-wrap:anywhere]">
-              <span class="tree-object-name">{{ item.system.name }}</span>
+              <span class="tree-object-title flex min-w-0 items-start gap-1">
+                <span class="tree-object-name min-w-0 [overflow-wrap:anywhere]">{{ item.system.name }}</span>
+                <UTooltip :text="publicationStatus(item.system.publication).description">
+                  <UIcon :name="publicationPresentation(item.system.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
+                </UTooltip>
+              </span>
               <small class="mt-[0.18rem] block">{{ item.system.objects.length }} map objects</small>
             </span>
           </template>
           <div class="col-start-2 row-span-2 flex min-w-0 flex-col items-center gap-0.5 self-center">
+            <UButton
+              v-if="item.kind === 'system'"
+              class="tree-publication-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :aria-label="`Change visibility for ${item.system.name}`"
+              :title="`Change visibility for ${item.system.name}`"
+              @click.stop="openSystemMenuFromButton($event, item.system)"
+            >
+              <UIcon name="i-lucide-eye" aria-hidden="true" />
+            </UButton>
             <UButton
               v-if="item.kind === 'object'"
               class="tree-publication-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
@@ -372,6 +426,19 @@
               @click.stop="toggleHierarchyItemAndRestoreFocus($event, handleToggle)"
             >
               <UIcon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" aria-hidden="true" />
+            </UButton>
+            <UButton
+              v-if="item.kind === 'system'"
+              class="quiet-button min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :aria-label="`Delete ${item.system.name} system`"
+              :title="props.workspace.cluster.systems.length === 1 ? 'A Jump Cluster must contain at least one star system.' : undefined"
+              :disabled="props.workspace.cluster.systems.length === 1 || props.saving"
+              @click.stop="commands.cluster.deleteSystem(item.system.id)"
+            >
+              <span aria-hidden="true">×</span>
             </UButton>
           </div>
         </div>
@@ -400,7 +467,7 @@ import {
 } from '../utils/map-hierarchy'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
-import type { PublicationTarget } from '../composables/editor-workflows/publication-types'
+import type { EntityContextTarget } from '../composables/editor-workflows/publication-types'
 import { publicationPresentation, publicationStatus } from '../utils/publication-presentation'
 import type { TreeItemSelectEvent, TreeItemToggleEvent } from 'reka-ui'
 
@@ -875,32 +942,40 @@ function selectHierarchyItem(event: TreeItemSelectEvent<HierarchyTreeItem>, item
   else void commands.navigation.selectSystem(item.system.id)
 }
 
-function systemTarget(systemId: string): PublicationTarget {
+function systemTarget(systemId: string): EntityContextTarget {
   return { kind: 'system', id: systemId, systemId }
 }
 
-function objectTarget(objectId: string, ownerSystemId?: string): PublicationTarget | null {
+function objectTarget(objectId: string, ownerSystemId?: string): EntityContextTarget | null {
   const system = ownerSystemId
     ? props.workspace.cluster.systems.find(candidate => candidate.id === ownerSystemId)
     : selectedSystem.value
   return system ? { kind: 'object', id: objectId, systemId: system.id } : null
 }
 
-function openSystemMenu(event: MouseEvent, systemId: string, opener: HTMLElement): void {
+function openEntityMenu(
+  event: Event,
+  target: EntityContextTarget,
+  opener: HTMLElement,
+  point: { x: number; y: number },
+  selectObjectForContext = false,
+): void {
   event.preventDefault()
   event.stopPropagation()
-  commands.publication.openMenu({
-    target: systemTarget(systemId),
-    clientPoint: { x: event.clientX, y: event.clientY },
-    opener,
-    source: 'hierarchy',
-  })
+  commands.publication.openMenu(
+    { target, clientPoint: point, opener, source: 'hierarchy' },
+    selectObjectForContext && target.kind === 'object' ? { selectObjectForContext: true } : undefined,
+  )
+}
+
+function openSystemMenu(event: Event, systemId: string, opener: HTMLElement, point: { x: number; y: number }): void {
+  openEntityMenu(event, systemTarget(systemId), opener, point)
 }
 
 function openSystemContextMenu(event: MouseEvent, system: { id: string }): void {
   if (!(event.target instanceof Element)) return
   const opener = event.target.closest<HTMLElement>('.system-link')
-  if (opener) openSystemMenu(event, system.id, opener)
+  if (opener) openSystemMenu(event, system.id, opener, { x: event.clientX, y: event.clientY })
 }
 
 function openSystemContextMenuFromKeyboard(event: KeyboardEvent, system: { id: string }): void {
@@ -908,52 +983,61 @@ function openSystemContextMenuFromKeyboard(event: KeyboardEvent, system: { id: s
   const opener = event.currentTarget
   if (!(opener instanceof HTMLElement)) return
   const bounds = opener.getBoundingClientRect()
-  event.preventDefault()
-  event.stopPropagation()
-  commands.publication.openMenu({
-    target: systemTarget(system.id),
-    clientPoint: { x: bounds.left, y: bounds.bottom },
-    opener,
-    source: 'hierarchy',
-  })
+  openSystemMenu(event, system.id, opener, { x: bounds.left, y: bounds.bottom })
 }
 
 function openSystemMenuFromButton(event: MouseEvent, system: { id: string }): void {
   const opener = event.currentTarget
   if (!(opener instanceof HTMLElement)) return
-  openSystemMenu(event, system.id, opener)
+  const bounds = opener.getBoundingClientRect()
+  const point = event.detail === 0
+    ? { x: bounds.left, y: bounds.bottom }
+    : { x: event.clientX, y: event.clientY }
+  openSystemMenu(event, system.id, opener, point)
 }
 
-function openObjectMenu(
-  event: Event,
-  objectId: string,
-  opener: HTMLElement,
-  point: { x: number; y: number },
-  selectObjectForContext = false,
-  ownerSystemId?: string,
-): void {
-  event.preventDefault()
-  event.stopPropagation()
-  const target = objectTarget(objectId, ownerSystemId ?? (props.continuousMap ? ownerSystemForObject(objectId)?.id : undefined))
-  if (!target) return
-  commands.publication.openMenu(
-    { target, clientPoint: point, opener, source: 'hierarchy' },
-    selectObjectForContext ? { selectObjectForContext: true } : undefined,
-  )
+function hierarchyItemTarget(item: HierarchyTreeItem): EntityContextTarget | null {
+  if (item.kind === 'system') return systemTarget(item.system.id)
+  if (item.kind === 'object') return objectTarget(item.row.object.id, item.ownerSystemId)
+  return item.ownerSystemId
+    ? { kind: 'orbit', id: item.row.orbit.id, systemId: item.ownerSystemId }
+    : null
 }
 
 function openHierarchyMenu(event: MouseEvent, item: HierarchyTreeItem): void {
-  if (item.kind !== 'object' || !(event.currentTarget instanceof HTMLElement)) return
+  if (!(event.currentTarget instanceof HTMLElement)) return
+  const target = hierarchyItemTarget(item)
+  if (!target) return
   const opener = event.currentTarget.closest<HTMLElement>('[role="treeitem"]') ?? event.currentTarget
-  openObjectMenu(event, item.row.object.id, opener, { x: event.clientX, y: event.clientY }, true, item.ownerSystemId)
+  openEntityMenu(event, target, opener, { x: event.clientX, y: event.clientY }, target.kind === 'object')
 }
 
 function openHierarchyMenuFromKeyboard(event: KeyboardEvent, item: HierarchyTreeItem): void {
-  if (item.kind !== 'object' || (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey))) return
+  if (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey)) return
   if (!(event.currentTarget instanceof HTMLElement)) return
+  const target = hierarchyItemTarget(item)
+  if (!target) return
   const opener = event.currentTarget.closest<HTMLElement>('[role="treeitem"]') ?? event.currentTarget
   const bounds = opener.getBoundingClientRect()
-  openObjectMenu(event, item.row.object.id, opener, { x: bounds.left, y: bounds.bottom }, true, item.ownerSystemId)
+  openEntityMenu(event, target, opener, { x: bounds.left, y: bounds.bottom }, target.kind === 'object')
+}
+
+function routeTarget(routeId: string): EntityContextTarget {
+  return { kind: 'route', id: routeId }
+}
+
+function openRouteContextMenu(event: MouseEvent, routeId: string): void {
+  const opener = event.currentTarget
+  if (!(opener instanceof HTMLElement)) return
+  openEntityMenu(event, routeTarget(routeId), opener, { x: event.clientX, y: event.clientY })
+}
+
+function openRouteContextMenuFromKeyboard(event: KeyboardEvent, routeId: string): void {
+  if (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey)) return
+  const opener = event.currentTarget
+  if (!(opener instanceof HTMLElement)) return
+  const bounds = opener.getBoundingClientRect()
+  openEntityMenu(event, routeTarget(routeId), opener, { x: bounds.left, y: bounds.bottom })
 }
 
 function openObjectMenuFromButton(event: MouseEvent, objectId: string, ownerSystemId?: string): void {
@@ -963,7 +1047,8 @@ function openObjectMenuFromButton(event: MouseEvent, objectId: string, ownerSyst
   const point = event.detail === 0
     ? { x: bounds.left, y: bounds.bottom }
     : { x: event.clientX, y: event.clientY }
-  openObjectMenu(event, objectId, opener, point, false, ownerSystemId)
+  const target = objectTarget(objectId, ownerSystemId ?? (props.continuousMap ? ownerSystemForObject(objectId)?.id : undefined))
+  if (target) openEntityMenu(event, target, opener, point)
 }
 
 function toggleHierarchyItem(event: TreeItemToggleEvent<HierarchyTreeItem>): void {

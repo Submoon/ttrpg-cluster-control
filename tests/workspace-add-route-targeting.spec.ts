@@ -38,7 +38,7 @@ campaignTest('prepared campaign snapshots stay isolated between fresh browser co
   expect(originalSystem.objects.length).toBeGreaterThan(0)
 
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: `Inspect ${systemName}`, exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: `${systemName}`, exact: true }).click()
   await centerWorkspaceSelection(page)
   await (await selectCatalogueObjectButton(page, 'other')).click()
   const otherType = page.getByRole('dialog', { name: 'Name this object type', exact: true })

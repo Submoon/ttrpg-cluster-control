@@ -166,7 +166,7 @@ test('traversal keeps its visible result through delayed and failed IndexedDB sa
   try {
     await setHistoryStorageGate(page, { hold: true })
     await undo.click()
-    const mapContext = page.getByRole('navigation', { name: 'Map context and commands' })
+    const mapContext = page.getByRole('region', { name: 'Current Jump Cluster', exact: true })
     await expect(mapContext.getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
     await expect(system).toHaveAccessibleName('Select Vesper')
     await expect.poll(() => pendingHistoryAcknowledgements(page)).toBeGreaterThan(0)
@@ -220,7 +220,7 @@ test('an older real save acknowledgement cannot enable traversal of a newer appl
     await releaseHistoryAcknowledgements(page)
     await expect(undo).toBeEnabled()
     await undo.click()
-    const mapContext = page.getByRole('navigation', { name: 'Map context and commands' })
+    const mapContext = page.getByRole('region', { name: 'Current Jump Cluster', exact: true })
     await expect(mapContext.getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
     await expect(system).toHaveAccessibleName('Select Vesper Second')
   } finally {

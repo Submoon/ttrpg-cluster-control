@@ -49,3 +49,17 @@ export function buildMapHierarchy(system: StarSystem | undefined): MapHierarchyR
   }
   return rows
 }
+
+/** The objects whose placement depends on this Orbit, excluding its own host. */
+export function orbitBranchObjects(system: StarSystem | undefined, orbitId: string): SystemObject[] {
+  const rows = buildMapHierarchy(system)
+  const rootIndex = rows.findIndex(row => row.kind === 'orbit' && row.orbit.id === orbitId)
+  if (rootIndex < 0) return []
+  const depth = rows[rootIndex]!.depth
+  const objects: SystemObject[] = []
+  for (const row of rows.slice(rootIndex + 1)) {
+    if (row.depth <= depth) break
+    if (row.kind === 'object') objects.push(row.object)
+  }
+  return objects
+}

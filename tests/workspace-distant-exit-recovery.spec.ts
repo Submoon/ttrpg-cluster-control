@@ -108,7 +108,7 @@ test('far unresolved exits stay reachable after Fit and export as a complete bou
   await expectFittedFeatures(map)
   const fittedCamera = await map.locator('.cluster-map-content').getAttribute('transform')
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Inspect Vesper Prime', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Vesper Prime', exact: true }).click()
   await hideWorkspaceInspector(page)
   await hierarchyToggle.click()
   await expect(map.locator('.cluster-map-content')).toHaveAttribute('transform', fittedCamera ?? '')

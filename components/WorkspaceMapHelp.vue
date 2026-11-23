@@ -9,6 +9,7 @@
     }"
   >
     <UButton
+      ref="trigger"
       class="workspace-control"
       color="neutral"
       variant="outline"
@@ -41,14 +42,14 @@
             <ul class="m-0 grid list-disc gap-1.5 pl-5">
               <li>Hold the right mouse button and drag to move the view while using any map tool.</li>
               <li>
-                Right-click a system or object to open its menu.
+                Right-click an object, Orbit, system, or Jump Route to open its menu.
                 Choose <strong>Change Visibility</strong> to control what players see on a shared map.
               </li>
               <li>
                 Right-click an object on the map or in <strong>Hierarchy</strong> to select it and open its menu.
                 Right-clicking an already selected object keeps the current selection. Choose <strong>Move selection</strong>, then drag a selected object.
               </li>
-              <li>To open the menu from the keyboard, focus the system or object and press <strong>Shift+F10</strong> or the <strong>Context Menu</strong> key.</li>
+              <li>To open the menu from the keyboard, focus a map or Hierarchy item and press <strong>Shift+F10</strong> or the <strong>Context Menu</strong> key.</li>
             </ul>
           </section>
 
@@ -97,16 +98,29 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { ModalProps } from '@nuxt/ui/components/Modal.vue'
+import { createDialogFocusTarget, restoreDialogFocus } from '../utils/dialog-focus'
 
 const open = defineModel<boolean>('open', { required: true })
+const props = defineProps<{
+  externalOpener?: HTMLElement | null
+  focusFallback?: () => void
+}>()
 const emit = defineEmits<{ 'active-change': [active: boolean] }>()
-const dialogContent: ModalProps['content'] & { 'aria-modal': 'true'; onCloseAutoFocus: () => void } = {
+const trigger = ref<{ $el?: HTMLElement } | null>(null)
+const dialogContent: ModalProps['content'] & { 'aria-modal': 'true' } = {
   'aria-modal': 'true',
-  onCloseAutoFocus: () => {
-    void nextTick(() => {
-      if (!open.value) emit('active-change', false)
+  onCloseAutoFocus: (event) => {
+    event.preventDefault()
+    const opener = createDialogFocusTarget(props.externalOpener ?? null)
+    void nextTick(async () => {
+      if (open.value) return
+      emit('active-change', false)
+      await nextTick()
+      if (open.value) return
+      const desktopTrigger = createDialogFocusTarget(trigger.value?.$el ?? null)
+      if (restoreDialogFocus(opener, desktopTrigger) === 'none') props.focusFallback?.()
     })
   },
 }

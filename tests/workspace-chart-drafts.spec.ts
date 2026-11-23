@@ -357,7 +357,9 @@ test('failed chart writes keep applied memory and Retry saves the latest workspa
     expect(await beforeUnloadIsPrevented(page)).toBe(false)
 
     await page.getByRole('button', { name: 'Close inspector panel' }).click()
-    await expect(page.getByRole('navigation', { name: 'Map context and commands' }).getByRole('heading', { name: 'Current Reach' })).toBeVisible()
+    await page.getByRole('button', { name: 'Open workspace menu', exact: true }).click()
+    await expect(page.getByRole('dialog', { name: 'Workspace menu', exact: true }).getByText('Current Reach', { exact: true })).toBeVisible()
+    await page.keyboard.press('Escape')
     await page.setViewportSize({ width: 1440, height: 960 })
     const desktopHierarchy = await openWorkspaceHierarchy(page)
     await expect(desktopHierarchy).toBeVisible()

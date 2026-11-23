@@ -76,7 +76,7 @@
           :route-session-active="!chartEditing && activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelPresentationOpen"
           :compact-panel="compactPanel"
-          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || mapTypeFiltersOpen || helpOpen || publicationMenuRequest !== null || creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || mobileMenuOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || mapTypeFiltersOpen || helpOpen || publicationMenuRequest !== null || creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen"
           :is-compact-viewport="isCompactViewport"
           @close-panel="closePanel"
         >
@@ -108,10 +108,13 @@
           </template>
           <template #header>
             <WorkspaceHeader
+              ref="workspaceHeader"
               :workspace="wardenDraftWorkspace ?? workspace"
               :active-view="activeView"
               :selected-system="selectedSystem"
               :compact-modal-open="compactPanelPresentationOpen"
+              :is-compact-viewport="isCompactViewport"
+              v-model:mobile-menu-open="mobileMenuOpen"
               show-privacy-link
             >
               <template #editor-actions>
@@ -125,12 +128,44 @@
                   :inspector-conflict="fieldDefinitionInspectorConflict"
                   :inspector-conflict-error="'Resolve the Inspector draft before changing this field.'"
                   :has-modified-draft="hasModifiedFieldDefinitionsSession"
+                  :hide-trigger="isCompactViewport"
+                  :focus-fallback="focusMobileWorkspaceMenu"
                   @intent="handleFieldDefinitionsIntent"
                 />
                 <WorkspaceMapHelp
                   v-model:open="helpOpen"
-                  @active-change="helpOwnsFocus = $event"
+                  :external-opener="mobileHelpOpener"
+                  :focus-fallback="focusMobileWorkspaceMenu"
+                  @active-change="onHelpActiveChange"
                 />
+              </template>
+              <template #mobile-actions>
+                <UButton
+                  class="workspace-control"
+                  color="neutral"
+                  variant="outline"
+                  size="sm"
+                  icon="i-lucide-list"
+                  aria-label="Open field definitions"
+                  aria-haspopup="dialog"
+                  aria-controls="field-definitions-dialog"
+                  :aria-expanded="fieldDefinitionDialogOpen"
+                  :aria-description="hasModifiedFieldDefinitionsSession ? 'An unsaved field draft is retained.' : undefined"
+                  @click="openFieldsFromMobileMenu"
+                >
+                  Fields
+                  <UBadge v-if="hasModifiedFieldDefinitionsSession" color="warning" variant="subtle">Draft</UBadge>
+                </UButton>
+                <UButton
+                  class="workspace-control"
+                  color="neutral"
+                  variant="outline"
+                  size="sm"
+                  aria-haspopup="dialog"
+                  @click="openHelpFromMobileMenu"
+                >
+                  Help
+                </UButton>
               </template>
             </WorkspaceHeader>
           </template>
@@ -143,7 +178,6 @@
               continuous-map
               :selected-image-system-id="continuousInspectorSystemId"
               :selected-system="selectedSystem"
-              :display-name="activeView === 'cluster' ? wardenDraftWorkspace?.cluster.name : wardenSystem?.name"
               :cluster-map="clusterMapRef"
               :system-map="systemMapRef"
               :export-error="exportError"
@@ -634,10 +668,16 @@
         <PublicationContextMenu
           :request="publicationMenuRequest"
           :current-mode="publicationMenuMode"
+          :route-shared="publicationMenuRouteShared"
+          :empty-orbit="publicationMenuOrbitObjects?.length === 0"
+          :last-system="publicationMenuRequest?.target.kind === 'system' && workspace.cluster.systems.length === 1"
           :busy="publicationBusy"
           :move-selection-available="publicationMenuMoveSelectionAvailable"
           @select="selectPublicationMenuMode"
-          @move-selection="moveSelectedObjectsFromMenu"
+          @share-route="shareRouteFromMenu"
+          @edit="editEntityFromMenu"
+          @move-selection="moveEntityFromMenu"
+          @delete="deleteEntityFromMenu"
           @dismiss="publicationControls.closeMenu()"
         />
       </section>
@@ -715,7 +755,8 @@ import {
 } from '../utils/continuous-map-editing'
 import type { WorkspaceHistoryTraversalContext } from '../composables/editor-workflows/workspace-mutations'
 import { provideEditorCommands } from '../composables/editor-workflows/editor-command-context'
-import type { PublicationMenuRequest } from '../composables/editor-workflows/publication-types'
+import type { EntityContextTarget, PublicationMenuRequest } from '../composables/editor-workflows/publication-types'
+import { orbitBranchObjects } from '../utils/map-hierarchy'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
@@ -739,6 +780,7 @@ import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
 import WorkspaceRestoreReview from './WorkspaceRestoreReview.vue'
 import WorkspaceFeedback from './WorkspaceFeedback.vue'
+import WorkspaceHeader from './WorkspaceHeader.vue'
 import PlayerViewPreviewDialog from './PlayerViewPreviewDialog.vue'
 import WorkspaceMapChrome from './WorkspaceMapChrome.vue'
 import DropboxRestoreDialog from './DropboxRestoreDialog.vue'
@@ -807,7 +849,34 @@ let revealHistoryContext: (context: WorkspaceHistoryTraversalContext) => void = 
 let publicationFocusRestoreAllowed: (request: PublicationMenuRequest) => boolean = () => false
 const historyOpen = ref(false)
 const helpOpen = ref(false)
+const mobileMenuOpen = ref(false)
+const workspaceHeader = ref<InstanceType<typeof WorkspaceHeader> | null>(null)
+const mobileHelpOpener = shallowRef<HTMLElement | null>(null)
 const helpOwnsFocus = ref(false)
+
+function focusMobileWorkspaceMenu(): HTMLElement | null {
+  return workspaceHeader.value?.focusMobileMenuToggle() ?? null
+}
+
+async function closeMobileMenuForAction(): Promise<HTMLElement | null> {
+  mobileMenuOpen.value = false
+  await nextTick()
+  return focusMobileWorkspaceMenu()
+}
+
+async function openFieldsFromMobileMenu(): Promise<void> {
+  await closeMobileMenuForAction()
+  await openFieldDefinitions()
+}
+
+async function openHelpFromMobileMenu(): Promise<void> {
+  mobileHelpOpener.value = await closeMobileMenuForAction()
+  helpOpen.value = true
+}
+function onHelpActiveChange(active: boolean): void {
+  helpOwnsFocus.value = active
+  if (!active) mobileHelpOpener.value = null
+}
 const playerPreviewOpen = ref(false)
 const playerClusterDocument = computed(() => workspace.value ? projectPlayerCluster(workspace.value) : null)
 const history = useWorkspaceHistory({
@@ -1036,14 +1105,26 @@ const publicationControls = workflows.publication
 const publicationMenuRequest = publicationControls.menuRequest
 const publicationBusy = publicationControls.busy
 const setRouteSharing = publicationControls.setRouteSharing
+const publicationMenuRouteShared = computed(() => {
+  const target = publicationMenuRequest.value?.target
+  if (target?.kind !== 'route') return undefined
+  return workspace.value?.cluster.routes.find(route => route.id === target.id)?.playerShared
+})
+const publicationMenuOrbitObjects = computed(() => {
+  const target = publicationMenuRequest.value?.target
+  if (target?.kind !== 'orbit') return null
+  return orbitBranchObjects(workspace.value?.cluster.systems.find(system => system.id === target.systemId), target.id)
+})
 const publicationMenuMode = computed(() => {
-  const request = publicationMenuRequest.value
-  if (!workspace.value || !request) return null
-  if (request.target.kind === 'system') {
-    return workspace.value.cluster.systems.find(system => system.id === request.target.id)?.publication ?? null
+  const target = publicationMenuRequest.value?.target
+  if (!target || target.kind === 'route') return null
+  if (target.kind === 'orbit') {
+    const objects = publicationMenuOrbitObjects.value
+    const mode = objects?.[0]?.publication
+    return mode && objects?.every(object => object.publication === mode) ? mode : null
   }
-  return workspace.value.cluster.systems.find(system => system.id === request.target.systemId)
-    ?.objects.find(object => object.id === request.target.id)?.publication ?? null
+  const system = workspace.value?.cluster.systems.find(system => system.id === target.systemId)
+  return (target.kind === 'system' ? system : system?.objects.find(object => object.id === target.id))?.publication ?? null
 })
 function currentSelectedObjectIds(): string[] {
   return selectedObjectIds.value.length
@@ -1061,11 +1142,23 @@ function canMoveSelectedObjectsFromMenu(request: typeof publicationMenuRequest.v
       ?.objects.some(object => object.id === target.id)
 }
 const publicationMenuMoveSelectionAvailable = computed(() =>
-  canMoveSelectedObjectsFromMenu(publicationMenuRequest.value))
+  publicationMenuRequest.value?.target.kind === 'system'
+  || publicationMenuRequest.value?.target.kind === 'orbit'
+  || canMoveSelectedObjectsFromMenu(publicationMenuRequest.value))
 
-function moveSelectedObjectsFromMenu(): void {
+async function moveEntityFromMenu(): Promise<void> {
   const request = publicationMenuRequest.value
-  if (!request || request.target.kind !== 'object' || !canMoveSelectedObjectsFromMenu(request)) return
+  if (!request || !publicationMenuMoveSelectionAvailable.value || request.target.kind === 'route') return
+  publicationControls.closeMenu()
+  if (request.target.kind !== 'object') {
+    if (!await selectContextEntity(request.target, false)) return
+    const { id, systemId, kind } = request.target
+    const isCurrent = () => kind === 'system'
+      ? clusterSelectedSystemId.value === id
+      : selectedSystemId.value === systemId && selectedOrbitId.value === id
+    if (mapMode.value !== 'move') await changeMapMode('move', isCurrent)
+    return
+  }
   const systemId = request.target.systemId
   const objectId = request.target.id
   const entryMode = mapMode.value
@@ -1080,16 +1173,84 @@ function moveSelectedObjectsFromMenu(): void {
       && !!workspace.value?.cluster.systems.find(system => system.id === systemId)
         ?.objects.some(object => object.id === objectId)
   }
-  publicationControls.closeMenu()
   if (entryMode === 'move') return
-  void changeMapMode('move', isCurrent)
+  await changeMapMode('move', isCurrent)
+}
+
+async function selectContextEntity(target: EntityContextTarget, openInspector: boolean): Promise<boolean> {
+  const workspaceId = workspace.value?.id
+  const clusterId = workspace.value?.cluster.id
+  const sameWorkspace = () => workspace.value?.id === workspaceId && workspace.value?.cluster.id === clusterId
+
+  if (target.kind === 'route') {
+    await selectRoute(target.id, openInspector)
+    return sameWorkspace() && selectedRouteId.value === target.id
+  }
+  if (continuousMap.value) {
+    const entity = target.kind === 'object'
+      ? { kind: 'object' as const, systemId: target.systemId, objectId: target.id }
+      : target.kind === 'orbit'
+        ? { kind: 'orbit' as const, systemId: target.systemId, orbitId: target.id }
+        : { kind: 'system' as const, systemId: target.systemId }
+    return await inspectContinuousTarget(entity, openInspector) && sameWorkspace()
+  }
+  if (target.kind === 'system') {
+    if (activeView.value !== 'cluster') await showClusterMap()
+    if (!sameWorkspace() || activeView.value !== 'cluster') return false
+    await selectClusterSystem(target.id, openInspector)
+    return sameWorkspace() && clusterSelectedSystemId.value === target.id
+  }
+  if (target.kind === 'object') await selectObject(target.id, openInspector)
+  else await selectOrbit(target.id, openInspector)
+  return sameWorkspace() && selectedSystemId.value === target.systemId
+    && (target.kind === 'object' ? selectedObjectId.value : selectedOrbitId.value) === target.id
+}
+
+async function editEntityFromMenu(): Promise<void> {
+  const target = publicationMenuRequest.value?.target
+  publicationControls.closeMenu()
+  if (!target || !await selectContextEntity(target, true)) return
+  if (target.kind === 'system') await beginChartNamesEdit(target.id)
+  else if (target.kind === 'route') {
+    if (routeSession.value?.routeId !== target.id) await beginRouteEdit(target.id)
+  } else if (entitySession.value?.kind !== target.kind || entitySession.value.systemId !== target.systemId
+    || entitySession.value.targetId !== target.id) {
+    if (target.kind === 'object') await beginObjectEdit()
+    else await beginOrbitEdit()
+  }
+}
+
+function deleteEntityFromMenu(): void {
+  const target = publicationMenuRequest.value?.target
+  publicationControls.closeMenu()
+  if (!target) return
+  switch (target.kind) {
+    case 'system':
+      void openDeletionReview({ kind: 'system', systemId: target.id })
+      break
+    case 'object':
+      void openDeletionReview({ kind: 'object', systemId: target.systemId, objectId: target.id })
+      break
+    case 'orbit':
+      void openDeletionReview({ kind: 'orbit', systemId: target.systemId, orbitId: target.id })
+      break
+    case 'route':
+      void openDeletionReview({ kind: 'route', routeId: target.id })
+      break
+  }
 }
 
 function selectPublicationMenuMode(mode: import('../domain/workspace').PublicationMode): void {
   const request = publicationMenuRequest.value
   publicationControls.closeMenu()
-  if (!request) return
+  if (!request || request.target.kind === 'route') return
   void publicationControls.set({ targets: [request.target], mode })
+}
+
+function shareRouteFromMenu(shared: boolean): void {
+  const target = publicationMenuRequest.value?.target
+  publicationControls.closeMenu()
+  if (target?.kind === 'route') void setRouteSharing(target.id, shared, 'context-menu')
 }
 const searchOpen = search.open
 const searchQuery = search.query
@@ -1332,7 +1493,7 @@ const orbitCreationPreview = computed(() => {
     : null
 })
 const {
-  beginRoute, beginRouteEdit, deleteSystem, deleteSelectedObject, deleteSelectedOrbit, deleteSelectedRoute,
+  beginRoute, beginRouteEdit, openDeletionReview, deleteSystem, deleteSelectedObject, deleteSelectedOrbit, deleteSelectedRoute,
   deletionReview, cancelDeletionReview, confirmDeletionReview,
 } = cluster
 
@@ -2175,6 +2336,8 @@ function resetAfterWorkspaceReplacement(): void {
   history.resolveCapacity(false)
   historyOpen.value = false
   helpOpen.value = false
+  mobileMenuOpen.value = false
+  mobileHelpOpener.value = null
   helpOwnsFocus.value = false
   playerPreviewOpen.value = false
   headerFilesOpen.value = false
@@ -2444,6 +2607,7 @@ watch(
 publicationFocusRestoreAllowed = request => !(
   historyOpen.value
   || helpOpen.value
+  || mobileMenuOpen.value
   || chartNamesDialogOpen.value
   || playerPreviewOpen.value
   || fieldDefinitionDialogOpen.value
@@ -2466,6 +2630,7 @@ publicationFocusRestoreAllowed = request => !(
 const workspaceOverlayAvailable = computed(() => workspace.value !== null
   && !historyOpen.value
   && !helpOpen.value
+  && !mobileMenuOpen.value
   && !chartNamesDialogOpen.value
   && !playerPreviewOpen.value
   && !fieldDefinitionDialogOpen.value

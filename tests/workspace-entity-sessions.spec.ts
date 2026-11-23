@@ -34,7 +34,7 @@ async function openSessionLab(page: Page): Promise<{
   const system = backup.cluster?.systems.find(system => system.name === 'Session Lab')
   if (!system) throw new Error('The reviewed import did not add Session Lab.')
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: 'Inspect Session Lab', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Session Lab', exact: true }).click()
   await centerWorkspaceSelection(page)
   return {
     hierarchy,

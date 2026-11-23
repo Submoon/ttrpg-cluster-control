@@ -81,7 +81,7 @@ test('a Warden shares applied player text and marker color while keeping drafts 
   await planet.click()
   await editMapObject(page)
   await playerText.fill(unappliedText)
-  const menu = page.getByRole('menu', { name: 'Player visibility', exact: true })
+  const menu = page.getByRole('menu', { name: 'Map item actions', exact: true })
   const publishButton = planet.getByRole('button', { name: 'Change visibility for Pilgrim World', exact: true })
   const publish = async () => {
     await publishButton.click()

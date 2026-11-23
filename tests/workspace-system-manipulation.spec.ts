@@ -96,7 +96,7 @@ async function createDenseReach(page: Page, fixture: ExportedMap = creationGeome
   await resolveImportReview(preview, 'confirm')
 
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await hierarchy.getByRole('button', { name: 'Inspect Dense Reach', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Dense Reach', exact: true }).click()
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
   await hideWorkspaceInspector(page)
   await centerWorkspaceSelection(page)
@@ -262,7 +262,7 @@ test('an existing object can preview and confirm a named Orbit or explicit free 
 
   await page.reload()
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await hierarchy.getByRole('button', { name: 'Inspect Dense Reach', exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: 'Dense Reach', exact: true }).click()
   await hideWorkspaceInspector(page)
   await centerWorkspaceSelection(page)
   const restoredMap = wardenMap(page).locator(`.continuous-warden-system[data-system-id="${systemId}"]`)

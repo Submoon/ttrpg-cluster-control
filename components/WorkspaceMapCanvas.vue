@@ -219,7 +219,7 @@ import type {
 import type { MapImageExportOptions, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import type { MapImageScope } from '../utils/map-image-scope'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
-import type { PublicationMenuLease, PublicationTarget } from '../composables/editor-workflows/publication-types'
+import type { EntityContextTarget, PublicationMenuLease } from '../composables/editor-workflows/publication-types'
 import type { MapViewport } from '../utils/map-zoom'
 import type { SearchTarget } from '../utils/workspace-search'
 import type { InspectedMapTarget } from '../stores/editor-ui'
@@ -1190,7 +1190,7 @@ function onKeyDownCapture(event: KeyboardEvent): void {
     dismissSearchLocator()
   }
   if ((event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))
-    && event.target instanceof SVGElement) {
+    && event.target instanceof Element) {
     const bounds = event.target.getBoundingClientRect()
     if (showPublicationMenu(event, { x: bounds.left, y: bounds.bottom })) return
   }
@@ -1482,7 +1482,7 @@ function onContextMenuCapture(event: MouseEvent): void {
   showPublicationMenu(event, { x: event.clientX, y: event.clientY })
 }
 
-function publicationTargetAt(target: EventTarget | null): { target: PublicationTarget; mark: SVGElement } | null {
+function publicationTargetAt(target: EventTarget | null): { target: EntityContextTarget; mark: SVGElement } | null {
   if (props.moveTargeting || props.clusterChooserOpen
     || props.clusterMoveTargeting
     || (props.activeView === 'cluster' && props.clusterAddType != null)
@@ -1500,20 +1500,69 @@ function publicationTargetAt(target: EventTarget | null): { target: PublicationT
       if (objectId && systemId && objectMark) {
         return { target: { kind: 'object', id: objectId, systemId }, mark: objectMark }
       }
+
+      const orbitTarget = target.closest<SVGElement>(
+        '.continuous-warden-orbit-target[data-system-id][data-orbit-id], '
+        + '.continuous-warden-orbit-hit-target[data-system-id][data-orbit-id], '
+        + '.continuous-warden-orbit-visible-arc[data-system-id][data-orbit-id], '
+        + '.continuous-warden-orbit-edit-handle[data-system-id][data-orbit-id]',
+      )
+      const orbitId = orbitTarget?.getAttribute('data-orbit-id')
+      const orbitSystemId = orbitTarget?.getAttribute('data-system-id')
+      if (orbitId && orbitSystemId && orbitTarget) {
+        const focusTarget = orbitTarget.matches(
+          '.continuous-warden-orbit-target, .continuous-warden-orbit-edit-handle',
+        )
+          ? orbitTarget
+          : [...(canvasRoot.value?.querySelectorAll<SVGElement>(
+            '.continuous-warden-orbit-target[data-system-id][data-orbit-id], '
+            + '.continuous-warden-orbit-edit-handle[data-system-id][data-orbit-id]',
+          ) ?? [])].find(mark => mark.getAttribute('data-system-id') === orbitSystemId
+            && mark.getAttribute('data-orbit-id') === orbitId) ?? null
+        if (focusTarget) return {
+          target: { kind: 'orbit', id: orbitId, systemId: orbitSystemId },
+          mark: focusTarget,
+        }
+      }
+
+      const routeMark = target.closest<SVGGElement>('.cluster-route[data-route-id]')
+      const routeId = routeMark?.getAttribute('data-route-id')
+      if (routeId && routeMark) return { target: { kind: 'route', id: routeId }, mark: routeMark }
     }
-    const mark = target.closest<SVGGElement>('.cluster-system-node[data-system-id]')
-    const systemId = mark?.getAttribute('data-system-id')
-    return systemId && mark
-      ? { target: { kind: 'system', id: systemId, systemId }, mark }
-      : null
+
+    const legacyRouteMark = target.closest<SVGGElement>('.cluster-route[data-route-id]')
+    const legacyRouteId = legacyRouteMark?.getAttribute('data-route-id')
+    if (legacyRouteId && legacyRouteMark) {
+      return { target: { kind: 'route', id: legacyRouteId }, mark: legacyRouteMark }
+    }
+
+    const systemMark = target.closest<SVGGElement>('.cluster-system-node[data-system-id]')
+    const resizeHandle = target.closest<HTMLElement>('[data-system-resize-handle][data-system-id]')
+    const systemId = systemMark?.getAttribute('data-system-id') ?? resizeHandle?.getAttribute('data-system-id')
+    if (!systemId) return null
+    const focusMark = systemMark ?? [...(canvasRoot.value?.querySelectorAll<SVGElement>(
+      '.continuous-warden-name-target[data-system-id], .continuous-warden-system-anchor[data-system-id]',
+    ) ?? [])].find(mark => mark.getAttribute('data-system-id') === systemId) ?? null
+    return focusMark ? { target: { kind: 'system', id: systemId, systemId }, mark: focusMark } : null
   }
 
-  const mark = target.closest<SVGGElement>('.system-object[data-object-id]')
-  const objectId = mark?.getAttribute('data-object-id')
+  const objectMark = target.closest<SVGGElement>('.system-object[data-object-id]')
+  const objectId = objectMark?.getAttribute('data-object-id')
   const systemId = props.system?.id
-  return objectId && systemId && mark
-    ? { target: { kind: 'object', id: objectId, systemId }, mark }
-    : null
+  if (objectId && systemId && objectMark) {
+    return { target: { kind: 'object', id: objectId, systemId }, mark: objectMark }
+  }
+
+  const orbitTarget = target.closest<SVGElement>(
+    '.orbit-hit-target[data-orbit-id], .orbit-axis-handle[data-orbit-id], '
+    + '.orbit-rotation-handle[data-orbit-id], .orbit-center-handle[data-orbit-id]',
+  )
+  const orbitId = orbitTarget?.getAttribute('data-orbit-id')
+  if (!orbitId || !systemId || !orbitTarget) return null
+  return {
+    target: { kind: 'orbit', id: orbitId, systemId },
+    mark: orbitTarget,
+  }
 }
 
 function showPublicationMenu(
@@ -1535,7 +1584,7 @@ function openPublicationMenu(target: EventTarget | null, point: { x: number; y: 
     clientPoint: point,
     opener: candidate.mark,
     source: 'map',
-  }, { selectObjectForContext: true })
+  }, candidate.target.kind === 'object' ? { selectObjectForContext: true } : undefined)
   if (!lease) return false
   publicationMenuLease = lease
   return true

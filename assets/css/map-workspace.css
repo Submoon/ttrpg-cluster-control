@@ -1013,7 +1013,8 @@ p-note {
   z-index: 15;
   top: 0.7rem;
   left: 50%;
-  width: min(64rem, calc(100% - 2rem));
+  width: max-content;
+  max-width: min(64rem, calc(100% - 2rem));
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -1280,12 +1281,12 @@ p-note {
 
 @media (max-width: 1000px) and (min-width: 761px) and (min-height: 601px) {
   .workspace-side-panel-content { padding: 0.75rem; }
-  .workspace-map-chrome-region { width: calc(100% - 1.5rem); }
+  .workspace-map-chrome-region { max-width: calc(100% - 1.5rem); }
 }
 
 @media (max-width: 760px), (max-height: 600px) {
   .map-workspace-shell .workspace-header { min-height: 3rem; padding: 0.4rem 0.55rem; }
-  .workspace-map-chrome-region { top: 0.5rem; width: calc(100% - 1rem); }
+  .workspace-map-chrome-region { top: 0.5rem; max-width: calc(100% - 1rem); }
   .workspace-resizable-panel:not(.workspace-resizable-panel-compact) { top: var(--workspace-map-chrome-clearance, 4.3rem); bottom: var(--workspace-bottom-controls-clearance, 4.4rem); }
   .workspace-bottom-controls {
     right: max(0.5rem, env(safe-area-inset-right));

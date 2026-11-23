@@ -9,7 +9,8 @@ import {
   type PublicationMode,
 } from '../../domain/workspace'
 import type { useEditorUiStore } from '../../stores/editor-ui'
-import type { PublicationRequest, PublicationTarget } from './publication-types'
+import { orbitBranchObjects } from '../../utils/map-hierarchy'
+import type { OrbitContextTarget, PublicationRequest, PublicationTarget } from './publication-types'
 import type { useEditorTransitions } from './useEditorTransitions'
 import type { RouteInspectorSession } from './useRouteInspectorSession'
 import type { WorkspaceMutationExecutor, WorkspaceMutationResult } from './workspace-mutations'
@@ -36,11 +37,13 @@ function rejection(
   return { status: 'rejected', reason, message }
 }
 
-function publicationTargetExists(workspace: LocalWorkspace, target: PublicationTarget): boolean {
+function publicationTargetExists(workspace: LocalWorkspace, target: PublicationTarget | OrbitContextTarget): boolean {
   if (target.kind === 'system') return target.systemId === target.id
     && workspace.cluster.systems.some(system => system.id === target.id)
-  return workspace.cluster.systems.some(system => system.id === target.systemId
-    && system.objects.some(object => object.id === target.id))
+  const system = workspace.cluster.systems.find(candidate => candidate.id === target.systemId)
+  return target.kind === 'orbit'
+    ? !!system?.orbits.some(orbit => orbit.id === target.id)
+    : !!system?.objects.some(object => object.id === target.id)
 }
 
 function routeTargetExists(workspace: LocalWorkspace, routeId: string): boolean {
@@ -76,19 +79,24 @@ export function usePublicationWorkflows(options: PublicationWorkflowOptions) {
     }
 
     const target = request.targets[0]
-    if (!target || (target.kind !== 'system' && target.kind !== 'object')
+    if (!target || (target.kind !== 'system' && target.kind !== 'object' && target.kind !== 'orbit')
       || typeof target.id !== 'string' || typeof target.systemId !== 'string') {
       const invalid = rejection('invalid', 'Choose one supported map item and a valid visibility setting.')
       setError(invalid.message)
       return invalid
     }
-    const capturedTarget: PublicationTarget = { kind: target.kind, id: target.id, systemId: target.systemId }
+    const capturedTarget = { ...target }
     const requestedMode: PublicationMode = request.mode
     const current = workspace.value
     if (!current || !publicationTargetExists(current, capturedTarget)) {
       return rejection('stale', 'That map item is no longer available.')
     }
 
+    const branchIds = capturedTarget.kind === 'orbit'
+      ? new Set(orbitBranchObjects(current.cluster.systems.find(system => system.id === capturedTarget.systemId), capturedTarget.id)
+          .map(object => object.id))
+      : null
+    if (branchIds?.size === 0) return { status: 'unchanged' }
     const capturedWorkspaceId = current.id
     const capturedClusterId = current.cluster.id
     const capturedContext = contextSignature()
@@ -104,7 +112,7 @@ export function usePublicationWorkflows(options: PublicationWorkflowOptions) {
     }
 
     try {
-      if (!await transitions.resolveTransition() || !isCurrent()) {
+      if (!await transitions.resolveTransition({}, isCurrent) || !isCurrent()) {
         return rejection('cancelled', 'Visibility was not changed because the pending editor decision was cancelled or became outdated.')
       }
 
@@ -116,12 +124,12 @@ export function usePublicationWorkflows(options: PublicationWorkflowOptions) {
         : requestedMode === 'hidden' ? 'Hidden' : 'Revealed'
       const mutationTarget = capturedTarget.kind === 'system'
         ? { kind: 'system' as const, id: capturedTarget.id }
-        : { kind: 'object' as const, id: capturedTarget.id, systemId: capturedTarget.systemId }
+        : { kind: capturedTarget.kind, id: capturedTarget.id, systemId: capturedTarget.systemId }
 
       const result = await mutations.execute({
         action: {
           kind: 'update',
-          label: `Set player visibility to ${label}`,
+          label: branchIds ? `Set Orbit branch player visibility to ${label}` : `Set player visibility to ${label}`,
           target: mutationTarget,
           parent: capturedTarget.kind === 'system'
             ? { kind: 'cluster', id: latest.cluster.id }
@@ -140,6 +148,19 @@ export function usePublicationWorkflows(options: PublicationWorkflowOptions) {
           }
 
           const system = currentWorkspace.cluster.systems.find(candidate => candidate.id === capturedTarget.systemId)
+          if (branchIds && system) {
+            const branch = orbitBranchObjects(system, capturedTarget.id)
+            if (branch.length !== branchIds.size || branch.some(object => !branchIds.has(object.id))) {
+              throw new Error('The Orbit branch changed. Open its menu again to change visibility.')
+            }
+            if (branch.every(object => object.publication === requestedMode)) return currentWorkspace
+            return replaceWorkspaceSystem(currentWorkspace, {
+              ...system,
+              objects: system.objects.map(object => branchIds.has(object.id)
+                ? { ...object, publication: requestedMode }
+                : object),
+            })
+          }
           if (!system || !system.objects.some(object => object.id === capturedTarget.id)) {
             throw new Error('The selected map object no longer exists.')
           }
@@ -162,7 +183,11 @@ export function usePublicationWorkflows(options: PublicationWorkflowOptions) {
   }
 
   /** Changes only the committed sharing flag, preserving the latest route details and layout. */
-  async function setRouteSharing(routeId: string, playerShared: boolean): Promise<WorkspaceMutationResult> {
+  async function setRouteSharing(
+    routeId: string,
+    playerShared: boolean,
+    source: 'inspector' | 'context-menu' = 'inspector',
+  ): Promise<WorkspaceMutationResult> {
     if (busy.value) return rejection('busy', 'Finish the current visibility change before starting another one.')
     if (!routeSharing) {
       return rejection('unavailable', 'Jump Route sharing is unavailable in this editor context.')
@@ -174,8 +199,9 @@ export function usePublicationWorkflows(options: PublicationWorkflowOptions) {
     }
 
     const current = workspace.value
-    if (!current || store.activeView !== 'cluster' || store.selectedRouteId !== routeId
-      || routeSharing.session.value !== null) {
+    const fromContextMenu = source === 'context-menu'
+    if (!current || store.activeView !== 'cluster'
+      || (!fromContextMenu && (store.selectedRouteId !== routeId || routeSharing.session.value !== null))) {
       return rejection('stale', 'That Jump Route is no longer available in its Inspect context.')
     }
     const route = current.cluster.routes.find(candidate => candidate.id === routeId)
@@ -194,9 +220,8 @@ export function usePublicationWorkflows(options: PublicationWorkflowOptions) {
         && latest?.id === capturedWorkspaceId
         && latest.cluster.id === capturedClusterId
         && store.activeView === 'cluster'
-        && store.selectedRouteId === routeId
-        && routeSharing.session.value === null
-        && routeSharing.sessionGeneration.value === capturedRouteSessionGeneration
+        && (fromContextMenu || (store.selectedRouteId === routeId && routeSharing.session.value === null
+          && routeSharing.sessionGeneration.value === capturedRouteSessionGeneration))
         && contextSignature() === capturedContext
         && !!latest && routeTargetExists(latest, routeId)
     }
@@ -205,7 +230,7 @@ export function usePublicationWorkflows(options: PublicationWorkflowOptions) {
       if (!await routeSharing.beforeWorkspaceOperation() || !isCurrent()) {
         return rejection('cancelled', 'Jump Route sharing was not changed because the workspace action was cancelled or became outdated.')
       }
-      if (!await transitions.resolveTransition() || !isCurrent()) {
+      if (!await transitions.resolveTransition({}, isCurrent) || !isCurrent()) {
         return rejection('cancelled', 'Jump Route sharing was not changed because the pending editor decision was cancelled or became outdated.')
       }
 
@@ -219,6 +244,7 @@ export function usePublicationWorkflows(options: PublicationWorkflowOptions) {
         return { status: 'unchanged' }
       }
 
+      const commitRouteSessionGeneration = routeSharing.sessionGeneration.value
       const label = playerShared ? 'Shared with players' : 'Private'
       const result = await mutations.execute({
         action: {
@@ -246,7 +272,8 @@ export function usePublicationWorkflows(options: PublicationWorkflowOptions) {
             },
           }
         },
-        isCurrent,
+        isCurrent: () => isCurrent() && routeSharing.session.value === null
+          && routeSharing.sessionGeneration.value === commitRouteSessionGeneration,
       })
 
       if (result.status === 'rejected') {

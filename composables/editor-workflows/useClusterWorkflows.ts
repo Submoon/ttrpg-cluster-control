@@ -193,8 +193,11 @@ export function useClusterWorkflows({
 
   /** Prepares a current cascade without changing applied data or resolving any drafts. */
   async function openDeletionReview(target: MapDeletionTarget): Promise<void> {
+    const workspaceId = workspace.value?.id
+    const clusterId = workspace.value?.cluster.id
     if (!await beforeWorkspaceOperation()) return
-    if (!workspace.value || saveState.value === 'saving' || deletionReview.value?.confirming) return
+    if (!workspace.value || workspace.value.id !== workspaceId || workspace.value.cluster.id !== clusterId
+      || saveState.value === 'saving' || deletionReview.value?.confirming) return
     const id = ++deletionReviewSequence
     editorError.value = ''
     refreshDeletionReview(id, target)
@@ -414,6 +417,7 @@ export function useClusterWorkflows({
   return {
     beginRoute,
     beginRouteEdit,
+    openDeletionReview,
     deleteSystem,
     deleteSelectedObject,
     deleteSelectedOrbit,

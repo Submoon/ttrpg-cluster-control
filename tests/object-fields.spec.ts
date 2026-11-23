@@ -45,7 +45,7 @@ function objectFieldsCampaign() {
 
 async function openSystemHierarchy(page: Page, systemName: string) {
   const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('button', { name: `Inspect ${systemName}`, exact: true }).click()
+  await hierarchy.getByRole('treeitem', { name: `${systemName}`, exact: true }).click()
   return hierarchy
 }
 
