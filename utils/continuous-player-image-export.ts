@@ -120,14 +120,12 @@ export function serializeContinuousPlayerMapImage(
     ? layoutPlayerContinuousNameLabels(displayedSystems, camera, svgPixelScale, titleSeedViewport)
       .find(label => label.systemId === selected.id)
     : undefined
-  const selectedContentRight = selectedContentBounds
-    ? selectedContentBounds.x + selectedContentBounds.width
-    : selected?.anchor.x ?? 0
+  const selectedContentLeft = selectedContentBounds?.x ?? selected?.anchor.x ?? 0
   const selectedContentTop = selectedContentBounds?.y ?? selected?.anchor.y ?? 0
   const selectedTitleBounds = selectedTitleSeed && selected
     ? nameBounds({
         ...selectedTitleSeed,
-        x: selectedContentRight - 8 - selectedTitleSeed.width / 2,
+        x: selectedContentLeft + 8 + selectedTitleSeed.width / 2,
         y: selectedContentTop - selectedTitleSeed.height - 8,
       })
     : undefined
@@ -171,14 +169,10 @@ export function serializeContinuousPlayerMapImage(
     nameSystems, camera, svgPixelScale, nameViewport,
   ).map((label) => {
     if (selected) {
-      const contentRight = selectedContentBounds
-        ? selectedContentBounds.x + selectedContentBounds.width
-        : selected.anchor.x
-      const contentTop = selectedContentBounds?.y ?? selected.anchor.y
       return {
         ...label,
-        x: contentRight - 8 - label.width / 2,
-        y: contentTop - label.height - 8,
+        x: selectedContentLeft + 8 + label.width / 2,
+        y: selectedContentTop - label.height - 8,
         hasLeader: false,
       }
     }

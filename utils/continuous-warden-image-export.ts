@@ -334,7 +334,7 @@ function scaleSystemNameForExport(
   const width = label.width * titleScale / scale
   return {
     ...label,
-    centerX: selected.envelope.x + selected.envelope.width - width / 2 - 8 / scale,
+    centerX: selected.envelope.x + width / 2 + 8 / scale,
     top: selected.envelope.y - height - 12 / scale,
     width,
     height,
