@@ -86,13 +86,48 @@ test('a visible arc crossing angle zero restarts its native dash phase at the el
   expect(result.arcs[1]!.dashOffset).toBe(0)
 })
 
-test('fully visible Orbits and unsafe finite geometry retain the native ellipse @pure', { tag: '@pure' }, () => {
-  expect(clipWardenOrbitStroke(
-    { center: { x: 50, y: 40 }, rx: 12, ry: 8, rotation: 65 },
-    { x: 0, y: 0, width: 100, height: 80 },
-    0,
-  )).toEqual({ kind: 'ellipse' })
+test('fully visible large Orbits use two phase-continuous halves, including viewport tangencies @pure', { tag: '@pure' }, () => {
+  const ellipse = { center: { x: 120, y: 90 }, rx: 320, ry: 175, rotation: 65 }
+  const radians = ellipse.rotation * Math.PI / 180
+  const halfWidth = Math.hypot(ellipse.rx * Math.cos(radians), ellipse.ry * Math.sin(radians))
+  const halfHeight = Math.hypot(ellipse.rx * Math.sin(radians), ellipse.ry * Math.cos(radians))
+  const viewport = {
+    x: ellipse.center.x - halfWidth,
+    y: ellipse.center.y - halfHeight,
+    width: halfWidth * 2,
+    height: halfHeight * 2,
+  }
+  const result = clipWardenOrbitStroke(ellipse, viewport, 0)
 
+  expect(result.kind).toBe('arcs')
+  if (result.kind !== 'arcs') return
+  expect(result.arcs).toHaveLength(2)
+
+  const halves = [[0, Math.PI], [Math.PI, Math.PI * 2]] as const
+  for (const [index, [startAngle, endAngle]] of halves.entries()) {
+    const arc = result.arcs[index]!
+    const match = arc.path.match(/^M (\S+) (\S+) A (\S+) (\S+) (\S+) 0 1 (\S+) (\S+)$/)
+    expect(match).not.toBeNull()
+    if (!match) continue
+
+    const start = { x: Number(match[1]), y: Number(match[2]) }
+    const end = { x: Number(match[6]), y: Number(match[7]) }
+    const expectedStart = pointAt(ellipse, radians, startAngle)
+    const expectedEnd = pointAt(ellipse, radians, endAngle)
+    expect(Number(match[3])).toBe(ellipse.rx)
+    expect(Number(match[4])).toBe(ellipse.ry)
+    expect(Number(match[5])).toBe(ellipse.rotation)
+    expect(start.x).toBeCloseTo(expectedStart.x, 10)
+    expect(start.y).toBeCloseTo(expectedStart.y, 10)
+    expect(end.x).toBeCloseTo(expectedEnd.x, 10)
+    expect(end.y).toBeCloseTo(expectedEnd.y, 10)
+  }
+
+  expect(result.arcs[0]!.dashOffset).toBe(0)
+  expect(result.arcs[1]!.dashOffset).toBeCloseTo(simpsonEllipseLength(Math.PI, ellipse.rx, ellipse.ry), 5)
+})
+
+test('unsafe finite geometry retains the native ellipse fallback @pure', { tag: '@pure' }, () => {
   expect(clipWardenOrbitStroke(
     { center: { x: Number.NaN, y: 40 }, rx: 12, ry: 8, rotation: 65 },
     { x: 0, y: 0, width: 100, height: 80 },

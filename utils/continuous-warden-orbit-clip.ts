@@ -45,10 +45,6 @@ export function clipWardenOrbitStroke(
     return { kind: 'ellipse' }
   }
 
-  if (bounds.left >= left && bounds.top >= top && bounds.right <= right && bounds.bottom <= bottom) {
-    return { kind: 'ellipse' }
-  }
-
   const coordinateTolerance = Number.EPSILON * 32 * Math.max(
     1, Math.abs(left), Math.abs(top), Math.abs(right), Math.abs(bottom),
     Math.abs(ellipse.center.x), Math.abs(ellipse.center.y), ellipse.rx, ellipse.ry,
@@ -82,6 +78,19 @@ export function clipWardenOrbitStroke(
     return { x, y }
   }
   const inside = (point: Point) => point.x >= left && point.x <= right && point.y >= top && point.y <= bottom
+  const arcs: OrbitArc[] = []
+  const fullEllipseAsArcs = () => {
+    if (!appendArc(0, Math.PI, 0)
+      || !appendArc(Math.PI, TAU, ellipseArcLength(Math.PI, ellipse.rx, ellipse.ry))) {
+      return { kind: 'ellipse' as const }
+    }
+    return { kind: 'arcs' as const, arcs }
+  }
+
+  // Split a fully visible curve before SVG paints its large ellipse resource every camera frame.
+  if (bounds.left >= left && bounds.top >= top && bounds.right <= right && bounds.bottom <= bottom) {
+    return fullEllipseAsArcs()
+  }
 
   const verticalA = ellipse.rx * cosine
   const verticalB = -ellipse.ry * sine
@@ -104,7 +113,7 @@ export function clipWardenOrbitStroke(
   if (cuts.length > 1 && cuts[0]! + TAU - cuts[cuts.length - 1]! <= ANGLE_EPSILON) cuts.pop()
 
   if (cuts.length === 0) {
-    return inside(pointAt(0)) ? { kind: 'ellipse' } : { kind: 'hidden' }
+    return inside(pointAt(0)) ? fullEllipseAsArcs() : { kind: 'hidden' }
   }
 
   const intervalVisible = cuts.map((start, index) => {
@@ -112,10 +121,9 @@ export function clipWardenOrbitStroke(
     const span = index === cuts.length - 1 ? next + TAU - start : next - start
     return inside(pointAt(start + span / 2))
   })
-  if (intervalVisible.every(Boolean)) return { kind: 'ellipse' }
+  if (intervalVisible.every(Boolean)) return fullEllipseAsArcs()
   if (intervalVisible.every(visible => !visible)) return { kind: 'hidden' }
 
-  const arcs: OrbitArc[] = []
   for (let startIndex = 0; startIndex < cuts.length; startIndex += 1) {
     const previousIndex = (startIndex + cuts.length - 1) % cuts.length
     if (!intervalVisible[startIndex] || intervalVisible[previousIndex]) continue
