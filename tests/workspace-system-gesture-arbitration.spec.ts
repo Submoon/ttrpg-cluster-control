@@ -20,6 +20,7 @@ import {
   wardenOrbitLocalGeometry,
   wardenSystemMark,
   workspaceNavigation,
+  workspaceZoomControls,
 } from './helpers'
 
 type TouchPoint = { id: number; x: number; y: number }
@@ -212,7 +213,10 @@ async function orbitDragPoints(
       for (const dx of [0, -1, 1]) {
         for (const dy of [0, -1, 1]) {
           const start = { x: Math.round(point.x) + dx, y: Math.round(point.y) + dy }
-          if (document.elementFromPoint(start.x, start.y) !== ellipse) continue
+          const hit = document.elementFromPoint(start.x, start.y)
+          const visibleArc = hit?.matches('.continuous-warden-orbit-visible-arc')
+            && hit.getAttribute('data-system-id') === systemId && hit.getAttribute('data-orbit-id') === orbitId
+          if (hit !== ellipse && !visibleArc) continue
           const localStart = new DOMPoint(start.x, start.y).matrixTransform(inverse)
           const destination = new DOMPoint(
             cx + (localStart.x - cx) * target.scale,
@@ -449,6 +453,44 @@ test('near-ring Warden Orbit targets select and resize from off-stroke pointer h
   expect(after.radii.vertical).toBeGreaterThan(before.radii.vertical + 5)
   expect(nearRingDrag.hitClass.split(/\s+/)).toContain('continuous-warden-orbit-hit-target')
   expect(nearRingDrag.hitOrbitId).toBe(orbitId)
+})
+
+test('near-ring Warden Orbit targets remain operable at maximum zoom', async ({ page }) => {
+  const { map, ring, systemId, primaryObjectId } = await createHostedOrbit(page)
+  const controls = workspaceZoomControls(page)
+  const zoomIn = controls.getByRole('button', { name: 'Zoom in', exact: true })
+  for (let step = 0; step < 18 && await zoomIn.isEnabled(); step++) await zoomIn.click()
+  await expect(controls.locator('output').first()).toHaveText('1600%')
+  await expect(map.locator('.continuous-warden-orbit-visible-arc').first()).toBeVisible()
+  await expect(map.getByRole('button', { name: 'Select Orbit 1', exact: true })).toHaveCount(1)
+
+  await wardenObjectMark(page, systemId, primaryObjectId).press('Enter')
+  await ring.press('Enter')
+  await expect(page.getByRole('button', { name: 'Edit Orbit', exact: true })).toBeVisible()
+  await wardenObjectMark(page, systemId, primaryObjectId).press('Enter')
+  const painted = await orbitDragPoints(ring, 1, .65)
+  await page.mouse.click(painted.start.x, painted.start.y)
+  await expect(page.getByRole('button', { name: 'Edit Orbit', exact: true })).toBeVisible()
+  await expect(ring).toBeFocused()
+  await closeVisiblePanels(page)
+  await setWorkspaceMapMode(page, 'Move')
+
+  const before = await wardenOrbitLocalGeometry(ring, systemId)
+  const drag = await orbitOffStrokeDragPoints(ring, .65, 8, 24)
+  expect(drag.hitClass.split(/\s+/)).toContain('continuous-warden-orbit-hit-target')
+  expect(drag.hitOrbitId).toBe(await ring.getAttribute('data-orbit-id'))
+  await page.mouse.move(drag.start.x, drag.start.y)
+  await page.mouse.down()
+  try {
+    await page.mouse.move(drag.end.x, drag.end.y, { steps: 5 })
+    await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+      .toBeGreaterThan(before.radii.horizontal + .5)
+  } finally {
+    await page.mouse.up()
+  }
+  await waitForWorkspaceSaved(page)
+  expect((await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+    .toBeGreaterThan(before.radii.horizontal + .5)
 })
 
 test('Escape restores an Orbit ring drag before its late mouse release', async ({ page }) => {

@@ -40,6 +40,8 @@ The small-map wheel response follow-up starts from prototype revision `680aa2426
 
 The Firefox follow-up starts from prototype revision `e9fa0da6cbf8f145388c48069175199c902f509a` with the same fetched `origin/main` baseline. Reproduce the report using the supplied two-system workspace in a local browser session.
 
+The maximum-zoom follow-up starts from prototype revision `58431aeb7ab34ccfbb514542165b84fd7ec669b5` with the same fetched `origin/main` baseline. The supplied workspace reproduces the Firefox stalls when the camera starts at 1600% with four large, partially visible Orbits.
+
 ## User Stories
 
 ### Explore and arrange the map
@@ -135,6 +137,7 @@ The Firefox follow-up starts from prototype revision `e9fa0da6cbf8f145388c480691
 - Any change of Inspector target that would leave a modified draft uses Apply, Discard and Stay, through the same guard for map, Hierarchy, Search or editing gestures. Stay or a failed Apply keeps the source target and draft. An independent direct move can commit while the Inspector and draft stay on another entity, subject to the existing mutation and dependency checks.
 - Delete opens the existing consequence review for a selected object, Orbit, or route on the continuous map, including in Move mode. An object must be the only member of the current selection. Active map gestures retain ownership of keyboard input.
 - An Orbit ring has a screen-space pointer target extending beyond its dashed stroke. The target follows the same ellipse in Select and Move, with one keyboard focus stop per Orbit and existing edit handles and object targets taking precedence. In live viewport paint, compensate the root SVG scale to keep the stroke, dash spacing, and hit width constant in screen pixels.
+- At high zoom, bound large Orbit strokes and their pointer corridors to the live viewport with overscan. Preserve the ellipse geometry, dash phase, and keyboard target when the curve is represented by visible arcs. Image exports continue to use the full applied geometry in their own crop.
 
 ### Placement and transfer
 

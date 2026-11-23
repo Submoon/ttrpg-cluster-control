@@ -779,7 +779,8 @@ function isMapEntityTarget(target: EventTarget | null): boolean {
   return target instanceof Element
     && !!target.closest(
       '.cluster-system-node, .cluster-route, .system-object, .orbit-mark, .orbit-hit-target, .orbit-edit-control, '
-      + '.continuous-warden-object, .continuous-warden-orbit-target, .continuous-warden-orbit-hit-target, .continuous-warden-orbit-edit-handle, '
+      + '.continuous-warden-object, .continuous-warden-orbit-target, .continuous-warden-orbit-hit-target, '
+      + '.continuous-warden-orbit-visible-arc, .continuous-warden-orbit-edit-handle, '
       + '[data-system-resize-handle]',
     )
 }
@@ -791,7 +792,8 @@ function longPressInspection(target: EventTarget | null): (() => void) | null {
   const continuousObjectId = objectTarget?.getAttribute('data-object-id')
   if (objectSystemId && continuousObjectId) return () => emit('select-continuous-object', objectSystemId, continuousObjectId)
   const orbitTarget = target.closest<SVGElement>(
-    '.continuous-warden-orbit-target[data-system-id][data-orbit-id], .continuous-warden-orbit-hit-target[data-system-id][data-orbit-id], .continuous-warden-orbit-edit-handle[data-system-id][data-orbit-id]',
+    '.continuous-warden-orbit-target[data-system-id][data-orbit-id], .continuous-warden-orbit-hit-target[data-system-id][data-orbit-id], '
+    + '.continuous-warden-orbit-visible-arc[data-system-id][data-orbit-id], .continuous-warden-orbit-edit-handle[data-system-id][data-orbit-id]',
   )
   const orbitSystemId = orbitTarget?.getAttribute('data-system-id')
   const continuousOrbitId = orbitTarget?.getAttribute('data-orbit-id')
