@@ -334,10 +334,6 @@ export function useClusterWorkflows({
     }
   }
 
-  async function deleteSystem(systemId: string): Promise<void> {
-    await openDeletionReview({ kind: 'system', systemId })
-  }
-
   async function deleteSelectedObject(): Promise<void> {
     const system = selectedSystem.value
     const object = selectedObject.value
@@ -418,7 +414,6 @@ export function useClusterWorkflows({
     beginRoute,
     beginRouteEdit,
     openDeletionReview,
-    deleteSystem,
     deleteSelectedObject,
     deleteSelectedOrbit,
     deleteSelectedRoute,

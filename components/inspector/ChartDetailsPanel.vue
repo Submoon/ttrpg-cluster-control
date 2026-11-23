@@ -95,21 +95,6 @@
     <p v-if="props.mode === 'cluster' && props.editorError" class="feedback m-0 error-text" role="alert">
       {{ props.editorError }}
     </p>
-    <div v-if="props.mode === 'system' && props.selectedSystem" class="chart-details-system-delete">
-      <p v-if="props.workspace.cluster.systems.length <= 1" id="chart-details-system-delete-restriction" class="inspector-intro m-0" role="status">
-        A Jump Cluster must keep at least one star system.
-      </p>
-      <UButton
-        color="error"
-        variant="outline"
-        :disabled="props.saving || props.workspace.cluster.systems.length <= 1"
-        :aria-label="`Delete ${props.selectedSystem.name} system`"
-        :aria-describedby="props.workspace.cluster.systems.length <= 1 ? 'chart-details-system-delete-restriction' : undefined"
-        @click="emit('delete-system', props.selectedSystem.id)"
-      >
-        Delete system…
-      </UButton>
-    </div>
   </UCard>
 </template>
 
@@ -137,9 +122,6 @@ const props = defineProps<{
   publicationBusy?: boolean
 }>()
 
-const emit = defineEmits<{
-  'delete-system': [systemId: string]
-}>()
 const commands = useEditorCommands()
 const jumpPointCount = computed(() => jumpPointsInCluster(props.workspace.cluster).length)
 const chartEditSystemId = computed(() => props.chartEditSystemId
@@ -167,13 +149,4 @@ function setSystemPublication(mode: PublicationMode): void {
 
 <style scoped>
 .chart-details-card-heading { min-width: 0; }
-.chart-details-system-delete {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  border-top: 1px solid var(--line-soft);
-  padding-top: 0.75rem;
-}
 </style>

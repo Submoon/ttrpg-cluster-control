@@ -1,170 +1,148 @@
 <template>
-  <UDashboardNavbar
-    as="header"
-    class="workspace-header"
-    :class="{ 'workspace-header-compact-editor': compactEditorHeader }"
-    :toggle="true"
-    toggle-side="right"
-    :ui="{ center: 'workspace-header-center' }"
-    :inert="props.compactModalOpen ? true : undefined"
-  >
-    <template #left>
-      <div class="workspace-header-brand" aria-label="TTRPG Cluster Control">
-        <img class="workspace-header-mark" :src="logo" alt="" width="28" height="28" />
-        <span class="workspace-header-wordmark">TTRPG Cluster Control</span>
-      </div>
-    </template>
+  <UDashboardGroup class="static block overflow-visible" :persistent="false" storage-key="workspace-header">
+    <UDashboardNavbar
+      as="header"
+      class="workspace-header"
+      :class="{ 'workspace-header-compact-editor': compactEditorHeader }"
+      :toggle="false"
+      toggle-side="right"
+      :ui="{ center: 'workspace-header-center' }"
+      :inert="props.compactModalOpen ? true : undefined"
+    >
+      <template #left>
+        <div class="workspace-header-brand" aria-label="TTRPG Cluster Control">
+          <img class="workspace-header-mark" :src="logo" alt="" width="28" height="28" />
+          <span class="workspace-header-wordmark">TTRPG Cluster Control</span>
+        </div>
+      </template>
 
-    <template #default>
-      <section
-        v-if="workspace && !compactEditorHeader"
-        class="workspace-header-cluster"
-        aria-label="Current Jump Cluster"
-      >
-        <span class="workspace-header-eyebrow">Current Jump Cluster</span>
-        <h1 :aria-labelledby="workspaceHeadingLabelId">
-          <UPopover
-            v-model:open="workspaceNameDisclosureOpen"
-            :modal="false"
-            :content="{
-              side: 'bottom', align: 'center', sideOffset: 4, collisionPadding: 12,
-              onOpenAutoFocus: event => event.preventDefault(),
-            }"
-          >
-            <UButton
-              class="workspace-control workspace-header-name-trigger"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-              :aria-label="`${workspace.cluster.name}, show full map name`"
-              :aria-expanded="workspaceNameDisclosureOpen"
-            >
-              <span :id="workspaceHeadingLabelId" class="workspace-header-name-text">{{ workspace.cluster.name }}</span>
-              <UIcon name="i-lucide-chevron-down" class="workspace-header-name-disclosure-icon" aria-hidden="true" />
-            </UButton>
-            <template #content>
-              <div class="workspace-header-name-popover">
-                <p class="workspace-header-full-name">{{ workspace.cluster.name }}</p>
-              </div>
-            </template>
-          </UPopover>
-        </h1>
-      </section>
-      <section
-        v-else-if="!workspace && props.publicTitle"
-        class="workspace-header-cluster workspace-header-public"
-        aria-label="Player map"
-      >
-        <span class="workspace-header-eyebrow">{{ props.publicEyebrow }}</span>
-        <h1>{{ props.publicTitle }}</h1>
-      </section>
-    </template>
-
-    <template #right>
-      <div v-show="!compactEditorHeader" class="workspace-header-utilities">
-        <slot name="player-actions" />
-        <NuxtLink
-          v-if="props.showPrivacyLink"
-          class="text-xs font-medium text-primary underline underline-offset-2"
-          to="/privacy"
-          :target="workspace ? '_blank' : undefined"
-          :rel="workspace ? 'noopener' : undefined"
-          :aria-label="workspace ? 'Privacy policy (opens in a new tab)' : undefined"
+      <template #default>
+        <section
+          v-if="workspace && !compactEditorHeader"
+          class="workspace-header-cluster"
+          aria-label="Current Jump Cluster"
         >
-          Privacy policy
-        </NuxtLink>
-        <div class="workspace-header-theme" role="group" aria-label="Theme">
-          <ColorScheme>
-            <span class="workspace-header-theme-status">{{ colorMode.value === 'dark' ? 'Dark' : 'Light' }}</span>
-          </ColorScheme>
-          <UColorModeButton class="theme-control-toggle workspace-control" />
-        </div>
-        <slot name="editor-actions" />
-      </div>
-    </template>
-
-    <template #toggle>
-      <UButton
-        v-if="compactEditorHeader"
-        ref="mobileMenuToggle"
-        class="workspace-control workspace-mobile-menu-toggle"
-        color="neutral"
-        variant="ghost"
-        size="sm"
-        :icon="mobileMenuOpen ? 'i-lucide-x' : 'i-lucide-menu'"
-        :aria-label="mobileMenuOpen ? 'Close workspace menu' : 'Open workspace menu'"
-        aria-controls="workspace-mobile-menu"
-        :aria-expanded="mobileMenuOpen"
-        @click="mobileMenuOpen = !mobileMenuOpen"
-      />
-    </template>
-  </UDashboardNavbar>
-
-  <UDashboardSidebar
-    v-if="compactEditorHeader"
-    v-model:open="mobileMenuOpen"
-    class="workspace-mobile-menu-sidebar"
-    mode="slideover"
-    side="right"
-    :toggle="false"
-    :menu="{
-      title: 'Workspace menu',
-      description: 'Jump Cluster tools and settings',
-      side: 'right',
-      transition: false,
-      content: { onCloseAutoFocus: restoreMenuToggleFocus },
-    }"
-    :ui="{ root: 'lg:hidden', overlay: 'lg:block', content: 'lg:block' }"
-  >
-    <template #content="{ close }">
-      <div id="workspace-mobile-menu" class="workspace-mobile-menu-content">
-        <div class="workspace-mobile-menu-heading">
-          <h2>Workspace menu</h2>
-          <UButton
-            class="workspace-control"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            trailing-icon="i-lucide-x"
-            aria-label="Close workspace menu"
-            @click="close?.()"
-          >
-            Close
-          </UButton>
-        </div>
-        <section v-if="workspace" class="workspace-mobile-menu-cluster" aria-label="Current Jump Cluster">
           <span class="workspace-header-eyebrow">Current Jump Cluster</span>
-          <h3>{{ workspace.cluster.name }}</h3>
+          <h1 :aria-labelledby="workspaceHeadingLabelId">
+            <UPopover
+              v-model:open="workspaceNameDisclosureOpen"
+              :modal="false"
+              :content="{
+                side: 'bottom', align: 'center', sideOffset: 4, collisionPadding: 12,
+                onOpenAutoFocus: event => event.preventDefault(),
+              }"
+            >
+              <UButton
+                class="workspace-control workspace-header-name-trigger"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                :aria-label="`${workspace.cluster.name}, show full map name`"
+                :aria-expanded="workspaceNameDisclosureOpen"
+              >
+                <span :id="workspaceHeadingLabelId" class="workspace-header-name-text">{{ workspace.cluster.name }}</span>
+                <UIcon name="i-lucide-chevron-down" class="workspace-header-name-disclosure-icon" aria-hidden="true" />
+              </UButton>
+              <template #content>
+                <div class="workspace-header-name-popover">
+                  <p class="workspace-header-full-name">{{ workspace.cluster.name }}</p>
+                </div>
+              </template>
+            </UPopover>
+          </h1>
         </section>
-        <div class="workspace-mobile-menu-actions">
-          <slot name="mobile-actions" />
-        </div>
-        <div class="workspace-mobile-menu-utilities">
+        <section
+          v-else-if="!workspace && props.publicTitle"
+          class="workspace-header-cluster workspace-header-public"
+          aria-label="Player map"
+        >
+          <span class="workspace-header-eyebrow">{{ props.publicEyebrow }}</span>
+          <h1>{{ props.publicTitle }}</h1>
+        </section>
+      </template>
+
+      <template #right>
+        <div v-show="!compactEditorHeader" class="workspace-header-utilities">
+          <slot name="player-actions" />
+          <NuxtLink
+            v-if="props.showPrivacyLink"
+            class="text-xs font-medium text-primary underline underline-offset-2"
+            to="/privacy"
+            :target="workspace ? '_blank' : undefined"
+            :rel="workspace ? 'noopener' : undefined"
+            :aria-label="workspace ? 'Privacy policy (opens in a new tab)' : undefined"
+          >
+            Privacy policy
+          </NuxtLink>
           <div class="workspace-header-theme" role="group" aria-label="Theme">
             <ColorScheme>
               <span class="workspace-header-theme-status">{{ colorMode.value === 'dark' ? 'Dark' : 'Light' }}</span>
             </ColorScheme>
             <UColorModeButton class="theme-control-toggle workspace-control" />
           </div>
-          <NuxtLink
-            v-if="props.showPrivacyLink"
-            class="text-xs font-medium text-primary underline underline-offset-2"
-            to="/privacy"
-            target="_blank"
-            rel="noopener"
-            aria-label="Privacy policy (opens in a new tab)"
-          >
-            Privacy policy
-          </NuxtLink>
+          <slot name="editor-actions" />
         </div>
-      </div>
-    </template>
-  </UDashboardSidebar>
+      </template>
 
+      <template #toggle>
+        <UDashboardSidebarToggle
+          v-if="compactEditorHeader"
+          ref="mobileMenuToggle"
+          class="workspace-control workspace-mobile-menu-toggle lg:inline-flex"
+          side="right"
+          size="sm"
+          :aria-label="mobileMenuOpen ? 'Close workspace menu' : 'Open workspace menu'"
+          :aria-expanded="mobileMenuOpen"
+        />
+      </template>
+    </UDashboardNavbar>
+
+    <UDashboardSidebar
+      v-if="compactEditorHeader"
+      v-model:open="mobileMenuOpen"
+      class="workspace-mobile-menu-sidebar"
+      mode="slideover"
+      side="right"
+      toggle-side="right"
+      :menu="{
+        title: 'Workspace menu',
+        description: 'Jump Cluster tools and settings',
+        side: 'right',
+        transition: false,
+        content: { onCloseAutoFocus: restoreMenuToggleFocus },
+      }"
+      :ui="{
+        root: 'lg:hidden',
+        overlay: 'lg:block',
+        content: 'lg:flex',
+        header: 'h-auto min-h-14 items-start justify-between gap-3 py-4',
+        body: 'border-t border-default py-3',
+      }"
+    >
+      <template #header>
+        <section v-if="workspace" class="workspace-mobile-menu-cluster" aria-label="Current Jump Cluster">
+          <span class="workspace-header-eyebrow">Current Jump Cluster</span>
+          <h2>{{ workspace.cluster.name }}</h2>
+        </section>
+      </template>
+      <template #toggle>
+        <UDashboardSidebarToggle class="lg:inline-flex" side="right" size="sm" aria-label="Close workspace menu" />
+      </template>
+      <UNavigationMenu
+        as="nav"
+        aria-label="Workspace options"
+        orientation="vertical"
+        color="neutral"
+        :items="mobileOptions"
+        :ui="{ root: 'w-full', link: 'min-h-11 gap-3 px-3 text-sm', list: 'gap-0.5' }"
+      />
+    </UDashboardSidebar>
+  </UDashboardGroup>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue'
+import type { NavigationMenuItem } from '@nuxt/ui'
 import logo from '~/assets/cluster-control-logo-256.png'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 
@@ -175,6 +153,7 @@ const props = withDefaults(defineProps<{
   compactModalOpen?: boolean
   isCompactViewport?: boolean
   showPrivacyLink?: boolean
+  hasFieldDraft?: boolean
   publicTitle?: string
   publicEyebrow?: string
 }>(), {
@@ -185,6 +164,11 @@ const props = withDefaults(defineProps<{
   publicEyebrow: 'PLAYER VIEW',
 })
 
+const emit = defineEmits<{
+  'open-fields': []
+  'open-help': []
+}>()
+
 const workspace = computed(() => props.workspace)
 const colorMode = useColorMode()
 const mobileMenuOpen = defineModel<boolean>('mobileMenuOpen', { default: false })
@@ -192,6 +176,36 @@ const workspaceNameDisclosureOpen = ref(false)
 const workspaceHeadingLabelId = `workspace-header-name-${useId()}`
 const mobileMenuToggle = ref<{ $el?: HTMLElement } | null>(null)
 const compactEditorHeader = computed(() => Boolean(workspace.value && props.isCompactViewport))
+const nextColorMode = computed(() => colorMode.value === 'dark' ? 'light' : 'dark')
+const mobileOptions = computed<NavigationMenuItem[]>(() => [
+  {
+    label: 'Help',
+    icon: 'i-lucide-circle-help',
+    'aria-haspopup': 'dialog',
+    onClick: () => emit('open-help'),
+  },
+  {
+    label: 'Fields',
+    icon: 'i-lucide-list',
+    badge: props.hasFieldDraft ? { label: 'Draft', color: 'warning', variant: 'subtle' } : undefined,
+    'aria-label': 'Open field definitions',
+    'aria-haspopup': 'dialog',
+    onClick: () => emit('open-fields'),
+  },
+  {
+    label: `Switch to ${nextColorMode.value} mode`,
+    icon: nextColorMode.value === 'dark' ? 'i-lucide-moon' : 'i-lucide-sun',
+    onClick: () => { colorMode.preference = nextColorMode.value },
+  },
+  ...(props.showPrivacyLink ? [{
+    label: 'Privacy policy',
+    icon: 'i-lucide-shield',
+    to: '/privacy',
+    target: '_blank',
+    rel: 'noopener',
+    'aria-label': 'Privacy policy (opens in a new tab)',
+  }] : []),
+])
 
 function restoreMenuToggleFocus(event: Event): void {
   event.preventDefault()
@@ -354,42 +368,13 @@ watch(() => workspace.value?.cluster.id, () => {
   font-size: 0.75rem;
 }
 
-.workspace-mobile-menu-content {
-  display: grid;
-  min-height: 0;
-  height: 100%;
-  gap: 1rem;
-  min-width: 0;
-  overflow-y: auto;
-  align-content: start;
-  padding: clamp(0.85rem, 4vw, 1.5rem);
-}
-
-.workspace-mobile-menu-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-bottom: 1px solid var(--line-soft);
-  padding-bottom: 0.6rem;
-}
-
-.workspace-mobile-menu-heading h2 {
-  margin: 0;
-  color: var(--text-primary);
-  font-family: Georgia, serif;
-  font-size: 1.1rem;
-  font-weight: 500;
-}
-
 .workspace-mobile-menu-cluster {
   display: grid;
+  min-width: 0;
   gap: 0.35rem;
-  border-bottom: 1px solid var(--line-soft);
-  padding: 0 0 0.8rem;
 }
 
-.workspace-mobile-menu-cluster h3 {
+.workspace-mobile-menu-cluster h2 {
   margin: 0;
   color: var(--text-primary);
   font-family: Georgia, serif;
@@ -397,28 +382,6 @@ watch(() => workspace.value?.cluster.id, () => {
   font-weight: 500;
   line-height: 1.3;
   overflow-wrap: anywhere;
-}
-
-.workspace-mobile-menu-actions,
-.workspace-mobile-menu-utilities {
-  display: grid;
-  justify-items: start;
-  gap: 0.65rem;
-  min-width: 0;
-}
-
-.workspace-mobile-menu-utilities {
-  border-top: 1px solid var(--line-soft);
-  padding-top: 0.8rem;
-}
-
-.workspace-mobile-menu-utilities .workspace-header-theme {
-  border: 0;
-  padding: 0;
-}
-
-.workspace-mobile-menu-utilities .workspace-header-theme-status {
-  display: inline;
 }
 
 @media (max-width: 760px), (max-height: 600px) {

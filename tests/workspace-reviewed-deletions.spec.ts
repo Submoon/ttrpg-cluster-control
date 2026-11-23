@@ -9,6 +9,7 @@ import {
   waitForWorkspaceSaved,
   wardenMap,
   wardenObjectMark,
+  wardenSystemMark,
 } from './helpers'
 
 test('Delete in Move mode reviews the selected continuous-map object', async ({ page }) => {
@@ -94,11 +95,10 @@ test('object deletion reviews the current cascade before resolving its inspector
 
 
 
-test('the current-system inspector disables deletion of the final system', async ({ page }) => {
-  await createSingleSystemWorkspace(page, { clusterName: 'Kestrel Reach', systemName: 'A' })
-  const inspectToggle = page.getByRole('button', { name: 'Inspect', exact: true })
-  if (await inspectToggle.getAttribute('aria-expanded') !== 'true') await inspectToggle.click()
-  const inspector = page.locator('#workspace-inspector-panel')
-  await expect(inspector.getByRole('button', { name: 'Delete A system', exact: true })).toBeDisabled()
-  await expect(inspector.getByText('A Jump Cluster must keep at least one star system.', { exact: true })).toBeVisible()
+test('the system context menu disables deletion of the final system', async ({ page }) => {
+  const { systemId } = await createSingleSystemWorkspace(page, { clusterName: 'Kestrel Reach', systemName: 'A' })
+  await wardenSystemMark(page, systemId).press('Shift+F10')
+  const menu = page.getByRole('menu', { name: 'Map item actions', exact: true })
+  await expect(menu.getByRole('menuitem', { name: /^Delete/ })).toBeDisabled()
+  await expect(menu.getByText('A Jump Cluster must keep at least one star system.', { exact: true })).toBeVisible()
 })

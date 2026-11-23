@@ -55,16 +55,6 @@
         >
           <UIcon name="i-lucide-eye" aria-hidden="true" />
         </UButton>
-        <button
-          class="quiet-button min-h-[2.5rem] w-[2.5rem] shrink-0 justify-center px-0"
-          type="button"
-          :aria-label="`Delete ${system.name} system`"
-          :title="props.workspace.cluster.systems.length === 1 ? 'A Jump Cluster must contain at least one star system.' : undefined"
-          :disabled="props.workspace.cluster.systems.length === 1 || props.saving"
-          @click="commands.cluster.deleteSystem(system.id)"
-        >
-          <span aria-hidden="true">×</span>
-        </button>
       </div>
     </nav>
 
@@ -220,19 +210,6 @@
                 @click.stop="toggleHierarchyItemAndRestoreFocus($event, handleToggle)"
               >
                 <UIcon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" aria-hidden="true" />
-              </UButton>
-              <UButton
-                v-if="item.kind === 'system'"
-                class="quiet-button min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                :aria-label="`Delete ${item.system.name} system`"
-                :title="props.workspace.cluster.systems.length === 1 ? 'A Jump Cluster must contain at least one star system.' : undefined"
-                :disabled="props.workspace.cluster.systems.length === 1 || props.saving"
-                @click.stop="commands.cluster.deleteSystem(item.system.id)"
-              >
-                <span aria-hidden="true">×</span>
               </UButton>
             </div>
             <UButton
@@ -427,19 +404,6 @@
             >
               <UIcon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" aria-hidden="true" />
             </UButton>
-            <UButton
-              v-if="item.kind === 'system'"
-              class="quiet-button min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              :aria-label="`Delete ${item.system.name} system`"
-              :title="props.workspace.cluster.systems.length === 1 ? 'A Jump Cluster must contain at least one star system.' : undefined"
-              :disabled="props.workspace.cluster.systems.length === 1 || props.saving"
-              @click.stop="commands.cluster.deleteSystem(item.system.id)"
-            >
-              <span aria-hidden="true">×</span>
-            </UButton>
           </div>
         </div>
       </template>
@@ -495,7 +459,6 @@ const props = defineProps<{
   continuousMap?: boolean
   inspectedTarget?: import('../stores/editor-ui').InspectedMapTarget | null
   hasChartNameDraft: boolean
-  saving: boolean
   dimmedObjectIds?: readonly string[]
 }>()
 

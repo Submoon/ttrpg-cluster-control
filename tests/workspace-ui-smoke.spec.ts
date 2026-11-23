@@ -146,7 +146,7 @@ for (const viewport of smokeViewports) {
     const editSystem = selectedSystemDetails.getByRole('button', { name: 'Edit Jump Cluster details', exact: true })
     await expectFooterActionToFit(selectedSystemDetails, editSystem, viewport)
     await expect(selectedSystemDetails.getByRole('group', { name: 'Configured visibility', exact: true })).toBeVisible()
-    await expect(selectedSystemDetails.getByRole('button', { name: 'Delete A system', exact: true })).toBeVisible()
+    await expect(selectedSystemDetails.getByRole('button', { name: 'Delete A system', exact: true })).toHaveCount(0)
     await editSystem.click()
     const systemEditor = page.getByRole('form', { name: 'Edit Jump Cluster details', exact: true })
     await expect(systemEditor.getByLabel('Star system', { exact: true })).toHaveValue('A')

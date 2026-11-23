@@ -101,7 +101,6 @@
     :has-chart-name-draft="props.hasChartNameDraft"
     :editor-error="props.editorError"
     :saving="props.saving"
-    @delete-system="emit('delete-system', $event)"
   />
 
   <section v-else-if="props.session" class="route-session-inspector" aria-label="Jump Route editor">
@@ -304,7 +303,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'delete-system': [systemId: string]
   'request-route-edit': [routeId: string]
   'set-route-sharing': [routeId: string, playerShared: boolean]
   'delete-route': []

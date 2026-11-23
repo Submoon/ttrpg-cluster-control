@@ -28,6 +28,7 @@ const props = defineProps<{
   routeShared?: boolean
   emptyOrbit?: boolean
   lastSystem?: boolean
+  saving?: boolean
   busy?: boolean
   moveSelectionAvailable?: boolean
 }>()
@@ -129,9 +130,10 @@ const items = computed(() => [
   },
   {
     label: 'Delete',
+    description: props.lastSystem ? 'A Jump Cluster must keep at least one star system.' : undefined,
     icon: 'i-lucide-trash-2',
     color: 'error' as const,
-    disabled: props.busy || props.lastSystem,
+    disabled: props.busy || props.lastSystem || props.saving,
     onSelect: () => emit('delete'),
   },
 ])

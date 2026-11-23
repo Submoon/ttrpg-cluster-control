@@ -639,7 +639,6 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       beginRoute: cluster.beginRoute,
       beginRouteEdit: cluster.beginRouteEdit,
       openDeletionReview: cluster.openDeletionReview,
-      deleteSystem: cluster.deleteSystem,
       deleteSelectedObject: cluster.deleteSelectedObject,
       deleteSelectedOrbit: cluster.deleteSelectedOrbit,
       deleteSelectedRoute: cluster.deleteSelectedRoute,

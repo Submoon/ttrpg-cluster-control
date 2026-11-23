@@ -115,7 +115,10 @@
               :compact-modal-open="compactPanelPresentationOpen"
               :is-compact-viewport="isCompactViewport"
               v-model:mobile-menu-open="mobileMenuOpen"
+              :has-field-draft="hasModifiedFieldDefinitionsSession"
               show-privacy-link
+              @open-fields="openFieldsFromMobileMenu"
+              @open-help="openHelpFromMobileMenu"
             >
               <template #editor-actions>
                 <FieldDefinitionsDialog
@@ -138,34 +141,6 @@
                   :focus-fallback="focusMobileWorkspaceMenu"
                   @active-change="onHelpActiveChange"
                 />
-              </template>
-              <template #mobile-actions>
-                <UButton
-                  class="workspace-control"
-                  color="neutral"
-                  variant="outline"
-                  size="sm"
-                  icon="i-lucide-list"
-                  aria-label="Open field definitions"
-                  aria-haspopup="dialog"
-                  aria-controls="field-definitions-dialog"
-                  :aria-expanded="fieldDefinitionDialogOpen"
-                  :aria-description="hasModifiedFieldDefinitionsSession ? 'An unsaved field draft is retained.' : undefined"
-                  @click="openFieldsFromMobileMenu"
-                >
-                  Fields
-                  <UBadge v-if="hasModifiedFieldDefinitionsSession" color="warning" variant="subtle">Draft</UBadge>
-                </UButton>
-                <UButton
-                  class="workspace-control"
-                  color="neutral"
-                  variant="outline"
-                  size="sm"
-                  aria-haspopup="dialog"
-                  @click="openHelpFromMobileMenu"
-                >
-                  Help
-                </UButton>
               </template>
             </WorkspaceHeader>
           </template>
@@ -451,7 +426,6 @@
               :inspected-target="inspectedTarget"
               :dimmed-object-ids="dimmedMapObjectIds"
               :has-chart-name-draft="hasChartNameDraft"
-              :saving="saveState === 'saving'"
             />
           </template>
 
@@ -619,7 +593,6 @@
               :save-error="saveError"
               :export-error="exportError"
               :system-transfer-session="systemTransferSession"
-              @delete-system="deleteSystem"
               @hide="closePanel('inspector')"
               @request-object-edit="beginObjectEdit"
               @object-focus-request-consumed="acknowledgeObjectInspectorFocusRequest"
@@ -671,6 +644,7 @@
           :route-shared="publicationMenuRouteShared"
           :empty-orbit="publicationMenuOrbitObjects?.length === 0"
           :last-system="publicationMenuRequest?.target.kind === 'system' && workspace.cluster.systems.length === 1"
+          :saving="saveState === 'saving'"
           :busy="publicationBusy"
           :move-selection-available="publicationMenuMoveSelectionAvailable"
           @select="selectPublicationMenuMode"
@@ -1493,7 +1467,7 @@ const orbitCreationPreview = computed(() => {
     : null
 })
 const {
-  beginRoute, beginRouteEdit, openDeletionReview, deleteSystem, deleteSelectedObject, deleteSelectedOrbit, deleteSelectedRoute,
+  beginRoute, beginRouteEdit, openDeletionReview, deleteSelectedObject, deleteSelectedOrbit, deleteSelectedRoute,
   deletionReview, cancelDeletionReview, confirmDeletionReview,
 } = cluster
 
@@ -1512,7 +1486,6 @@ provideEditorCommands({
     routeSummary: wardenRouteSummary,
   },
   charts: { beginNamesEdit: beginChartNamesEdit },
-  cluster: { deleteSystem },
   creation: {
     beginOrbitDrag: creation.beginOrbitDrag,
     updateOrbitDrag: creation.updateOrbitDrag,

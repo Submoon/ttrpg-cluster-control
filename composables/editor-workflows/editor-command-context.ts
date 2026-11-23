@@ -23,9 +23,6 @@ export interface EditorCommandContext {
   charts: {
     beginNamesEdit(systemId?: string): Promise<void>
   }
-  cluster: {
-    deleteSystem(systemId: string): void
-  }
   creation: {
     /**
      * Reserves the current Add Orbit target and workspace context for one possible drag placement.

@@ -35,7 +35,6 @@
         :saving="props.saving"
         :editor-error="props.editorError"
         :session="props.routeSession"
-        @delete-system="emit('delete-system', $event)"
         @request-route-edit="emit('request-route-edit', $event)"
         @set-route-sharing="(routeId, playerShared) => emit('set-route-sharing', routeId, playerShared)"
         @update-route-input="(sessionId, field, value) => emit('update-route-input', sessionId, field, value)"
@@ -135,7 +134,6 @@
           :publication-busy="props.publicationBusy"
           :has-chart-name-draft="props.hasChartNameDraft"
           :saving="props.saving"
-          @delete-system="emit('delete-system', $event)"
         />
       </div>
     </div>
@@ -201,7 +199,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'delete-system': [systemId: string]
   hide: []
   'request-object-edit': []
   'object-focus-request-consumed': [requestId: number]
