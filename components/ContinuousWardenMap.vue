@@ -45,7 +45,10 @@
         :move-enabled="mode === 'move' && !moveTargeting && !clusterMoveTargeting && !creationType && clusterAddType === null"
       />
       <!-- Keep the system-detail layer free of a camera-scale ancestor so live wheel zoom repaints its geometry at the final viewport scale. -->
-      <g class="cluster-map-items continuous-warden-fixed-paint">
+      <g
+        class="cluster-map-items continuous-warden-fixed-paint"
+        :style="{ '--warden-orbit-screen-pixel': `${1 / svgPixelScale}px` }"
+      >
           <g
             v-for="projection in renderedProjections"
             :key="projection.id"
@@ -597,7 +600,7 @@ const MINIMUM_FIT_PADDING = 48
 const ROUTE_REVEAL_PADDING_PIXELS = 14
 const ROUTE_FAN_OUT_LIMIT_PIXELS = 96
 const VIEWPORT_FEEDBACK_INTERVAL_MS = 120
-const WHEEL_ZOOM_SMOOTHING_MS = 55
+const WHEEL_ZOOM_DURATION_MS = 160
 const WHEEL_ZOOM_SETTLE_SCALE_EPSILON = 0.0005
 const WHEEL_ZOOM_SETTLE_TRANSLATION_EPSILON = 0.05
 const PRECISE_WHEEL_DELTA_THRESHOLD = 32
@@ -695,7 +698,12 @@ let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 let resizeObserver: ResizeObserver | undefined
 let viewportFeedbackTimer: ReturnType<typeof setTimeout> | undefined
 let wheelZoomFrame: number | undefined
-let pendingWheelZoom: { target: MapViewport; expectedCurrent: MapViewport; lastFrameTime: number } | null = null
+let pendingWheelZoom: {
+  start: MapViewport
+  target: MapViewport
+  expectedCurrent: MapViewport
+  startedAt: number
+} | null = null
 let cameraInitialized = false
 let searchInteractionGeneration = 0
 let focusFallbackGeneration = 0
@@ -1841,20 +1849,19 @@ function animateWheelZoom(frameTime: number): void {
     return
   }
 
-  const elapsed = Math.max(1, Math.min(50, frameTime - pending.lastFrameTime))
-  pending.lastFrameTime = frameTime
-  const progress = 1 - Math.exp(-elapsed / WHEEL_ZOOM_SMOOTHING_MS)
+  const elapsed = Math.max(0, frameTime - pending.startedAt)
+  const progress = Math.min(1, elapsed / WHEEL_ZOOM_DURATION_MS)
+  const easedProgress = 1 - (1 - progress) ** 3
   const target = pending.target
-  let next = {
-    x: current.x + (target.x - current.x) * progress,
-    y: current.y + (target.y - current.y) * progress,
-    k: current.k + (target.k - current.k) * progress,
-  }
+  const next = progress >= 1
+    ? target
+    : {
+        x: pending.start.x + (target.x - pending.start.x) * easedProgress,
+        y: pending.start.y + (target.y - pending.start.y) * easedProgress,
+        k: pending.start.k + (target.k - pending.start.k) * easedProgress,
+      }
 
-  if (sameViewport(next, target)) {
-    next = target
-    pendingWheelZoom = null
-  }
+  if (progress >= 1) pendingWheelZoom = null
   applyViewport(next, 'coalesced')
   if (pendingWheelZoom) {
     pendingWheelZoom.expectedCurrent = getViewport()
@@ -1863,18 +1870,21 @@ function animateWheelZoom(frameTime: number): void {
 }
 
 function scheduleWheelZoom(target: MapViewport, current: MapViewport): void {
+  const startedAt = window.performance.now()
   if (pendingWheelZoom) {
+    pendingWheelZoom.start = current
     pendingWheelZoom.target = target
     pendingWheelZoom.expectedCurrent = current
+    pendingWheelZoom.startedAt = startedAt
   } else {
     pendingWheelZoom = {
+      start: current,
       target,
       expectedCurrent: current,
-      lastFrameTime: window.performance.now(),
+      startedAt,
     }
   }
   if (wheelZoomFrame === undefined) {
-    pendingWheelZoom.lastFrameTime = window.performance.now()
     wheelZoomFrame = window.requestAnimationFrame(animateWheelZoom)
   }
 }
@@ -4553,8 +4563,7 @@ defineExpose({
 .continuous-warden-system-detail .continuous-warden-orbit-hit-target {
   fill: none;
   stroke: transparent;
-  stroke-width: 20px;
-  vector-effect: non-scaling-stroke;
+  stroke-width: calc(20 * var(--warden-orbit-screen-pixel, 1px));
   pointer-events: stroke;
   cursor: pointer;
 }
@@ -4588,6 +4597,17 @@ defineExpose({
   stroke-width: 2;
   stroke-dasharray: 3 6;
   vector-effect: non-scaling-stroke;
+}
+
+/* Live rings are already viewport-projected, so only the root SVG pixel scale needs compensation. */
+.continuous-warden-fixed-paint .continuous-warden-orbit-target {
+  stroke-width: calc(2 * var(--warden-orbit-screen-pixel, 1px));
+  stroke-dasharray: calc(3 * var(--warden-orbit-screen-pixel, 1px)) calc(6 * var(--warden-orbit-screen-pixel, 1px));
+  vector-effect: none;
+}
+
+.continuous-warden-fixed-paint .continuous-warden-orbit-target:is(.is-selected, :focus) {
+  stroke-width: calc(3 * var(--warden-orbit-screen-pixel, 1px));
 }
 
 .continuous-warden-object {

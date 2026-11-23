@@ -36,6 +36,8 @@ The next feedback pass starts from `99e9271f23b2596ef5277fa70aac55a774691e44`, t
 
 The selected-system export and Delete shortcut feedback starts from prototype revision `5824c383fe1c023166aaef9b9be78703d97acde5`. After fetching, `main` and `origin/main` still point to `48873799dac97b84856db676176b5c6b869b5620`, which the prototype already contains.
 
+The small-map wheel response follow-up starts from prototype revision `680aa2426602b5f41e09debb44ab836926d1c9ab`. A fresh fetch confirmed the same `origin/main` baseline.
+
 ## User Stories
 
 ### Explore and arrange the map
@@ -123,12 +125,13 @@ The selected-system export and Delete shortcut feedback starts from prototype re
 ### Camera, selection, and gestures
 
 - The unified Warden map uses Select, Move and Add. Pan and zoom are shared capabilities. Wheel and pinch work across tools. Right-button drag pans while a right click retains its context-menu behavior. In Select, a primary drag from empty canvas draws the object selection rectangle without a modifier. Retain the existing modified-click selection path for desktop. A finger drag on empty background pans. In Move, dragging an editable mark manipulates its target. A second contact takes over for pinch and rolls back the uncommitted move.
+- Coarse wheel input eases toward the accumulated, pointer-anchored camera target over 160 ms from the latest impulse. If the browser misses a frame, the next frame uses actual elapsed time. Fine wheel input and reduced-motion preferences use immediate camera updates.
 - In Select, a tap is ordinary selection. A long press on each object toggles its membership in the group. Motion beyond the gesture threshold or a second contact cancels a pending press. An activated long press consumes its release so it cannot also act as a tap. Switching to Move preserves the group.
 - Direct input uses the frontmost eligible visible target. System names and anchors are direct targets for their supported actions. Provide ongoing access to covered entities through Hierarchy and Search where supported. Selecting a system name inspects it without entry into a separate map. Ordinary selection, including Hierarchy selection, leaves the camera in place.
 - Fit frames the Cluster on the applicable surface. Center and Search use the unobstructed map area and keep the current zoom where it suffices, adjusting it to reveal detail or frame the target when needed. Fit, pan, zoom and Center preserve the current selection and draft. Keep a collapsed selection in Inspect and its owning system identifiable. If the focused mark disappears, focus the owning system's visible name or the canvas if that name is outside the usable area. On successful Undo or Redo, reveal the affected entity or its surviving parent, panning only as needed and adjusting zoom when semantic detail would hide it.
 - Any change of Inspector target that would leave a modified draft uses Apply, Discard and Stay, through the same guard for map, Hierarchy, Search or editing gestures. Stay or a failed Apply keeps the source target and draft. An independent direct move can commit while the Inspector and draft stay on another entity, subject to the existing mutation and dependency checks.
 - Delete opens the existing consequence review for a selected object, Orbit, or route on the continuous map, including in Move mode. An object must be the only member of the current selection. Active map gestures retain ownership of keyboard input.
-- An Orbit ring has a screen-space pointer target extending beyond its dashed stroke. The target follows the same ellipse in Select and Move, with one keyboard focus stop per Orbit and existing edit handles and object targets taking precedence.
+- An Orbit ring has a screen-space pointer target extending beyond its dashed stroke. The target follows the same ellipse in Select and Move, with one keyboard focus stop per Orbit and existing edit handles and object targets taking precedence. In live viewport paint, compensate the root SVG scale to keep the stroke, dash spacing, and hit width constant in screen pixels.
 
 ### Placement and transfer
 

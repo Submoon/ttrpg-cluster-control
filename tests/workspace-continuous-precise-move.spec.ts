@@ -23,6 +23,8 @@ type WardenWheelProbe = {
   initialScale: number | null
   initialOrbitRadius: number | null
   scenePointAtLastWheel: LocalPoint | null
+  lastWheelTime: number | null
+  targetReachedTime: number | null
   scales: number[]
   settled: boolean
 }
@@ -71,6 +73,8 @@ test('wheel zoom repaints object text and Orbits in a fixed viewport paint space
       initialScale: null,
       initialOrbitRadius: null,
       scenePointAtLastWheel: null,
+      lastWheelTime: null,
+      targetReachedTime: null,
       scales: [],
       settled: false,
     }
@@ -88,6 +92,7 @@ test('wheel zoom repaints object text and Orbits in a fixed viewport paint space
       const scenePoint = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
       probe.pointer = { x: event.clientX, y: event.clientY }
       probe.scenePointAtLastWheel = { x: scenePoint.x, y: scenePoint.y }
+      probe.lastWheelTime = window.performance.now()
       probe.wheelScales.push(readScale())
       probe.wheelCount += 1
       probe.settled = false
@@ -116,6 +121,11 @@ test('wheel zoom repaints object text and Orbits in a fixed viewport paint space
         } else if (secondPointer && probe.wheelCount === 2 && nextScale > probe.wheelScales[1]! + .001) {
           deliverWheel(100, secondPointer)
         }
+        // SVG matrices round the rendered scale before JavaScript reads it.
+        if (probe.wheelCount >= 3 && probe.targetReachedTime === null && probe.initialScale !== null
+          && Math.abs(nextScale - probe.initialScale * 2 ** 0.2) < 0.000001) {
+          probe.targetReachedTime = window.performance.now()
+        }
         if (Math.abs(nextScale - previousScale) < 0.0000001) unchangedFrames += 1
         else {
           previousScale = nextScale
@@ -133,17 +143,23 @@ test('wheel zoom repaints object text and Orbits in a fixed viewport paint space
     ;(window as unknown as { __wardenWheelProbe?: WardenWheelProbe }).__wardenWheelProbe = probe
     window.addEventListener('wheel', observeWheel, { capture: true })
   })
+  await page.clock.install()
   await page.mouse.wheel(0, -100)
   const wheelProbe = () => page.evaluate(() =>
     (window as unknown as { __wardenWheelProbe: WardenWheelProbe }).__wardenWheelProbe,
   )
   const firstPointer = { x: Math.round(pointer.x), y: Math.round(pointer.y) }
-  await expect.poll(async () => (await wheelProbe()).settled).toBe(true)
+  await page.clock.runFor(300)
   const probe = await wheelProbe()
   if (!probe.pointer || !probe.scenePointAtLastWheel || probe.initialScale === null || probe.initialOrbitRadius === null) {
     throw new Error('The native wheel input did not reach the Warden camera probe.')
   }
   expect(probe.wheelCount).toBe(3)
+  expect(probe.settled).toBe(true)
+  expect(probe.lastWheelTime).not.toBeNull()
+  expect(probe.targetReachedTime).not.toBeNull()
+  // The deadline can land between frames, and the sampling callback can precede the camera callback.
+  expect(probe.targetReachedTime! - probe.lastWheelTime!).toBeLessThanOrEqual(200)
   expect(probe.pointer.x).not.toBe(firstPointer.x)
   const expectedFinalScale = probe.initialScale * 2 ** 0.2
   const intermediateScales = probe.scales.filter(value => value > probe.initialScale! + 0.001 && value < expectedFinalScale - 0.001)

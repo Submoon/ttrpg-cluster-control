@@ -407,9 +407,24 @@ test('near-ring Warden Orbit targets select and resize from off-stroke pointer h
   await expect(map.getByRole('button', { name: 'Select Orbit 1', exact: true })).toHaveCount(1)
   const orbitId = await ring.getAttribute('data-orbit-id')
   if (!orbitId) throw new Error('The hosted Orbit has no identity.')
-
   await wardenObjectMark(page, systemId, primaryObjectId).press('Enter')
   await expect(page.getByRole('button', { name: 'Edit map object', exact: true })).toBeVisible()
+  const widths = await ring.evaluate((element) => {
+    const hit = element.parentElement?.querySelector('.continuous-warden-orbit-hit-target')
+    if (!(element instanceof SVGGraphicsElement) || !(hit instanceof SVGGraphicsElement)) {
+      throw new Error('The visible and interactive Orbit ellipses must both be mounted.')
+    }
+    return [element, hit].map(mark => {
+      const matrix = mark.getScreenCTM()
+      if (!matrix) throw new Error('The Orbit ellipse must have a screen transform.')
+      const style = getComputedStyle(mark)
+      const scale = style.vectorEffect === 'non-scaling-stroke' ? 1 : Math.hypot(matrix.a, matrix.b)
+      return Number.parseFloat(style.strokeWidth) * scale
+    })
+  })
+  expect(widths[0]).toBeCloseTo(2, 1)
+  expect(widths[1]).toBeCloseTo(20, 1)
+
   const nearRingClick = await orbitOffStrokeDragPoints(ring, .65, 8, 36)
   await page.mouse.click(nearRingClick.start.x, nearRingClick.start.y)
   await expect(page.getByRole('button', { name: 'Edit Orbit', exact: true })).toBeVisible()
