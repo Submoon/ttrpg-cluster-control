@@ -8,10 +8,19 @@ import {
   mapImageScopeFrame,
   trimMapImageRoute,
   type MapImageBounds,
+  type MapImageRoutePrefix,
 } from './map-image-scope'
+import { rotatedEllipseBounds } from './continuous-map-history-reveal'
 import { playerMapPaint, type PlayerMapPaint } from './player-map-image-export'
-import { layoutPlayerContinuousNameLabels, type PlayerContinuousNameLabel } from './player-continuous-map-layout'
-import { CONTINUOUS_SYSTEM_NAME_FONT_PIXELS as fontPixels, continuousMapNameLabelFramePosition } from './continuous-map-name-labels'
+import {
+  layoutPlayerContinuousNameLabels,
+  playerContinuousTargetBounds,
+  type PlayerContinuousNameLabel,
+} from './player-continuous-map-layout'
+import {
+  CONTINUOUS_SYSTEM_NAME_FONT_PIXELS as fontPixels,
+  continuousMapNameLabelFramePosition,
+} from './continuous-map-name-labels'
 import { projectPlayerContinuousMap, type PlayerContinuousSystemProjection } from './player-continuous-map-projection'
 import { projectPlayerContinuousRouteEndpoints, type PlayerContinuousRouteDescriptor } from './player-continuous-route-projection'
 import { buildContinuousMapRouteGeometries, type ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
@@ -31,6 +40,7 @@ const fixedStroke = { 'vector-effect': 'non-scaling-stroke' }
 
 interface ImageRoute extends PlayerContinuousRouteDescriptor {
   geometry: ContinuousMapRouteGeometry
+  stub?: MapImageRoutePrefix
 }
 
 /** Applied public paint inputs captured from a single mounted map. */
@@ -57,12 +67,18 @@ export function serializeContinuousPlayerMapImage(
   const paint = playerMapPaint(palette)
   const { systems } = projectPlayerContinuousMap(document)
   const selected = image.scope === 'system' ? systems.find(system => system.id === image.systemId) : undefined
-  if (image.scope === 'system' && !selected) throw new Error('Select a public system before exporting that image scope.')
+  if (image.scope === 'system' && (selected?.disclosure !== 'revealed' || !selected.geometry)) {
+    throw new Error('Select a Revealed public system before exporting that image scope.')
+  }
   const snapshot = image.scope === 'viewport' ? image.snapshot : undefined
   const camera = snapshot?.camera ?? identityCamera
   const svgPixelScale = snapshot?.svgPixelScale ?? 1
   const scenePixelScale = camera.k * svgPixelScale
   const displayedSystems = selected ? [selected] : systems
+  const publicMarkers = new Map(document.systems.map(marker => [marker.id, marker]))
+  const selectedContentBounds = selected
+    ? systemInteriorBounds(selected, publicMarkers.get(selected.id))
+    : null
   const displayFrames = continuousSystemFrames(systems.flatMap(system => system.geometry ? [{
     id: system.id,
     anchor: system.anchor,
@@ -77,12 +93,16 @@ export function serializeContinuousPlayerMapImage(
   const displayedRoutes = selected ? incidentRoutesForMapImage(descriptors, selected.id) : descriptors
   const routes = displayedRoutes.flatMap((route): ImageRoute[] => {
     const geometry = geometries.get(route.id)
-    return geometry ? [{ ...route, geometry }] : []
+    if (!geometry) return []
+    const stub = selected
+      ? trimMapImageRoute(geometry, route.fromSystemId === selected.id ? 'start' : 'end', routeStubLength)
+      : undefined
+    return [{ ...route, geometry, ...(stub ? { stub } : {}) }]
   })
-  const publicMarkers = new Map(document.systems.map(marker => [marker.id, marker]))
   const geometryBounds = snapshot?.drawable ?? mapImageBounds([
-    ...displayedSystems.map(systemImageBounds),
-    ...(selected ? detailBounds(selected, publicMarkers.get(selected.id)) : []),
+    ...(selected
+      ? [selectedContentBounds, ...routes.map(route => routeStubBounds(route.stub!))]
+      : displayedSystems.map(systemImageBounds)),
     ...(selected ? [] : routes.flatMap(route => [
       route.geometry.bounds,
       route.unresolved ? {
@@ -91,7 +111,7 @@ export function serializeContinuousPlayerMapImage(
         y: route.geometry.end.y + anonymousBounds.y,
       } : null,
     ])),
-  ]) ?? fallbackBounds
+  ]) ?? (selected ? pointBounds(selected.anchor) : fallbackBounds)
   const nameViewport = snapshot?.nameViewport ?? automaticNameViewport(displayedSystems, geometryBounds)
   const nameSystems = snapshot
     ? displayedSystems.map((system) => {
@@ -110,6 +130,18 @@ export function serializeContinuousPlayerMapImage(
   const names = layoutPlayerContinuousNameLabels(
     nameSystems, camera, svgPixelScale, nameViewport,
   ).map((label) => {
+    if (selected) {
+      const centerX = selectedContentBounds
+        ? selectedContentBounds.x + selectedContentBounds.width / 2
+        : selected.anchor.x
+      const contentTop = selectedContentBounds?.y ?? selected.anchor.y
+      return {
+        ...label,
+        x: centerX,
+        y: contentTop - label.height - 8,
+        hasLeader: false,
+      }
+    }
     const frame = snapshot ? nameSystemsById.get(label.systemId)?.geometry?.envelope : undefined
     if (!frame) return label
     const progress = Number(detailIds.has(label.systemId))
@@ -119,12 +151,15 @@ export function serializeContinuousPlayerMapImage(
       hasLeader: label.hasLeader && progress < .12,
     }
   })
-  const overview = mapImageBounds([geometryBounds, ...names.map(nameBounds)]) ?? geometryBounds
+  const overviewCandidates = selected && !selectedContentBounds && routes.length === 0
+    ? names.map(nameBounds)
+    : [geometryBounds, ...names.map(nameBounds)]
+  const overview = mapImageBounds(overviewCandidates) ?? geometryBounds
   const frame = mapImageScopeFrame(image.scope, {
     overview,
     selectedSystem: selected ? overview : null,
     viewport: snapshot?.drawable ?? null,
-    selectedSystemRouteGutter: routeStubLength + 8,
+    selectedSystemRouteGutter: 0,
     padding: exportPadding,
   })
   const routeLabels = selected ? null : placeContinuousMapRouteLabels({
@@ -138,16 +173,17 @@ export function serializeContinuousPlayerMapImage(
   const dimmed = new Set(snapshot?.dimmedObjects?.ids)
   const scene = [
     ...routes.map(route => selected
-      ? routeStubSvg(route, selected.id, paint)
+      ? routeStubSvg(route, paint)
       : routeSvg(route, routeLabels?.get(route.id), scenePixelScale, paint)),
     ...displayedSystems.map(system => systemSvg(
       system,
-      displayFrames.get(system.id),
+      selected ? undefined : displayFrames.get(system.id),
       detailIds.has(system.id),
       publicMarkers.get(system.id),
       scenePixelScale,
       paint,
       snapshot?.dimmedObjects?.systemId === system.id ? dimmed : undefined,
+      !selected,
     )),
   ].join('')
   const destinations = selected ? '' : routes.filter(route => route.unresolved)
@@ -191,15 +227,45 @@ function systemImageBounds(system: PlayerContinuousSystemProjection): MapImageBo
   return { x: system.anchor.x - radius, y: system.anchor.y - radius, width: radius * 2, height: radius * 2 }
 }
 
-function detailBounds(system: PlayerContinuousSystemProjection, marker: PlayerSystemMarker | undefined): MapImageBounds[] {
-  if (!system.geometry || marker?.disclosure !== 'revealed') return []
+function systemInteriorBounds(
+  system: PlayerContinuousSystemProjection,
+  marker: PlayerSystemMarker | undefined,
+): MapImageBounds | null {
+  if (!system.geometry || marker?.disclosure !== 'revealed') return null
   const positions = new Map(system.geometry.objects.map(object => [object.id, object.scenePosition]))
-  return marker.map.objects.flatMap(object => {
+  const objects = marker.map.objects.flatMap(object => {
     const position = positions.get(object.id)
-    if (!position) return []
+    const targetBounds = playerContinuousTargetBounds(system.geometry!, { kind: 'object', id: object.id })
+    if (!position || !targetBounds) return []
+    // The focused-map helper is intentionally compact; exports preserve the older conservative
+    // allowance for the larger Georgia labels painted into the SVG.
     const labelWidth = Array.from(playerObjectPresentation(object).label).length * 12
-    return [{ x: position.x - 10, y: position.y - 16, width: labelWidth + 19, height: 26 }]
+    const renderedLabelBounds = {
+      x: position.x - 10,
+      y: position.y - 16,
+      width: labelWidth + 19,
+      height: 26,
+    }
+    const bounds = mapImageBounds([targetBounds, renderedLabelBounds])
+    return bounds ? [bounds] : []
   })
+  const orbits = system.geometry.orbits.map(orbit => {
+    return rotatedEllipseBounds(orbit.sceneCenter, orbit.sceneRadii, orbit.rotation, 2)
+  })
+  return mapImageBounds([...objects, ...orbits])
+}
+
+function routeStubBounds(prefix: MapImageRoutePrefix): MapImageBounds {
+  return mapImageBounds([
+    prefix.start,
+    prefix.control1,
+    prefix.control2,
+    prefix.end,
+  ].map(point => ({ ...point, width: 0, height: 0 })))!
+}
+
+function pointBounds(point: { x: number; y: number }): MapImageBounds {
+  return { x: point.x, y: point.y, width: 1, height: 1 }
 }
 
 function systemSvg(
@@ -210,6 +276,7 @@ function systemSvg(
   pixelScale: number,
   paint: PlayerMapPaint,
   dimmedObjectIds?: ReadonlySet<string>,
+  showSystemAnchor = true,
 ): string {
   const color = detailed ? paint.mapSelected : paint.mapOrbit
   const frame = displayFrame && displayFrame.width > 0 && displayFrame.height > 0 ? svgElement('rect', {
@@ -228,12 +295,13 @@ function systemSvg(
   const fill = unknown ? paint.mapBackground : paint.mapCard
   const stroke = unknown ? paint.textMuted : system.disclosure === 'known-type' ? paint.mapLabelBorder : paint.mapInstallation
   const core = unknown ? '' : svgElement('circle', { r: 3, fill: paint.mapInstallation })
-  const anchorMark = svgElement('circle', {
-    r: markerRadius(system), fill, stroke, 'stroke-width': unknown ? 3 : 2, ...fixedStroke,
-  })
-  const anchor = svgElement('g', {
-    transform: `translate(${system.anchor.x} ${system.anchor.y}) scale(${1 / pixelScale})`,
-  }, anchorMark + core)
+  const anchor = showSystemAnchor
+    ? svgElement('g', {
+        transform: `translate(${system.anchor.x} ${system.anchor.y}) scale(${1 / pixelScale})`,
+      }, svgElement('circle', {
+        r: markerRadius(system), fill, stroke, 'stroke-width': unknown ? 3 : 2, ...fixedStroke,
+      }) + core)
+    : ''
   const detail = detailed ? systemDetailSvg(system, marker, paint, dimmedObjectIds) : ''
   return svgElement('g', { class: 'player-continuous-system' }, frame + detail + anchor)
 }
@@ -292,8 +360,8 @@ function objectSvg(
   }, mark + text)
 }
 
-function routeStubSvg(route: ImageRoute, ownerId: string, paint: PlayerMapPaint): string {
-  const prefix = trimMapImageRoute(route.geometry, route.fromSystemId === ownerId ? 'start' : 'end', routeStubLength)
+function routeStubSvg(route: ImageRoute, paint: PlayerMapPaint): string {
+  const prefix = route.stub!
   const stroke = route.unresolved ? paint.mapUnresolved : paint.mapRoute
   return svgElement('path', {
     class: 'cluster-route-line player-image-route-stub',

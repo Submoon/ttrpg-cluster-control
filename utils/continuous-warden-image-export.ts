@@ -114,11 +114,17 @@ export async function exportContinuousWardenMapImage(
     anchor: projection.anchor,
     envelope: projection.preferredFrame ?? projection.envelope,
   })))
+  const exportFrames = new Map(displayFrames)
+  if (request.scope === 'system' && selected) {
+    // Detail exports use the actual content bounds instead of the editor's preferred frame.
+    exportFrames.set(selected.id, selected.envelope)
+  }
   const useViewportRouteScale = request.scope === 'viewport'
   const routes = buildContinuousWardenRouteGeometries({
     routes: request.cluster.routes,
     projections: request.projections,
     detailSystemIds,
+    frames: exportFrames,
     unresolvedExitPositions: request.unresolvedExitPositions,
     ...(useViewportRouteScale ? {
         display: {
@@ -139,8 +145,9 @@ export async function exportContinuousWardenMapImage(
     request.scope === 'viewport' ? request.viewport : null,
     request.scope === 'viewport' ? request.svgPixelScale : 1,
     request.scope === 'viewport' ? request.viewportRect : null,
-    displayFrames,
+    request.scope === 'system' ? exportFrames : displayFrames,
     detailSystemIds,
+    request.scope === 'system',
   )
   const viewportRouteLabels = request.scope === 'viewport'
     ? placeContinuousMapRouteLabels({
@@ -312,7 +319,6 @@ function sceneFrames(
   const selectedSystem = selected
     ? mapImageBounds([
         selected.envelope,
-        displayFrames.get(selected.id) ?? null,
         selectedLabel ? {
           x: selectedLabel.centerX - selectedLabel.width / 2,
           y: selectedLabel.top,
@@ -338,6 +344,7 @@ function layoutSystemNames(
   viewportRect: SvgViewportRect | null,
   displayFrames: ReadonlyMap<string, SvgViewportRect>,
   detailSystemIds: ReadonlySet<string>,
+  placeSelectedDetailName: boolean,
 ): ExportLabel[] {
   const placementViewport = viewport ?? { x: 0, y: 0, k: 1 }
   const scale = pixelScale > 0 ? pixelScale : 1
@@ -360,9 +367,11 @@ function layoutSystemNames(
     const frame = displayFrames.get(projection.id)
     const resolvedFrame = positiveFrame(frame) ? frame : projection.envelope
     const progress = Number(!!viewport && detailSystemIds.has(projection.id))
-    const position = viewport
-      ? continuousMapNameLabelFramePosition(label, resolvedFrame, viewport, scale, progress, placementRect)
-      : { x: label.x, y: label.y }
+    const position = placeSelectedDetailName
+      ? { x: projection.envelope.x + projection.envelope.width / 2, y: projection.envelope.y - label.height - 12 }
+      : viewport
+        ? continuousMapNameLabelFramePosition(label, resolvedFrame, viewport, scale, progress, placementRect)
+        : { x: label.x, y: label.y }
     return [{
       projection,
       anchor: { x: label.anchorX, y: label.anchorY },
@@ -371,7 +380,7 @@ function layoutSystemNames(
       width: label.width,
       height: label.height,
       fontSize: systemNameFontPixels / scale,
-      hasLeader: label.hasLeader && progress < .12,
+      hasLeader: !placeSelectedDetailName && label.hasLeader && progress < .12,
       leaderY: position.y + label.height / 2,
     }]
   })
@@ -414,7 +423,7 @@ function appendSystem(
 ): void {
   const group = createScopedElement(parent, 'g', 'continuous-warden-system')
   group.setAttribute('data-system-id', projection.id)
-  if (displayFrame.width > 0 && displayFrame.height > 0) {
+  if (scope !== 'system' && displayFrame.width > 0 && displayFrame.height > 0) {
     const envelope = createScopedElement(parent, 'rect', `continuous-warden-system-envelope${detailed ? ' is-detailed' : ''}`)
     envelope.setAttribute('x', String(displayFrame.x))
     envelope.setAttribute('y', String(displayFrame.y))
@@ -428,23 +437,25 @@ function appendSystem(
   const pixelsPerSceneUnit = scope === 'viewport' ? viewport.k * svgPixelScale : 1
   if (detailed && system) appendSystemDetail(group, projection, system, dimmedObjectIds, pixelsPerSceneUnit)
 
-  const anchor = createScopedElement(parent, 'g', 'cluster-system-node continuous-warden-system-anchor')
-  anchor.setAttribute('data-system-id', projection.id)
-  const scale = 1 / Math.max(0.0001, pixelsPerSceneUnit)
-  anchor.setAttribute('transform', `translate(${projection.anchor.x} ${projection.anchor.y}) scale(${scale})`)
-  const hitTarget = createScopedElement(parent, 'circle', 'continuous-warden-anchor-hit-target')
-  hitTarget.setAttribute('r', '16')
-  hitTarget.setAttribute('aria-hidden', 'true')
-  const mark = createScopedElement(parent, 'circle', 'continuous-warden-anchor-mark')
-  mark.setAttribute('r', '7')
-  const core = createScopedElement(parent, 'circle', 'continuous-warden-anchor-core')
-  core.setAttribute('r', '2')
-  anchor.append(hitTarget)
-  const coveredByStar = detailed && projection.objects.some(object =>
-    wardenStarOverlapsAnchor(projection, object.scenePosition, pixelsPerSceneUnit)
-    && system?.objects.some(source => source.id === object.id && source.subtype === 'star'))
-  if (!coveredByStar) anchor.append(mark, core)
-  group.append(anchor)
+  if (scope !== 'system') {
+    const anchor = createScopedElement(parent, 'g', 'cluster-system-node continuous-warden-system-anchor')
+    anchor.setAttribute('data-system-id', projection.id)
+    const scale = 1 / Math.max(0.0001, pixelsPerSceneUnit)
+    anchor.setAttribute('transform', `translate(${projection.anchor.x} ${projection.anchor.y}) scale(${scale})`)
+    const hitTarget = createScopedElement(parent, 'circle', 'continuous-warden-anchor-hit-target')
+    hitTarget.setAttribute('r', '16')
+    hitTarget.setAttribute('aria-hidden', 'true')
+    const mark = createScopedElement(parent, 'circle', 'continuous-warden-anchor-mark')
+    mark.setAttribute('r', '7')
+    const core = createScopedElement(parent, 'circle', 'continuous-warden-anchor-core')
+    core.setAttribute('r', '2')
+    anchor.append(hitTarget)
+    const coveredByStar = detailed && projection.objects.some(object =>
+      wardenStarOverlapsAnchor(projection, object.scenePosition, pixelsPerSceneUnit)
+      && system?.objects.some(source => source.id === object.id && source.subtype === 'star'))
+    if (!coveredByStar) anchor.append(mark, core)
+    group.append(anchor)
+  }
   parent.append(group)
 }
 

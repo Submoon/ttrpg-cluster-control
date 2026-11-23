@@ -140,6 +140,14 @@ test('a selected player system includes its full detail and bounded incoming and
   expect(image.svg).toContain('Local &lt;Gate&gt;')
   expect(image.svg).toContain('River &amp; Vale')
   expect(image.svg).toContain('rotate(30 384 200)')
+  expect(image.svg).not.toContain('player-continuous-system-envelope')
+  expect(image.svg).not.toContain('translate(400 200) scale(')
+  const nameTextIndex = image.svg.indexOf('River &amp; Vale</text>')
+  const nameGroupStart = image.svg.lastIndexOf('<g transform="translate(', nameTextIndex)
+  const nameGroup = image.svg.slice(nameGroupStart, nameTextIndex)
+  const nameY = Number(nameGroup.match(/translate\([^ ]+ ([^)]+)\)/)?.[1])
+  expect(nameY).toBeLessThan(180)
+  expect(nameGroup).not.toContain('<line ')
   expect(image.svg).not.toContain('Remote Reach')
   expect(image.svg).not.toContain('Remote Gate')
   expect(image.svg).not.toContain('Unknown destination')
@@ -177,18 +185,34 @@ test('the current player image uses its drawable crop and dims repeated public I
   expect(image.height).toBe(650)
 })
 
-test('a generic system image shows its public marker without a system envelope or interior @pure', () => {
+test('Selected system rejects marker-only disclosure instead of exporting a name-only marker image @pure', () => {
+  const document = publicDocument()
+  document.systems[2] = {
+    id: 'system-3',
+    position: { x: 1800, y: 460 },
+    disclosure: 'known-type',
+    type: 'star-system',
+    label: 'Star system',
+  }
+
+  expect(() => serializeContinuousPlayerMapImage(
+    document,
+    { scope: 'system', systemId: 'system-3' },
+    'print-light',
+  )).toThrow('Select a Revealed public system')
+})
+
+test('a Revealed empty system frames its published name without the cluster anchor @pure', () => {
   const image = serializeContinuousPlayerMapImage(
     publicDocument(),
-    { scope: 'system', systemId: 'system-3' },
+    { scope: 'system', systemId: 'system-4' },
     'print-light',
   )
 
-  expect(image.svg).toContain('r="18"')
+  expect(image.svg).toContain('Empty Reach')
   expect(image.svg).not.toContain('player-continuous-system-envelope')
-  expect(image.svg).not.toContain('player-continuous-system-detail')
-  expect(image.svg).not.toContain('River &amp; Vale')
-  expect(image.width).toBeLessThan(250)
+  expect(image.svg).not.toContain('translate(100 450) scale(')
+  expect(image.width).toBeLessThan(300)
 })
 
 test('a legacy share exports only the retained route and never infers an attachment @pure', () => {

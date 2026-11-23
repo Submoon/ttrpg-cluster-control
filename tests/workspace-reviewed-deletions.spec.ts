@@ -8,7 +8,28 @@ import {
   selectInspectorOption,
   waitForWorkspaceSaved,
   wardenMap,
+  wardenObjectMark,
 } from './helpers'
+
+test('Delete in Move mode reviews the selected continuous-map object', async ({ page }) => {
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
+  await waitForWorkspaceSaved(page)
+  const move = page.getByRole('group', { name: 'Map interaction mode', exact: true })
+    .getByRole('button', { name: 'Move', exact: true })
+  await move.click()
+  await expect(move).toHaveAttribute('aria-pressed', 'true')
+
+  const star = wardenObjectMark(page, systemId, primaryObjectId)
+  await star.click()
+  await expect(star).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('Delete')
+
+  const review = page.getByRole('dialog', { name: 'Review deletion', exact: true })
+  await expect(review).toBeVisible()
+  await expect(review).toContainText('Primary Star')
+  await review.getByRole('button', { name: 'Cancel deletion', exact: true }).click()
+  await expect(star).toBeVisible()
+})
 
 test('object deletion reviews the current cascade before resolving its inspector draft', async ({ page }) => {
   const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })

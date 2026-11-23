@@ -130,7 +130,6 @@
                 'is-entering': detailMotion.progressFor(projection.id) < 1,
                 'is-exiting': !detailSystemIds.has(projection.id),
               }"
-              :style="detailSystemPaintStyle(projection)"
               :fill-opacity="detailMotion.progressFor(projection.id)"
               :stroke-opacity="detailMotion.progressFor(projection.id)"
               :aria-hidden="detailSystemIds.has(projection.id) && detailMotion.progressFor(projection.id) >= 1 ? undefined : 'true'"
@@ -147,8 +146,23 @@
                   :transform="orbitPlacementPreviewPaint(projection)?.transform"
                   aria-hidden="true"
                 />
+                <!-- All painted rings take precedence over nearby hit areas. -->
                 <ellipse
-                  v-for="orbit in projection.orbits"
+                  v-for="{ orbit, geometry } in orbitPaintBySystem.get(projection.id)"
+                  :key="`hit-${orbit.id}`"
+                  class="continuous-warden-orbit-hit-target"
+                  :data-system-id="projection.id"
+                  :data-orbit-id="orbit.id"
+                  :cx="geometry.center.x"
+                  :cy="geometry.center.y"
+                  :rx="geometry.rx"
+                  :ry="geometry.ry"
+                  :transform="geometry.transform"
+                  aria-hidden="true"
+                  focusable="false"
+                />
+                <ellipse
+                  v-for="{ orbit, geometry } in orbitPaintBySystem.get(projection.id)"
                   :key="orbit.id"
                   class="orbit-ring continuous-warden-orbit-target"
                   :class="{ 'is-selected': isSelectedOrbit(projection.id, orbit.id) }"
@@ -157,11 +171,11 @@
                   role="button"
                   tabindex="0"
                   :aria-label="orbitLabel(projection.id, orbit.id)"
-                  :cx="orbitPaintGeometry(projection, orbit).center.x"
-                  :cy="orbitPaintGeometry(projection, orbit).center.y"
-                  :rx="orbitPaintGeometry(projection, orbit).rx"
-                  :ry="orbitPaintGeometry(projection, orbit).ry"
-                  :transform="orbitPaintGeometry(projection, orbit).transform"
+                  :cx="geometry.center.x"
+                  :cy="geometry.center.y"
+                  :rx="geometry.rx"
+                  :ry="geometry.ry"
+                  :transform="geometry.transform"
                 />
                 <template v-for="orbit in projection.orbits" :key="`${orbit.id}-edit-controls`">
                   <circle
@@ -227,7 +241,7 @@
                   />
                 </template>
               </g>
-              <g class="system-map-items">
+              <g class="system-map-items" :style="detailObjectPaintStyle(projection)">
                 <g
                   v-for="object in projection.objects"
                   :key="object.id"
@@ -280,19 +294,19 @@
                     class="continuous-warden-star-halo"
                     :r="starHaloRadius(projection) * detailPaintScale(projection)"
                   />
-                  <g class="continuous-warden-object-text" :style="{ '--map-object-text-scale': detailTextScale(projection) * detailPaintScale(projection) }">
+                  <g class="continuous-warden-object-text">
                     <text
                       class="continuous-warden-object-glyph"
-                      :style="{ fill: localObject(projection.id, object.id)?.markerColor }"
-                      :y="8 * detailTextScale(projection) * detailPaintScale(projection)"
+                      :fill="localObject(projection.id, object.id)?.markerColor"
+                      :y="8 * detailTextPaintScale(projection)"
                       text-anchor="middle"
                     >
                       {{ objectGlyph(projection.id, object.id) }}
                     </text>
-                    <text class="continuous-warden-object-key" :y="31 * detailTextScale(projection) * detailPaintScale(projection)" text-anchor="middle">
+                    <text class="continuous-warden-object-key" :y="31 * detailTextPaintScale(projection)" text-anchor="middle">
                       {{ object.locationKey }}
                     </text>
-                    <text class="continuous-warden-object-name" :y="46 * detailTextScale(projection) * detailPaintScale(projection)" text-anchor="middle">
+                    <text class="continuous-warden-object-name" :y="46 * detailTextPaintScale(projection)" text-anchor="middle">
                       {{ object.name }}
                     </text>
                   </g>
@@ -939,10 +953,13 @@ const systemFrameResizeHandles = computed(() => {
   })
 })
 const presentationProjectionById = computed(() => new Map(presentationProjections.value.map(projection => [projection.id, projection] as const)))
+const appliedObjectOwners = computed(() => new Map(props.cluster.systems.flatMap(system =>
+  system.objects.map(object => [object.id, system.id] as const),
+)))
+const selectedObjectIdSet = computed(() => new Set(props.selectedObjectIds))
 const hiddenSelectedObjectCount = computed(() => {
-  const owners = new Map(props.cluster.systems.flatMap(system => system.objects.map(object => [object.id, system.id] as const)))
   return props.selectedObjectIds.filter(objectId => {
-    const ownerId = owners.get(objectId)
+    const ownerId = appliedObjectOwners.value.get(objectId)
     return ownerId !== undefined && !detailSystemIds.value.has(ownerId)
   }).length
 })
@@ -1457,10 +1474,11 @@ function detailPaintPoint(projection: ContinuousWardenSystemProjection, localPoi
   }
 }
 
-function detailSystemPaintStyle(projection: ContinuousWardenSystemProjection) {
+function detailObjectPaintStyle(projection: ContinuousWardenSystemProjection) {
   const scale = detailPaintScale(projection)
   return {
     '--warden-detail-selection-stroke-width': `${1.35 * scale}px`,
+    '--map-object-text-scale': detailTextPaintScale(projection),
   }
 }
 
@@ -1485,6 +1503,13 @@ function orbitPaintGeometry(
     transform: orbitPaintTransform(projection, orbit.center, orbit.rotation),
   }
 }
+
+const orbitPaintBySystem = computed(() => new Map(renderedProjections.value
+  .filter(projection => mountedDetailSystemIds.value.has(projection.id))
+  .map(projection => [projection.id, projection.orbits.map(orbit => ({
+    orbit,
+    geometry: orbitPaintGeometry(projection, orbit),
+  }))] as const)))
 
 function orbitPlacementPreviewPaint(projection: ContinuousWardenSystemProjection) {
   const preview = orbitPlacementPreviewFor(projection.id)
@@ -1555,23 +1580,18 @@ const routeLabelObstacles = computed(() => nameLabelLayout.value.map(label => {
   }
 }))
 
+const objectGlyphs: Readonly<Record<string, string>> = {
+  star: '✦', planet: '◉', moon: '☾', asteroid: '◆', belt: '⋯', station: '⌂', base: '▤', colony: '⚑',
+  vessel: '△', derelict: '▽', 'jump-point': '⊕', anomaly: '✧', nebula: '◌', hazard: '⚠', other: '◇',
+}
+
 function objectGlyph(projectionId: string, objectId: string): string {
-  const object = localObject(projectionId, objectId)
-  if (!object) return '◇'
-  const glyphs: Record<string, string> = {
-    star: '✦', planet: '◉', moon: '☾', asteroid: '◆', belt: '⋯', station: '⌂', base: '▤', colony: '⚑',
-    vessel: '△', derelict: '▽', 'jump-point': '⊕', anomaly: '✧', nebula: '◌', hazard: '⚠', other: '◇',
-  }
-  return glyphs[object.subtype] ?? '◇'
+  return objectGlyphs[objectSubtype(projectionId, objectId)] ?? '◇'
 }
 
 function transferObjectGlyph(object: ContinuousWardenSystemProjection['objects'][number]): string {
   const subtype = transferBranchPreview.value?.objectSubtypes.get(object.id)
-  const glyphs: Record<string, string> = {
-    star: '✦', planet: '◉', moon: '☾', asteroid: '◆', belt: '⋯', station: '⌂', base: '▤', colony: '⚑',
-    vessel: '△', derelict: '▽', 'jump-point': '⊕', anomaly: '✧', nebula: '◌', hazard: '⚠', other: '◇',
-  }
-  return glyphs[subtype ?? ''] ?? '◇'
+  return objectGlyphs[subtype ?? ''] ?? '◇'
 }
 
 function objectSubtype(projectionId: string, objectId: string): string {
@@ -1611,8 +1631,17 @@ function systemScreenScale(projection: ContinuousWardenSystemProjection): number
   return projection.scale * viewport.value.k * svgPixelScale.value
 }
 
-function detailTextScale(projection: ContinuousWardenSystemProjection): number {
-  return continuousMapTextScale(systemScreenScale(projection), 20, 28)
+const detailTextPaintScales = computed(() => {
+  const k = viewport.value.k
+  const pixelScale = svgPixelScale.value
+  return new Map(renderedProjections.value.map(projection => {
+    const paintScale = projection.scale * k
+    return [projection.id, paintScale * continuousMapTextScale(paintScale * pixelScale, 20, 28)] as const
+  }))
+})
+
+function detailTextPaintScale(projection: ContinuousWardenSystemProjection): number {
+  return detailTextPaintScales.value.get(projection.id)!
 }
 
 function starHaloRadius(projection: ContinuousWardenSystemProjection): number {
@@ -1639,8 +1668,7 @@ function searchLocatorRadius(projection: ContinuousWardenSystemProjection): numb
 }
 
 function isSelectedObject(systemId: string, objectId: string): boolean {
-  return props.selectedObjectIds.includes(objectId)
-    && props.cluster.systems.some(system => system.id === systemId && system.objects.some(object => object.id === objectId))
+  return selectedObjectIdSet.value.has(objectId) && appliedObjectOwners.value.get(objectId) === systemId
 }
 
 function isSelectedOrbit(systemId: string, orbitId: string): boolean {
@@ -2383,7 +2411,7 @@ function canMoveObjectInSystem(target: { systemId: string; objectId: string }): 
 function orbitTargetAtTarget(target: EventTarget | null): { systemId: string; orbitId: string } | null {
   if (!(target instanceof Element)) return null
   const mark = target.closest<SVGElement>(
-    '.continuous-warden-orbit-target[data-system-id][data-orbit-id], .continuous-warden-orbit-edit-handle[data-system-id][data-orbit-id]',
+    '.continuous-warden-orbit-target[data-system-id][data-orbit-id], .continuous-warden-orbit-hit-target[data-system-id][data-orbit-id], .continuous-warden-orbit-edit-handle[data-system-id][data-orbit-id]',
   )
   const systemId = mark?.getAttribute('data-system-id')
   const orbitId = mark?.getAttribute('data-orbit-id')
@@ -4522,6 +4550,15 @@ defineExpose({
   cursor: pointer;
 }
 
+.continuous-warden-system-detail .continuous-warden-orbit-hit-target {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 20px;
+  vector-effect: non-scaling-stroke;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
 .continuous-warden-orbit-edit-handle {
   pointer-events: all;
   vector-effect: non-scaling-stroke;
@@ -4683,9 +4720,9 @@ defineExpose({
 }
 
 .continuous-warden-object-glyph {
-  fill: var(--map-text);
   font: calc(20px * var(--map-object-text-scale, 1)) Consolas, monospace;
 }
+.continuous-warden-object-glyph:not([fill]) { fill: var(--map-text); }
 
 .continuous-warden-object-key {
   fill: var(--map-unresolved);

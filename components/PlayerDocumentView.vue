@@ -81,7 +81,7 @@
               :get-shortcut-owning-dialog="getShortcutOwningDialog"
               file-scope="player map"
               scoped-images
-              :can-export-system-image="selectedSystemMarker !== null"
+              :can-export-system-image="selectedSystem !== null"
               :export-error="playerExportError"
               :show-type-filters="selectedSystem !== null"
               :type-filter-options="typeFilterOptions"
@@ -221,7 +221,7 @@
             :get-shortcut-owning-dialog="getShortcutOwningDialog"
             file-scope="player map"
             scoped-images
-            :can-export-system-image="selectedSystemMarker !== null"
+            :can-export-system-image="selectedSystem !== null"
             :export-error="playerExportError"
             :show-type-filters="selectedSystem !== null"
             :type-filter-options="typeFilterOptions"
@@ -700,7 +700,7 @@ function prepareScopedPlayerImage(scope: MapImageScope) {
   let image: ContinuousPlayerImageScope = { scope: 'cluster' }
   let isCurrent = ownsMap
   if (scope === 'system') {
-    const selected = selectedSystemMarker.value
+    const selected = selectedSystem.value
     if (!selected) return null
     const visit = mapVisit
     image = { scope, systemId: selected.id }

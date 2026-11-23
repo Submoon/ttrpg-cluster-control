@@ -75,6 +75,13 @@ test('wheel zoom repaints object text and Orbits in a fixed viewport paint space
       settled: false,
     }
     const readScale = () => camera.getCTM()?.a ?? Number.NaN
+    const view = element.getBoundingClientRect()
+    let secondPointer: { x: number; y: number } | null = null
+    const deliverWheel = (deltaY: number, client: { x: number; y: number }) => {
+      element.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true, cancelable: true, deltaY, clientX: client.x, clientY: client.y,
+      }))
+    }
     const observeWheel = (event: WheelEvent) => {
       const matrix = camera.getScreenCTM()
       if (!matrix) throw new Error('The continuous map camera must be measurable at wheel delivery.')
@@ -88,6 +95,10 @@ test('wheel zoom repaints object text and Orbits in a fixed viewport paint space
 
       if (probe.initialScale !== null) return
       probe.initialScale = readScale()
+      secondPointer = {
+        x: event.clientX + (event.clientX + 64 < view.right - 8 ? 64 : -64),
+        y: event.clientY + (event.clientY + 40 < view.bottom - 8 ? 40 : -40),
+      }
       const orbit = element.querySelector<SVGEllipseElement>('.continuous-warden-orbit-target')
       if (!orbit) throw new Error('A Warden Orbit must be present before wheel zoom.')
       probe.initialOrbitRadius = Number(orbit.getAttribute('rx'))
@@ -98,6 +109,13 @@ test('wheel zoom repaints object text and Orbits in a fixed viewport paint space
       const sampleCamera = () => {
         const nextScale = readScale()
         probe.scales.push(nextScale)
+        // Deliver the follow-up impulses in the browser while the camera is still easing.
+        // Automation round trips can exceed the first impulse's complete animation on a busy runner.
+        if (secondPointer && probe.wheelCount === 1 && nextScale > probe.wheelScales[0]! + .001) {
+          deliverWheel(-100, secondPointer)
+        } else if (secondPointer && probe.wheelCount === 2 && nextScale > probe.wheelScales[1]! + .001) {
+          deliverWheel(100, secondPointer)
+        }
         if (Math.abs(nextScale - previousScale) < 0.0000001) unchangedFrames += 1
         else {
           previousScale = nextScale
@@ -119,23 +137,7 @@ test('wheel zoom repaints object text and Orbits in a fixed viewport paint space
   const wheelProbe = () => page.evaluate(() =>
     (window as unknown as { __wardenWheelProbe: WardenWheelProbe }).__wardenWheelProbe,
   )
-  await expect.poll(async () => {
-    const probe = await wheelProbe()
-    return probe.initialScale !== null && probe.scales.some(value => value > probe.initialScale! + 0.001)
-  }, { intervals: [5] }).toBe(true)
-
-  const mapBounds = await map.boundingBox()
-  if (!mapBounds) throw new Error('The Warden map must be visible for pointer-anchored wheel zoom.')
   const firstPointer = { x: Math.round(pointer.x), y: Math.round(pointer.y) }
-  const secondPointer = {
-    x: Math.round(firstPointer.x + (firstPointer.x + 64 < mapBounds.x + mapBounds.width - 8 ? 64 : -64)),
-    y: Math.round(firstPointer.y + (firstPointer.y + 40 < mapBounds.y + mapBounds.height - 8 ? 40 : -40)),
-  }
-  expect(secondPointer.x).not.toBe(firstPointer.x)
-  await page.mouse.move(secondPointer.x, secondPointer.y)
-  await page.mouse.wheel(0, -100)
-  await page.mouse.wheel(0, 100)
-
   await expect.poll(async () => (await wheelProbe()).settled).toBe(true)
   const probe = await wheelProbe()
   if (!probe.pointer || !probe.scenePointAtLastWheel || probe.initialScale === null || probe.initialOrbitRadius === null) {

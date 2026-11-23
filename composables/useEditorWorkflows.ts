@@ -436,6 +436,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const cluster = useClusterWorkflows({
     workspace,
     mutations,
+    continuousMap: options.continuousMap,
+    editingGestureActive: mapControls.editingGestureActive,
     onDeletionApplied: plan => {
       navigation.cleanupAfterDeletion(plan)
       systemCreation.pruneTargetsAfterDeletion(plan)

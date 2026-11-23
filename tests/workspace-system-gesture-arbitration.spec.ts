@@ -232,6 +232,57 @@ async function orbitDragPoints(
   }, { scale, angle })
 }
 
+async function orbitOffStrokeDragPoints(
+  orbitTarget: Locator,
+  angle: number,
+  offsetPixels: number,
+  dragPixels: number,
+): Promise<{ start: ScreenPoint; end: ScreenPoint; hitClass: string; hitOrbitId: string | null }> {
+  const painted = await orbitDragPoints(orbitTarget, 1, angle)
+  return orbitTarget.evaluate((element, input) => {
+    if (!(element instanceof SVGEllipseElement)) throw new Error('The Orbit input target is not an ellipse.')
+    const matrix = element.getScreenCTM()
+    if (!matrix) throw new Error('The Orbit hit target is not attached to the map.')
+    const cx = element.cx.baseVal.value
+    const cy = element.cy.baseVal.value
+    const rx = element.rx.baseVal.value
+    const ry = element.ry.baseVal.value
+    const localStart = new DOMPoint(input.start.x, input.start.y).matrixTransform(matrix.inverse())
+    const angleOnEllipse = Math.atan2((localStart.y - cy) / ry, (localStart.x - cx) / rx)
+    const tangentLocal = {
+      x: -rx * Math.sin(angleOnEllipse),
+      y: ry * Math.cos(angleOnEllipse),
+    }
+    const tangent = {
+      x: matrix.a * tangentLocal.x + matrix.c * tangentLocal.y,
+      y: matrix.b * tangentLocal.x + matrix.d * tangentLocal.y,
+    }
+    const tangentLength = Math.hypot(tangent.x, tangent.y)
+    if (!Number.isFinite(tangentLength) || tangentLength === 0) {
+      throw new Error('The Orbit ring has no measurable screen-space tangent.')
+    }
+    let normal = { x: tangent.y / tangentLength, y: -tangent.x / tangentLength }
+    const center = new DOMPoint(cx, cy).matrixTransform(matrix)
+    const radial = { x: input.start.x - center.x, y: input.start.y - center.y }
+    if (normal.x * radial.x + normal.y * radial.y < 0) normal = { x: -normal.x, y: -normal.y }
+    const start = {
+      x: Math.round(input.start.x + normal.x * input.offsetPixels),
+      y: Math.round(input.start.y + normal.y * input.offsetPixels),
+    }
+    const end = {
+      x: Math.round(start.x + normal.x * input.dragPixels),
+      y: Math.round(start.y + normal.y * input.dragPixels),
+    }
+    const hit = document.elementFromPoint(start.x, start.y)
+    return {
+      start,
+      end,
+      hitClass: hit?.getAttribute('class') ?? '',
+      hitOrbitId: hit?.closest('[data-orbit-id]')?.getAttribute('data-orbit-id') ?? null,
+    }
+  }, { start: painted.start, offsetPixels, dragPixels })
+}
+
 async function readWorkspaceRecords(page: Page): Promise<WorkspaceRecords> {
   return page.evaluate(async () => {
     const request = indexedDB.open('ttrpg-cluster-control')
@@ -349,6 +400,41 @@ async function cameraOnlyRightPanAndSecondTouch(
   await dispatchTouch(cdp, 'touchEnd', [])
   await expect.poll(() => scene.getAttribute('transform')).not.toBe(transformAfterPan)
 }
+
+test('near-ring Warden Orbit targets select and resize from off-stroke pointer hits', async ({ page }) => {
+  const { map, ring, systemId, primaryObjectId } = await createHostedOrbit(page)
+  await setWorkspaceMapMode(page, 'Select')
+  await expect(map.getByRole('button', { name: 'Select Orbit 1', exact: true })).toHaveCount(1)
+  const orbitId = await ring.getAttribute('data-orbit-id')
+  if (!orbitId) throw new Error('The hosted Orbit has no identity.')
+
+  await wardenObjectMark(page, systemId, primaryObjectId).press('Enter')
+  await expect(page.getByRole('button', { name: 'Edit map object', exact: true })).toBeVisible()
+  const nearRingClick = await orbitOffStrokeDragPoints(ring, .65, 8, 36)
+  await page.mouse.click(nearRingClick.start.x, nearRingClick.start.y)
+  await expect(page.getByRole('button', { name: 'Edit Orbit', exact: true })).toBeVisible()
+  expect(nearRingClick.hitClass.split(/\s+/)).toContain('continuous-warden-orbit-hit-target')
+  expect(nearRingClick.hitOrbitId).toBe(orbitId)
+
+  await setWorkspaceMapMode(page, 'Move')
+  const before = await wardenOrbitLocalGeometry(ring, systemId)
+  const nearRingDrag = await orbitOffStrokeDragPoints(ring, .65, 8, 36)
+  await page.mouse.move(nearRingDrag.start.x, nearRingDrag.start.y)
+  await page.mouse.down()
+  try {
+    await page.mouse.move(nearRingDrag.end.x, nearRingDrag.end.y, { steps: 5 })
+    await expect.poll(async () => (await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
+      .toBeGreaterThan(before.radii.horizontal + 5)
+  } finally {
+    await page.mouse.up()
+  }
+  await waitForWorkspaceSaved(page)
+  const after = await wardenOrbitLocalGeometry(ring, systemId)
+  expect(after.radii.horizontal).toBeGreaterThan(before.radii.horizontal + 5)
+  expect(after.radii.vertical).toBeGreaterThan(before.radii.vertical + 5)
+  expect(nearRingDrag.hitClass.split(/\s+/)).toContain('continuous-warden-orbit-hit-target')
+  expect(nearRingDrag.hitOrbitId).toBe(orbitId)
+})
 
 test('Escape restores an Orbit ring drag before its late mouse release', async ({ page }) => {
   const { ring } = await createHostedOrbit(page)

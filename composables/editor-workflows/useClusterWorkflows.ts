@@ -22,6 +22,8 @@ interface ClusterWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   mutations: WorkspaceMutationExecutor
   onDeletionApplied: (plan: MapDeletionPlan) => void
+  continuousMap?: Readonly<Ref<boolean>>
+  editingGestureActive: Readonly<Ref<boolean>>
   saveState: Readonly<Ref<SaveState>>
   chartNamesDialogOpen: Readonly<ComputedRef<boolean>>
   fieldDefinitionDialogOpen: Ref<boolean>
@@ -45,6 +47,8 @@ export function useClusterWorkflows({
   workspace,
   mutations,
   onDeletionApplied,
+  continuousMap,
+  editingGestureActive,
   saveState,
   chartNamesDialogOpen,
   fieldDefinitionDialogOpen,
@@ -348,6 +352,27 @@ export function useClusterWorkflows({
     if (route) await openDeletionReview({ kind: 'route', routeId: route.id })
   }
 
+  function deletionShortcutTarget(): MapDeletionTarget | null {
+    if (continuousMap?.value) {
+      const target = store.inspectedTarget
+      if (target?.kind === 'route' || target?.kind === 'orbit') return target
+      if (target?.kind === 'object' && store.selectedObjectIds.length === 1
+        && store.selectedObjectIds[0] === target.objectId) return target
+      return null
+    }
+
+    if (store.activeView === 'cluster') {
+      const route = selectedRoute.value
+      return route ? { kind: 'route', routeId: route.id } : null
+    }
+    const system = selectedSystem.value
+    if (!system) return null
+    const object = selectedObject.value
+    const orbit = selectedOrbit.value
+    if (object) return { kind: 'object', systemId: system.id, objectId: object.id }
+    return orbit ? { kind: 'orbit', systemId: system.id, orbitId: orbit.id } : null
+  }
+
   /**
    * Handles an unmodified Delete key only when an eligible map selection is safe to remove.
    * Inputs, open drafts/dialogs, repeats, and pending saves retain their native behavior.
@@ -367,22 +392,18 @@ export function useClusterWorkflows({
         || target.closest('input, textarea, select, [contenteditable="true"]')
       ))
       || saveState.value === 'saving'
+      || editingGestureActive.value
+      || deletionReview.value !== null
       || store.searchOpen
       || chartNamesDialogOpen.value
       || fieldDefinitionDialogOpen.value
     ) return
 
-    const removeSelected = store.activeView === 'cluster'
-      ? selectedRoute.value ? deleteSelectedRoute : undefined
-      : selectedObject.value
-        ? deleteSelectedObject
-        : selectedOrbit.value
-          ? deleteSelectedOrbit
-          : undefined
-    if (!removeSelected) return
+    const selection = deletionShortcutTarget()
+    if (!selection) return
 
     event.preventDefault()
-    void removeSelected()
+    void openDeletionReview(selection)
   }
 
   onMounted(() => {

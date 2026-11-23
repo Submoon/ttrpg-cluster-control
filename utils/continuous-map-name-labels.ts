@@ -147,64 +147,87 @@ export function continuousMapNameLabels<T extends ContinuousMapNameProjection>({
     return anchorNearViewport || envelopeNearViewport ? [{ ...point, preferredOffset }] : []
   })
 
+  const scoredPositions: number[] = []
   for (const anchor of anchorPoints) {
     const widthPixels = systemNameWidthPixels(anchor.name)
     const width = widthPixels / scale
     const height = CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / scale
-    const candidates = [
-      { x: anchor.preferredOffset.x / scale, y: anchor.preferredOffset.y / scale },
-      ...namePlacementOffsets(widthPixels).map(offset => ({ x: offset.x / scale, y: offset.y / scale })),
-    ]
-    let chosen = candidates[0]!
+    const placementOffsets = namePlacementOffsets(widthPixels)
+    let chosenX = anchor.preferredOffset.x / scale
+    let chosenY = anchor.preferredOffset.y / scale
     let chosenScore = Number.POSITIVE_INFINITY
-    for (const offset of candidates) {
+    scoredPositions.length = 0
+    for (let candidateIndex = 0; candidateIndex <= placementOffsets.length; candidateIndex += 1) {
+      const offsetX = candidateIndex === 0
+        ? anchor.preferredOffset.x / scale
+        : placementOffsets[candidateIndex - 1]!.x / scale
+      const offsetY = candidateIndex === 0
+        ? anchor.preferredOffset.y / scale
+        : placementOffsets[candidateIndex - 1]!.y / scale
       const centerX = clampToViewport(
-        anchor.x + offset.x,
+        anchor.x + offsetX,
         viewportRect.x + margin + width / 2,
         viewportRect.x + viewportRect.width - margin - width / 2,
       )
       const top = clampToViewport(
-        anchor.y + offset.y,
+        anchor.y + offsetY,
         viewportRect.y + margin,
         viewportRect.y + viewportRect.height - margin - height,
       )
-      const candidateOffset = { x: centerX - anchor.x, y: top - anchor.y }
-      const bounds = {
-        left: centerX - width / 2,
-        right: centerX + width / 2,
-        top,
-        bottom: top + height,
+      let alreadyScored = false
+      for (let positionIndex = 0; positionIndex < scoredPositions.length; positionIndex += 2) {
+        if (scoredPositions[positionIndex] === centerX && scoredPositions[positionIndex + 1] === top) {
+          alreadyScored = true
+          break
+        }
       }
-      const outsideWidth = Math.max(0, viewportRect.x + margin - bounds.left)
-        + Math.max(0, bounds.right - (viewportRect.x + viewportRect.width - margin))
-      const outsideHeight = Math.max(0, viewportRect.y + margin - bounds.top)
-        + Math.max(0, bounds.bottom - (viewportRect.y + viewportRect.height - margin))
+      if (alreadyScored) continue
+      scoredPositions.push(centerX, top)
+
+      const left = centerX - width / 2
+      const right = centerX + width / 2
+      const bottom = top + height
+      const outsideWidth = Math.max(0, viewportRect.x + margin - left)
+        + Math.max(0, right - (viewportRect.x + viewportRect.width - margin))
+      const outsideHeight = Math.max(0, viewportRect.y + margin - top)
+        + Math.max(0, bottom - (viewportRect.y + viewportRect.height - margin))
       const outsideArea = outsideWidth * height + outsideHeight * width
-      const labelOverlapArea = occupied.reduce((total, prior) => {
-        const overlapWidth = Math.max(0, Math.min(bounds.right + 6 / scale, prior.right)
-          - Math.max(bounds.left - 6 / scale, prior.left))
-        const overlapHeight = Math.max(0, Math.min(bounds.bottom + 4 / scale, prior.bottom)
-          - Math.max(bounds.top - 4 / scale, prior.top))
-        return total + overlapWidth * overlapHeight
-      }, 0)
-      const anchorOverlapArea = anchorPoints.reduce((total, other) => {
-        if (other.id === anchor.id) return total
+      let labelOverlapArea = 0
+      for (const prior of occupied) {
+        const overlapWidth = Math.max(0, Math.min(right + 6 / scale, prior.right)
+          - Math.max(left - 6 / scale, prior.left))
+        const overlapHeight = Math.max(0, Math.min(bottom + 4 / scale, prior.bottom)
+          - Math.max(top - 4 / scale, prior.top))
+        labelOverlapArea += overlapWidth * overlapHeight
+      }
+      let anchorOverlapArea = 0
+      for (const other of anchorPoints) {
+        if (other.id === anchor.id) continue
         const radius = 18 / scale
-        const overlapWidth = Math.max(0, Math.min(bounds.right, other.x + radius) - Math.max(bounds.left, other.x - radius))
-        const overlapHeight = Math.max(0, Math.min(bounds.bottom, other.y + radius) - Math.max(bounds.top, other.y - radius))
-        return total + overlapWidth * overlapHeight
-      }, 0)
-      const duplicatePosition = labels.some(label => label.x === centerX && label.y === top)
+        const overlapWidth = Math.max(0, Math.min(right, other.x + radius) - Math.max(left, other.x - radius))
+        const overlapHeight = Math.max(0, Math.min(bottom, other.y + radius) - Math.max(top, other.y - radius))
+        anchorOverlapArea += overlapWidth * overlapHeight
+      }
+      let duplicatePosition = false
+      for (const label of labels) {
+        if (label.x === centerX && label.y === top) {
+          duplicatePosition = true
+          break
+        }
+      }
+      const candidateOffsetX = centerX - anchor.x
+      const candidateOffsetY = top - anchor.y
       const score = labelOverlapArea * 100 + anchorOverlapArea * 30 + outsideArea * 10
-        + (duplicatePosition ? 1_000_000_000 : 0) + Math.hypot(candidateOffset.x, candidateOffset.y) * 0.01
+        + (duplicatePosition ? 1_000_000_000 : 0) + Math.hypot(candidateOffsetX, candidateOffsetY) * 0.01
       if (score < chosenScore) {
-        chosen = candidateOffset
+        chosenX = candidateOffsetX
+        chosenY = candidateOffsetY
         chosenScore = score
       }
       if (labelOverlapArea === 0 && anchorOverlapArea === 0 && outsideArea === 0 && !duplicatePosition) break
     }
-    const x = anchor.x + chosen.x
-    const y = anchor.y + chosen.y
+    const x = anchor.x + chosenX
+    const y = anchor.y + chosenY
     occupied.push({ left: x - width / 2, top: y, right: x + width / 2, bottom: y + height })
     labels.push({
       id: anchor.id,
@@ -215,7 +238,7 @@ export function continuousMapNameLabels<T extends ContinuousMapNameProjection>({
       height,
       anchorX: anchor.x,
       anchorY: anchor.y,
-      hasLeader: Math.hypot(chosen.x, chosen.y + height / 2) * scale > 24,
+      hasLeader: Math.hypot(chosenX, chosenY + height / 2) * scale > 24,
     })
   }
   return labels

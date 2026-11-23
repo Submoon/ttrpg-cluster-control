@@ -96,6 +96,8 @@ async function inspectContinuousImage(
   routePaths: Record<string, string>
   dashedRouteIds: string[]
   detailedSystemIds: string[]
+  editorFrameSystemIds: string[]
+  overviewAnchorSystemIds: string[]
   orbitIds: string[]
   objectIds: string[]
   dimmedObjectIds: string[]
@@ -157,7 +159,11 @@ async function inspectContinuousImage(
       dashedRouteIds: routeMarks.flatMap(route => route.querySelector('.cluster-route-line')?.getAttribute('stroke-dasharray')
         ? [route.getAttribute('data-route-id')!]
         : []),
-      detailedSystemIds: systems.filter(system => system.querySelector('.continuous-warden-system-envelope.is-detailed'))
+      detailedSystemIds: systems.filter(system => system.querySelector('.continuous-warden-system-detail'))
+        .map(system => system.getAttribute('data-system-id')!).filter(Boolean),
+      editorFrameSystemIds: systems.filter(system => system.querySelector('.continuous-warden-system-envelope'))
+        .map(system => system.getAttribute('data-system-id')!).filter(Boolean),
+      overviewAnchorSystemIds: systems.filter(system => system.querySelector('.continuous-warden-system-anchor'))
         .map(system => system.getAttribute('data-system-id')!).filter(Boolean),
       orbitIds: [...svg.querySelectorAll<SVGElement>('.system-orbits [data-orbit-id]')]
         .map(orbit => orbit.getAttribute('data-orbit-id')!).filter(Boolean),
@@ -410,6 +416,11 @@ test('Warden system images keep applied geometry through drafts and preserve the
 test('the default Warden map exports all three scopes from applied layout and camera state', async ({ page }) => {
   test.setTimeout(120_000)
   const fixture = exportJumpCluster(restoreJumpClusterBackup(campaignWithExportPreviews()))
+  if (!fixture.layout || !fixture.cluster) throw new Error('The Warden export fixture is incomplete.')
+  fixture.layout.systemFrames = {
+    ...fixture.layout.systemFrames,
+    'campaign-baseline-vesper': { left: 4000, top: 240, right: 240, bottom: 240 },
+  }
   await importCampaignWorkspace(page, fixture, { width: 1440, height: 960 })
   const orbitId = 'ticket28-preview-unoccupied-orbit'
   const transferMoonId = 'ticket28-preview-transfer-moon'
@@ -421,6 +432,20 @@ test('the default Warden map exports all three scopes from applied layout and ca
   await setWorkspaceMapMode(page, 'Select')
   const zoom = workspaceZoomControls(page)
   await zoom.getByRole('button', { name: 'Fit map', exact: true }).click()
+  const harrowSystem = fixture.cluster.systems.find(system => system.id === 'campaign-baseline-harrow')
+  if (!harrowSystem) throw new Error('The Harrow fixture system is missing.')
+  await expect(continuousMap.locator('.continuous-warden-system[data-system-id="campaign-baseline-harrow"] .continuous-warden-system-detail'))
+    .toHaveCount(0)
+  await continuousMap.locator('.continuous-warden-name-target[data-system-id="campaign-baseline-harrow"]').click()
+  const overviewSelection = await downloadImage(page, 'image/svg+xml', 'Selected system')
+  if (!overviewSelection.text) throw new Error('The selected-system Warden SVG is empty at overview zoom.')
+  const overviewSelectionScene = await inspectContinuousImage(page, overviewSelection.text)
+  expect(overviewSelectionScene.systemNames).toEqual(['Harrow'])
+  expect(overviewSelectionScene.detailedSystemIds).toEqual(['campaign-baseline-harrow'])
+  expect(overviewSelectionScene.objectIds.sort()).toEqual(harrowSystem.objects.map(object => object.id).sort())
+  expect(overviewSelectionScene.orbitIds.sort()).toEqual(harrowSystem.orbits.map(orbit => orbit.id).sort())
+  expect(overviewSelectionScene.editorFrameSystemIds).toEqual([])
+  expect(overviewSelectionScene.overviewAnchorSystemIds).toEqual([])
   await continuousMap.locator('.continuous-warden-name-target[data-system-id="campaign-baseline-vesper"]').click()
   await zoom.getByRole('button', { name: 'Center selected target', exact: true }).click()
   const vesperObjects = continuousMap.locator('.continuous-warden-object[data-system-id="campaign-baseline-vesper"]')
@@ -509,6 +534,8 @@ test('the default Warden map exports all three scopes from applied layout and ca
   const selectedScene = scopeScenes['Selected system']
   const viewportScene = scopeScenes['Current viewport']
   if (!clusterScene || !selectedScene || !viewportScene) throw new Error('A Warden image scope was not exported.')
+  const selectedSystem = fixture.cluster.systems.find(system => system.id === 'campaign-baseline-vesper')
+  if (!selectedSystem) throw new Error('The selected Warden fixture system is missing.')
   expect(clusterScene.systemNames).toEqual(expect.arrayContaining(['Vesper Prime', 'Harrow']))
   for (const bounds of Object.values(clusterScene.systemNameBounds)) {
     expect(bounds.x).toBeGreaterThanOrEqual(clusterScene.viewBox[0])
@@ -550,6 +577,12 @@ test('the default Warden map exports all three scopes from applied layout and ca
   expect(selectedScene.dashedRouteIds.sort()).toEqual(selectedScene.routeIds.sort())
   expect(selectedScene.routeLabelIds).toEqual([])
   expect(selectedScene.dimmedObjectIds).toEqual([])
+  expect(selectedScene.detailedSystemIds).toEqual(['campaign-baseline-vesper'])
+  expect(selectedScene.editorFrameSystemIds).toEqual([])
+  expect(selectedScene.overviewAnchorSystemIds).toEqual([])
+  expect(selectedScene.objectIds.sort()).toEqual(selectedSystem.objects.map(object => object.id).sort())
+  expect(selectedScene.orbitIds.sort()).toEqual(selectedSystem.orbits.map(orbit => orbit.id).sort())
+  expect(selectedScene.viewBox[2]).toBeLessThan(2000)
   expect(selectedScene.texts).not.toContain(longCaption)
   for (const routeId of selectedScene.routeIds) {
     const path = selectedScene.routePaths[routeId]
