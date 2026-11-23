@@ -11,6 +11,10 @@
 @source not "../../CONTEXT.md";
 @source not "../../GLOSSARY.md";
 
+/* These unused Nuxt UI theme utilities trigger page-wide focus-visible selectors during map zoom. */
+@source not inline("group-has-focus-visible/user:scale-115");
+@source not inline("group-has-focus-visible/changelog-version-image:scale-105");
+
 :root {
   color-scheme: light;
   font-family: "Trebuchet MS", "Segoe UI", sans-serif;
