@@ -604,6 +604,7 @@ const WHEEL_ZOOM_DURATION_MS = 160
 const WHEEL_ZOOM_SETTLE_SCALE_EPSILON = 0.0005
 const WHEEL_ZOOM_SETTLE_TRANSLATION_EPSILON = 0.05
 const PRECISE_WHEEL_DELTA_THRESHOLD = 32
+const WHEEL_ANCHOR_BURST_TIMEOUT_MS = 150
 const DETAIL_RENDER_OVERSCAN_PIXELS = 36
 const OVERVIEW_DETAIL_SYSTEM_IDS: ReadonlySet<string> = new Set()
 
@@ -698,6 +699,10 @@ let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 let resizeObserver: ResizeObserver | undefined
 let viewportFeedbackTimer: ReturnType<typeof setTimeout> | undefined
 let wheelZoomFrame: number | undefined
+type SvgPointTransform = Pick<DOMMatrixReadOnly, 'a' | 'b' | 'c' | 'd' | 'e' | 'f'>
+let wheelAnchorTransform: { element: SVGSVGElement; inverse: SvgPointTransform | null } | null = null
+let wheelAnchorLastInputAt = Number.NEGATIVE_INFINITY
+let observedVisualViewport: VisualViewport | undefined
 let pendingWheelZoom: {
   start: MapViewport
   target: MapViewport
@@ -2696,7 +2701,7 @@ function onWheelCapture(event: WheelEvent): void {
 
   const current = getViewport()
   const base = direct ? current : (pendingWheelZoom?.target ?? current)
-  const [anchorX, anchorY] = pointer(event, element) as [number, number]
+  const [anchorX, anchorY] = wheelAnchorPoint(event, element)
   const deltaUnit = event.deltaMode === 1 ? 0.05 : event.deltaMode === 2 ? 1 : 0.002
   const scaleDelta = event.deltaY * deltaUnit * (event.ctrlKey ? 10 : 1)
   const minimumExponent = Math.log2(minimumZoomScale.value)
@@ -2718,6 +2723,41 @@ function onWheelCapture(event: WheelEvent): void {
 
   if (direct) applyViewport(target, 'coalesced')
   else scheduleWheelZoom(target, current)
+}
+
+function invalidateWheelAnchorTransform(): void {
+  wheelAnchorTransform = null
+}
+
+function wheelAnchorPoint(event: WheelEvent, element: SVGSVGElement): [number, number] {
+  const inputTime = window.performance.now()
+  if (inputTime - wheelAnchorLastInputAt >= WHEEL_ANCHOR_BURST_TIMEOUT_MS) invalidateWheelAnchorTransform()
+  wheelAnchorLastInputAt = inputTime
+
+  if (wheelAnchorTransform?.element !== element) {
+    let inverse: SvgPointTransform | null = null
+    try {
+      const matrix = element.getScreenCTM()
+      if (matrix) {
+        const candidate = matrix.inverse()
+        if ([candidate.a, candidate.b, candidate.c, candidate.d, candidate.e, candidate.f].every(Number.isFinite)) {
+          inverse = candidate
+        }
+      }
+    } catch {
+      // A missing or singular SVG matrix falls back to D3's established pointer conversion below.
+    }
+    wheelAnchorTransform = { element, inverse }
+  }
+
+  const inverse = wheelAnchorTransform.inverse
+  if (inverse) {
+    const x = inverse.a * event.clientX + inverse.c * event.clientY + inverse.e
+    const y = inverse.b * event.clientX + inverse.d * event.clientY + inverse.f
+    if (Number.isFinite(x) && Number.isFinite(y)) return [x, y]
+  }
+
+  return pointer(event, element) as [number, number]
 }
 
 function updateObjectMovePreview(drag: ActiveObjectDrag, scenePoint: Point): void {
@@ -4118,6 +4158,7 @@ function getImageContextKey(scope: MapImageScope | null = 'viewport'): string {
 }
 
 function cancelActiveGesture(): void {
+  invalidateWheelAnchorTransform()
   cancelWheelZoom()
   viewPan = null
   if (activeOrbitGesture) finishOrbitGesture(true)
@@ -4211,7 +4252,7 @@ onMounted(async () => {
     return
   }
   zoomBehavior = zoom<SVGSVGElement, unknown>()
-    .extent(() => svgViewportExtent(getSvgViewportRect(element)))
+    .extent(() => svgViewportExtent(svgViewport.value))
     .scaleExtent([minimumZoomScale.value, MAP_ZOOM_MAX_SCALE])
     // The map owns wheel zoom and applies it through its pointer-anchored eased camera path.
     .filter(() => false)
@@ -4221,6 +4262,7 @@ onMounted(async () => {
   resizeObserver = new ResizeObserver(() => {
     const current = svgElement.value
     if (!current) return
+    invalidateWheelAnchorTransform()
     const rect = getSvgViewportRect(current)
     zoomBehavior?.extent(() => svgViewportExtent(rect))
     updateMinimumZoomScale(rect)
@@ -4232,6 +4274,11 @@ onMounted(async () => {
   updateSvgPixelScale()
   updateSvgViewport()
   window.addEventListener('blur', cancelActiveGesture)
+  window.addEventListener('scroll', invalidateWheelAnchorTransform, true)
+  window.addEventListener('resize', invalidateWheelAnchorTransform)
+  observedVisualViewport = window.visualViewport ?? undefined
+  observedVisualViewport?.addEventListener('scroll', invalidateWheelAnchorTransform)
+  observedVisualViewport?.addEventListener('resize', invalidateWheelAnchorTransform)
   if (props.initialViewport) setViewport(props.initialViewport)
   else fitMap()
   cameraInitialized = true
@@ -4242,6 +4289,13 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('blur', cancelActiveGesture)
+  window.removeEventListener('scroll', invalidateWheelAnchorTransform, true)
+  window.removeEventListener('resize', invalidateWheelAnchorTransform)
+  observedVisualViewport?.removeEventListener('scroll', invalidateWheelAnchorTransform)
+  observedVisualViewport?.removeEventListener('resize', invalidateWheelAnchorTransform)
+  observedVisualViewport = undefined
+  wheelAnchorLastInputAt = Number.NEGATIVE_INFINITY
+  invalidateWheelAnchorTransform()
   cancelWheelZoom()
   clearViewportFeedbackTimer()
   if (pendingMapClickTimer) clearTimeout(pendingMapClickTimer)

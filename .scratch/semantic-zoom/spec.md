@@ -38,6 +38,8 @@ The selected-system export and Delete shortcut feedback starts from prototype re
 
 The small-map wheel response follow-up starts from prototype revision `680aa2426602b5f41e09debb44ab836926d1c9ab`. A fresh fetch confirmed the same `origin/main` baseline.
 
+The Firefox follow-up starts from prototype revision `e9fa0da6cbf8f145388c48069175199c902f509a` with the same fetched `origin/main` baseline. Reproduce the report using the supplied two-system workspace in a local browser session.
+
 ## User Stories
 
 ### Explore and arrange the map
@@ -126,6 +128,7 @@ The small-map wheel response follow-up starts from prototype revision `680aa2426
 
 - The unified Warden map uses Select, Move and Add. Pan and zoom are shared capabilities. Wheel and pinch work across tools. Right-button drag pans while a right click retains its context-menu behavior. In Select, a primary drag from empty canvas draws the object selection rectangle without a modifier. Retain the existing modified-click selection path for desktop. A finger drag on empty background pans. In Move, dragging an editable mark manipulates its target. A second contact takes over for pinch and rolls back the uncommitted move.
 - Coarse wheel input eases toward the accumulated, pointer-anchored camera target over 160 ms from the latest impulse. If the browser misses a frame, the next frame uses actual elapsed time. Fine wheel input and reduced-motion preferences use immediate camera updates.
+- Reuse the root SVG screen transform within a wheel burst while recomputing the anchor from each event's coordinates. Invalidate the transform when the viewport moves or resizes. Use opaque theme surfaces for the Warden controls and side panels over the live SVG to avoid recomputing backdrop blur on camera frames.
 - In Select, a tap is ordinary selection. A long press on each object toggles its membership in the group. Motion beyond the gesture threshold or a second contact cancels a pending press. An activated long press consumes its release so it cannot also act as a tap. Switching to Move preserves the group.
 - Direct input uses the frontmost eligible visible target. System names and anchors are direct targets for their supported actions. Provide ongoing access to covered entities through Hierarchy and Search where supported. Selecting a system name inspects it without entry into a separate map. Ordinary selection, including Hierarchy selection, leaves the camera in place.
 - Fit frames the Cluster on the applicable surface. Center and Search use the unobstructed map area and keep the current zoom where it suffices, adjusting it to reveal detail or frame the target when needed. Fit, pan, zoom and Center preserve the current selection and draft. Keep a collapsed selection in Inspect and its owning system identifiable. If the focused mark disappears, focus the owning system's visible name or the canvas if that name is outside the usable area. On successful Undo or Redo, reveal the affected entity or its surviving parent, panning only as needed and adjusting zoom when semantic detail would hide it.
