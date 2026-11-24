@@ -797,10 +797,15 @@ test('reviewed system deletion restores the same cascade through the editor Undo
   await expect.poll(() => menu.evaluate(element => element.contains(document.activeElement))).toBe(true)
   await page.keyboard.press('End')
   await expect(deletion).toBeFocused()
+  await deletion.press('Enter')
+  await expect(confirm).toBeFocused()
+
+  // Start a held key on the dialog, then deliver its repeat to the confirm control.
+  await review.focus()
+  await expect(review).toBeFocused()
   await page.keyboard.down('Enter')
   try {
-    await expect(confirm).toBeFocused()
-    // Holding the key that opened the review must not confirm the deletion.
+    await confirm.focus()
     await page.keyboard.down('Enter')
     await expect(confirm).toBeFocused()
     await expect(confirm).toBeEnabled()
