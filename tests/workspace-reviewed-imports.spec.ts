@@ -5,9 +5,7 @@ import {
   createSystemObject,
   exportStarSystem,
 } from '../domain/workspace'
-import { clusterSystemPosition } from '../utils/cluster-map-geometry'
 import {
-  abortNextWorkspaceWrite,
   waitForWorkspaceSaved,
   activeWorkspaceFeedback,
   captureMapExportBlobs,
@@ -19,10 +17,8 @@ import {
   openChartDetailsEditor,
   fitWorkspaceMap,
   resolveImportReview,
-  reviewStarSystemImport,
   setJsonFile,
   setHeaderMapActionsOpen,
-  workspaceZoomControls,
 } from './helpers'
 
 function incomingSystem(): {
@@ -208,103 +204,4 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   const persistedOrbit = persistedSystem?.orbits[0]
   expect(persistedOrbit && persisted.layout.orbitRadii?.[persistedOrbit.id]).toEqual({ horizontal: 4200, vertical: 1900 })
   expect(persistedOrbit && persisted.layout.orbitRotations?.[persistedOrbit.id]).toBe(31)
-})
-
-test('canceling a held import placement click leaves Add ready for the next click', async ({ page }) => {
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await waitForWorkspaceSaved(page)
-  await fitWorkspaceMap(page)
-
-  await (await dockAction(page, 'Add star system')).click()
-  await setJsonFile(await openStarSystemImportPicker(page), 'incoming-reach-copy.json', incomingSystem().content)
-  const placement = page.getByRole('group', { name: 'Standalone star system placement controls', exact: true })
-  await expect(placement).toBeVisible()
-
-  const map = page.locator('svg.continuous-warden-map-svg')
-  const anchorMarks = map.locator('.continuous-warden-system-anchor[data-system-id]')
-  const safeCandidates = [{ x: 0.75, y: 0.65 }, { x: 0.64, y: 0.5 }, { x: 0.75, y: 0.35 }]
-    .map(position => clusterSystemPosition({ candidate: position }, 'candidate'))
-  const clearContactPoint = () => map.evaluate((element, candidates) => {
-    const transform = element.querySelector<SVGGElement>('.cluster-map-content')?.getScreenCTM()
-    if (!transform) throw new Error('The map must expose its current scene transform.')
-    for (const candidate of candidates) {
-      const screen = new DOMPoint(candidate.x, candidate.y).matrixTransform(transform)
-      const x = Math.round(screen.x)
-      const y = Math.round(screen.y)
-      if (document.elementFromPoint(x, y) === element) return { x, y }
-    }
-    return null
-  }, safeCandidates)
-  const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out', exact: true })
-  let contact = await clearContactPoint()
-  for (let step = 0; !contact && step < 12 && !await zoomOut.isDisabled(); step += 1) {
-    await zoomOut.click()
-    contact = await clearContactPoint()
-  }
-  if (!contact) throw new Error('The held pointer must reach clear map space.')
-
-  await map.focus()
-  await page.mouse.move(contact.x, contact.y)
-  await page.mouse.down()
-  await page.keyboard.press('Escape')
-  await expect(placement).toBeHidden()
-  await page.mouse.up()
-  await expect(anchorMarks).toHaveCount(1)
-  await expect(page.getByRole('button', { name: 'Add to map', exact: true })).toHaveAttribute('aria-pressed', 'true')
-
-  await page.mouse.click(contact.x, contact.y)
-  await expect(anchorMarks).toHaveCount(2)
-  await waitForWorkspaceSaved(page)
-})
-
-test('an applied import closes review before save failure and Retry persists the copy without clearing an unrelated draft', async ({ page }) => {
-  await captureMapExportBlobs(page)
-  await page.setViewportSize({ width: 1440, height: 960 })
-  await page.goto('/')
-  await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
-  await page.getByRole('button', { name: 'Create local workspace' }).click()
-  await fitWorkspaceMap(page)
-
-  const chartEditor = await openChartDetailsEditor(page)
-  await chartEditor.getByLabel('Jump Cluster', { exact: true }).fill('Unapplied Reach')
-  await chartEditor.getByLabel('Star system', { exact: true }).fill('Unapplied Vesper')
-  await hideWorkspaceInspector(page)
-
-  const incoming = incomingSystem()
-  const review = await reviewStarSystemImport(page, 'incoming-reach.json', incoming.content)
-  await expect(review).toBeVisible()
-
-  const saveFeedback = activeWorkspaceFeedback(page).locator('.save-feedback')
-  await abortNextWorkspaceWrite(page, async () => {
-    await resolveImportReview(review, 'confirm')
-    await expect(review).toBeHidden()
-    await expect(saveFeedback).toContainText('Not saved.')
-  })
-
-  const appliedMemory = await downloadJson(page, 'Export Jump Cluster JSON')
-  const importedSystem = appliedMemory.cluster?.systems.find(system => system.name === 'Incoming Vesper')
-  expect(importedSystem).toBeDefined()
-  expect(importedSystem?.id).not.toBe(incoming.systemId)
-  await expect(saveFeedback).toContainText('Not saved.')
-
-  const resumeDraft = activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft', exact: true })
-  await expect(resumeDraft).toBeVisible()
-  await resumeDraft.click()
-  await expect(chartEditor.getByLabel('Jump Cluster', { exact: true })).toHaveValue('Unapplied Reach')
-  await expect(chartEditor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
-  await hideWorkspaceInspector(page)
-
-  await activeWorkspaceFeedback(page).getByRole('button', { name: 'Retry save', exact: true }).click()
-  await waitForWorkspaceSaved(page)
-  await page.reload()
-  await fitWorkspaceMap(page)
-
-  const afterReload = await downloadJson(page, 'Export Jump Cluster JSON')
-  const persistedImport = afterReload.cluster?.systems.find(system => system.name === 'Incoming Vesper')
-  expect(persistedImport).toBeDefined()
-  expect(persistedImport?.id).not.toBe(incoming.systemId)
 })

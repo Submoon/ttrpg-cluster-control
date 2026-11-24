@@ -1105,7 +1105,7 @@ test-results/local-test-<timestamp>-<pid>-<random>/server.log. test:local owns t
 Playwright paths, so --output, --last-failed-file, and --config overrides are not accepted.
 
 Examples:
-  npm run test:local -- tests/workspace-ui-smoke.spec.ts --project=browser
+  npm run test:local -- tests/workspace-panels.spec.ts --project=browser
   npm run test:local -- tests/local-test-launcher.spec.ts --project=pure
   npm run test:local -- --grep "route placement"
 `

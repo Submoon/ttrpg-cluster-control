@@ -32,8 +32,8 @@ Confirmed by the user on 2026-11-13. The source issue and comments were refreshe
 
 ### Existing evidence
 
-- The generated [Global Search Atlas](../../../tests/workspace-global-search.spec.ts) contains 20 systems and 520 catalogue objects, including stars, with no Orbits or Jump Routes. It supplies a data-volume reference from a search regression.
-- [Deep Readability Atlas](../../../tests/fixtures/workspace-hierarchy-deep.json) contains one system, eight objects and six Orbits, with a deepest chain of five host-to-occupant Orbit links. [Branch Atlas](../../../tests/workspace-object-search.spec.ts) exercises extended geometry, rotated ellipses and distant objects.
+- The generated [Global Search Atlas](https://github.com/Submoon/ttrpg-cluster-control/blob/6a415e8be8022ad8da080f809a2c8d22c3d84fcf/tests/workspace-global-search.spec.ts) contains 20 systems and 520 catalogue objects, including stars, with no Orbits or Jump Routes. It supplies a data-volume reference from a search regression.
+- [Deep Readability Atlas](../../../tests/fixtures/workspace-hierarchy-deep.json) contains one system, eight objects and six Orbits, with a deepest chain of five host-to-occupant Orbit links. [Branch Atlas](https://github.com/Submoon/ttrpg-cluster-control/blob/6a415e8be8022ad8da080f809a2c8d22c3d84fcf/tests/workspace-object-search.spec.ts) exercises extended geometry, rotated ellipses and distant objects.
 - Existing [touch checks](../../../tests/workspace-touch-takeover.spec.ts) exercise compact Chromium at 390 by 844 and simulate pinch through CDP. Desktop checks use 1440 by 900 or 960. The [interface revamp specification](../../interface-revamp/spec.md) names physical Android Chrome as its touch target.
 - Prior [revamp measurements](../../interface-revamp/finalization.md) use a small two-system campaign. Frame pacing and latency for unified semantic zoom remain to be measured.
 - The [player codec](../../../domain/player-codec.ts) defines admission limits for public documents. Performance targets for the chosen scenes require their own measurements.

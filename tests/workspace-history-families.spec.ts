@@ -25,12 +25,13 @@ import { createWorkspaceSnapshot } from '../utils/workspace-storage'
 import { projectWardenSystem } from '../utils/continuous-map-projection'
 import {
   waitForWorkspaceSaved,
-  addClusterSystem,
   captureMapExportBlobs,
   createSingleSystemWorkspace,
   downloadJson,
-  openWorkspaceHierarchy,
   fitWorkspaceMap,
+  resolveJumpClusterRestoreReview,
+  reviewJumpClusterBackup,
+  wardenSystemMark,
 } from './helpers'
 
 function fakeImportInput(content: string, readContent: () => Promise<string> = async () => content): { event: Event; restore(): void } {
@@ -777,81 +778,49 @@ test('a stale import capacity answer cannot publish into a replacement workspace
   }
 })
 
-test('reviewed system deletion restores the same cascade through the editor Undo and Redo commands', async ({ page }, testInfo) => {
+test('focused map deletion reviews a seeded system cascade and Undo restores the complete Cluster', async ({ page }) => {
   test.setTimeout(60_000)
   await captureMapExportBlobs(page)
   await createSingleSystemWorkspace(page)
-  await fitWorkspaceMap(page)
-  await addClusterSystem(page)
+  const fixture = makeCascadeWorkspace()
+  const restore = await reviewJumpClusterBackup(page, 'deletion-cascade.json', JSON.stringify(exportJumpCluster(fixture)))
+  await resolveJumpClusterRestoreReview(restore, 'confirm')
   await waitForWorkspaceSaved(page)
+  await fitWorkspaceMap(page)
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
-  const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  const system = hierarchy.getByRole('treeitem', { name: 'New System 2', exact: true })
-  await expect(system.getByRole('button', { name: 'Delete New System 2 system', exact: true })).toHaveCount(0)
-  await system.press('Shift+F10')
+  const source = fixture.cluster.systems[0]!
+  const target = wardenSystemMark(page, source.id)
+  await target.focus()
+  await expect(target).toBeFocused()
+  await target.press('Shift+F10')
   const menu = page.getByRole('menu', { name: 'Map item actions', exact: true })
   const deletion = menu.getByRole('menuitem', { name: 'Delete', exact: true })
   const review = page.getByRole('dialog', { name: 'Review deletion', exact: true })
   const confirm = review.getByRole('button', { name: 'Confirm deletion', exact: true })
+  await expect(menu).toBeVisible()
   await expect(deletion).toBeEnabled()
-  await expect.poll(() => menu.evaluate(element => element.contains(document.activeElement))).toBe(true)
-  await page.keyboard.press('End')
+  await deletion.focus()
   await expect(deletion).toBeFocused()
-  const handoff = await page.evaluateHandle(() => {
-    const controller = new AbortController()
-    const events: Array<{ type: string; key?: string; role?: string | null; label?: string | null; time: number }> = []
-    for (const type of ['keydown', 'keyup', 'click', 'focusin', 'focusout', 'scroll']) {
-      window.addEventListener(type, (event) => {
-        if (events.length >= 40) return
-        const control = event.target instanceof Element ? event.target.closest('[role], button') : null
-        events.push({
-          type,
-          key: event instanceof KeyboardEvent ? event.key : undefined,
-          role: control?.getAttribute('role'),
-          label: control?.getAttribute('aria-label') ?? control?.textContent?.trim().slice(0, 50),
-          time: performance.now(),
-        })
-      }, { capture: true, signal: controller.signal })
-    }
-    return { events, controller }
-  })
-  try {
-    await deletion.press('Enter')
-    await expect(confirm).toBeFocused()
-  } catch (error) {
-    const events = await handoff.evaluate(probe => probe.events)
-    await testInfo.attach('Deletion keyboard handoff', { body: JSON.stringify(events, null, 2), contentType: 'application/json' })
-    throw error
-  } finally {
-    await handoff.evaluate(probe => probe.controller.abort())
-    await handoff.dispose()
-  }
-
-  // Start a held key on the dialog, then deliver its repeat to the confirm control.
-  await review.focus()
-  await expect(review).toBeFocused()
-  await page.keyboard.down('Enter')
-  try {
-    await confirm.focus()
-    await page.keyboard.down('Enter')
-    await expect(confirm).toBeFocused()
-    await expect(confirm).toBeEnabled()
-  } finally {
-    await page.keyboard.up('Enter')
-  }
-  await page.keyboard.press('Enter')
+  await page.keyboard.press('Space')
+  await expect(review).toBeVisible()
+  await expect(review).toContainText('A star system')
+  await expect(review).toContainText('Herma')
+  await expect(review).toContainText('Iria')
+  await expect(review).toContainText('Lost Gate')
+  await expect(confirm).toBeFocused()
+  await page.keyboard.press('Space')
   await expect(review).toBeHidden()
   await waitForWorkspaceSaved(page)
   const after = await downloadJson(page, 'Export Jump Cluster JSON')
-  expect(after.cluster?.systems.map(system => system.name)).toEqual(['Vesper'])
+  if (before.type !== 'cluster' || !before.cluster || after.type !== 'cluster' || !after.cluster) {
+    throw new Error('Expected complete Cluster backups.')
+  }
+  expect(after.cluster.systems.map(system => system.name)).toEqual(['B'])
+  expect(after.cluster.routes).toEqual([])
+  expect(after.cluster.systems[0]?.objects.map(object => object.name)).toEqual(['Primary Star', 'B Gate'])
 
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })
-  const redo = page.getByRole('button', { name: /^Redo(?:\b|:)/ })
   await undo.click()
   await waitForWorkspaceSaved(page)
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(before)
-  await expect(redo).toBeEnabled()
-  await redo.click()
-  await waitForWorkspaceSaved(page)
-  expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(after)
 })

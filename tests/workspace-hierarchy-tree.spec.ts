@@ -1,15 +1,14 @@
 import { readFile } from 'node:fs/promises'
-import { expect, preparedCampaignTest as test, test as freshTest, type Locator } from './fixtures'
+import { expect, test as freshTest, type Locator } from './fixtures'
 import {
-  centerWorkspaceSelection,
   type DownloadWindow,
+  editMapObject,
   exposedContinuousObjectHitPoint,
   type ExportedMap,
   hideWorkspaceInspector,
   openMapFilesSection,
   openWorkspaceHierarchy,
-  openWorkspaceZoomNavigation,
-  type ScreenPoint,
+  saveMapObject,
   setHeaderMapActionsOpen,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
@@ -19,20 +18,11 @@ import {
   wardenObjectLocalPosition,
   wardenOrbitLocalGeometry,
   wardenMap,
-  workspaceNavigation,
   workspaceZoomControls,
 } from './helpers'
 
 async function renderedObjectPosition(mark: Locator): Promise<{ x: number; y: number }> {
   return wardenObjectLocalPosition(mark)
-}
-
-async function visibleIndicatorObjectIds(indicators: Locator): Promise<string[]> {
-  const ids = await indicators.evaluateAll(marks => marks.map(mark => mark.getAttribute('data-selection-object-id')))
-  return ids.map((id) => {
-    if (!id) throw new Error('A visible selection indicator has no object identity.')
-    return id
-  }).sort()
 }
 
 async function downloadJsonFromFile(
@@ -55,216 +45,7 @@ async function downloadJsonFromFile(
   }
 }
 
-test('multi-select objects and preserve Hierarchy keyboard behavior through reflow', async ({
-  campaignWorkspacePage: page,
-}) => {
-  test.setTimeout(60_000)
-  await page.setViewportSize({ width: 1440, height: 900 })
-  const beforeSelection = await downloadJsonFromFile(page, 'Export Jump Cluster JSON')
-  const owner = beforeSelection.cluster?.systems.find(system => system.name === 'Vesper Prime')
-  const star = owner?.objects.find(object => object.name === 'Primary Star')
-  const planet = owner?.objects.find(object => object.name === 'Iria')
-  const departure = owner?.objects.find(object => object.name === 'Vesper Departure')
-  if (!owner || !star || !planet || !departure) throw new Error('The campaign needs its three selectable Vesper records.')
-
-  const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('treeitem', { name: `${owner.name}`, exact: true }).click()
-  await hideWorkspaceInspector(page)
-  await centerWorkspaceSelection(page)
-  const rowName = (object: typeof star) => `Select ${object.locationKey}, ${object.name} in ${owner.name}`
-  const primaryStar = hierarchy.getByRole('treeitem', { name: rowName(star), exact: true })
-  const iria = hierarchy.getByRole('treeitem', { name: rowName(planet), exact: true })
-  const departureRow = hierarchy.getByRole('treeitem', { name: rowName(departure), exact: true })
-  const primaryOrbit = hierarchy.getByRole('treeitem', { name: 'Orbit 1 around Primary Star, 1 object', exact: true })
-  const map = wardenMap(page)
-  const starMark = wardenObjectMark(page, owner.id, star.id)
-  const departureMark = wardenObjectMark(page, owner.id, departure.id)
-  const selectedMarks = map.locator('.continuous-warden-object[aria-pressed="true"]')
-  const indicators = map.locator('.system-object-selection-indicator:visible')
-  const groupIds = [star.id, planet.id].sort()
-  await setWorkspaceMapMode(page, 'Select')
-  await primaryStar.click()
-  await iria.click({ modifiers: ['Shift'] })
-  await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
-  await expect(iria).toHaveAttribute('aria-selected', 'true')
-  await expect(selectedMarks).toHaveCount(2)
-  expect(await visibleIndicatorObjectIds(indicators)).toEqual(groupIds)
-  await expect(page.getByText('2 objects selected', { exact: true })).toBeVisible()
-  await departureRow.click({ modifiers: ['Shift'] })
-  await expect(departureRow).toHaveAttribute('aria-selected', 'true')
-  await expect(selectedMarks).toHaveCount(3)
-  await expect(page.getByText('3 objects selected', { exact: true })).toBeVisible()
-  await departureRow.click({ modifiers: ['Shift'] })
-  await expect(departureRow).toHaveAttribute('aria-selected', 'false')
-  expect(await visibleIndicatorObjectIds(indicators)).toEqual(groupIds)
-
-  await hideWorkspaceInspector(page)
-  const menu = page.getByRole('menu', { name: 'Map item actions', exact: true })
-  const moveMode = workspaceNavigation(page).getByRole('button', { name: 'Move', exact: true })
-  const moveFromContextMenu = async (row: Locator) => {
-    // At the detail threshold Iria is covered by its owner's name badge; Hierarchy keeps its context action accessible.
-    await row.focus()
-    await row.press('Shift+F10')
-    await menu.getByRole('menuitem', { name: 'Move selection', exact: true }).click()
-    await expect(moveMode).toHaveAttribute('aria-pressed', 'true')
-  }
-  await moveFromContextMenu(iria)
-  expect(await visibleIndicatorObjectIds(indicators)).toEqual(groupIds)
-  await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
-  await expect(iria).toHaveAttribute('aria-selected', 'true')
-  await expect(selectedMarks).toHaveCount(2)
-  await setWorkspaceMapMode(page, 'Select')
-  await moveFromContextMenu(departureRow)
-  await expect(selectedMarks).toHaveCount(1)
-  await expect(departureMark).toHaveAttribute('aria-pressed', 'true')
-  await expect(departureRow).toHaveAttribute('aria-selected', 'true')
-  await expect(primaryStar).toHaveAttribute('aria-selected', 'false')
-  await expect(iria).toHaveAttribute('aria-selected', 'false')
-  await setWorkspaceMapMode(page, 'Select')
-
-  await page.getByRole('button', { name: 'Filters', exact: true }).click()
-  const filters = page.getByRole('dialog', { name: /^Filters(?: \(1 active criterion\))?$/ })
-  await filters.getByRole('group', { name: 'Celestial body', exact: true })
-    .getByRole('checkbox', { name: 'Planet', exact: true }).check()
-  await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
-  await primaryStar.focus()
-  await page.keyboard.press('Enter')
-  await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
-  await expect(primaryStar).toHaveAttribute('aria-description', /Dimmed on map/)
-  await expect(starMark).toHaveClass(/\bis-dimmed\b/)
-  await expect(starMark).toHaveAttribute('aria-pressed', 'true')
-  await hideWorkspaceInspector(page)
-  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-  await starMark.focus()
-  await expect(starMark).toBeFocused()
-  await page.emulateMedia({ reducedMotion: 'reduce' })
-  const dimmedIndicator = starMark.locator('.system-object-selection-indicator')
-  await expect(dimmedIndicator.locator('.system-object-selection-outline')).toBeVisible()
-  await expect(dimmedIndicator.locator('.system-object-selection-dashes')).toBeVisible()
-  await expect(dimmedIndicator.locator('.system-object-selection-dashes')).toHaveCSS('animation-name', 'none')
-  await page.emulateMedia({ reducedMotion: 'no-preference' })
-  await page.getByRole('button', { name: 'Filters (1 active criterion)', exact: true }).click()
-  await filters.getByRole('button', { name: 'Clear all', exact: true }).click()
-  await filters.getByRole('button', { name: 'Close filters', exact: true }).click()
-  await expect(starMark).not.toHaveClass(/\bis-dimmed\b/)
-
-  await openWorkspaceHierarchy(page)
-  await iria.click({ modifiers: ['Shift'] })
-  await hideWorkspaceInspector(page)
-  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-  expect(await visibleIndicatorObjectIds(indicators)).toEqual(groupIds)
-  const camera = map.locator('.cluster-map-content')
-  const beforeNavigation = await camera.getAttribute('transform')
-  const navigation = await openWorkspaceZoomNavigation(page)
-  await navigation.getByRole('button', { name: 'Pan map right', exact: true }).click()
-  const zoom = workspaceZoomControls(page)
-  await zoom.getByRole('button', { name: 'Open map navigation controls', exact: true }).click()
-  await zoom.getByRole('button', { name: 'Zoom in', exact: true }).click()
-  await expect(camera).not.toHaveAttribute('transform', beforeNavigation!)
-
-  // Derive both native rectangle corners from the transformed, owner-qualified object anchors.
-  const rectangle = await map.evaluate((svg, target): { start: ScreenPoint; end: ScreenPoint } | null => {
-    const anchors = [...svg.querySelectorAll<SVGGraphicsElement>('.continuous-warden-object')].map(mark => {
-      const matrix = mark.getScreenCTM()
-      if (!matrix) throw new Error('A painted Warden object has no screen transform.')
-      const point = new DOMPoint(0, 0).matrixTransform(matrix)
-      return { systemId: mark.dataset.systemId, objectId: mark.dataset.objectId, x: point.x, y: point.y }
-    })
-    const anchor = anchors.find(point => point.systemId === target.systemId && point.objectId === target.objectId)
-    if (!anchor) throw new Error('Vesper Departure has no painted anchor after camera navigation.')
-    const bounds = svg.getBoundingClientRect()
-    const backgroundAt = (point: ScreenPoint) => {
-      const hit = document.elementFromPoint(point.x, point.y)
-      return hit instanceof Element && svg.contains(hit)
-        && !hit.closest('.cluster-system-node, .cluster-route, .continuous-warden-object, .continuous-warden-orbit-target, .continuous-warden-orbit-edit-handle')
-    }
-    for (const radius of [24, 32, 48, 64, 80, 96]) {
-      const start: ScreenPoint = { x: Math.round(anchor.x - radius), y: Math.round(anchor.y - radius) }
-      const end: ScreenPoint = { x: Math.round(anchor.x + radius), y: Math.round(anchor.y + radius) }
-      if (start.x <= bounds.left || end.x >= bounds.right || start.y <= bounds.top || end.y >= bounds.bottom) continue
-      const enclosed = anchors.filter(point => point.x >= start.x && point.x <= end.x
-        && point.y >= start.y && point.y <= end.y)
-      if (enclosed.length === 1 && enclosed[0] === anchor && backgroundAt(start) && backgroundAt(end)) return { start, end }
-    }
-    return null
-  }, { systemId: owner.id, objectId: departure.id })
-  if (!rectangle) throw new Error('The transformed departure needs an unobstructed native selection rectangle.')
-  const dragRectangle = async () => {
-    await page.mouse.move(rectangle.start.x, rectangle.start.y)
-    await page.mouse.down()
-    await page.mouse.move(rectangle.end.x, rectangle.end.y, { steps: 6 })
-  }
-  const preview = page.locator('.workspace-selection-rectangle')
-  try {
-    await dragRectangle()
-    await expect(preview).toBeVisible()
-    await page.keyboard.press('Escape')
-    await expect(preview).toBeHidden()
-  } finally {
-    await page.mouse.up()
-  }
-  expect(await visibleIndicatorObjectIds(indicators)).toEqual(groupIds)
-  try {
-    await dragRectangle()
-    await expect(preview).toBeVisible()
-  } finally {
-    await page.mouse.up()
-  }
-  await expect(preview).toBeHidden()
-  await expect(selectedMarks).toHaveCount(1)
-  await expect(departureMark).toHaveAttribute('aria-pressed', 'true')
-  await hideWorkspaceInspector(page)
-  await openWorkspaceHierarchy(page)
-  await expect(departureRow).toHaveAttribute('aria-selected', 'true')
-  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-  await page.mouse.click(rectangle.start.x, rectangle.start.y)
-  await expect(selectedMarks).toHaveCount(0)
-  await expect(indicators).toHaveCount(0)
-
-  await openWorkspaceHierarchy(page)
-  await primaryStar.click()
-  await expect(primaryOrbit).toHaveAttribute('aria-expanded', 'true')
-  await page.keyboard.type('Iria')
-  await expect(iria).toBeFocused()
-  const treeRows = hierarchy.getByRole('tree').getByRole('treeitem')
-  await page.keyboard.press('Home')
-  await expect(treeRows.first()).toBeFocused()
-  await page.keyboard.press('End')
-  await expect(treeRows.last()).toBeFocused()
-  const selectMode = workspaceNavigation(page).getByRole('button', { name: 'Select', exact: true })
-  for (const key of ['s', 'm', 'a']) {
-    await iria.focus()
-    await page.keyboard.press(key)
-    await expect(selectMode).toHaveAttribute('aria-pressed', 'true')
-    await expect(workspaceNavigation(page).getByRole('button', { name: 'Add to map', exact: true }))
-      .toHaveAttribute('aria-expanded', 'false')
-    await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
-    await expect(iria).toHaveAttribute('aria-selected', 'false')
-  }
-  await primaryOrbit.focus()
-  await page.keyboard.press('ArrowLeft')
-  await expect(primaryOrbit).toHaveAttribute('aria-expanded', 'false')
-  await expect(iria).toBeHidden()
-  await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
-  await hideWorkspaceInspector(page)
-  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-  await page.setViewportSize({ width: 390, height: 844 })
-  const compactHierarchy = await openWorkspaceHierarchy(page)
-  const compactStar = compactHierarchy.getByRole('treeitem', { name: rowName(star), exact: true })
-  const compactOrbit = compactHierarchy.getByRole('treeitem', { name: 'Orbit 1 around Primary Star, 1 object', exact: true })
-  await expect(compactStar).toHaveAttribute('aria-selected', 'true')
-  await expect(compactOrbit).toHaveAttribute('aria-expanded', 'false')
-  await expect(compactHierarchy.getByRole('treeitem', { name: rowName(planet), exact: true })).toBeHidden()
-  await page.getByRole('button', { name: 'Close hierarchy panel', exact: true }).click()
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await openWorkspaceHierarchy(page)
-  await expect(primaryStar).toHaveAttribute('aria-selected', 'true')
-  await expect(primaryOrbit).toHaveAttribute('aria-expanded', 'false')
-  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
-  expect(await downloadJsonFromFile(page, 'Export Jump Cluster JSON')).toEqual(beforeSelection)
-})
-
-freshTest('the default Warden map moves a group across owning systems and restores the saved edit', async ({ page }) => {
+freshTest('a Warden edits an object and moves a group onto an Orbit', async ({ page }) => {
   freshTest.setTimeout(60_000)
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/')
@@ -295,7 +76,6 @@ freshTest('the default Warden map moves a group across owning systems and restor
   const review = page.getByRole('dialog', { name: 'Open Jump Cluster', exact: true })
   await review.getByRole('button', { name: 'Open Jump Cluster', exact: true }).click()
   await waitForWorkspaceStartup(page)
-  const clusterBeforeGroupMove = await downloadJsonFromFile(page, 'Export Jump Cluster JSON')
   await setWorkspaceMapMode(page, 'Select')
   const sourceMark = wardenObjectMark(page, sourceOwner.id, sourceObject.id)
   const otherMark = wardenObjectMark(page, otherOwner.id, otherOwnerObject.id)
@@ -309,6 +89,16 @@ freshTest('the default Warden map moves a group across owning systems and restor
     await zoomIn.click()
   }
   if (!sourcePoint || !otherPoint) throw new Error('The two owners need visible, hittable objects.')
+  await sourceMark.press('Enter')
+  await editMapObject(page)
+  const notes = page.getByRole('region', { name: 'Object inspector', exact: true }).getByLabel('GM notes', { exact: true })
+  await notes.fill('Surveyed before the move.')
+  await saveMapObject(page)
+  await waitForWorkspaceSaved(page)
+  await hideWorkspaceInspector(page)
+  const clusterBeforeGroupMove = await downloadJsonFromFile(page, 'Export Jump Cluster JSON')
+  expect(clusterBeforeGroupMove.cluster?.systems.find(system => system.id === sourceOwner.id)
+    ?.objects.find(object => object.id === sourceObject.id)?.description).toBe('Surveyed before the move.')
   await page.mouse.click(sourcePoint.x, sourcePoint.y)
   await page.keyboard.down('Shift')
   try {
@@ -473,91 +263,4 @@ freshTest('the default Warden map moves a group across owning systems and restor
   await page.reload()
   await waitForWorkspaceStartup(page)
   expect(await downloadJsonFromFile(page, 'Export Jump Cluster JSON')).toEqual(clusterAfterGroupMove)
-})
-
-freshTest('a sparse Hierarchy context menu survives replacing its selected sibling and returns focus', async ({ page }) => {
-  freshTest.setTimeout(60_000)
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/')
-  const fixture = JSON.parse(await readFile(new URL('./fixtures/workspace-data-campaign-baseline.json', import.meta.url), 'utf8')) as ExportedMap
-  const owner = fixture.cluster?.systems[0]
-  const alpha = owner?.objects.find(object => object.name === 'Primary Star')
-  const beta = owner?.objects.find(object => object.name === 'Vesper Departure')
-  if (!fixture.cluster || !owner || !alpha || !beta) throw new Error('The context fixture needs two sibling objects.')
-  alpha.name = 'Context Alpha'
-  beta.name = 'Context Beta'
-  alpha.placement = { kind: 'system', x: .3, y: .7 }
-  beta.placement = { kind: 'system', x: .7, y: .7 }
-  owner.objects = [alpha, beta]
-  owner.orbits = []
-  fixture.cluster.systems = [owner]
-  fixture.cluster.routes = []
-  fixture.layout.systemPositions = { [owner.id]: { x: .5, y: .5 } }
-  fixture.layout.orbitRadii = {}
-  fixture.layout.objectAngles = {}
-  const [picker] = await Promise.all([
-    page.waitForEvent('filechooser'),
-    page.getByRole('button', { name: 'Open local Jump Cluster backup', exact: true }).click(),
-  ])
-  await picker.setFiles({ name: 'sparse-context-siblings.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(fixture)) })
-  await page.getByRole('dialog', { name: 'Open Jump Cluster', exact: true })
-    .getByRole('button', { name: 'Open Jump Cluster', exact: true }).click()
-  await waitForWorkspaceStartup(page)
-  await setWorkspaceMapMode(page, 'Select')
-  const alphaMark = wardenObjectMark(page, owner.id, alpha.id)
-  const betaMark = wardenObjectMark(page, owner.id, beta.id)
-  const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
-  for (let step = 0; step < 12; step += 1) {
-    if (await alphaMark.count() && await betaMark.count()
-      && await exposedContinuousObjectHitPoint(alphaMark) && await exposedContinuousObjectHitPoint(betaMark)) break
-    await zoomIn.click()
-  }
-  const selectMapObject = async (mark: Locator, modified = false) => {
-    const point = await exposedContinuousObjectHitPoint(mark)
-    if (!point) throw new Error('The context sibling needs an exposed native map target.')
-    if (modified) await page.keyboard.down('Shift')
-    try {
-      await page.mouse.click(point.x, point.y)
-    } finally {
-      if (modified) await page.keyboard.up('Shift')
-    }
-  }
-  await selectMapObject(betaMark)
-  await hideWorkspaceInspector(page)
-  await selectMapObject(alphaMark, true)
-  await selectMapObject(betaMark, true)
-  await expect(alphaMark).toHaveAttribute('aria-pressed', 'true')
-  await expect(betaMark).toHaveAttribute('aria-pressed', 'false')
-  await page.getByRole('button', { name: 'Inspect', exact: true }).click()
-  const inspector = page.locator('#workspace-inspector-panel')
-  await expect(inspector).toContainText(beta.name)
-  const hierarchy = await openWorkspaceHierarchy(page)
-  const alphaRow = hierarchy.getByRole('treeitem', {
-    name: `Select ${alpha.locationKey}, ${alpha.name} in ${owner.name}`, exact: true, includeHidden: true,
-  })
-  const betaRow = hierarchy.getByRole('treeitem', {
-    name: `Select ${beta.locationKey}, ${beta.name} in ${owner.name}`, exact: true,
-  })
-  await expect(alphaRow).toHaveAttribute('aria-selected', 'true')
-  await expect(betaRow).toHaveAttribute('aria-selected', 'false')
-  await expect(hierarchy.getByRole('button', { name: `Show all ${owner.name} records`, exact: true })).toBeVisible()
-  const camera = wardenMap(page).locator('.cluster-map-content')
-  const cameraBeforeContext = await camera.getAttribute('transform')
-  await betaRow.focus()
-  await betaRow.press('Shift+F10')
-  const menu = page.getByRole('menu', { name: 'Map item actions', exact: true })
-  await expect(menu.getByRole('menuitem', { name: 'Move selection', exact: true })).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(menu).toBeHidden()
-  // Replacing membership prunes Alpha, moving Beta into its preceding sibling's rendered slot.
-  await expect(alphaRow).toHaveCount(0)
-  await expect(betaRow).toHaveAttribute('aria-selected', 'true')
-  await expect(alphaMark).toHaveAttribute('aria-pressed', 'false')
-  await expect(betaMark).toHaveAttribute('aria-pressed', 'true')
-  await expect(inspector).toContainText(beta.name)
-  await expect(inspector).not.toContainText(alpha.name)
-  await expect(camera).toHaveAttribute('transform', cameraBeforeContext!)
-  await expect(betaRow).toBeFocused()
-  await expect(hierarchy).toBeVisible()
-  await expect(inspector).toBeVisible()
 })

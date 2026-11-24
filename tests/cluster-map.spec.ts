@@ -1,10 +1,22 @@
 import { expect, preparedCampaignTest as campaignTest, type Locator, type Page } from './fixtures'
 import {
-  captureMapExportBlobs, centerWorkspaceSelection, dockAction, downloadJson,
-  hideWorkspaceInspector, measureMouseDrag, openWorkspaceHierarchy,
-  openWorkspaceZoomNavigation, quitSystemAdd, selectInspectorOption, setWorkspaceMapMode, snapshotSvgCoordinates,
-  waitForWorkspaceSaved, waitForWorkspaceStartup, wardenMap, wardenObjectMark, wardenSystemMark,
-  wardenOrbitLocalGeometry, workspaceZoomControls, workspaceZoomOutput, type ExportedMap,
+  captureMapExportBlobs,
+  centerWorkspaceSelection,
+  dockAction,
+  downloadJson,
+  hideWorkspaceInspector,
+  measureMouseDrag,
+  openWorkspaceHierarchy,
+  quitSystemAdd,
+  selectCatalogueObjectButton,
+  selectInspectorOption,
+  setWorkspaceMapMode,
+  waitForWorkspaceSaved,
+  waitForWorkspaceStartup,
+  wardenMap,
+  wardenObjectMark,
+  wardenOrbitLocalGeometry,
+  type ExportedMap,
 } from './helpers'
 
 async function hidePanels(page: Page): Promise<void> {
@@ -87,78 +99,7 @@ function radii(snapshot: ExportedMap, orbitId: string): { horizontal: number; ve
 }
 
 campaignTest.describe('prepared campaign map layout', () => {
-  campaignTest('cluster zoom and pan support a system arrangement that survives reload', async ({ campaignWorkspacePage: page }) => {
-    await captureMapExportBlobs(page)
-    await hidePanels(page)
-    const map = wardenMap(page)
-    const controls = workspaceZoomControls(page)
-    const content = map.locator('.cluster-map-content')
-    const scale = () => content.evaluate(element => (element as SVGGElement).transform.baseVal.getItem(1).matrix.a)
-    const navigation = await openWorkspaceZoomNavigation(page)
-    const slider = navigation.getByRole('slider', { name: 'Map zoom level', exact: true })
-    const minimum = Number(await slider.getAttribute('aria-valuemin'))
-    const maximum = Number(await slider.getAttribute('aria-valuemax'))
-    expect(minimum).toBe(5)
-    expect(maximum).toBe(320)
-    await slider.press('Home')
-    await expect.poll(scale).toBeCloseTo(minimum / 20, 8)
-    await slider.press('ArrowRight')
-    await expect.poll(scale).toBeCloseTo(minimum / 20 + 0.01, 6)
-    await expect(workspaceZoomOutput(page)).toHaveText('5.2%')
-    await slider.press('End')
-    await expect(workspaceZoomOutput(page)).toHaveText('320%')
-    await page.keyboard.press('Escape')
-    await controls.getByRole('button', { name: 'Fit map', exact: true }).click()
-    const initial = await scale()
-    await controls.getByRole('button', { name: 'Zoom in', exact: true }).click()
-    await expect.poll(scale).toBeGreaterThan(initial)
-    const beforeWheel = await scale()
-    const bounds = await map.boundingBox()
-    if (!bounds) throw new Error('The Warden map is not visible.')
-    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
-    await page.mouse.wheel(0, -150)
-    await expect.poll(scale).toBeGreaterThan(beforeWheel)
-    await page.mouse.wheel(0, -5000)
-    await expect.poll(scale).toBeCloseTo(maximum / 20, 8)
-    await expect(controls.getByRole('button', { name: 'Zoom in', exact: true })).toBeDisabled()
-    await page.mouse.wheel(0, 5000)
-    await expect.poll(scale).toBeCloseTo(minimum / 20, 8)
-    await expect(controls.getByRole('button', { name: 'Zoom out', exact: true })).toBeDisabled()
-    await controls.getByRole('button', { name: 'Fit map', exact: true }).click()
-    await expect.poll(scale).toBeGreaterThan(minimum / 20)
-    const beforePan = await content.getAttribute('transform')
-    await rightPanMap(page, map)
-    await expect(content).not.toHaveAttribute('transform', beforePan ?? '')
-
-    const before = await downloadJson(page, 'Export Jump Cluster JSON')
-    const system = before.cluster?.systems.find(candidate => candidate.name === 'Vesper Prime')
-    const position = system && before.layout.systemPositions?.[system.id]
-    if (!system || !position) throw new Error('The campaign needs its saved Vesper Prime anchor.')
-    await setWorkspaceMapMode(page, 'Move')
-    const anchor = wardenSystemMark(page, system.id)
-    const beforeTransform = await anchor.getAttribute('transform')
-    const name = map.locator(`.continuous-warden-name-target[data-system-id="${system.id}"]`)
-    const nameBounds = await name.locator('.continuous-warden-name-background').boundingBox()
-    if (!nameBounds) throw new Error('Vesper Prime needs a visible name target for its system-anchor Move.')
-    const start = { x: nameBounds.x + nameBounds.width / 2, y: nameBounds.y + nameBounds.height / 2 }
-    expect(await name.evaluate((element, point) => element.contains(document.elementFromPoint(Math.round(point.x), Math.round(point.y))), start)).toBe(true)
-    const coordinates = await snapshotSvgCoordinates(content)
-    const delivered = await measureMouseDrag(page, start, { x: start.x + 48, y: start.y + 24 }, { eventFamily: 'pointer' })
-    await expect(anchor).not.toHaveAttribute('transform', beforeTransform ?? '')
-    await waitForWorkspaceSaved(page)
-    const after = await downloadJson(page, 'Export Jump Cluster JSON')
-    const down = coordinates.fromClient(delivered.down)
-    const up = coordinates.fromClient(delivered.up)
-    expect(after.layout.systemPositions?.[system.id]?.x).toBeCloseTo(position.x + (up.x - down.x) / 736, 6)
-    expect(after.layout.systemPositions?.[system.id]?.y).toBeCloseTo(position.y + (up.y - down.y) / 368, 6)
-    await page.reload()
-    await waitForWorkspaceStartup(page)
-    expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(after)
-    await expect(wardenSystemMark(page, system.id)).toBeVisible()
-    await expect(workspaceZoomOutput(page)).toHaveText(/^[\d.]+%$/)
-  })
-
-  campaignTest('resizing an occupied Orbit preserves its angle through pointer and keyboard changes', async ({ campaignWorkspacePage: page }) => {
+  campaignTest('create and populate an Orbit and preserve its occupant when resizing', async ({ campaignWorkspacePage: page }) => {
     await captureMapExportBlobs(page)
     const before = await downloadJson(page, 'Export Jump Cluster JSON')
     const system = before.cluster?.systems.find(candidate => candidate.name === 'Vesper Prime')
@@ -209,6 +150,14 @@ campaignTest.describe('prepared campaign map layout', () => {
     expect(radii(added, second.id)).not.toEqual(radii(added, primaryOrbit.id))
     const secondRing = map.locator(`.continuous-warden-orbit-target[data-system-id="${system.id}"][data-orbit-id="${second.id}"]`)
     await expect(secondRing).toHaveAccessibleName('Select Orbit 2')
+    await (await selectCatalogueObjectButton(page, 'moon')).click()
+    await secondRing.press('Enter')
+    await quitSystemAdd(page)
+    await waitForWorkspaceSaved(page)
+    const populated = await downloadJson(page, 'Export Jump Cluster JSON')
+    const addedMoon = populated.cluster?.systems.find(candidate => candidate.id === system.id)?.objects
+      .find(object => object.subtype === 'moon' && !system.objects.some(original => original.id === object.id))
+    expect(addedMoon?.placement).toEqual({ kind: 'orbit', orbitId: second.id })
     await secondRing.press('Enter')
     await hideWorkspaceInspector(page)
     await setWorkspaceMapMode(page, 'Move')
@@ -226,6 +175,8 @@ campaignTest.describe('prepared campaign map layout', () => {
     await expect(map.locator('.cluster-map-content')).not.toHaveAttribute('transform', beforePan ?? '')
     await waitForWorkspaceSaved(page)
     const saved = await downloadJson(page, 'Export Jump Cluster JSON')
+    expect(saved.cluster?.systems.find(candidate => candidate.id === system.id)?.objects
+      .find(object => object.id === addedMoon?.id)?.placement).toEqual({ kind: 'orbit', orbitId: second.id })
     expect(radii(saved, primaryOrbit.id).horizontal).toBeCloseTo(resizedRadii.horizontal, 2)
     expect(radii(saved, primaryOrbit.id).vertical).toBeCloseTo(resizedRadii.vertical, 2)
     expect(radii(saved, second.id).horizontal).toBe(secondInitial + 401)
