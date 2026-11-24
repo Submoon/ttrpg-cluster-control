@@ -6,37 +6,38 @@ A local-first campaign cartography app for Wardens to plan schematic, not-to-sca
 
 [Open the app on Vercel](https://ttrpg-cluster-control.vercel.app/)
 
-The editor supports desktop and mobile layouts, light/dark themes, catalogue objects and Orbits, logical Jump Routes, and reusable custom fields.
+The Warden editor, its player preview, and the standalone player reader use continuous maps. Players see only the content included in a published player document.
 
-## Using the editor
+## Using the Warden editor
 
-- Use the bottom dock: **Select** (default) to inspect, **Navigate** to pan or enter systems, **Move** to reposition map elements, and **Add** for repeated placement.
-- Open **Hierarchy** to browse the map and **Inspect** for details. Panels fill the screen on mobile; closing a panel preserves its draft.
-- On a star-system map in **Select**, Shift+click an object on the map or in **Hierarchy** to add or remove it from the shared selection. Drag a rectangle from empty map space to replace the selection. **Inspect** shows the number of selected objects. Click empty map space or press Escape outside a map gesture to clear the selection.
-- In **Navigate**, **Select**, or **Move**, right-click an object on the map or in **Hierarchy** to select it and open its menu. Right-clicking an already selected object keeps the current selection. Choose **Move selection** to enter **Move** from Navigate or Select. In Move, the command closes the menu and keeps the current mode and selection. Drag any selected object to move the selection together. The preview marks objects that will leave an Orbit. Releasing applies the move in one step, and one **Undo** restores the previous arrangement.
-- A planned toolbar command will let you enter multiple selection and toggle objects by tap or keyboard activation. The planned flow then switches to **Move** to reposition the selection together.
-- Use **Search** from either map context to find the current Jump Cluster or any star system by name, or an object in any system by name or Location key. Choosing an object frames its hosted Orbit branch. Existing draft guards still apply.
-- Choose **Edit** to make changes, then **Apply** or **Discard**. From a system's cluster inspector, **Open system** enters its map without changing tools. Deletions show their consequences before confirmation; the last system cannot be deleted.
-- Open **Fields** to manage reusable definitions. Use **Map files** for JSON import/export and clean SVG/PNG images, with an optional light print palette.
-- In **Hierarchy**, choose **Open Jump Cluster details**, then choose **Edit** in **Inspect** to set the independent **Player-facing title** and how players see the selected system. The visibility options are Hidden, Unknown presence, Known type, and Revealed. New systems start as Known type, and systems from older maps start Hidden.
-- Object editing offers the same four publication modes. New objects start as Known type; legacy objects start Hidden. Publication changes preserve their source content and geometry.
-- Change system or object visibility directly with the four icon buttons in **Inspect**, or choose **Change Visibility** in the menu opened from a Hierarchy row or a map context menu. Right-drag still pans the map. Map and Hierarchy badges show the configured setting; a lock identifies objects whose parent system is not Revealed. Required Hidden Orbit hosts may still appear anonymously in the player preview. Quick changes use the usual draft decisions, saving and Undo/Redo. Administrative badges are excluded from image exports.
-- Object editing separates **Player text** from private **GM notes**. In **Fields**, choose **Share with players** for native or custom definitions; an object can additionally hide an individual value. Only Revealed objects publish their player text and permitted, applicable Field values. Other selection options remain private.
-- Jump Route editing offers **Share with players** independently of its Jump Points. A shared route needs at least one visible system; a Hidden endpoint appears as an unknown destination at its exact map position. Pan, zoom and Fit in the player preview keep distant destinations inspectable. Source route resolution remains unchanged. A physical Station association appears only when both objects are Revealed.
-- **Preview player view** shows committed player-visible content in a Warden-side dialog. Only Revealed systems open their internal player map. Required secret Orbit hosts appear anonymously, while unrelated hidden objects stay absent. The preview includes only permitted text, values, routes and associations. GM notes, Location keys, private definitions/options and private counts stay excluded.
-- In **Map files**, **Generate player link** creates an immutable snapshot of the whole published cluster. Copy the retained link or select it for manual copying. Anyone with the link can read and copy that snapshot; later edits require generating a new link. Each player tab is independent, and reloading a link restores its snapshot. Ordinary base-site tabs still reopen the saved Warden workspace.
-- Player links contain compressed public data in the URL fragment, without a map service, database or account. The hosted application is still required. The complete URL is limited to 8,192 UTF-8 bytes; this application limit does not guarantee acceptance by every messenger. If the snapshot is too large or native compression is unavailable, use **Export player JSON**. **Open player JSON** opens the standalone reader in another tab; recipients can also visit `/player` and choose the file. A file stays in that tab's memory and must be reopened after reload. Invalid links show an error and offer the JSON reader.
-- **Export player SVG** and **Export player PNG** download the current public map with the active or light print palette. Internal system images require a Revealed system with visible objects. Empty shares and images without public features are refused. Complete Warden backup and image actions remain available separately.
+- Use the map tools **Select**, **Move**, and **Add**. Use the mouse wheel or pinch to zoom between the Jump Cluster overview and system detail; drag empty map space with one finger or right-drag with a mouse to pan. **Fit map** shows the whole Cluster; **Center selection** frames an inspected system, object, Orbit, or Jump Route. Select a system or map item to inspect it on the same canvas.
+- In **Select**, click or tap an item to inspect it. On touch, long-press an object to toggle it in or out of the group selection. On desktop, Shift-, Ctrl-, or Cmd-click toggles an object; drag from empty map space to select objects in a rectangle. In **Move**, drag a selected object to move the group together. A group can span systems. Right-click a map or Hierarchy item, or focus it and press Shift+F10 or the Context Menu key, to open its context menu; use **Change Visibility** or **Delete** there, choose **Move selection** to move a group, and use **Edit** in Inspect for details.
+- Use **Hierarchy** to browse systems and objects, **Inspect** for the current selection, and **Search** to find the Jump Cluster, a system, or an object in the current workspace. Search matches object names and Location keys. Choose a result to reveal it on the continuous map. Press Ctrl+K or Cmd+K to open Search.
+- In Inspect, choose **Apply changes** or **Discard** to complete an edit. Deletions show their consequences before confirmation. Use **Undo** and **Redo** for applied changes.
+- Open **Fields** to manage reusable field definitions. The map filters and Search filters can narrow objects by type, publication, and field values.
+
+### Map files
+
+**Map files** groups file and image actions into **Download or back up**, **Import or restore**, **Export an image**, and **Share with players**.
+
+- Download or back up the private Jump Cluster or selected Star System as JSON, or use a configured cloud backup provider. Import a Star System as a reviewed copy, or restore a complete Jump Cluster backup after review.
+- Warden images can export as PNG or SVG with the active palette or a light print palette. Choose **Entire Cluster**, **Selected system**, or **Current viewport** for the image area. Use **Export a system…** to filter by name and choose a Star System for Warden image export. Warden images include private map content.
+- Player images export only published content. In the player preview and standalone reader, **Map files** offers the same image areas when available for the current public document. A selected-system image is available only for a Revealed system.
+- **Share with players** opens the player preview, exports player JSON, opens the standalone reader, or generates a player link. A player link is an immutable snapshot of the published Jump Cluster; generate a new link to share later edits.
+
+### Publishing
+
+Set each system and object to **Hidden**, **Unknown presence**, **Known type**, or **Revealed**. Object publication is independent of system visibility. Edit **Player text** separately from private **GM notes**; choose which fields and individual values players can see. Share Jump Routes independently from the systems they connect. The preview and reader contain only published text, values, and relationships; private notes, Location keys, and Warden-only data stay out of player files and images.
+
+A player link contains compressed public data in its URL fragment and does not require an account or map service. The hosted application is still required. The complete URL is limited to 8,192 UTF-8 bytes, which may exceed some messengers' limits. If a link is too large or compression is unavailable, export **player JSON** instead. Open a file in the standalone reader, or visit `/player` and choose the file. A file stays in that tab's memory and must be reopened after reload; reloading a generated link restores its snapshot.
 
 ## Local data
 
-Applied changes are saved automatically in IndexedDB, separately for each browser profile and site origin. A last-valid snapshot supports recovery when the current workspace cannot load. Failed saves offer retry and JSON recovery actions. Unapplied drafts and temporary pan/zoom are session state. Clearing browser site data can erase the local workspace.
+Applied changes save automatically in IndexedDB, separately for each browser profile and site origin. The app keeps a last-valid snapshot for recovery if the current workspace cannot load. Unapplied drafts and map view state are temporary. Clearing browser site data can erase the local workspace.
 
-Export the Jump Cluster JSON to keep a complete backup, or explicitly back it up to Google Drive or Dropbox when configured. From the app, open a complete local JSON backup or restore a dated cloud backup. In the editor, the replacement review names both maps and offers a download of the active map before you confirm. Use **Restore a Star System** to append a standalone system to the active Jump Cluster.
+Complete Jump Cluster backups contain editable Warden data. Current complete Cluster exports use format version 5; standalone Star System exports use version 4. Supported earlier backup versions remain importable. Player JSON uses a separate public document format, and player links contain a snapshot of that public document.
 
-See [Google Drive setup](docs/google-drive-backups.md) and [Dropbox setup](docs/dropbox-setup.md) for provider configuration, retention, and live verification.
-
-New complete JSON backups use source format version 4 and retain publication settings, player text, GM notes, Field masks, and all preparation data. Version 1 backups initialize system and object publication as Hidden. Version 2 backups preserve system settings and initialize legacy objects as Hidden. Version 3 backups preserve system and object visibility. Earlier formats initialize player text as empty and Fields and routes as private. Standalone system imports check native and custom Field publication compatibility before adding the system.
+See [Google Drive setup](docs/google-drive-backups.md) and [Dropbox setup](docs/dropbox-setup.md) for provider configuration and backup behavior.
 
 ## Development
 

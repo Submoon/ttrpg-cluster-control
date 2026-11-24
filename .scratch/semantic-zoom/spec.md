@@ -1,6 +1,6 @@
 ---
 title: Unified map with stable semantic zoom
-status: open
+status: closed
 triage_labels:
   - enhancement
   - ready-for-agent
@@ -190,17 +190,15 @@ Prefer the highest existing seam that observes the contract directly and reliabl
 Count stars among the objects. Include dense and sparse neighbors, overlapping envelopes, multiple detailed systems, distant geometry, routes, and a five-link Orbit branch. Record Orbit, route and object distribution. Use the Warden, preview, and reader with their applicable versions of both scenes.
 
 - Aim for **60 frames per second** during sustained pan and zoom on a typical laptop and a mid-range smartphone in both scenes. Movement remains regular, with **no visible freeze longer than 100 ms** during a gesture. Visible click or tap selection feedback arrives in **under 100 ms**, and semantic detail settles in **under 200 ms** after zoom input ends. The camera responds during the gesture.
-- Use mouse/wheel and trackpad on the laptop, and one-finger pan and two-finger pinch on a physical phone. Record device, browser version, viewport, refresh rate, and the visible object, Orbit and label counts for each tested camera segment. Measure after scene admission and initial render. Cover first reveal, repeated threshold crossings, neighboring systems, and sustained movement. Record frame intervals, observed pacing, longest pauses, selection latency and settling time. Record initial load separately if measured.
+- For web qualification, use mouse and wheel input in the selected desktop browsers. Record browser version, viewport, refresh estimate, scene, surface, visible object/Orbit/label counts, frame intervals, longest pauses, selection latency and detail settling. Measure after scene admission and initial render; cover first reveal, repeated threshold crossings, neighboring systems, and sustained movement. Record initial load separately if measured.
+- Future device qualification should use a laptop trackpad and one-finger pan and two-finger pinch on a physical phone. Record device, browser version, viewport, refresh rate, and visible object, Orbit and label counts for each tested camera segment; use the same scenes and interaction targets above.
 - The [prototype evidence](prototype-evaluation.md) supports the interaction choice. For ticket 21's closeout on 2026-11-24, the user waived physical-mobile acceptance and chose web-only qualification. [Ticket 21](tickets/21-qualify-semantic-zoom-performance.md) records the desktop browser results and remaining misses; no physical-phone or trackpad result is claimed. This waiver does not change the performance targets above.
 
 ## Out of Scope
 
 - Inter-system objects and ships in transit, tracked in [Place and manage inter-system objects, including ships on Jump Routes](https://github.com/Submoon/ttrpg-cluster-control/issues/60).
 - Planet surface maps, station interiors, political overlays, and individual system scaling.
-- Production implementation and the implementation ticket breakdown during this specification step.
 
-## Further Notes
+## Resolution
 
-- The exact common drawing scale, envelope margin, minimum footprint, reveal thresholds, label placement and transition duration are tunable implementation parameters. Select them against the confirmed semantics and performance checks. Prototype values and its old individual-scaling experiment are evaluation evidence.
-- Choose the necessary format versions and migration adapters during implementation planning. Keep editable and published formats separate, and use the existing restore, history and disclosure boundaries. Preserve supported legacy data subject to the confirmed same-system route cleanup.
-- The next planning step is to slice this specification into implementation tickets with dependency ordering and acceptance scenarios. The [Wayfinder map](map.md) retains the source of each decision.
+The continuous map is active in all three product views. [Activation and integrated verification](tickets/22-activate-and-qualify-unified-map.md) records the delivered revision and CI results. The [Wayfinder map](map.md) retains the product decisions.
