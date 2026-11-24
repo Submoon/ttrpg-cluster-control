@@ -371,3 +371,43 @@ test('continuous Orbit resize rolls back on Escape and accepts the next pointer 
     return focused === element || (element.contains(focused) && focused?.classList.contains('continuous-warden-name-target'))
   })).toBe(true)
 })
+
+test('detail collapse leaves focus with a control that takes it during the update', async ({ page }) => {
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+    viewport: { width: 1440, height: 960 },
+  })
+  const map = wardenMap(page)
+  const object = wardenObjectMark(page, systemId, primaryObjectId)
+  const inspector = page.getByRole('button', { name: 'Inspect', exact: true })
+  await object.focus()
+  await expect(object).toBeFocused()
+
+  const mark = await object.elementHandle()
+  const control = await inspector.elementHandle()
+  const probe = await map.evaluateHandle((element, { mark, control }) => {
+    const state = { transferred: false }
+    // Take focus during the DOM update, before the deferred map fallback can run.
+    const observer = new MutationObserver(() => {
+      if (mark.isConnected && !mark.closest('[inert], [aria-hidden="true"]')) return
+      control.focus({ preventScroll: true })
+      state.transferred = document.activeElement === control
+      observer.disconnect()
+    })
+    observer.observe(element, { childList: true, subtree: true, attributeFilter: ['aria-hidden', 'inert'] })
+    return { state, observer }
+  }, { mark, control })
+  try {
+    const bounds = await map.boundingBox()
+    if (!bounds) throw new Error('The continuous map is not visible.')
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+    await page.mouse.wheel(0, 1800)
+    await expect(object).toHaveCount(0)
+    expect(await probe.evaluate(({ state }) => state.transferred)).toBe(true)
+    await expect(inspector).toBeFocused()
+  } finally {
+    await probe.evaluate(({ observer }) => observer.disconnect())
+    await probe.dispose()
+    await mark.dispose()
+    await control.dispose()
+  }
+})

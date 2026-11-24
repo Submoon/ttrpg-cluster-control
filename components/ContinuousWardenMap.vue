@@ -545,6 +545,7 @@ import {
 } from '../utils/continuous-map-history-reveal'
 import type { ClientRectBounds } from '../utils/map-usable-area'
 import { createMapTouchNavigation } from './maps/map-touch-navigation'
+import { useWardenMapDom } from './maps/useWardenMapDom'
 import type { MapImageExportOptions, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import { mapImageContextKey, type MapImageScope } from '../utils/map-image-scope'
 import { exportContinuousWardenMapImage } from '../utils/continuous-warden-image-export'
@@ -650,6 +651,22 @@ const emit = defineEmits<{
 }>()
 
 const svgElement = ref<SVGSVGElement | null>(null)
+const mapDom = useWardenMapDom({
+  getRoot: () => svgElement.value,
+  getUsableClientRect: () => props.getUsableClientRect?.(),
+})
+const {
+  systemIdAtTarget,
+  objectTargetAtTarget,
+  orbitTargetAtTarget,
+  orbitEditTargetAtTarget,
+  routeIdAtTarget,
+  systemFrameResizeTarget,
+  isExitMarkerTarget,
+  focusMap,
+  focusedDetailSystemId,
+  preserveFocusBeforeDetailCollapse,
+} = mapDom
 const haloGradientId = `continuous-warden-halo-${useId()}`
 const routeLayer = ref<InstanceType<typeof ContinuousMapRouteLayer> | null>(null)
 const viewport = ref<MapViewport>({ x: 0, y: 0, k: 1 })
@@ -690,7 +707,6 @@ let pendingWheelZoom: {
 } | null = null
 let cameraInitialized = false
 let searchInteractionGeneration = 0
-let focusFallbackGeneration = 0
 let viewPan: { transform: MapViewport; start: [number, number] } | null = null
 interface ActiveObjectDrag {
   systemId: string
@@ -1246,29 +1262,9 @@ function detailSystemIntersectsViewport(projection: ContinuousWardenSystemProjec
     && screenBounds.top <= viewportRect.y + viewportRect.height + overscan
 }
 
-function focusedDetailSystemId(): string | null {
-  if (typeof document === 'undefined' || typeof Element === 'undefined') return null
-  const focused = document.activeElement
-  if (!(focused instanceof Element)) return null
-  return focused.closest<SVGElement>(
-    '.continuous-warden-object[data-system-id], .continuous-warden-orbit-target[data-system-id], .continuous-warden-orbit-edit-handle[data-system-id]',
-  )?.getAttribute('data-system-id') ?? null
-}
-
 function hasPositiveFrame(frame: SvgViewportRect | undefined): frame is SvgViewportRect {
   return !!frame && Number.isFinite(frame.width) && Number.isFinite(frame.height)
     && frame.width > 0 && frame.height > 0
-}
-
-function systemFrameResizeTarget(target: EventTarget | null): { systemId: string; corner: ActiveSystemFrameResize['corner'] } | null {
-  if (!(target instanceof Element)) return null
-  const button = target.closest<HTMLButtonElement>('button[data-system-resize-handle][data-system-id]')
-  const systemId = button?.getAttribute('data-system-id')
-  const corner = button?.getAttribute('data-system-resize-handle')
-  if (!systemId || (corner !== 'top-left' && corner !== 'top-right' && corner !== 'bottom-left' && corner !== 'bottom-right')) {
-    return null
-  }
-  return { systemId, corner }
 }
 
 function startSystemFrameResize(
@@ -1709,35 +1705,6 @@ function updateDetailReveal(cameraScale: number): void {
     preserveFocusBeforeDetailCollapse(next)
     detailSystemIds.value = next
   }
-}
-
-function preserveFocusBeforeDetailCollapse(nextDetailSystemIds: ReadonlySet<string>): void {
-  if (typeof document === 'undefined' || typeof Element === 'undefined') return
-  const focusedMark = document.activeElement
-  if (!(focusedMark instanceof Element)) return
-  const focusedEntity = focusedMark.closest<SVGElement>(
-    '.continuous-warden-object[data-system-id], .continuous-warden-orbit-target[data-system-id], .continuous-warden-orbit-edit-handle[data-system-id]',
-  )
-  const systemId = focusedEntity?.getAttribute('data-system-id')
-  if (!focusedEntity || !systemId || nextDetailSystemIds.has(systemId)) return
-  const capturedGeneration = ++focusFallbackGeneration
-  void nextTick(() => {
-    if (capturedGeneration !== focusFallbackGeneration
-      || (focusedEntity.isConnected && !focusedEntity.closest('[inert], [aria-hidden="true"]'))) return
-    const currentFocus = document.activeElement
-    if (currentFocus !== document.body && currentFocus !== svgElement.value && currentFocus !== focusedMark) return
-    const visibleName = [...(svgElement.value?.querySelectorAll<SVGElement>('.continuous-warden-name-target[data-system-id]') ?? [])]
-      .find((candidate) => {
-        if (candidate.getAttribute('data-system-id') !== systemId || candidate.getClientRects().length === 0) return false
-        const usable = props.getUsableClientRect?.()
-        if (!usable) return false
-        const bounds = candidate.getBoundingClientRect()
-        return bounds.left >= usable.left && bounds.top >= usable.top
-          && bounds.right <= usable.right && bounds.bottom <= usable.bottom
-      })
-    if (visibleName) visibleName.focus({ preventScroll: true })
-    else focusMap()
-  })
 }
 
 function updateSvgPixelScale(): void {
@@ -2351,8 +2318,6 @@ function panBy(dx: number, dy: number): void {
   setViewport({ ...current, x: current.x + dx, y: current.y + dy })
 }
 
-function focusMap(): void { svgElement.value?.focus({ preventScroll: true }) }
-
 function startViewPan(event: MouseEvent): void {
   const element = svgElement.value
   if (!element || !zoomBehavior) return
@@ -2388,20 +2353,6 @@ function cameraPointAt(event: { clientX: number; clientY: number }, camera: MapV
   return { x: (x - camera.x) / camera.k, y: (y - camera.y) / camera.k }
 }
 
-function systemIdAtTarget(target: EventTarget | null): string | null {
-  if (!(target instanceof Element)) return null
-  const mark = target.closest<SVGElement>('.cluster-system-node[data-system-id]')
-  return mark?.getAttribute('data-system-id') ?? null
-}
-
-function objectTargetAtTarget(target: EventTarget | null): { systemId: string; objectId: string } | null {
-  if (!(target instanceof Element)) return null
-  const mark = target.closest<SVGElement>('.continuous-warden-object[data-system-id][data-object-id]')
-  const systemId = mark?.getAttribute('data-system-id')
-  const objectId = mark?.getAttribute('data-object-id')
-  return systemId && objectId ? { systemId, objectId } : null
-}
-
 function canMoveObjectInSystem(target: { systemId: string; objectId: string }): boolean {
   const system = props.cluster.systems.find(candidate => candidate.id === target.systemId)
   const object = system?.objects.find(candidate => candidate.id === target.objectId)
@@ -2415,22 +2366,6 @@ function canMoveObjectInSystem(target: { systemId: string; objectId: string }): 
   })
 }
 
-function orbitTargetAtTarget(target: EventTarget | null): { systemId: string; orbitId: string } | null {
-  if (!(target instanceof Element)) return null
-  const mark = target.closest<SVGElement>(
-    '.continuous-warden-orbit-target[data-system-id][data-orbit-id], .continuous-warden-orbit-hit-target[data-system-id][data-orbit-id], '
-    + '.continuous-warden-orbit-visible-arc[data-system-id][data-orbit-id], .continuous-warden-orbit-edit-handle[data-system-id][data-orbit-id]',
-  )
-  const systemId = mark?.getAttribute('data-system-id')
-  const orbitId = mark?.getAttribute('data-orbit-id')
-  return systemId && orbitId ? { systemId, orbitId } : null
-}
-
-function routeIdAtTarget(target: EventTarget | null): string | null {
-  if (!(target instanceof Element)) return null
-  return target.closest('.cluster-route[data-route-id]')?.getAttribute('data-route-id') ?? null
-}
-
 function orbitEditCommand(target: OrbitEditTarget): EntityCommand {
   return target.kind === 'center'
     ? { kind: 'orbit-center-position', orbitId: target.orbitId }
@@ -2442,7 +2377,7 @@ function moveTargetAtPoint(event: PointerEvent, element: SVGSVGElement | null): 
   const hits = element.ownerDocument.elementsFromPoint(event.clientX, event.clientY)
     .filter(hit => hit === element || element.contains(hit))
   const orderedHits = hits.length ? hits : [event.target]
-  if (event.target instanceof Element && event.target.closest('.cluster-exit-hit-target, .cluster-exit-mark')) {
+  if (isExitMarkerTarget(event.target)) {
     const routeId = routeIdAtTarget(event.target)
     const isUnresolved = (routes: readonly JumpRoute[]) =>
       routes.some(route => route.id === routeId && route.toSystemId === null)
@@ -2789,35 +2724,6 @@ function updateObjectMovePreview(drag: ActiveObjectDrag, scenePoint: Point): voi
     })
     : null
   elasticPlacementPreview.value = elastic ? { ...elastic, systemId: drag.systemId } : null
-}
-
-function orbitEditTargetAtTarget(target: EventTarget | null): {
-  systemId: string
-  orbitId: string
-  kind: 'resize' | 'rotation' | 'center'
-  axis: 'global' | 'horizontal' | 'vertical'
-} | null {
-  if (!(target instanceof Element)) return null
-  const handle = target.closest<SVGElement>('.continuous-warden-orbit-edit-handle[data-system-id][data-orbit-id]')
-  const handleSystemId = handle?.getAttribute('data-system-id')
-  const handleOrbitId = handle?.getAttribute('data-orbit-id')
-  if (handle && handleSystemId && handleOrbitId) {
-    const kind = handle.getAttribute('data-orbit-edit-kind')
-    if (kind === 'rotation' || kind === 'center') {
-      return { systemId: handleSystemId, orbitId: handleOrbitId, kind, axis: 'global' }
-    }
-    if (kind === 'resize') {
-      const axis = handle.getAttribute('data-resize-axis')
-      return {
-        systemId: handleSystemId,
-        orbitId: handleOrbitId,
-        kind,
-        axis: axis === 'horizontal' || axis === 'vertical' ? axis : 'global',
-      }
-    }
-  }
-  const orbit = orbitTargetAtTarget(target)
-  return orbit ? { ...orbit, kind: 'resize', axis: 'global' } : null
 }
 
 function orbitGestureLocalPoint(gesture: OrbitGestureBase, event: PointerEvent): Point | null {
@@ -3799,14 +3705,7 @@ function onClickCapture(event: MouseEvent): void {
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
-    if (event.target instanceof SVGPathElement
-      && event.target.matches('.continuous-warden-orbit-visible-arc, .continuous-warden-orbit-hit-target')) {
-      const systemId = CSS.escape(orbitTarget.systemId)
-      const orbitId = CSS.escape(orbitTarget.orbitId)
-      svgElement.value?.querySelector<SVGElement>(
-        `.continuous-warden-orbit-target[data-system-id="${systemId}"][data-orbit-id="${orbitId}"]`,
-      )?.focus({ preventScroll: true })
-    }
+    mapDom.focusOrbitFromPath(event.target, orbitTarget)
     emit('select-orbit', orbitTarget.systemId, orbitTarget.orbitId)
     return
   }
