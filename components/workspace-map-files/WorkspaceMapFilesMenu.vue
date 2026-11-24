@@ -167,7 +167,7 @@ const generatedWorkspaceId = ref(props.generatedPlayerUrl ? props.workspaceId : 
 const dropdownContent = computed(() => ({
   align: 'end' as const,
   collisionPadding: 8,
-  onCloseAutoFocus: closeFocus.settleClosingFocus,
+  onCloseAutoFocus: restoreMapFilesFocus,
 }))
 const canViewGeneratedLink = computed(() => Boolean(props.generatedPlayerUrl)
   && generatedWorkspaceId.value === props.workspaceId)
@@ -422,6 +422,12 @@ function triggerElement(): HTMLElement | null {
 
 function focusTrigger(): void {
   triggerElement()?.focus({ preventScroll: true })
+}
+
+function restoreMapFilesFocus(event: Event): void {
+  event.preventDefault()
+  if (hasMapFilesFocusOwnership()) focusTrigger()
+  closeFocus.settleClosingFocus()
 }
 
 function ownedMenu(owner: Element | null | undefined): HTMLElement | null {

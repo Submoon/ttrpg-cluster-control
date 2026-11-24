@@ -777,7 +777,7 @@ test('a stale import capacity answer cannot publish into a replacement workspace
   }
 })
 
-test('reviewed system deletion restores the same cascade through the editor Undo and Redo commands', async ({ page }) => {
+test('reviewed system deletion restores the same cascade through the editor Undo and Redo commands', async ({ page }, testInfo) => {
   test.setTimeout(60_000)
   await captureMapExportBlobs(page)
   await createSingleSystemWorkspace(page)
@@ -797,8 +797,35 @@ test('reviewed system deletion restores the same cascade through the editor Undo
   await expect.poll(() => menu.evaluate(element => element.contains(document.activeElement))).toBe(true)
   await page.keyboard.press('End')
   await expect(deletion).toBeFocused()
-  await deletion.press('Enter')
-  await expect(confirm).toBeFocused()
+  const handoff = await page.evaluateHandle(() => {
+    const controller = new AbortController()
+    const events: Array<{ type: string; key?: string; role?: string | null; label?: string | null; time: number }> = []
+    for (const type of ['keydown', 'keyup', 'click', 'focusin', 'focusout', 'scroll']) {
+      window.addEventListener(type, (event) => {
+        if (events.length >= 40) return
+        const control = event.target instanceof Element ? event.target.closest('[role], button') : null
+        events.push({
+          type,
+          key: event instanceof KeyboardEvent ? event.key : undefined,
+          role: control?.getAttribute('role'),
+          label: control?.getAttribute('aria-label') ?? control?.textContent?.trim().slice(0, 50),
+          time: performance.now(),
+        })
+      }, { capture: true, signal: controller.signal })
+    }
+    return { events, controller }
+  })
+  try {
+    await deletion.press('Enter')
+    await expect(confirm).toBeFocused()
+  } catch (error) {
+    const events = await handoff.evaluate(probe => probe.events)
+    await testInfo.attach('Deletion keyboard handoff', { body: JSON.stringify(events, null, 2), contentType: 'application/json' })
+    throw error
+  } finally {
+    await handoff.evaluate(probe => probe.controller.abort())
+    await handoff.dispose()
+  }
 
   // Start a held key on the dialog, then deliver its repeat to the confirm control.
   await review.focus()
