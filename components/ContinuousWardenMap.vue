@@ -149,71 +149,11 @@
                   :transform="orbitPlacementPreviewPaint(projection)?.transform"
                   aria-hidden="true"
                 />
-                <!-- All painted rings take precedence over nearby hit areas. -->
-                <template v-for="{ orbit, geometry, clip } in orbitPaintBySystem.get(projection.id)" :key="`hit-${orbit.id}`">
-                  <ellipse
-                    v-if="clip.kind === 'ellipse'"
-                    class="continuous-warden-orbit-hit-target"
-                    :data-system-id="projection.id"
-                    :data-orbit-id="orbit.id"
-                    :cx="geometry.center.x"
-                    :cy="geometry.center.y"
-                    :rx="geometry.rx"
-                    :ry="geometry.ry"
-                    :transform="geometry.transform"
-                    aria-hidden="true"
-                    focusable="false"
-                  />
-                  <template v-else-if="clip.kind === 'arcs'">
-                    <path
-                      v-for="(arc, arcIndex) in clip.arcs"
-                      :key="`${orbit.id}-hit-${arcIndex}`"
-                      class="continuous-warden-orbit-hit-target"
-                      :data-system-id="projection.id"
-                      :data-orbit-id="orbit.id"
-                      :d="arc.path"
-                      aria-hidden="true"
-                      focusable="false"
-                    />
-                  </template>
-                </template>
-                <template v-for="{ orbit, geometry, clip } in orbitPaintBySystem.get(projection.id)" :key="orbit.id">
-                  <ellipse
-                    class="orbit-ring continuous-warden-orbit-target"
-                    :class="{
-                      'is-selected': isSelectedOrbit(projection.id, orbit.id),
-                      'is-clipped': clip.kind !== 'ellipse',
-                    }"
-                    :data-system-id="projection.id"
-                    :data-orbit-id="orbit.id"
-                    role="button"
-                    tabindex="0"
-                    :aria-label="orbitLabel(projection.id, orbit.id)"
-                    :cx="geometry.center.x"
-                    :cy="geometry.center.y"
-                    :rx="geometry.rx"
-                    :ry="geometry.ry"
-                    :transform="geometry.transform"
-                    @focus="onOrbitTargetFocus(projection.id, orbit.id)"
-                    @blur="onOrbitTargetBlur(projection.id, orbit.id)"
-                  />
-                  <template v-if="clip.kind === 'arcs'">
-                    <path
-                      v-for="(arc, arcIndex) in clip.arcs"
-                      :key="`${orbit.id}-visible-${arcIndex}`"
-                      class="continuous-warden-orbit-visible-arc"
-                      :class="{
-                        'is-selected': isSelectedOrbit(projection.id, orbit.id),
-                        'is-focused': isFocusedOrbit(projection.id, orbit.id),
-                      }"
-                      :data-system-id="projection.id"
-                      :data-orbit-id="orbit.id"
-                      :d="arc.path"
-                      :stroke-dashoffset="arc.dashOffset"
-                      aria-hidden="true"
-                    />
-                  </template>
-                </template>
+                <ContinuousWardenOrbitLayer
+                  :system-id="projection.id"
+                  :marks="orbitPaintBySystem.get(projection.id) ?? EMPTY_ORBIT_PAINT_MARKS"
+                  :selected-orbit-id="selectedOrbitIdForSystem(projection.id)"
+                />
                 <template v-for="orbit in projection.orbits" :key="`${orbit.id}-edit-controls`">
                   <circle
                     v-if="props.mode === 'move' && isSelectedOrbit(projection.id, orbit.id)"
@@ -628,7 +568,9 @@ import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-in
 import type { SelectedObjectDrag, SelectedObjectDragPreview } from '../composables/editor-workflows/selected-object-drag'
 import { useContinuousMapDetailMotion } from '../composables/useContinuousMapDetailMotion'
 import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
+import ContinuousWardenOrbitLayer from './maps/ContinuousWardenOrbitLayer.vue'
 
+const EMPTY_ORBIT_PAINT_MARKS = [] as const
 const SEARCH_LOCATOR_LOCAL_RADIUS = 25
 const SEARCH_LOCATOR_MIN_SCREEN_RADIUS = 10
 const MINIMUM_FIT_PADDING = 48
@@ -730,7 +672,6 @@ const detailMotion = useContinuousMapDetailMotion(detailSystemIds)
 const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
 const svgPixelScale = ref(1)
 const svgViewport = ref<SvgViewportRect>({ x: 0, y: 0, width: 960, height: 560 })
-const focusedOrbit = ref<{ systemId: string; orbitId: string } | null>(null)
 const ready = ref(false)
 const searchLocatorTarget = shallowRef<{ clusterId: string; systemId: string; objectId: string } | null>(null)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
@@ -1568,7 +1509,7 @@ const orbitPaintBySystem = computed(() => new Map(renderedProjections.value
           rotation: orbit.rotation,
         }, svgViewport.value, ORBIT_STROKE_CLIP_OVERSCAN_PIXELS / svgPixelScale.value)
       : { kind: 'ellipse' as const }
-    return { orbit, geometry, clip }
+    return { id: orbit.id, label: orbitLabel(projection.id, orbit.id), geometry, clip }
   })] as const)))
 
 function orbitPlacementPreviewPaint(projection: ContinuousWardenSystemProjection) {
@@ -1732,20 +1673,12 @@ function isSelectedObject(systemId: string, objectId: string): boolean {
 }
 
 function isSelectedOrbit(systemId: string, orbitId: string): boolean {
+  return selectedOrbitIdForSystem(systemId) === orbitId
+}
+
+function selectedOrbitIdForSystem(systemId: string): string | null {
   const target = props.inspectedTarget
-  return target?.kind === 'orbit' && target.systemId === systemId && target.orbitId === orbitId
-}
-
-function isFocusedOrbit(systemId: string, orbitId: string): boolean {
-  return focusedOrbit.value?.systemId === systemId && focusedOrbit.value.orbitId === orbitId
-}
-
-function onOrbitTargetFocus(systemId: string, orbitId: string): void {
-  focusedOrbit.value = { systemId, orbitId }
-}
-
-function onOrbitTargetBlur(systemId: string, orbitId: string): void {
-  if (isFocusedOrbit(systemId, orbitId)) focusedOrbit.value = null
+  return target?.kind === 'orbit' && target.systemId === systemId ? target.orbitId : null
 }
 
 function orbitLabel(systemId: string, orbitId: string): string {
@@ -4674,22 +4607,9 @@ defineExpose({
   pointer-events: none;
 }
 .continuous-warden-system-detail.is-exiting,
-.continuous-warden-system-detail.is-exiting *,
+.continuous-warden-system-detail.is-exiting :deep(*),
 .continuous-warden-system-detail.is-entering,
-.continuous-warden-system-detail.is-entering * { pointer-events: none !important; }
-
-.continuous-warden-system-detail .continuous-warden-orbit-target {
-  pointer-events: stroke;
-  cursor: pointer;
-}
-
-.continuous-warden-system-detail .continuous-warden-orbit-hit-target {
-  fill: none;
-  stroke: transparent;
-  stroke-width: calc(20 * var(--warden-orbit-screen-pixel, 1px));
-  pointer-events: stroke;
-  cursor: pointer;
-}
+.continuous-warden-system-detail.is-entering :deep(*) { pointer-events: none !important; }
 
 .continuous-warden-orbit-edit-handle {
   pointer-events: all;
@@ -4720,32 +4640,6 @@ defineExpose({
   stroke-width: 2;
   stroke-dasharray: 3 6;
   vector-effect: non-scaling-stroke;
-}
-
-/* Live rings are already viewport-projected, so only the root SVG pixel scale needs compensation. */
-.continuous-warden-fixed-paint .continuous-warden-orbit-target {
-  stroke-width: calc(2 * var(--warden-orbit-screen-pixel, 1px));
-  stroke-dasharray: calc(3 * var(--warden-orbit-screen-pixel, 1px)) calc(6 * var(--warden-orbit-screen-pixel, 1px));
-  vector-effect: none;
-}
-
-.continuous-warden-fixed-paint .continuous-warden-orbit-target:is(.is-selected, :focus) {
-  stroke-width: calc(3 * var(--warden-orbit-screen-pixel, 1px));
-}
-
-.continuous-warden-fixed-paint .continuous-warden-orbit-visible-arc {
-  fill: none;
-  stroke: var(--map-orbit);
-  stroke-width: calc(2 * var(--warden-orbit-screen-pixel, 1px));
-  stroke-dasharray: calc(3 * var(--warden-orbit-screen-pixel, 1px)) calc(6 * var(--warden-orbit-screen-pixel, 1px));
-  vector-effect: none;
-  pointer-events: stroke;
-  cursor: pointer;
-}
-
-.continuous-warden-fixed-paint .continuous-warden-orbit-visible-arc:is(.is-selected, .is-focused) {
-  stroke: var(--map-selected);
-  stroke-width: calc(3 * var(--warden-orbit-screen-pixel, 1px));
 }
 
 .continuous-warden-object {
@@ -4861,17 +4755,6 @@ defineExpose({
   stroke-width: 2;
   stroke-dasharray: 2 3;
   vector-effect: non-scaling-stroke;
-  pointer-events: none;
-}
-
-.continuous-warden-orbit-target.is-selected,
-.continuous-warden-orbit-target:focus {
-  stroke: var(--map-selected);
-  stroke-width: 3;
-}
-
-.continuous-warden-orbit-target.is-clipped {
-  stroke: none;
   pointer-events: none;
 }
 

@@ -459,9 +459,17 @@ test('near-ring Warden Orbit targets remain operable at maximum zoom', async ({ 
   const { map, ring, systemId, primaryObjectId } = await createHostedOrbit(page)
   const controls = workspaceZoomControls(page)
   const zoomIn = controls.getByRole('button', { name: 'Zoom in', exact: true })
-  for (let step = 0; step < 18 && await zoomIn.isEnabled(); step++) await zoomIn.click()
-  await expect(controls.locator('output').first()).toHaveText('320%')
-  await expect(map.locator('.continuous-warden-orbit-visible-arc').first()).toBeVisible()
+  await expect(ring).not.toHaveClass(/is-clipped/)
+  const keyboardTarget = await ring.elementHandle()
+  try {
+    for (let step = 0; step < 18 && await zoomIn.isEnabled(); step++) await zoomIn.click()
+    await expect(controls.locator('output').first()).toHaveText('320%')
+    await expect(map.locator('.continuous-warden-orbit-visible-arc').first()).toBeVisible()
+    // Arc paint replaces the visible stroke while the same native ellipse keeps keyboard ownership.
+    expect(await ring.evaluate((element, original) => element === original, keyboardTarget)).toBe(true)
+  } finally {
+    await keyboardTarget.dispose()
+  }
   await expect(map.getByRole('button', { name: 'Select Orbit 1', exact: true })).toHaveCount(1)
 
   await wardenObjectMark(page, systemId, primaryObjectId).press('Enter')
