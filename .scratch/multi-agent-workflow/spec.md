@@ -5,6 +5,8 @@ status: closed
 
 # Project multi-agent development workflow
 
+The repository has retired this workflow. See [AGENTS.md](../../AGENTS.md) for current project guidance.
+
 ## Request and baseline
 
 Configure project-local Codex profiles with the agreed models and reasoning efforts, a ceiling of six subagents, and automatic routing by complexity and risk.
@@ -23,7 +25,7 @@ Fetched origin on 2026-10-15. Implementation intentionally uses the existing `co
 ## Validation
 
 - All six TOML files parsed successfully with Python tomllib; the skill passed skill-creator's quick_validate.py.
-- A temporary local Codex app-server started with --strict-config returned the effective project layer: gpt-6.1-sol / high, agents enabled, and max_concurrent_threads_per_session = 6. Its skills/list API discovered project-development with repository scope and enabled = true. See validate_runtime.py for the read-only protocol check.
+- A temporary local Codex app-server started with --strict-config returned the effective project layer: gpt-6.1-sol / high, agents enabled, and max_concurrent_threads_per_session = 6. Its skills/list API discovered project-development with repository scope and enabled = true.
 - An independent GPT-6.1 Sol / xhigh reviewer evaluated seven routes: trivial edit, localized behavior fix, cross-module domain concept, save migration, sensitive review-only request, constrained runtime, and repeated correction failures. No blocking findings.
 - git diff --check passed. Application tests were not needed for this configuration-only change.
 - The current chat's concurrency limit is unchanged. New sessions load the project settings, subject to runtime limits and explicit session overrides. Native named-profile execution and every configured model were not exercised; the independent review used explicit model/effort dispatch.
