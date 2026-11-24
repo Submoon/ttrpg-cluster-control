@@ -35,6 +35,8 @@ export interface ContinuousMapNameLabelsOptions<T extends ContinuousMapNameProje
   viewportRect: SvgViewportRect
   svgPixelScale: number
   getAnchor?: (projection: T) => Point
+  /** Supplies already measured width in name-font pixels; omitted for the live browser default. */
+  getNameWidthPixels?: (name: string) => number
 }
 
 /** Interpolates a screen-space name from its overview placement to the top-left of its visible frame. */
@@ -292,6 +294,7 @@ export function continuousMapNameLabels<T extends ContinuousMapNameProjection>({
   viewportRect,
   svgPixelScale,
   getAnchor = projection => projection.anchor,
+  getNameWidthPixels = continuousMapSystemNameWidthPixels,
 }: ContinuousMapNameLabelsOptions<T>): ContinuousMapNameLabel[] {
   const scale = svgPixelScale > 0 ? svgPixelScale : 1
   const margin = CONTINUOUS_SYSTEM_NAME_VIEWPORT_MARGIN_PIXELS / scale
@@ -337,7 +340,7 @@ export function continuousMapNameLabels<T extends ContinuousMapNameProjection>({
 
   const scoredPositions: number[] = []
   for (const anchor of anchorPoints) {
-    const widthPixels = systemNameWidthPixels(anchor.name)
+    const widthPixels = getNameWidthPixels(anchor.name)
     const width = widthPixels / scale
     const height = CONTINUOUS_SYSTEM_NAME_HEIGHT_PIXELS / scale
     const placementOffsets = namePlacementOffsets(widthPixels)
@@ -432,7 +435,8 @@ export function continuousMapNameLabels<T extends ContinuousMapNameProjection>({
   return labels
 }
 
-function systemNameWidthPixels(name: string): number {
+/** Uses the existing canvas measurement and text-length fallback for Warden system names. */
+export function continuousMapSystemNameWidthPixels(name: string): number {
   const cached = systemNameWidthPixelsCache.get(name)
   if (cached !== undefined) return cached
   if (textMeasureContext === undefined && typeof document !== 'undefined') {
