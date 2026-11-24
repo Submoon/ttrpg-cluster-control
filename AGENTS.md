@@ -8,7 +8,6 @@ Before GitHub-driven analysis or implementation, fetch `origin` and compare with
 
 ## References
 
-- Development and review: the coordinator follows `.agents/skills/project-development/SKILL.md`; delegated specialists execute only their assigned scope.
 - Source changes and review: read `docs/agents/conventions.md`.
 - Test changes: read [verification guidance](docs/agents/testing.md) when writing or reviewing tests.
 - Editor state, commands, persistence or map integration: read `docs/architecture/editor.md`.

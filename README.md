@@ -50,7 +50,7 @@ npm run dev
 
 Run `npm run lint` and `npm run typecheck` for source checks. Install Chromium with `npx playwright install chromium` before running browser tests. See [verification guidance](docs/agents/testing.md) for focused commands, runner variables, and CI artifacts.
 
-Technical references: [editor architecture](docs/architecture/editor.md), [source conventions](docs/agents/conventions.md), and [UI guidance](docs/agents/ui.md). Agent coordination follows [the development workflow](.agents/skills/project-development/SKILL.md).
+Technical references: [editor architecture](docs/architecture/editor.md), [source conventions](docs/agents/conventions.md), and [UI guidance](docs/agents/ui.md).
 
 ## License
 
