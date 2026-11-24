@@ -261,7 +261,10 @@ test('releasing an object drag over disabled history chrome cancels cleanly and 
   if (!createdPlanet) throw new Error('The added Planet is missing from the same owner.')
   expect(createdPlanet.placement).toEqual({ kind: 'orbit', orbitId })
   const planet = wardenObjectMark(page, systemId, createdPlanet.id)
-  await planet.press('Enter')
+  await planet.and(map.getByRole('button', {
+    name: `Select ${createdPlanet.locationKey}, ${createdPlanet.name}`,
+    exact: true,
+  })).click()
   await editMapObject(page)
   await page.getByLabel('Name', { exact: true }).fill('Iria')
   await saveMapObject(page)

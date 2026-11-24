@@ -4,6 +4,9 @@ import {
   createSingleSystemWorkspace,
   downloadJson,
   dockAction,
+  hideWorkspaceInspector,
+  waitForWorkspaceSaved,
+  waitForWorkspaceStartup,
   wardenMap,
   workspaceNavigation,
   workspaceZoomControls,
@@ -159,8 +162,10 @@ test('Add System places two systems at targeted cluster points and reloads their
   const firstCreatedId = createdIds[0]!
   const secondCreatedId = createdIds[1]!
 
+  await waitForWorkspaceSaved(page)
   await page.reload()
-  if (await inspector.isVisible()) await inspectToggle.click()
+  await waitForWorkspaceStartup(page)
+  await hideWorkspaceInspector(page)
   await expect(inspector).toBeHidden()
   await expect(clusterMap).toBeVisible()
   const afterReload = await downloadJson(page, 'Export Jump Cluster JSON')

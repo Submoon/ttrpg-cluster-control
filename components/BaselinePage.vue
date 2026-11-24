@@ -639,6 +639,7 @@
           </template>
         </MapEditorLayout>
         <PublicationContextMenu
+          ref="publicationContextMenu"
           :request="publicationMenuRequest"
           :current-mode="publicationMenuMode"
           :route-shared="publicationMenuRouteShared"
@@ -1077,6 +1078,9 @@ watch(
 )
 const publicationControls = workflows.publication
 const publicationMenuRequest = publicationControls.menuRequest
+const publicationContextMenu = ref<{ whenClosingFocusSettled: () => Promise<void> } | null>(null)
+let publicationMenuRevision = 0
+watch(publicationMenuRequest, () => { publicationMenuRevision += 1 }, { flush: 'sync' })
 const publicationBusy = publicationControls.busy
 const setRouteSharing = publicationControls.setRouteSharing
 const publicationMenuRouteShared = computed(() => {
@@ -1194,22 +1198,40 @@ async function editEntityFromMenu(): Promise<void> {
   }
 }
 
-function deleteEntityFromMenu(): void {
-  const target = publicationMenuRequest.value?.target
+async function deleteEntityFromMenu(): Promise<void> {
+  const request = publicationMenuRequest.value
+  const current = workspace.value
+  if (!request || !current || deletionReview.value) {
+    publicationControls.closeMenu()
+    return
+  }
+
+  const target = { ...request.target }
+  const workspaceId = current.id
+  const clusterId = current.cluster.id
+  const menuRevision = publicationMenuRevision
   publicationControls.closeMenu()
-  if (!target) return
+
+  await nextTick()
+  await publicationContextMenu.value?.whenClosingFocusSettled()
+  await nextTick()
+
+  if (publicationMenuRevision !== menuRevision + 1 || publicationMenuRequest.value !== null
+    || workspace.value !== current || workspace.value?.id !== workspaceId
+    || workspace.value.cluster.id !== clusterId || deletionReview.value !== null) return
+
   switch (target.kind) {
     case 'system':
-      void openDeletionReview({ kind: 'system', systemId: target.id })
+      await openDeletionReview({ kind: 'system', systemId: target.id })
       break
     case 'object':
-      void openDeletionReview({ kind: 'object', systemId: target.systemId, objectId: target.id })
+      await openDeletionReview({ kind: 'object', systemId: target.systemId, objectId: target.id })
       break
     case 'orbit':
-      void openDeletionReview({ kind: 'orbit', systemId: target.systemId, orbitId: target.id })
+      await openDeletionReview({ kind: 'orbit', systemId: target.systemId, orbitId: target.id })
       break
     case 'route':
-      void openDeletionReview({ kind: 'route', routeId: target.id })
+      await openDeletionReview({ kind: 'route', routeId: target.id })
       break
   }
 }

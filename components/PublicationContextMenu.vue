@@ -17,9 +17,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, shallowRef, watch } from 'vue'
+import { computed, nextTick, shallowRef, watch } from 'vue'
 import type { PublicationMode } from '../domain/workspace'
 import type { PublicationMenuView } from '../composables/editor-workflows/publication-types'
+import { useDialogCloseFocusBarrier } from '../composables/useDialogCloseFocusBarrier'
 import { publicationModes, publicationPresentation } from '../utils/publication-presentation'
 
 const props = defineProps<{
@@ -41,6 +42,10 @@ const emit = defineEmits<{
   'move-selection': []
   dismiss: []
 }>()
+
+const closeFocus = useDialogCloseFocusBarrier(computed(() => props.request !== null))
+
+defineExpose({ whenClosingFocusSettled: closeFocus.whenClosingFocusSettled })
 
 const virtualAnchor = computed(() => ({
   getBoundingClientRect() {
@@ -142,10 +147,15 @@ function onOpenChange(open: boolean): void {
   if (!open) emit('dismiss')
 }
 
-function onCloseAutoFocus(event: Event): void {
+async function onCloseAutoFocus(event: Event): Promise<void> {
   event.preventDefault()
   const content = event.target instanceof Element ? event.target : null
   const request = content ? requestByContent.get(content) : null
-  if (request) void request.restoreFocus(content)
+  try {
+    if (request) await request.restoreFocus(content)
+  } finally {
+    await nextTick()
+    closeFocus.settleClosingFocus()
+  }
 }
 </script>
