@@ -375,6 +375,8 @@ const props = withDefaults(defineProps<{
 
 type RevealedSystem = Extract<PlayerSystemMarker, { disclosure: 'revealed' }>
 type FocusTarget = HTMLElement | SVGElement
+const PUBLIC_LAYOUT_OBSTRUCTION_SELECTOR = '[data-map-obstruction], [data-player-map-obstruction]'
+const PUBLIC_LAYOUT_VISIBILITY_ATTRIBUTES = new Set(['class', 'style', 'hidden', 'inert', 'aria-hidden'])
 interface PlayerMapHandle {
   revealTarget(target: PlayerInspectionTarget, expectedDocument: PlayerSystemDocument): boolean
   captureImageViewport(expectedDocument: PlayerClusterDocument): PlayerImageViewportSnapshot | null
@@ -492,6 +494,7 @@ const usableRectReader = computed<PlayerUsableRectReader>(() => {
 let compactMedia: MediaQueryList | null = null
 let layoutResizeObserver: ResizeObserver | null = null
 let layoutMutationObserver: MutationObserver | null = null
+const observedLayoutObstructions = new Set<HTMLElement>()
 let requestNonce = 0
 let searchOpening = 0
 let mapVisit = 0
@@ -510,6 +513,7 @@ onBeforeUnmount(() => {
   invalidatePendingReveal()
   compactMedia?.removeEventListener('change', updateCompactViewport)
   layoutResizeObserver?.disconnect()
+  observedLayoutObstructions.clear()
   layoutMutationObserver?.disconnect()
 })
 
@@ -568,19 +572,68 @@ function observePublicLayout(): void {
   if (!root || typeof ResizeObserver === 'undefined' || typeof MutationObserver === 'undefined') return
   layoutResizeObserver = new ResizeObserver(publicLayoutChanged)
   layoutResizeObserver.observe(root)
+  refreshObservedLayoutObstructions(root)
   layoutMutationObserver = new MutationObserver((records) => {
     // The map owns its SVG paint. Panel and wrapper changes still invalidate the usable area.
     const map = root.querySelector('svg.player-continuous-map-scene')
-    if (!map || records.some(record => !map.contains(record.target)
-      || record.attributeName === 'data-map-obstruction'
-      || record.attributeName === 'data-player-map-obstruction')) publicLayoutChanged()
+    if (!records.some(record => affectsPublicLayout(record, root, map))) return
+    refreshObservedLayoutObstructions(root)
+    publicLayoutChanged()
   })
   layoutMutationObserver.observe(root, {
     attributes: true,
-    attributeFilter: ['class', 'style', 'hidden', 'inert', 'data-map-obstruction', 'data-player-map-obstruction'],
+    attributeFilter: [
+      ...PUBLIC_LAYOUT_VISIBILITY_ATTRIBUTES,
+      'data-map-obstruction',
+      'data-player-map-obstruction',
+    ],
     childList: true,
     subtree: true,
   })
+}
+
+function refreshObservedLayoutObstructions(root: HTMLElement): void {
+  const current = new Set(root.querySelectorAll<HTMLElement>(PUBLIC_LAYOUT_OBSTRUCTION_SELECTOR))
+  if (root.matches(PUBLIC_LAYOUT_OBSTRUCTION_SELECTOR)) current.add(root)
+  for (const obstruction of observedLayoutObstructions) {
+    if (current.has(obstruction)) continue
+    layoutResizeObserver?.unobserve(obstruction)
+    observedLayoutObstructions.delete(obstruction)
+  }
+  for (const obstruction of current) {
+    if (observedLayoutObstructions.has(obstruction)) continue
+    layoutResizeObserver?.observe(obstruction)
+    observedLayoutObstructions.add(obstruction)
+  }
+}
+
+function affectsPublicLayout(record: MutationRecord, root: HTMLElement, map: SVGSVGElement | null): boolean {
+  if (map?.contains(record.target)) return false
+  const target = record.target instanceof Element ? record.target : record.target.parentElement
+  if (record.type === 'attributes') {
+    if (record.attributeName === 'data-map-obstruction' || record.attributeName === 'data-player-map-obstruction') {
+      return true
+    }
+    return !!target && PUBLIC_LAYOUT_VISIBILITY_ATTRIBUTES.has(record.attributeName ?? '')
+      && isLayoutObstructionOrAncestor(target, root)
+  }
+  if (record.type !== 'childList') return false
+  if ([...record.addedNodes, ...record.removedNodes].some(containsLayoutObstruction)) return true
+  return !!target && isLayoutObstructionOrAncestor(target, root)
+}
+
+function isLayoutObstructionOrAncestor(target: Element, root: HTMLElement): boolean {
+  if (target.matches(PUBLIC_LAYOUT_OBSTRUCTION_SELECTOR)) return true
+  for (const obstruction of observedLayoutObstructions) {
+    if (root.contains(obstruction) && target.contains(obstruction)) return true
+  }
+  return false
+}
+
+function containsLayoutObstruction(node: Node): boolean {
+  if (!(node instanceof Element)) return false
+  return node.matches(PUBLIC_LAYOUT_OBSTRUCTION_SELECTOR)
+    || node.querySelector(PUBLIC_LAYOUT_OBSTRUCTION_SELECTOR) !== null
 }
 
 function publicLayoutChanged(): void {
