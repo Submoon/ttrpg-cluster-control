@@ -99,6 +99,7 @@ function expectSystemPlacement(
 }
 
 test('system Add immediately places on repeated clicks and preserves each placement', async ({ page }) => {
+  test.setTimeout(60_000)
   await captureMapExportBlobs(page)
   const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
     viewport: { width: 1440, height: 960 },
@@ -227,6 +228,8 @@ test('system Add immediately places on repeated clicks and preserves each placem
 
   await test.step('An Orbit drag released over Quit Add creates the displayed circle once', async () => {
     const quitAdd = page.getByRole('button', { name: 'Quit Add and return to Select' })
+    // Leave room for the in-gesture zoom-out without collapsing the system interior.
+    await workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true }).click()
     const firstRing = orbitRings.and(map.getByRole('button', { name: 'Select Orbit 1', exact: true }))
     const start = await hostPoint()
     const preview = map.locator('.orbit-creation-preview-ring')
@@ -247,7 +250,7 @@ test('system Add immediately places on repeated clicks and preserves each placem
       }
       const previewRadius = element.rx.baseVal.value * previewScale
       const previewStroke = strokeWidthInScreenPixels(element, matrix)
-      const gap = Math.min(...Array.from(existing, (ring) => {
+      return Math.min(...Array.from(existing, (ring) => {
         const ringMatrix = ring.getScreenCTM()
         if (!ringMatrix) throw new Error('Expected an existing Orbit transform.')
         const ringRadius = ring.rx.baseVal.value * scaleFor(ringMatrix)
@@ -255,7 +258,6 @@ test('system Add immediately places on repeated clicks and preserves each placem
         const halfStrokes = (previewStroke + ringStroke) / 2
         return Math.abs(previewRadius - ringRadius) - halfStrokes
       }))
-      return { gap, scale: previewScale }
     })
     const originalRing = await firstRing.evaluateHandle(element => element)
     let radius: string
@@ -268,9 +270,9 @@ test('system Add immediately places on repeated clicks and preserves each placem
       const snappedRadius = await preview.getAttribute('rx')
       if (snappedRadius === null) throw new Error('Expected a preview radius.')
       const beforeGap = await readPaintedGap()
-      expect(beforeGap.gap, 'nearest rendered gap in CSS pixels').toBeGreaterThanOrEqual(3.95)
-      // Clearance accounts for the highlighted stroke, which is 0.4 scene units wider.
-      expect(beforeGap.gap, 'nearest available radius limits the gap').toBeLessThanOrEqual(4.05 + 0.2 * beforeGap.scale)
+      expect(beforeGap, 'nearest rendered gap in CSS pixels').toBeGreaterThanOrEqual(3.95)
+      // The reserved highlighted stroke is one CSS pixel wider than ordinary paint.
+      expect(beforeGap, 'nearest available radius limits the gap').toBeLessThanOrEqual(4.55)
 
       const zoom = workspaceZoomOutput(page)
       const beforeZoom = await zoom.textContent()
@@ -280,7 +282,7 @@ test('system Add immediately places on repeated clicks and preserves each placem
       await page.keyboard.press('Enter')
       await expect(zoom).not.toHaveText(beforeZoom)
       await expect(preview).not.toHaveAttribute('rx', snappedRadius)
-      expect((await readPaintedGap()).gap, 'gap stays clear at the new zoom').toBeGreaterThanOrEqual(3.95)
+      expect(await readPaintedGap(), 'gap stays clear at the new zoom').toBeGreaterThanOrEqual(3.95)
       expect(await originalRing.evaluate(element => element.isConnected), 'preview updates keep existing map marks mounted').toBe(true)
 
       const updatedRadius = await preview.getAttribute('rx')

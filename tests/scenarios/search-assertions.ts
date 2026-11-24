@@ -31,12 +31,12 @@ export async function measurePaintedBounds(element: Locator): Promise<PaintedBou
   await expect(element).toBeVisible()
   return element.evaluate((node, sampleErrorCssPixels): PaintedBounds | null => {
     if (!node.isConnected || node.getClientRects().length === 0) return null
-    if (!node.matches('.orbit-ring')) {
+    if (!node.matches('.orbit-ring, .continuous-warden-orbit-visible-arc')) {
       const bounds = node.getBoundingClientRect()
       return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
     }
     if (!(node instanceof SVGGeometryElement)) {
-      throw new Error('An .orbit-ring paint measurement must target an SVGGeometryElement.')
+      throw new Error('An Orbit paint measurement must target an SVGGeometryElement.')
     }
 
     const totalLength = node.getTotalLength()

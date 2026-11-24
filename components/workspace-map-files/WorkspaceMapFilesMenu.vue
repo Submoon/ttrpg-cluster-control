@@ -213,9 +213,10 @@ const groups = computed(() => [
 ])
 
 function keepSubmenuOpenOnParentFocus(event: Event): void {
-  // Reka can briefly focus the parent menu when the mouse leaves a submenu trigger.
-  const parentMenu = ownedMenu(triggerElement())
-  if (parentMenu && event.target === parentMenu) event.preventDefault()
+  // Reka can briefly focus any parent menu in this nested menu stack when the mouse leaves a submenu trigger.
+  if (event.target instanceof HTMLElement && event.target.matches('.workspace-map-files-content[role="menu"]')) {
+    event.preventDefault()
+  }
 }
 
 const items = computed<MenuItem[][]>(() => {
@@ -245,6 +246,7 @@ const items = computed<MenuItem[][]>(() => {
     menuValue: 'warden-image-scope',
     label: `Warden image scope · ${selectedImageScopeLabel.value}`,
     icon: 'i-lucide-crop',
+    content,
     children: imageScopeChoices.map(choice => ({
       menuValue: `warden-image-scope-${choice.value}`,
       label: choice.label,
@@ -263,6 +265,7 @@ const items = computed<MenuItem[][]>(() => {
     icon: 'i-lucide-orbit',
     disabled: props.imageSystems.length === 0,
     filter: systemFilterInputProps,
+    content,
     children: props.imageSystems.map(system => ({
       menuValue: `warden-image-system-${system.id}`,
       label: system.name,

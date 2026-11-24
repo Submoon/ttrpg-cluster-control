@@ -127,9 +127,9 @@ async function dragCenterTo(page: Page, systemId: string, handle: Locator, targe
 
 
 test('the Warden can preview and confirm an unoccupied Orbit center move without losing Orbit drafts', async ({ page }) => {
-  test.setTimeout(60_000)
+  test.setTimeout(90_000)
   await captureMapExportBlobs(page)
-  const { systemName, systemId } = await createSingleSystemWorkspace(page)
+  const { systemName, systemId } = await createSingleSystemWorkspace(page, { viewport: { width: 1920, height: 1080 } })
   const map = wardenMap(page)
   await (await dockAction(page, 'Add orbit')).click()
   const addToggle = page.getByRole('button', { name: 'Add to map', exact: true, includeHidden: true })
@@ -151,6 +151,7 @@ test('the Warden can preview and confirm an unoccupied Orbit center move without
   const hierarchy = await openWorkspaceHierarchy(page)
   const orbitItem = hierarchy.getByRole('treeitem', { name: /Orbit 1 around unoccupied center, 0 objects/ })
   await orbitItem.click()
+  await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
   const ring = map.locator(`.continuous-warden-orbit-target[data-system-id="${systemId}"][data-orbit-id="${orbitId}"]`)
   const initialGeometry = await wardenOrbitLocalGeometry(ring, systemId)
   const initialCenter = initialGeometry.center

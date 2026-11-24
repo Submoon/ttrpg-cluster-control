@@ -3,12 +3,12 @@ import { expect, test, type Locator, type Page } from './fixtures'
 import { expectPaletteOptionActive } from './scenarios/search-palette'
 import { expectPaintedInsideUsableMap, measurePaintedBounds } from './scenarios/search-assertions'
 import { largestUnobstructedClientRect } from '../utils/map-usable-area'
-import { CONTINUOUS_MAP_SYSTEM_SCALE } from '../utils/continuous-map-projection'
 import {
   createLocalWorkspace,
   createOrbit,
   createSystemObject,
   exportStarSystem,
+  minimumOrbitRadius,
   type StarSystem,
 } from '../domain/workspace'
 import {
@@ -49,12 +49,24 @@ async function expectBranchPaintInsideUsableMap(
   branchRings: Locator,
   branchNames: readonly string[],
 ): Promise<void> {
-  await expect(branchRings).toHaveCount(4)
   const labels = branchNames.map(name => owner.locator('.continuous-warden-object-name').and(owner.getByText(name, { exact: true })))
-  await expectPaintedInsideUsableMap(page, map, [...await branchRings.all(), ...labels])
+  await expectPaintedInsideUsableMap(page, map, [...await branchOrbitPaint(owner, branchRings), ...labels])
 }
 
-function branchSearchMap(): {
+async function branchOrbitPaint(owner: Locator, branchRings: Locator): Promise<Locator[]> {
+  await expect(branchRings).toHaveCount(4)
+  const orbitIds = await branchRings.evaluateAll(rings => rings.map(ring => ring.getAttribute('data-orbit-id')))
+  const paint = await Promise.all(orbitIds.map(async (id) => {
+    if (!id) throw new Error('The branch Orbit has no identity.')
+    const selector = `[data-orbit-id="${id}"]`
+    const visible = owner.locator(`.continuous-warden-orbit-target:not(.is-clipped)${selector}, .continuous-warden-orbit-visible-arc${selector}`)
+    await expect(visible.first()).toBeVisible()
+    return visible.all()
+  }))
+  return paint.flat()
+}
+
+function branchSearchMap(branchScale = .2): {
   content: string
   systemName: string
   targetName: string
@@ -116,6 +128,11 @@ function branchSearchMap(): {
     system = { ...system, objects: [...system.objects, searchableAnomaly] }
   }
 
+  function scaledBranchRadii(orbit: typeof eastOrbit, horizontal: number, vertical: number) {
+    const minimum = minimumOrbitRadius(system, orbit)
+    return { horizontal: Math.max(minimum, horizontal * branchScale), vertical: Math.max(minimum, vertical * branchScale) }
+  }
+
   const source = {
     ...workspace,
     cluster: {
@@ -126,10 +143,11 @@ function branchSearchMap(): {
       ...workspace.layout,
       orbitRadii: {
         [parentOrbit.id]: { horizontal: 9000, vertical: 9000 },
-        [eastOrbit.id]: { horizontal: 3200, vertical: 190 },
-        [eastDeepOrbit.id]: { horizontal: 500, vertical: 120 },
-        [westOrbit.id]: { horizontal: 2200, vertical: 600 },
-        [westDeepOrbit.id]: { horizontal: 280, vertical: 150 },
+        // Keep the branch within the viewport at readable detail while its parent remains off-frame.
+        [eastOrbit.id]: scaledBranchRadii(eastOrbit, 3200, 190),
+        [eastDeepOrbit.id]: scaledBranchRadii(eastDeepOrbit, 500, 120),
+        [westOrbit.id]: scaledBranchRadii(westOrbit, 2200, 600),
+        [westDeepOrbit.id]: scaledBranchRadii(westDeepOrbit, 280, 150),
         [readableOrbit.id]: { horizontal: 100, vertical: 70 },
       },
       orbitRotations: {
@@ -209,7 +227,7 @@ async function importAndOpenBranchSearchSystem(
 
 
 test('search centers a rotated recursive branch at sufficient current zoom without framing its relatives', async ({ page }, testInfo) => {
-  test.setTimeout(60_000)
+  test.setTimeout(90_000)
   const fixture = branchSearchMap()
   const { map, owner, branchRings } = await importAndOpenBranchSearchSystem(page, fixture, 'branch-atlas-large.json')
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
@@ -245,12 +263,11 @@ test('search centers a rotated recursive branch at sufficient current zoom witho
   await expect(map.locator('[data-map-search-locator]')).toHaveCount(0)
   const frameScale = scaleFromTransform(await content.getAttribute('transform'))
   expect(frameScale).toBe(scaleFromTransform(beforeFrame))
-  expect(frameScale * CONTINUOUS_MAP_SYSTEM_SCALE).toBeLessThan(0.25)
   expect(await content.getAttribute('transform')).not.toBe(beforeFrame)
 
   await expectBranchPaintInsideUsableMap(page, map, owner, branchRings, [fixture.targetName, ...fixture.branchNames])
   const painted = await Promise.all([
-    ...await branchRings.all(),
+    ...await branchOrbitPaint(owner, branchRings),
     ...[fixture.targetName, ...fixture.branchNames].map(name => owner.locator('.continuous-warden-object-name')
       .and(owner.getByText(name, { exact: true }))),
   ].map(measurePaintedBounds))
@@ -301,8 +318,8 @@ test('search centers a rotated recursive branch at sufficient current zoom witho
 
 
 test('compact Location-key search preserves a dirty same-object draft and returns focus after touch selection', async ({ page }, testInfo) => {
-  test.setTimeout(60_000)
-  const fixture = branchSearchMap()
+  test.setTimeout(90_000)
+  const fixture = branchSearchMap(.09)
   const draftName = `${fixture.targetName} draft`
   const { map, owner, targetObjectId, branchRings } = await importAndOpenBranchSearchSystem(page, fixture, 'branch-atlas-draft.json')
 

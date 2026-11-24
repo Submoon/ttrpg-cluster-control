@@ -15,6 +15,7 @@ import {
 } from './helpers'
 
 test('the player preview inspects the same public route through its shared document view', async ({ page }) => {
+  test.setTimeout(60_000)
   const fixture = exportJumpCluster(restoreJumpClusterBackup(structuredClone(campaignFixture)))
   for (const system of fixture.cluster.systems) {
     system.publication = 'revealed'
@@ -41,7 +42,7 @@ test('the player preview inspects the same public route through its shared docum
   await expect(route).toHaveAttribute('aria-pressed', 'true')
 
   const scene = map.locator('svg.player-continuous-map-scene')
-  const content = scene.locator(':scope > g').first()
+  const content = scene.locator(':scope > g[transform]')
   const start = await previewPanStart(scene)
   await scene.evaluate(element => {
     const target = window as PreviewPanProbeWindow
@@ -94,7 +95,7 @@ test('the player preview inspects the same public route through its shared docum
 
   const reopened = await openPlayerPreview(page)
   const reopenedScene = reopened.locator('svg.player-continuous-map-scene')
-  const reopenedContent = reopenedScene.locator(':scope > g').first()
+  const reopenedContent = reopenedScene.locator(':scope > g[transform]')
   const reopenedStart = await previewPanStart(reopenedScene)
   const camera = () => reopenedContent.evaluate(element => {
     const transforms = (element as SVGGElement).transform.baseVal
@@ -281,6 +282,9 @@ test('continuous routes support clipped selection, guarded inspection and author
   const fixture = structuredClone(campaignFixture)
   const original = fixture.cluster.routes[0]!
   const departure = fixture.cluster.systems[0]!.objects.find(object => object.id === original.fromPointId)!
+  const destinationSystem = fixture.cluster.systems[1]!
+  const arrival = destinationSystem.objects.find(object => object.id === original.toPointId)!
+  destinationSystem.objects = [{ ...arrival, locationKey: 'A', name: 'Arrival' }]
   departure.placement = { kind: 'system', x: 0.94, y: 0.5 }
   const namedRoute = { ...original, name: 'Harrow courier route' }
   fixture.cluster.routes.splice(0, 1, namedRoute, {

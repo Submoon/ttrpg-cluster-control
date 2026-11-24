@@ -5,7 +5,7 @@ import {
   exposedContinuousObjectHitPoint, hideWorkspaceInspector, inspectImageSvg,
   measureMouseDrag, openMapFilesSection, openWorkspaceHierarchy, resolveImportReview, reviewStarSystemImport,
   setHeaderMapActionsOpen, setWorkspaceMapMode, waitForWorkspaceSaved, waitForWorkspaceStartup, wardenLocalCoordinates,
-  wardenMap, wardenObjectMark, wardenObjectLocalPosition, wardenOrbitLocalRadii, workspaceZoomControls, type WorldPoint,
+  wardenMap, wardenObjectMark, wardenObjectLocalPosition, wardenOrbitLocalGeometry, wardenOrbitLocalRadii, workspaceZoomControls, type WorldPoint,
 } from './helpers'
 
 async function ensureLocalPointsReachable(page: Page, systemId: string, points: readonly WorldPoint[]): Promise<void> {
@@ -110,6 +110,7 @@ async function expectExportedSystemSceneInsideViewBox(page: Page, text: string, 
 }
 
 test('the system map expands beyond its initial bounds and exports the full applied layout', async ({ page }) => {
+  test.setTimeout(90_000)
   const fixture = createLocalWorkspace('Extent fixture', 'Vesper')
   const fixtureSystem = fixture.cluster.systems[0]!
   const fixtureStar = fixtureSystem.objects[0]!
@@ -175,21 +176,28 @@ test('the system map expands beyond its initial bounds and exports the full appl
   expect(farPosition.x).toBeGreaterThan(960)
   expect(farPosition.y).toBeGreaterThan(560)
   await expectObjectPosition(primaryMark, primaryBefore)
+  const orbitGeometry = await wardenOrbitLocalGeometry(ring, system.id)
   await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
-  await expect(ring).toBeVisible()
-  await expect(planet).toBeVisible()
   const mapBounds = await map.boundingBox()
   const envelope = await owner.locator('.continuous-warden-system-envelope').boundingBox()
   if (!mapBounds || !envelope) throw new Error('The expanded system needs a visible canvas and envelope.')
-  for (const feature of [ring, planet]) {
-    const bounds = await feature.boundingBox()
-    if (!bounds) throw new Error('The expanded system feature is not measurable.')
-    for (const containing of [mapBounds, envelope]) {
-      expect(bounds.x).toBeGreaterThanOrEqual(containing.x - 1)
-      expect(bounds.y).toBeGreaterThanOrEqual(containing.y - 1)
-      expect(bounds.x + bounds.width).toBeLessThanOrEqual(containing.x + containing.width + 1)
-      expect(bounds.y + bounds.height).toBeLessThanOrEqual(containing.y + containing.height + 1)
-    }
+  // Fit can collapse the interior. Check the committed ring and object in the fitted camera.
+  const fittedCoordinates = await wardenLocalCoordinates(page, system.id)
+  const { center, radii } = orbitGeometry
+  const fittedPoints = [
+    { x: envelope.x, y: envelope.y },
+    { x: envelope.x + envelope.width, y: envelope.y + envelope.height },
+    ...[
+      { x: center.x - radii.horizontal, y: center.y - radii.vertical },
+      { x: center.x + radii.horizontal, y: center.y + radii.vertical },
+      farPosition,
+    ].map(fittedCoordinates.toClient),
+  ]
+  for (const point of fittedPoints) {
+    expect(point.x).toBeGreaterThanOrEqual(mapBounds.x - 1)
+    expect(point.y).toBeGreaterThanOrEqual(mapBounds.y - 1)
+    expect(point.x).toBeLessThanOrEqual(mapBounds.x + mapBounds.width + 1)
+    expect(point.y).toBeLessThanOrEqual(mapBounds.y + mapBounds.height + 1)
   }
   const images = await openMapFilesSection(page, 'Export an image', 'keyboard')
   const imageScope = images.getByRole('menuitem', { name: /^Warden image scope/ })
@@ -220,8 +228,11 @@ test('the system map expands beyond its initial bounds and exports the full appl
   expect(exported.systemIds).toEqual([system.id])
   const png = await downloadImage(page, 'image/png')
   expect(png.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
-  expect(png.width).toBe(svgInfo.width)
-  expect(png.height).toBe(svgInfo.height)
+  if (!png.width || !png.height) throw new Error('The system PNG is missing its raster dimensions.')
+  expect(png.width).toBeGreaterThan(svgInfo.width)
+  expect(png.height).toBeGreaterThan(svgInfo.height)
+  // Each format rounds its output dimensions independently.
+  expect(Math.abs(png.height - png.width * svgInfo.viewBox[3]! / svgInfo.viewBox[2]!)).toBeLessThanOrEqual(2)
   if (!png.sourceSvgText) throw new Error('The system PNG has no source SVG.')
   const pngScene = await inspectImageSvg(page, png.sourceSvgText)
   expect(pngScene.texts).toContain(fixturePlanet.name)

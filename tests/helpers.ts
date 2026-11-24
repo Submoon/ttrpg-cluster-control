@@ -991,15 +991,23 @@ export async function clickWardenSystemPoint(
   systemId: string,
   point: WorldPoint,
 ): Promise<WorldPoint> {
-  const coordinates = await wardenLocalCoordinates(page, systemId)
-  const client = coordinates.toClient({ x: 64 + 832 * point.x, y: 72 + 416 * point.y })
-  const deliveredClient = { x: Math.round(client.x), y: Math.round(client.y) }
-  const hitsMap = await wardenMap(page).evaluate((map, input) =>
-    map.contains(document.elementFromPoint(input.x, input.y)), deliveredClient)
-  if (!hitsMap) throw new Error(`System point (${point.x}, ${point.y}) does not hit the visible Warden map.`)
-  await page.mouse.click(deliveredClient.x, deliveredClient.y)
-  const delivered = coordinates.fromClient(deliveredClient)
-  return { x: (delivered.x - 64) / 832, y: (delivered.y - 72) / 416 }
+  const map = wardenMap(page)
+  const zoomOut = workspaceZoomControls(page).getByRole('button', { name: 'Zoom out', exact: true })
+  for (let attempt = 0; attempt < 64; attempt += 1) {
+    const coordinates = await wardenLocalCoordinates(page, systemId)
+    const client = coordinates.toClient({ x: 64 + 832 * point.x, y: 72 + 416 * point.y })
+    const deliveredClient = { x: Math.round(client.x), y: Math.round(client.y) }
+    const hitsMap = await map.evaluate((element, input) =>
+      element.contains(document.elementFromPoint(input.x, input.y)), deliveredClient)
+    if (hitsMap) {
+      await page.mouse.click(deliveredClient.x, deliveredClient.y)
+      const delivered = coordinates.fromClient(deliveredClient)
+      return { x: (delivered.x - 64) / 832, y: (delivered.y - 72) / 416 }
+    }
+    if (await zoomOut.isDisabled()) break
+    await zoomOut.click()
+  }
+  throw new Error(`System point (${point.x}, ${point.y}) is unreachable through public zoom controls.`)
 }
 
 /** Frames the selected entity through the same map controls on desktop and compact viewports. */

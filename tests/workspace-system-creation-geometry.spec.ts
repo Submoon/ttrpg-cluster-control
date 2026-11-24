@@ -124,10 +124,11 @@ async function expectPlanetAddArmed(page: Page): Promise<void> {
     .getByRole('status').filter({ hasText: /^ADD Planet\b/ })).toBeVisible()
 }
 
-function expectAngleNearFixtureAngle(actual: number | undefined, clickError: number, minorRadius: number): void {
+function expectAngleNearFixtureAngle(actual: number | undefined, expected: number, clickError: number, minorRadius: number): void {
   expect(actual).toBeDefined()
   if (actual === undefined) return
-  const wrappedDifference = Math.atan2(Math.sin(actual), Math.cos(actual))
+  const difference = actual - expected
+  const wrappedDifference = Math.atan2(Math.sin(difference), Math.cos(difference))
   // The bound follows the delivered pointer's scene error and the Orbit's smallest radius.
   // A nearest point can move at most twice the input error; the minor radius bounds angular chord length.
   const angularBound = 2 * Math.asin(Math.min(1, clickError / minorRadius)) + 1e-6
@@ -162,13 +163,16 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
   await expectPlanetAddArmed(page)
   const creationTargets = [
     {
-      point: { x: 583.9230484541326, y: 340 },
+      // Parametric angle 2.25 on Alpha, clear of the neighboring Beta rim.
+      point: { x: 383.5953542926599, y: 296.21607499733256 },
+      angle: 2.25,
       orbitId: alphaOrbit.id,
       minorRadius: 80,
     },
     {
       // Keep decimal fixture text; Number yields the same runtime float as the original literal.
       point: { x: 592.5020987390543, y: Number('244.52742863650086') },
+      angle: 0,
       orbitId: nestedOrbit.id,
       minorRadius: 55,
     },
@@ -187,6 +191,7 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
   expect(alphaPlanet.placement).toEqual({ kind: 'orbit', orbitId: alphaOrbit.id })
   expectAngleNearFixtureAngle(
     afterAlphaAdd.layout.objectAngles[alphaPlanet.id],
+    creationTargets[0].angle,
     clickErrors[0]!,
     creationTargets[0].minorRadius,
   )
@@ -232,7 +237,7 @@ test('system Add targets rotated primary and nested Orbits without shifting lega
     const target = expectedTargets[index]!
     const planet = createdPlanets[index]!
     expect(planet.placement).toEqual({ kind: 'orbit', orbitId: target.orbitId })
-    expectAngleNearFixtureAngle(completed.layout.objectAngles[planet.id], clickErrors[index]!, target.minorRadius)
+    expectAngleNearFixtureAngle(completed.layout.objectAngles[planet.id], target.angle, clickErrors[index]!, target.minorRadius)
   }
   await waitForWorkspaceSaved(page)
 })

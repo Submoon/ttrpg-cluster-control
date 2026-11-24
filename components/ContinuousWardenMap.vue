@@ -2598,7 +2598,8 @@ function getOrbitDragSceneClearance(systemId: string): number | null {
   const owner = projections.value.find(candidate => candidate.id === systemId)
   if (!owner) return null
   const scale = getViewport().k * svgPixelScale.value * owner.scale
-  return Number.isFinite(scale) && scale > 0 ? 4 / scale + (2.4 + 2.5) / 2 : null
+  // The widest existing stroke is 3 CSS pixels. The preview stroke scales with the local scene.
+  return Number.isFinite(scale) && scale > 0 ? (4 + 3 / 2) / scale + 2.5 / 2 : null
 }
 
 function isClientPointOnMap(clientX: number, clientY: number): boolean {

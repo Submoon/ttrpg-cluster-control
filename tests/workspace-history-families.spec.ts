@@ -783,6 +783,7 @@ test('reviewed system deletion restores the same cascade through the editor Undo
   await createSingleSystemWorkspace(page)
   await fitWorkspaceMap(page)
   await addClusterSystem(page)
+  await waitForWorkspaceSaved(page)
   const before = await downloadJson(page, 'Export Jump Cluster JSON')
   const hierarchy = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
   const system = hierarchy.getByRole('treeitem', { name: 'New System 2', exact: true })

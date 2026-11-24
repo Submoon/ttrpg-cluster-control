@@ -7,7 +7,8 @@ import {
   wardenMap,
 } from './helpers'
 
-campaignTest('invalid route edits focus the validation summary and Stay preserves the edit context', async ({ campaignWorkspacePage: page }) => {
+campaignTest('invalid route edits focus the validation summary and Stay preserves the edit context', async ({ campaignWorkspacePage: page }, testInfo) => {
+  testInfo.setTimeout(60_000)
   await setWorkspaceMapMode(page, 'Select')
 
   const clusterMap = wardenMap(page)

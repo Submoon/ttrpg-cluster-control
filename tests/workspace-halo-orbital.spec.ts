@@ -349,7 +349,7 @@ test('dropping into another halo opens a seeded review when the Location key con
     .getByRole('button', { name: 'Move', exact: true }).click()
   const zoomIn = workspaceZoomControls(page).getByRole('button', { name: 'Zoom in', exact: true })
   for (let step = 0; step < 4 && !await sourceMark.isVisible(); step += 1) await zoomIn.click()
-  await expect(sourceMark).toBeVisible()
+  await expect.poll(() => exposedContinuousObjectHitPoint(sourceMark)).not.toBeNull()
   const destinationFrame = map.locator(`.continuous-warden-system[data-system-id="${destination.id}"] .continuous-warden-system-envelope`)
   const bounds = await destinationFrame.boundingBox()
   const hit = await exposedContinuousObjectHitPoint(sourceMark)

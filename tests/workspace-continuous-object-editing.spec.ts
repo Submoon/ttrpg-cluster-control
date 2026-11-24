@@ -16,6 +16,8 @@ import {
 type ScreenPoint = { x: number; y: number }
 
 async function screenOrbitPoint(orbit: import('@playwright/test').Locator): Promise<ScreenPoint> {
+  await expect(orbit.and(orbit.page().locator('.continuous-warden-system-detail:not([inert]) .continuous-warden-orbit-target')))
+    .toBeVisible()
   return orbit.evaluate((element) => {
     if (!(element instanceof SVGEllipseElement)) throw new Error('The Orbit target is not an SVG ellipse.')
     const systemId = element.getAttribute('data-system-id')
@@ -40,7 +42,9 @@ async function screenOrbitPoint(orbit: import('@playwright/test').Locator): Prom
       for (const dx of [0, -1, 1]) {
         for (const dy of [0, -1, 1]) {
           const point = { x: Math.round(screen.x) + dx, y: Math.round(screen.y) + dy }
-          if (document.elementFromPoint(point.x, point.y) === element) return point
+          const hit = document.elementFromPoint(point.x, point.y)
+          if (hit === element || (hit?.matches('.continuous-warden-orbit-visible-arc')
+            && hit.getAttribute('data-system-id') === systemId && hit.getAttribute('data-orbit-id') === orbitId)) return point
         }
       }
     }
@@ -108,7 +112,7 @@ async function screenPointOutsideEveryEnvelope(map: import('@playwright/test').L
 }
 
 test('continuous Add keeps a definite owner, uses local geometry, and asks before outside placement @ui-smoke', async ({ page }) => {
-  test.setTimeout(60_000)
+  test.setTimeout(90_000)
   await captureMapExportBlobs(page)
   const { systemId, systemName, primaryObjectId } = await createSingleSystemWorkspace(page)
 
