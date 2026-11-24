@@ -10,6 +10,7 @@ import {
   selectInspectorOption,
   setWorkspaceMapMode,
   snapshotSvgCoordinates,
+  type SvgCoordinates,
   waitForWorkspaceSaved,
   workspaceZoomControls,
 } from './helpers'
@@ -103,16 +104,16 @@ test('the player preview inspects the same public route through its shared docum
     const scale = transforms.getItem(1).matrix
     return { x: translation.e, y: translation.f, k: scale.a }
   })
-  // Browser SVGMatrix rounds translation, so compare well below one rendered pixel.
-  const translationPrecision = 3
   const beforeFreshPan = await camera()
   const coordinates = await snapshotSvgCoordinates(reopenedScene)
   const delivered = await measureMouseDrag(page, reopenedStart, { x: reopenedStart.x + 24, y: reopenedStart.y + 12 }, { eventFamily: 'pointer' })
   const down = coordinates.fromClient(delivered.down)
   const up = coordinates.fromClient(delivered.up)
   const afterFreshPan = await camera()
-  expect(afterFreshPan.x).toBeCloseTo(beforeFreshPan.x + up.x - down.x, translationPrecision)
-  expect(afterFreshPan.y).toBeCloseTo(beforeFreshPan.y + up.y - down.y, translationPrecision)
+  expectCameraTranslationWithinCssPixel(afterFreshPan, {
+    x: beforeFreshPan.x + up.x - down.x,
+    y: beforeFreshPan.y + up.y - down.y,
+  }, coordinates)
   expect(afterFreshPan.k).toBe(beforeFreshPan.k)
 
   await reopenedScene.evaluate(() => {
@@ -135,8 +136,10 @@ test('the player preview inspects the same public route through its shared docum
     const previous = currentCoordinates.fromClient(lastPoint)
     const next = currentCoordinates.fromClient(deliveredPoint)
     const after = await camera()
-    expect(after.x).toBeCloseTo(before.x + next.x - previous.x, translationPrecision)
-    expect(after.y).toBeCloseTo(before.y + next.y - previous.y, translationPrecision)
+    expectCameraTranslationWithinCssPixel(after, {
+      x: before.x + next.x - previous.x,
+      y: before.y + next.y - previous.y,
+    }, currentCoordinates)
     expect(after.k).toBe(before.k)
   }
   mouseHeld = false
@@ -178,6 +181,18 @@ test('the player preview inspects the same public route through its shared docum
 type PreviewPanProbeWindow = Window & {
   __previewPanProbe?: { group: Element; moves: number; transform: string | null; cleanup: () => void }
   __previewHeldPointer?: { point: { x: number; y: number } | null; cleanup: () => void }
+}
+
+function expectCameraTranslationWithinCssPixel(
+  actual: { x: number; y: number },
+  expected: { x: number; y: number },
+  coordinates: SvgCoordinates,
+): void {
+  const actualCss = coordinates.toClient(actual)
+  const expectedCss = coordinates.toClient(expected)
+  // Native pointer delivery is measured in CSS pixels; SVG viewport projection rounding can leave under one pixel of residual error.
+  expect(Math.abs(actualCss.x - expectedCss.x), 'horizontal pan error in CSS pixels').toBeLessThanOrEqual(1)
+  expect(Math.abs(actualCss.y - expectedCss.y), 'vertical pan error in CSS pixels').toBeLessThanOrEqual(1)
 }
 
 async function previewPanStart(scene: Locator): Promise<{ x: number; y: number }> {

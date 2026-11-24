@@ -50,8 +50,9 @@ campaignTest('prepared campaign snapshots stay isolated between fresh browser co
   const isolatedObject = changed.cluster?.systems.find(system => system.id === originalSystem.id)
     ?.objects.find(object => object.subtype === 'Context Sentinel')
   if (!isolatedObject) throw new Error('The sentinel must belong to Vesper in the first browser context.')
-  await expect(wardenObjectMark(page, originalSystem.id, isolatedObject.id)).toBeVisible()
   await quitSystemAdd(page)
+  await centerWorkspaceSelection(page)
+  await expect(wardenObjectMark(page, originalSystem.id, isolatedObject.id)).toBeVisible()
 
   const secondContext = await browser.newContext({
     baseURL: new URL(page.url()).origin,

@@ -12,7 +12,6 @@ import {
   selectCatalogueObjectButton,
   waitForWorkspaceSaved,
   wardenMap,
-  wardenObjectMark,
 } from './helpers'
 
 type ChartWriteGate = {
@@ -273,7 +272,7 @@ test('dismissing Chromium beforeunload keeps a modified hidden chart draft', asy
 
 test('a hidden invalid chart draft survives an unrelated object placement and stays out of export', async ({ page }) => {
   await captureMapExportBlobs(page)
-  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page)
+  const { systemId } = await createSingleSystemWorkspace(page)
   await waitForWorkspaceSaved(page)
 
   const editor = await openChartDetailsEditor(page)
@@ -300,7 +299,10 @@ test('a hidden invalid chart draft survives an unrelated object placement and st
   await hideWorkspaceInspector(page)
   await expect(editor).toBeHidden()
 
-  await wardenObjectMark(page, systemId, primaryObjectId).press('Enter')
+  const hierarchy = await openWorkspaceHierarchy(page)
+  const primary = hierarchy.getByRole('treeitem', { name: /^Select A, Primary Star in / })
+  if (await primary.count() === 0) await hierarchy.getByRole('button', { name: /^Expand (Unapplied )?Vesper$/ }).click()
+  await primary.click()
   const guard = page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })
   await expect(guard.getByRole('button', { name: 'Apply and continue' })).toBeVisible()
   await guard.getByRole('button', { name: 'Apply and continue' }).click()
