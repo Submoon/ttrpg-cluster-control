@@ -305,7 +305,7 @@ export function isOrbit(value: unknown): value is Orbit {
 }
 
 /**
- * Validates a positive-level route between distinct Jump Points or to a named unresolved exit.
+ * Validates a positive-level route between distinct systems or to a named unresolved exit.
  * @param value Unknown route candidate.
  * @returns True when endpoints and optional name match one supported route shape.
  */
@@ -321,20 +321,23 @@ export function isJumpRoute(value: unknown): value is JumpRoute {
       || value.name.length > maxNameLength
     ))
     || !isJumpLevel(value.jumpLevel)
-    || typeof value.fromPointId !== 'string'
-    || !value.fromPointId
+    || typeof value.fromSystemId !== 'string'
+    || !value.fromSystemId
+    || (value.fromPointId !== null && (typeof value.fromPointId !== 'string' || !value.fromPointId))
     || typeof value.playerShared !== 'boolean'
   ) {
     return false
   }
 
-  if (typeof value.toPointId === 'string') {
-    return value.toPointId.length > 0
-      && value.toPointId !== value.fromPointId
+  if (typeof value.toSystemId === 'string') {
+    return !!value.toSystemId
+      && value.toSystemId !== value.fromSystemId
+      && (value.toPointId === null || (typeof value.toPointId === 'string' && value.toPointId.length > 0))
       && value.unresolvedExit === undefined
   }
 
-  return value.toPointId === null
+  return value.toSystemId === null
+    && value.toPointId === null
     && typeof value.unresolvedExit === 'string'
     && !!value.unresolvedExit.trim()
     && value.unresolvedExit === value.unresolvedExit.trim()

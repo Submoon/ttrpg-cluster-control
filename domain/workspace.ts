@@ -9,6 +9,7 @@ export {
 } from './workspace-model'
 export type {
   Point,
+  SystemFrameInsets,
   CatalogueSubtype,
   ObjectFamily,
   CustomFieldType,
@@ -21,7 +22,9 @@ export type {
   SystemObject,
   OrbitRadii,
   Orbit,
+  JumpRouteEndpoint,
   JumpRoute,
+  JumpRouteInput,
   StarSystem,
   PublicationMode,
   ChartDetailsChanges,
@@ -66,7 +69,25 @@ export {
   updateChartDetails,
 } from './workspace-cluster'
 export { planMapEntityDeletion } from './workspace-deletion'
+export { resolveSystemObjectBranch } from './workspace-object-branch'
+export type { SystemObjectBranch } from './workspace-object-branch'
+export { fromNormalizedMapPoint, toNormalizedMapPoint } from './workspace-map-coordinates'
+export {
+  applySystemObjectTransfer,
+  prepareSystemObjectTransfer,
+  resolveSystemObjectHistoryTarget,
+  validateSystemObjectTransferKeys,
+} from './workspace-transfer'
+export type {
+  SystemObjectTransferPlacement,
+  SystemObjectTransferRequest,
+  SystemObjectTransferReview,
+  SystemObjectTransferKeyConflict,
+  SystemObjectTransferRouteAttachment,
+  SystemObjectTransferStationLink,
+} from './workspace-transfer'
 export { moveUnresolvedExitTarget } from './workspace-exit-placement'
+export { setWorkspaceSystemFrame, workspaceSystemFrame } from './workspace-system-frames'
 export {
   createOrbit,
   defaultOrbitRadius,

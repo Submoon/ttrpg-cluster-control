@@ -1,21 +1,26 @@
 /**
  * Translates map and inspector intents into workspace commits; transient SVG drag previews stay renderer-local.
  */
-import { computed, type Ref, type ShallowRef } from 'vue'
+import { computed, toRaw, type Ref } from 'vue'
 import {
   canPlaceObjectInOrbit,
+  captureEffectiveObjectAngles,
   defaultObjectOrbitAngle,
   defaultOrbitRadius,
   detachOrbit,
+  createSystemObject,
   minimumOrbitRadius,
   moveOrbitCenter,
   normalizeOrbitRotation,
   replaceWorkspaceSystem,
+  setWorkspaceSystemFrame,
   updateWorkspaceObject,
   type LocalWorkspace,
+  type CatalogueSubtype,
   type ObjectPlacement,
   type OrbitRadii,
   type Point,
+  type SystemFrameInsets,
 } from '../../domain/workspace'
 import type {
   OrbitAdjustmentGeometry,
@@ -26,12 +31,31 @@ import type {
   CommittedOrbitCenterPosition,
   CommittedObjectPosition,
   EntityCommand,
-  SystemMapHandle,
+  MapNavigationHandle,
   TransitionOptions,
+  SystemCreationTarget,
 } from './types'
 import type { WorkspaceMutationExecutor, WorkspaceMutationRequest, WorkspaceMutationResult } from './workspace-mutations'
 import { useEditorUiStore } from '../../stores/editor-ui'
-import { objectPositions, orbitCenter as resolveOrbitCenter, orbitRadii as resolveOrbitRadii, orbitRotation as resolveOrbitRotation, toNormalizedMapPoint } from '../../utils/system-map-geometry'
+import { applySelectedObjectTranslation, planSelectedObjectTranslation } from '../../utils/selected-object-placement'
+import {
+  fromNormalizedMapPoint,
+  objectPositions,
+  orbitCenter as resolveOrbitCenter,
+  orbitRadii as resolveOrbitRadii,
+  orbitRotation as resolveOrbitRotation,
+  toNormalizedMapPoint,
+} from '../../utils/system-map-geometry'
+import { clampWardenClusterAnchor } from '../../utils/continuous-map-projection'
+import { orbitGeometrySource } from '../../utils/orbit-geometry-source'
+import { validName } from '../../domain/workspace-validation'
+
+export interface CapturedClusterSystemMove {
+  workspaceId: string
+  clusterId: string
+  systemId: string
+  originPosition: Point
+}
 
 type OrbitAdjustmentController = Pick<ReturnType<typeof createContinuousOrbitAdjustmentController>, 'update'>
 
@@ -43,7 +67,8 @@ function sameGeometryNumber(left: number, right: number): boolean {
 interface MapWorkflowOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
   mutations: WorkspaceMutationExecutor
-  systemMapRef: ShallowRef<SystemMapHandle | null>
+  systemMapRef: Readonly<Ref<MapNavigationHandle | null>>
+  continuousMap?: Readonly<Ref<boolean>>
   resolveTransition: (options?: TransitionOptions) => Promise<boolean>
   beginObjectSession: (clusterId: string, systemId: string, objectId: string) => void
   beginOrbitSession: (clusterId: string, systemId: string, orbitId: string) => void
@@ -65,6 +90,7 @@ export function useMapWorkflows({
   workspace,
   mutations,
   systemMapRef,
+  continuousMap,
   resolveTransition,
   beginObjectSession,
   beginOrbitSession,
@@ -80,6 +106,24 @@ export function useMapWorkflows({
   const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
   const selectedObject = computed(() => selectedSystem.value?.objects.find(object => object.id === store.selectedObjectId))
   const selectedOrbit = computed(() => selectedSystem.value?.orbits.find(orbit => orbit.id === store.selectedOrbitId))
+
+  function isOrbitOwnerCurrent(systemId: string, orbitId?: string): boolean {
+    if (store.activeView === 'system') return store.selectedSystemId === systemId
+      && (orbitId === undefined || store.selectedOrbitId === orbitId)
+    if (!continuousMap?.value || store.activeView !== 'cluster') return false
+    const target = store.inspectedTarget
+    return target?.kind === 'orbit' && target.systemId === systemId
+      && (orbitId === undefined || target.orbitId === orbitId)
+  }
+
+  function isOrbitAvailableOnCurrentMap(systemId: string, orbitId: string): boolean {
+    if (store.activeView === 'system') return store.selectedSystemId === systemId
+      && workspace.value?.cluster.systems.some(system => system.id === systemId
+        && system.orbits.some(orbit => orbit.id === orbitId)) === true
+    if (!continuousMap?.value || store.activeView !== 'cluster') return false
+    return workspace.value?.cluster.systems.some(system => system.id === systemId
+      && system.orbits.some(orbit => orbit.id === orbitId)) === true
+  }
 
   function rejectBlockedEntityCommand(command: EntityCommand): boolean {
     if (!isEntityCommandBlocked(command)) return false
@@ -151,7 +195,7 @@ export function useMapWorkflows({
         const latestOrbit = latest?.cluster.systems.find(candidate => candidate.id === system.id)
           ?.orbits.find(item => item.id === orbit.id)
         return latest !== null && latest.id === intent.workspaceId && latest.cluster.id === clusterId
-          && store.activeView === 'system' && store.selectedSystemId === system.id
+          && isOrbitAvailableOnCurrentMap(system.id, orbit.id)
           && latestOrbit !== undefined
           && (change.kind !== 'center' || latestOrbit.hostId === null)
           && !isEntityCommandBlocked(command)
@@ -222,7 +266,7 @@ export function useMapWorkflows({
 
   async function updateOrbitAdjustment(intent: OrbitAdjustmentIntent) {
     const command: EntityCommand = { kind: 'orbit-geometry', orbitId: intent.orbitId }
-    if (store.activeView !== 'system' || store.mapMode !== 'move' || store.selectedSystemId !== intent.systemId) {
+    if (store.mapMode !== 'move' || !isOrbitAvailableOnCurrentMap(intent.systemId, intent.orbitId)) {
       return { status: 'rejected', reason: 'stale', message: 'The selected system changed before this Orbit adjustment was received.' } as const
     }
     if (rejectBlockedEntityCommand(command)) {
@@ -257,31 +301,53 @@ export function useMapWorkflows({
    * @param position Proposed normalized cluster-map position.
    * @returns A promise that resolves after the attempt; invalid coordinates or save failures populate editorError.
    */
-  async function moveSystem(systemId: string, position: Point): Promise<void> {
-    if (!await beforeWorkspaceOperation()) return
-    const currentWorkspace = workspace.value
-    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
-    if (!currentWorkspace || !system) return
+  async function moveSystem(
+    systemId: string,
+    position: Point,
+    capturedContext?: CapturedClusterSystemMove,
+  ): Promise<void> {
+    const startingWorkspace = workspace.value
+    const startingSystem = startingWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
+    const startingAnchor = startingWorkspace?.layout.systemPositions[systemId]
+    if (!startingWorkspace || !startingSystem || !startingAnchor) return
+    const captured: CapturedClusterSystemMove = capturedContext ?? {
+      workspaceId: startingWorkspace.id,
+      clusterId: startingWorkspace.cluster.id,
+      systemId,
+      originPosition: { ...startingAnchor },
+    }
+    if (captured.systemId !== systemId) return
+    if (!capturedContext && !await beforeWorkspaceOperation()) return
+
+    const contextIsCurrent = (latest: LocalWorkspace | null): boolean => {
+      const latestSystem = latest?.cluster.systems.find(candidate => candidate.id === captured.systemId)
+      const latestAnchor = latest?.layout.systemPositions[captured.systemId]
+      return latest !== null
+        && latest.id === captured.workspaceId
+        && latest.cluster.id === captured.clusterId
+        && latestSystem !== undefined
+        && latestAnchor?.x === captured.originPosition.x
+        && latestAnchor.y === captured.originPosition.y
+        && (capturedContext === undefined
+          || (store.activeView === 'cluster' && store.mapMode === 'move'))
+    }
+    if (!contextIsCurrent(workspace.value)) return
 
     try {
       if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
         throw new Error('A map position must contain finite coordinates.')
       }
-      const clusterId = currentWorkspace.cluster.id
+      const targetPosition = clampWardenClusterAnchor(position)
       const result = await mutations.execute({
         action: {
           kind: 'move',
-          label: `Move ${system.name} on Jump Cluster`,
+          label: `Move ${startingSystem.name} on Jump Cluster`,
           target: { kind: 'system', id: systemId },
-          parent: { kind: 'cluster', id: clusterId },
+          parent: { kind: 'cluster', id: captured.clusterId },
         },
-        isCurrent: () => {
-          const latest = workspace.value
-          return latest !== null && latest.cluster.id === clusterId
-            && latest.cluster.systems.some(candidate => candidate.id === systemId)
-        },
+        isCurrent: () => contextIsCurrent(workspace.value),
         prepare: (latest) => {
-          if (latest.cluster.id !== clusterId || !latest.cluster.systems.some(candidate => candidate.id === systemId)) {
+          if (!contextIsCurrent(latest)) {
             throw new Error('The selected star system is no longer available.')
           }
           return {
@@ -291,8 +357,7 @@ export function useMapWorkflows({
               systemPositions: {
                 ...latest.layout.systemPositions,
                 [systemId]: {
-                  x: Math.max(0, Math.min(1, position.x)),
-                  y: Math.max(0, Math.min(1, position.y)),
+                  ...targetPosition,
                 },
               },
             },
@@ -381,6 +446,230 @@ export function useMapWorkflows({
       editorError.value = ''
     } catch (error) {
       editorError.value = errorText(error)
+    }
+  }
+
+  /**
+   * Moves one object using an explicit owning system, independent of the current Inspector target.
+   * The point is normalized in that system's legacy local map coordinates; eligible same-system Orbits
+   * and the object's hosted branch are resolved by the existing translation planner.
+   */
+  async function moveMapObjectInSystem(
+    systemId: string,
+    objectId: string,
+    position: Point,
+    expectedWorkspace?: LocalWorkspace,
+    frameInsets?: SystemFrameInsets,
+  ): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
+    const currentWorkspace = workspace.value
+    if (expectedWorkspace && toRaw(currentWorkspace) !== toRaw(expectedWorkspace)) {
+      editorError.value = 'The workspace changed before this object move could be applied.'
+      return
+    }
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
+    const object = system?.objects.find(candidate => candidate.id === objectId)
+    if (!currentWorkspace || !system || !object) return
+
+    try {
+      if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+        throw new Error('A map position must contain finite coordinates.')
+      }
+      const sourcePlacement = object.placement
+      const geometry = {
+        objectAngles: currentWorkspace.layout.objectAngles,
+        orbitRadii: currentWorkspace.layout.orbitRadii,
+        orbitRotations: currentWorkspace.layout.orbitRotations,
+      }
+      const sourcePoint = objectPositions(system, geometry).get(objectId)
+      if (!sourcePoint) throw new Error('The selected map object position is no longer available.')
+      const targetPoint = fromNormalizedMapPoint(position)
+      const delta = { x: targetPoint.x - sourcePoint.x, y: targetPoint.y - sourcePoint.y }
+      const plan = planSelectedObjectTranslation(currentWorkspace, systemId, [objectId], delta)
+      if (!plan) throw new Error('The selected map object is no longer available.')
+      if (plan.updates.length === 0) {
+        editorError.value = ''
+        return
+      }
+
+      const placementCommand = (change: typeof plan.changes[number]): EntityCommand => ({
+        kind: 'object-placement',
+        objectId: change.objectId,
+        fromOrbitId: change.previousPlacement.kind === 'orbit' ? change.previousPlacement.orbitId : null,
+        toOrbitId: change.nextPlacement.kind === 'orbit' ? change.nextPlacement.orbitId : null,
+      })
+      const blockedCommand = plan.changes.map(placementCommand).find(isEntityCommandBlocked)
+      if (blockedCommand) {
+        rejectBlockedEntityCommand(blockedCommand)
+        return
+      }
+
+      const clusterId = currentWorkspace.cluster.id
+      const onAppliedHandlers = plan.updates
+        .map(change => createCommittedPositionAppliedHandler?.({
+          objectId: change.objectId,
+          previousPlacement: change.previousPlacement,
+          nextPlacement: change.nextPlacement,
+          ...(change.previousAngle !== undefined ? { previousAngle: change.previousAngle } : {}),
+          ...(change.nextAngle !== undefined ? { nextAngle: change.nextAngle } : {}),
+          command: placementCommand(change) as Extract<EntityCommand, { kind: 'object-placement' }>,
+        }))
+        .filter((handler): handler is () => void => handler !== undefined)
+      const contextIsCurrent = (): boolean => {
+        const latest = workspace.value
+        const latestObject = latest?.cluster.systems.find(candidate => candidate.id === systemId)
+          ?.objects.find(candidate => candidate.id === objectId)
+        return latest !== null && latest === currentWorkspace && latest.id === currentWorkspace.id && latest.cluster.id === clusterId
+          && latestObject !== undefined
+          && JSON.stringify(latestObject.placement) === JSON.stringify(sourcePlacement)
+          && store.activeView === 'cluster' && store.mapMode === 'move'
+      }
+      const result = await mutations.execute({
+        action: {
+          kind: 'move',
+          label: `Move ${object.name}`,
+          target: { kind: 'object', id: object.id, systemId },
+          parent: { kind: 'system', id: systemId },
+        },
+        isCurrent: contextIsCurrent,
+        ...(onAppliedHandlers.length
+          ? { onApplied: () => onAppliedHandlers.forEach(handler => handler()) }
+          : {}),
+        prepare: latest => {
+          if (!contextIsCurrent()) throw new Error('The selected map object or map context changed before the move could be applied.')
+          const latestSystem = latest.cluster.systems.find(candidate => candidate.id === systemId)
+          const latestObject = latestSystem?.objects.find(candidate => candidate.id === objectId)
+          if (!latestSystem || !latestObject) throw new Error('The selected map object is no longer available.')
+          const latestBlocked = plan.changes.map(placementCommand).find(isEntityCommandBlocked)
+          if (latestBlocked) throw new Error('Resolve the Inspector draft before changing this object or its placement.')
+          const moved = applySelectedObjectTranslation(latest, systemId, plan)
+          return frameInsets ? setWorkspaceSystemFrame(moved, systemId, frameInsets) : moved
+        },
+      })
+      throwIfRejected(result)
+      if (result.status === 'applied') await result.durable
+      editorError.value = ''
+    } catch (error) {
+      editorError.value = errorText(error)
+    }
+  }
+
+  /** Commits one regular frame resize against the snapshot used by the corner gesture. */
+  async function resizeSystemFrame(
+    systemId: string,
+    insets: SystemFrameInsets,
+    expectedWorkspace: LocalWorkspace,
+  ): Promise<void> {
+    if (!await beforeWorkspaceOperation()) return
+    const current = workspace.value
+    const system = current?.cluster.systems.find(candidate => candidate.id === systemId)
+    const isCurrent = () => workspace.value === current && store.activeView === 'cluster' && store.mapMode === 'move'
+    if (!current || !system || toRaw(current) !== toRaw(expectedWorkspace) || !isCurrent()) return
+    try {
+      const result = await mutations.execute({
+        action: { kind: 'resize', label: `Resize frame for ${system.name}`, target: { kind: 'system', id: systemId } },
+        isCurrent,
+        prepare: latest => setWorkspaceSystemFrame(latest, systemId, insets),
+      })
+      throwIfRejected(result)
+      if (result.status === 'applied') await result.durable
+      editorError.value = ''
+    } catch (error) {
+      editorError.value = errorText(error)
+    }
+  }
+
+  /** Adds a catalogue object to an explicitly resolved system without changing Inspector selection. */
+  async function addMapObjectInSystem(
+    systemId: string,
+    subtype: CatalogueSubtype,
+    target: Extract<SystemCreationTarget, { kind: 'free' | 'orbit' }>,
+    otherType?: string,
+    expectedWorkspace?: LocalWorkspace,
+    addRequestIsCurrent: () => boolean = () => true,
+  ): Promise<boolean> {
+    if (!addRequestIsCurrent() || !await beforeWorkspaceOperation() || !addRequestIsCurrent()) return false
+    const currentWorkspace = workspace.value
+    if (expectedWorkspace && toRaw(currentWorkspace) !== toRaw(expectedWorkspace)) {
+      editorError.value = 'The workspace changed before this object could be added.'
+      return false
+    }
+    const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
+    if (!currentWorkspace || !system) return false
+
+    try {
+      if (target.kind === 'free' && (!Number.isFinite(target.point.x) || !Number.isFinite(target.point.y))) {
+        throw new Error('A map position must contain finite coordinates.')
+      }
+      if (target.kind === 'orbit' && (!Number.isFinite(target.angle)
+        || !canPlaceObjectInOrbit(system, '__new-object__', target.orbitId))) {
+        throw new Error('Choose a valid Orbit for this object.')
+      }
+      const otherTypeLabel = subtype === 'other' ? validName(otherType ?? '', 'Object type') : undefined
+      const orbitId = target.kind === 'orbit' ? target.orbitId : undefined
+      const identity = createSystemObject(system, subtype, orbitId)
+      const command: EntityCommand = { kind: 'object-create', orbitId: orbitId ?? null }
+      if (rejectBlockedEntityCommand(command)) return false
+
+      const clusterId = currentWorkspace.cluster.id
+      const contextIsCurrent = (): boolean => {
+        const latest = workspace.value
+        const latestSystem = latest?.cluster.systems.find(candidate => candidate.id === systemId)
+        return addRequestIsCurrent() && latest !== null && latest.id === currentWorkspace.id && latest.cluster.id === clusterId
+          && latestSystem !== undefined
+          && (target.kind !== 'orbit' || latestSystem.orbits.some(orbit => orbit.id === target.orbitId))
+          && latest === currentWorkspace && store.activeView === 'cluster'
+      }
+      const result = await mutations.execute({
+        action: {
+          kind: 'create',
+          label: `Add ${identity.name}`,
+          target: { kind: 'object', id: identity.id, systemId },
+          parent: { kind: 'system', id: systemId },
+        },
+        isCurrent: contextIsCurrent,
+        prepare: latest => {
+          if (!contextIsCurrent()) throw new Error('The selected star system or Add target changed before this object could be added.')
+          const latestSystem = latest.cluster.systems.find(candidate => candidate.id === systemId)
+          if (!latestSystem) throw new Error('The star system for this Add action is no longer available.')
+          if (isEntityCommandBlocked(command)) {
+            throw new Error('Resolve the Inspector draft before adding an object to this Orbit.')
+          }
+          const latestGenerated = createSystemObject(latestSystem, subtype, orbitId)
+          const object = {
+            ...latestGenerated,
+            id: identity.id,
+            ...(otherTypeLabel ? { subtype: otherTypeLabel } : {}),
+            placement: target.kind === 'free'
+              ? { kind: 'system' as const, x: target.point.x, y: target.point.y }
+              : { kind: 'orbit' as const, orbitId: target.orbitId },
+          }
+          const candidate = replaceWorkspaceSystem(latest, {
+            ...latestSystem,
+            objects: [...latestSystem.objects, object],
+          })
+          if (target.kind !== 'orbit') return candidate
+          return {
+            ...candidate,
+            layout: {
+              ...candidate.layout,
+              objectAngles: {
+                ...candidate.layout.objectAngles,
+                ...captureEffectiveObjectAngles(latest, latestSystem, [target.orbitId]),
+                [object.id]: target.angle,
+              },
+            },
+          }
+        },
+      })
+      throwIfRejected(result)
+      if (result.status === 'applied') void result.durable.catch(() => undefined)
+      editorError.value = ''
+      return result.status === 'applied'
+    } catch (error) {
+      if (!addRequestIsCurrent()) return false
+      editorError.value = errorText(error)
+      return false
     }
   }
 
@@ -559,12 +848,36 @@ export function useMapWorkflows({
    * @param radii Proposed horizontal and vertical radii.
    * @returns A promise that resolves after the attempt; invalid radii and save failures populate editorError.
    */
-  async function resizeMapOrbit(orbitId: string, radii: OrbitRadii): Promise<void> {
+  async function resizeMapOrbit(
+    orbitId: string,
+    radii: OrbitRadii,
+    explicitSystemId?: string,
+    expectedSourceGeometry?: string,
+  ): Promise<void> {
+    const eventWorkspace = workspace.value
+    const eventSystem = explicitSystemId
+      ? eventWorkspace?.cluster.systems.find(candidate => candidate.id === explicitSystemId)
+      : selectedSystem.value
+    const eventOrbit = eventSystem?.orbits.find(candidate => candidate.id === orbitId)
+    if (expectedSourceGeometry !== undefined
+      && (!eventWorkspace || !eventSystem || !eventOrbit
+        || orbitGeometrySource(eventWorkspace, eventSystem, eventOrbit) !== expectedSourceGeometry)) {
+      editorError.value = 'The Orbit geometry changed before this resize could be applied.'
+      return
+    }
     if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
-    const system = selectedSystem.value
+    const system = explicitSystemId
+      ? currentWorkspace?.cluster.systems.find(candidate => candidate.id === explicitSystemId)
+      : selectedSystem.value
     const orbit = system?.orbits.find(candidate => candidate.id === orbitId)
-    if (!currentWorkspace || !system || !orbit) return
+    if (!currentWorkspace || !system || !orbit
+      || (explicitSystemId && !isOrbitAvailableOnCurrentMap(explicitSystemId, orbitId))) return
+    const sourceGeometry = orbitGeometrySource(currentWorkspace, system, orbit)
+    if (expectedSourceGeometry !== undefined && sourceGeometry !== expectedSourceGeometry) {
+      editorError.value = 'The Orbit geometry changed before this resize could be applied.'
+      return
+    }
     if (rejectBlockedEntityCommand({ kind: 'orbit-geometry', orbitId })) return
 
     try {
@@ -582,14 +895,23 @@ export function useMapWorkflows({
         },
         isCurrent: () => {
           const latest = workspace.value
+          const latestSystem = latest?.cluster.systems.find(candidate => candidate.id === system.id)
+          const latestOrbit = latestSystem?.orbits.find(item => item.id === orbitId)
           return latest !== null && latest.cluster.id === clusterId
-            && store.selectedSystemId === systemId
-            && latest.cluster.systems.some(candidate => candidate.id === systemId && candidate.orbits.some(item => item.id === orbitId))
+            && latest.id === currentWorkspace.id
+            && (explicitSystemId
+              ? isOrbitAvailableOnCurrentMap(systemId, orbitId)
+              : store.selectedSystemId === systemId)
+            && latestSystem !== undefined && latestOrbit !== undefined
+            && orbitGeometrySource(latest, latestSystem, latestOrbit) === sourceGeometry
         },
         prepare: (latest) => {
           const latestSystem = latest.cluster.systems.find(candidate => candidate.id === systemId)
           const latestOrbit = latestSystem?.orbits.find(candidate => candidate.id === orbitId)
           if (!latestSystem || !latestOrbit) throw new Error('The selected Orbit is no longer available.')
+          if (latest.id !== currentWorkspace.id || orbitGeometrySource(latest, latestSystem, latestOrbit) !== sourceGeometry) {
+            throw new Error('The Orbit geometry changed before this resize could be applied.')
+          }
           if (rejectBlockedEntityCommand({ kind: 'orbit-geometry', orbitId })) throw new Error('Resolve the Inspector draft before changing this object, Orbit, or a related dependency.')
           const minimum = minimumOrbitRadius(latestSystem, latestOrbit)
           return {
@@ -621,11 +943,36 @@ export function useMapWorkflows({
    * @param degrees Proposed rotation in degrees.
    * @returns A promise that resolves after the attempt; invalid input or save failures populate editorError.
    */
-  async function rotateMapOrbit(orbitId: string, degrees: number): Promise<void> {
+  async function rotateMapOrbit(
+    orbitId: string,
+    degrees: number,
+    explicitSystemId?: string,
+    expectedSourceGeometry?: string,
+  ): Promise<void> {
+    const eventWorkspace = workspace.value
+    const eventSystem = explicitSystemId
+      ? eventWorkspace?.cluster.systems.find(candidate => candidate.id === explicitSystemId)
+      : selectedSystem.value
+    const eventOrbit = eventSystem?.orbits.find(candidate => candidate.id === orbitId)
+    if (expectedSourceGeometry !== undefined
+      && (!eventWorkspace || !eventSystem || !eventOrbit
+        || orbitGeometrySource(eventWorkspace, eventSystem, eventOrbit) !== expectedSourceGeometry)) {
+      editorError.value = 'The Orbit geometry changed before this rotation could be applied.'
+      return
+    }
     if (!await beforeWorkspaceOperation()) return
     const currentWorkspace = workspace.value
-    const system = selectedSystem.value
-    if (!currentWorkspace || !system?.orbits.some(orbit => orbit.id === orbitId)) return
+    const system = explicitSystemId
+      ? currentWorkspace?.cluster.systems.find(candidate => candidate.id === explicitSystemId)
+      : selectedSystem.value
+    const orbit = system?.orbits.find(candidate => candidate.id === orbitId)
+    if (!currentWorkspace || !system || !orbit
+      || (explicitSystemId && !isOrbitAvailableOnCurrentMap(explicitSystemId, orbitId))) return
+    const sourceGeometry = orbitGeometrySource(currentWorkspace, system, orbit)
+    if (expectedSourceGeometry !== undefined && sourceGeometry !== expectedSourceGeometry) {
+      editorError.value = 'The Orbit geometry changed before this rotation could be applied.'
+      return
+    }
     if (rejectBlockedEntityCommand({ kind: 'orbit-geometry', orbitId })) return
 
     try {
@@ -640,13 +987,23 @@ export function useMapWorkflows({
         },
         isCurrent: () => {
           const latest = workspace.value
+          const latestSystem = latest?.cluster.systems.find(candidate => candidate.id === system.id)
+          const latestOrbit = latestSystem?.orbits.find(item => item.id === orbitId)
           return latest !== null && latest.cluster.id === clusterId
-            && store.selectedSystemId === systemId
-            && latest.cluster.systems.some(candidate => candidate.id === systemId && candidate.orbits.some(item => item.id === orbitId))
+            && latest.id === currentWorkspace.id
+            && (explicitSystemId
+              ? isOrbitAvailableOnCurrentMap(systemId, orbitId)
+              : store.selectedSystemId === systemId)
+            && latestSystem !== undefined && latestOrbit !== undefined
+            && orbitGeometrySource(latest, latestSystem, latestOrbit) === sourceGeometry
         },
         prepare: (latest) => {
           const latestSystem = latest.cluster.systems.find(candidate => candidate.id === systemId)
-          if (!latestSystem?.orbits.some(candidate => candidate.id === orbitId)) throw new Error('The selected Orbit is no longer available.')
+          const latestOrbit = latestSystem?.orbits.find(candidate => candidate.id === orbitId)
+          if (!latestSystem || !latestOrbit) throw new Error('The selected Orbit is no longer available.')
+          if (latest.id !== currentWorkspace.id || orbitGeometrySource(latest, latestSystem, latestOrbit) !== sourceGeometry) {
+            throw new Error('The Orbit geometry changed before this rotation could be applied.')
+          }
           if (rejectBlockedEntityCommand({ kind: 'orbit-geometry', orbitId })) throw new Error('Resolve the Inspector draft before changing this object, Orbit, or a related dependency.')
           return {
             ...latest,
@@ -679,14 +1036,32 @@ export function useMapWorkflows({
     center: Point,
     hostId: string | null,
     operationIsCurrent?: () => boolean,
+    explicitSystemId?: string,
+    expectedSourceGeometry?: string,
   ): Promise<boolean> {
+    const eventWorkspace = workspace.value
+    const eventSystemId = explicitSystemId ?? selectedSystem.value?.id
+    const eventSystem = eventWorkspace?.cluster.systems.find(candidate => candidate.id === eventSystemId)
+    const eventOrbit = eventSystem?.orbits.find(candidate => candidate.id === orbitId)
+    if (expectedSourceGeometry !== undefined
+      && (!eventWorkspace || !eventSystem || !eventOrbit
+        || orbitGeometrySource(eventWorkspace, eventSystem, eventOrbit) !== expectedSourceGeometry)) {
+      editorError.value = 'The Orbit geometry changed before this move could be applied.'
+      return false
+    }
     if (!await beforeWorkspaceOperation()) return false
     const currentWorkspace = workspace.value
-    const selectedSystemId = selectedSystem.value?.id
+    const selectedSystemId = explicitSystemId ?? selectedSystem.value?.id
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === selectedSystemId)
     if (!currentWorkspace || !system) return false
+    if (explicitSystemId && !isOrbitAvailableOnCurrentMap(explicitSystemId, orbitId)) return false
     const currentOrbit = system.orbits.find(candidate => candidate.id === orbitId)
     if (!currentOrbit) return false
+    const sourceGeometry = orbitGeometrySource(currentWorkspace, system, currentOrbit)
+    if (expectedSourceGeometry !== undefined && sourceGeometry !== expectedSourceGeometry) {
+      editorError.value = 'The Orbit geometry changed before this move could be applied.'
+      return false
+    }
     const isFreeCenterMove = currentOrbit.hostId === null && hostId === null
     const previousCenter = isFreeCenterMove ? { ...currentOrbit.center } : null
     const command: EntityCommand = isFreeCenterMove
@@ -718,16 +1093,20 @@ export function useMapWorkflows({
         ...(onApplied ? { onApplied } : {}),
         isCurrent: () => {
           const latest = workspace.value
-          const latestOrbit = latest?.cluster.systems.find(candidate => candidate.id === selectedSystemId)
-            ?.orbits.find(item => item.id === orbitId)
+          const latestSystem = latest?.cluster.systems.find(candidate => candidate.id === selectedSystemId)
+          const latestOrbit = latestSystem?.orbits.find(item => item.id === orbitId)
           const centerUnchanged = !isFreeCenterMove || (latestOrbit?.hostId === null
             && previousCenter !== null
             && latestOrbit.center.x === previousCenter.x
             && latestOrbit.center.y === previousCenter.y)
-          return latest !== null && latest.cluster.id === clusterId
-            && store.selectedSystemId === selectedSystemId
+          return latest !== null && latest.id === currentWorkspace.id && latest.cluster.id === clusterId
+            && (explicitSystemId
+              ? isOrbitAvailableOnCurrentMap(selectedSystemId, orbitId)
+              : store.activeView === 'system' && store.selectedSystemId === selectedSystemId)
             && latestOrbit !== undefined
             && latestOrbit.hostId === currentOrbit.hostId
+            && latestSystem !== undefined
+            && orbitGeometrySource(latest, latestSystem, latestOrbit) === sourceGeometry
             && centerUnchanged
             && (operationIsCurrent === undefined || operationIsCurrent())
             && !rejectBlockedEntityCommand(command)
@@ -739,6 +1118,9 @@ export function useMapWorkflows({
           const latestSystem = latest.cluster.systems.find(candidate => candidate.id === selectedSystemId)
           const latestOrbit = latestSystem?.orbits.find(candidate => candidate.id === orbitId)
           if (!latestSystem || !latestOrbit) throw new Error('The selected Orbit is no longer available.')
+          if (latest.id !== currentWorkspace.id || orbitGeometrySource(latest, latestSystem, latestOrbit) !== sourceGeometry) {
+            throw new Error('The Orbit geometry changed before this move could be applied.')
+          }
           if (latestOrbit.hostId !== currentOrbit.hostId) {
             throw new Error('The Orbit center or host changed before this move could be applied.')
           }
@@ -806,25 +1188,25 @@ export function useMapWorkflows({
    */
   async function detachSelectedOrbit(): Promise<void> {
     if (!await beforeWorkspaceOperation()) return
-    const systemId = selectedSystem.value?.id
-    const orbitId = selectedOrbit.value?.id
-    if (
-      !systemId
-      || !orbitId
-      || selectedOrbit.value?.hostId === null
-    ) return
+    const inspectedOrbit = continuousMap?.value && store.activeView === 'cluster'
+      && store.inspectedTarget?.kind === 'orbit'
+      ? store.inspectedTarget
+      : null
+    const systemId = inspectedOrbit?.systemId ?? selectedSystem.value?.id
+    const orbitId = inspectedOrbit?.orbitId ?? selectedOrbit.value?.id
+    if (!systemId || !orbitId) return
     if (rejectBlockedEntityCommand({ kind: 'orbit-host', orbitId, hostId: null })) return
     if (!await resolveTransition({ leaveChart: false, leaveEntitySession: false })) return
 
     const currentWorkspace = workspace.value
     const system = currentWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
     const orbit = system?.orbits.find(candidate => candidate.id === orbitId)
-    if (!currentWorkspace || !system || !orbit || selectedSystem.value?.id !== systemId) return
+    if (!currentWorkspace || !system || !orbit || orbit.hostId === null || !isOrbitOwnerCurrent(systemId, orbitId)) return
 
     try {
       const map = systemMapRef.value
-      if (!map) throw new Error('The system map is not ready.')
-      const center = map.getDetachedOrbitCenter(orbit.id)
+      if (!map) throw new Error('The map is not ready.')
+      const center = map.getDetachedOrbitCenter?.(orbit.id, systemId)
       if (!center) throw new Error('Could not find a nearby empty location for this Orbit.')
       const clusterId = currentWorkspace.cluster.id
       const result = await mutations.execute({
@@ -837,8 +1219,7 @@ export function useMapWorkflows({
         isCurrent: () => {
           const latest = workspace.value
           return latest !== null && latest.cluster.id === clusterId
-            && store.selectedSystemId === systemId
-            && store.selectedOrbitId === orbitId
+            && isOrbitOwnerCurrent(systemId, orbitId)
             && latest.cluster.systems.some(candidate => candidate.id === systemId && candidate.orbits.some(item => item.id === orbitId && item.hostId !== null))
             && !rejectBlockedEntityCommand({ kind: 'orbit-host', orbitId, hostId: null })
         },
@@ -847,8 +1228,8 @@ export function useMapWorkflows({
           const latestOrbit = latestSystem?.orbits.find(candidate => candidate.id === orbitId)
           if (!latestSystem || !latestOrbit || latestOrbit.hostId === null) throw new Error('The selected Orbit is no longer hosted.')
           const latestMap = systemMapRef.value
-          if (!latestMap) throw new Error('The system map is not ready.')
-          const latestCenter = latestMap.getDetachedOrbitCenter(latestOrbit.id)
+          if (!latestMap) throw new Error('The map is not ready.')
+          const latestCenter = latestMap.getDetachedOrbitCenter?.(latestOrbit.id, systemId)
           if (!latestCenter) throw new Error('Could not find a nearby empty location for this Orbit.')
           const prepared = replaceWorkspaceSystem(latest, detachOrbit(latestSystem, latestOrbit.id, latestCenter))
           const defaultRadius = defaultOrbitRadius(latestSystem, latestOrbit)
@@ -899,6 +1280,9 @@ export function useMapWorkflows({
     updateOrbitAdjustment,
     moveSystem,
     moveMapObject,
+    moveMapObjectInSystem,
+    resizeSystemFrame,
+    addMapObjectInSystem,
     placeMapObjectInOrbit,
     rotateMapObject,
     resizeMapOrbit,

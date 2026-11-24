@@ -10,6 +10,7 @@ import type {
   JsonImportSummary,
   LocalWorkspace,
   Orbit,
+  Point,
   PreparedJsonImport,
   StarSystem,
   StarSystemExport,
@@ -18,19 +19,20 @@ import { initialClusterSystemPosition } from './workspace-cluster'
 import {
   isLocalWorkspace,
   isStarSystem,
+  migrateLegacyWorkspaceRouteShape,
   remapLegacyReservedCustomFieldIds,
   withDefaultJumpLevels,
   withoutLegacyObjectApplicabilityTargets,
 } from './workspace-schema'
 import { minimumOrbitRadius, normalizeOrbitRadii, normalizeOrbitRotations, orbitRadiiMeetMinimum } from './workspace-orbits'
-import { isObjectFieldSettings, isRecord, objectFieldValidationError } from './workspace-validation'
+import { isObjectFieldSettings, isPoint, isRecord, objectFieldValidationError } from './workspace-validation'
 
 type ImportableMap =
-  | (Omit<JumpClusterExport, 'version'> & { version: 1 | 2 | 3 | 4 })
+  | (Omit<JumpClusterExport, 'version'> & { version: 1 | 2 | 3 | 4 | 5 })
   | (Omit<StarSystemExport, 'version'> & { version: 1 | 2 | 3 | 4 })
 
 /**
- * Validates a supported version 1 through 4 Cluster or standalone-system export.
+ * Validates a supported version 1 through 5 Cluster or version 1 through 4 standalone-system export.
  * @param value Unknown parsed JSON value.
  * @returns True only when the export and every saved map-specific value satisfy current domain rules.
  */
@@ -40,7 +42,7 @@ function isImportedMap(value: unknown): value is ImportableMap {
   const layout = value.layout
   if (
     value.format !== 'ttrpg-cluster-control-map'
-    || (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4)
+    || (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4 && value.version !== 5)
     || !isObjectFieldSettings(settings)
     || !isRecord(layout)
     || layout.version !== 1
@@ -80,13 +82,14 @@ function isImportedMap(value: unknown): value is ImportableMap {
     while (validationIds.has(validationId)) validationId = crypto.randomUUID()
 
     const candidate = {
-      version: 4,
+      version: 5,
       id: validationId,
       cluster,
       objectFieldSettings: settings,
       layout: {
         systemPositions: layout.systemPositions,
         unresolvedExitPositions: layout.unresolvedExitPositions,
+        systemFrames: layout.systemFrames,
         orbitRadii,
         orbitRotations,
         objectAngles: layout.objectAngles ?? {},
@@ -96,10 +99,11 @@ function isImportedMap(value: unknown): value is ImportableMap {
 
     const systemIds = new Set(candidate.cluster.systems.map(system => system.id))
     return Object.keys(candidate.layout.systemPositions).every(systemId => systemIds.has(systemId))
+      && Object.keys(candidate.layout.systemFrames ?? {}).every(systemId => systemIds.has(systemId))
   }
 
   const system = value.system
-  if (value.type !== 'system' || !isStarSystem(system)) return false
+  if (value.type !== 'system' || value.version === 5 || layout.systemFrames !== undefined || !isStarSystem(system)) return false
   if (!isRecord(layout.orbitRadii) || !isRecord(layout.objectAngles)) return false
 
   const orbitIds = new Set(system.orbits.map(orbit => orbit.id))
@@ -191,17 +195,26 @@ function normalizeLegacyMap(value: unknown): unknown {
 }
 
 function prepareImportedMap(value: unknown): unknown {
-  const normalized = normalizeLegacyMap(value)
-  let withReservedFieldIdsRemapped = normalized
-  if (isRecord(normalized) && normalized.version !== 4) {
-    if (normalized.type === 'cluster') {
-      withReservedFieldIdsRemapped = remapLegacyReservedCustomFieldIds(normalized, 'cluster-export')
-    } else if (normalized.type === 'system') {
-      withReservedFieldIdsRemapped = remapLegacyReservedCustomFieldIds(normalized, 'system-export')
+  const sourceVersion = isRecord(value) ? value.version : undefined
+  let normalized = normalizeLegacyMap(value)
+  if (sourceVersion === 1) {
+    normalized = withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(normalized))
+  }
+  if (isRecord(normalized)
+    && normalized.type === 'cluster'
+    && (sourceVersion === 1 || sourceVersion === 2 || sourceVersion === 3 || sourceVersion === 4)) {
+    normalized = migrateLegacyWorkspaceRouteShape(normalized)
+    if (!normalized) return null
+  }
+
+  if (sourceVersion === 1 || sourceVersion === 2 || sourceVersion === 3) {
+    if (isRecord(normalized) && normalized.type === 'cluster') {
+      normalized = remapLegacyReservedCustomFieldIds(normalized, 'cluster-export')
+    } else if (isRecord(normalized) && normalized.type === 'system') {
+      normalized = remapLegacyReservedCustomFieldIds(normalized, 'system-export')
     }
   }
-  if (!isRecord(value) || value.version !== 1) return withReservedFieldIdsRemapped
-  return withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(withReservedFieldIdsRemapped))
+  return normalized
 }
 
 /**
@@ -328,7 +341,7 @@ function remapImportedSystem(
 export function restoreJumpClusterBackup(value: unknown): LocalWorkspace {
   const map = prepareImportedMap(value)
   if (!isImportedMap(map) || map.type !== 'cluster') {
-    throw new Error('Choose a valid version 1, version 2, version 3, or version 4 Jump Cluster JSON backup.')
+    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster JSON backup.')
   }
 
   const entityIds = new Set<string>([
@@ -345,13 +358,14 @@ export function restoreJumpClusterBackup(value: unknown): LocalWorkspace {
   while (entityIds.has(localId)) localId = crypto.randomUUID()
 
   const workspace: LocalWorkspace = {
-    version: 4,
+    version: 5,
     id: localId,
     cluster: map.cluster,
     objectFieldSettings: map.objectFieldSettings,
     layout: {
       systemPositions: map.layout.systemPositions,
       unresolvedExitPositions: map.layout.unresolvedExitPositions ?? {},
+      ...(map.layout.systemFrames !== undefined ? { systemFrames: map.layout.systemFrames } : {}),
       orbitRadii: normalizeOrbitRadii(map.layout.orbitRadii ?? {}, map.layout.orbitEllipseRadii ?? {}) ?? {},
       orbitRotations: normalizeOrbitRotations(map.layout.orbitRotations ?? {}) ?? {},
       objectAngles: map.layout.objectAngles ?? {},
@@ -370,13 +384,18 @@ export function restoreJumpClusterBackup(value: unknown): LocalWorkspace {
  * Explicit applicability scopes are unioned, while an undefined/global scope dominates the union.
  * @param workspace Current workspace into which the copy would be added.
  * @param value Parsed JSON candidate.
+ * @param standaloneAnchor Optional Cluster position for an imported standalone system.
  * @returns Proposed next workspace, IDs of added systems, and an informational collision/match summary.
  * @throws If the export is invalid, same-name custom fields conflict, or the proposed workspace fails validation.
  */
-export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): PreparedJsonImport {
+export function prepareJsonImport(
+  workspace: LocalWorkspace,
+  value: unknown,
+  standaloneAnchor?: Point,
+): PreparedJsonImport {
   const map = prepareImportedMap(value)
   if (!isImportedMap(map)) {
-    throw new Error('Choose a valid version 1, version 2, version 3, or version 4 Jump Cluster or star system JSON export.')
+    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
   }
 
   const sourceSystems = map.type === 'cluster' ? map.cluster.systems : [map.system]
@@ -501,12 +520,14 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
 
   const importedSystems = sourceSystems.map(system => remapImportedSystem(system, ids, fieldIds))
   const importedRoutes: JumpRoute[] = sourceRoutes.map((route): JumpRoute =>
-    route.toPointId === null
+    route.toSystemId === null
       ? {
           id: ids.get(route.id)!,
           ...(route.name !== undefined ? { name: route.name } : {}),
           jumpLevel: route.jumpLevel,
-          fromPointId: ids.get(route.fromPointId)!,
+          fromSystemId: ids.get(route.fromSystemId)!,
+          fromPointId: route.fromPointId === null ? null : ids.get(route.fromPointId)!,
+          toSystemId: null,
           toPointId: null,
           unresolvedExit: route.unresolvedExit,
           playerShared: route.playerShared,
@@ -515,14 +536,19 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
           id: ids.get(route.id)!,
           ...(route.name !== undefined ? { name: route.name } : {}),
           jumpLevel: route.jumpLevel,
-          fromPointId: ids.get(route.fromPointId)!,
-          toPointId: ids.get(route.toPointId)!,
+          fromSystemId: ids.get(route.fromSystemId)!,
+          fromPointId: route.fromPointId === null ? null : ids.get(route.fromPointId)!,
+          toSystemId: ids.get(route.toSystemId)!,
+          toPointId: route.toPointId === null ? null : ids.get(route.toPointId)!,
           playerShared: route.playerShared,
         },
   )
   const layout = {
     systemPositions: { ...workspace.layout.systemPositions },
     unresolvedExitPositions: { ...(workspace.layout.unresolvedExitPositions ?? {}) },
+    ...(workspace.layout.systemFrames !== undefined || (map.type === 'cluster' && map.layout.systemFrames !== undefined)
+      ? { systemFrames: { ...workspace.layout.systemFrames } }
+      : {}),
     orbitRadii: { ...workspace.layout.orbitRadii },
     orbitRotations: { ...workspace.layout.orbitRotations },
     objectAngles: { ...workspace.layout.objectAngles },
@@ -535,28 +561,31 @@ export function prepareJsonImport(workspace: LocalWorkspace, value: unknown): Pr
     for (const [sourceId, position] of Object.entries(map.layout.unresolvedExitPositions ?? {})) {
       layout.unresolvedExitPositions[ids.get(sourceId)!] = position
     }
+    for (const [sourceId, insets] of Object.entries(map.layout.systemFrames ?? {})) {
+      layout.systemFrames![ids.get(sourceId)!] = insets
+    }
   } else {
     const addedSystemId = addedSystemIds[0]
     if (!addedSystemId) {
       throw new Error('The imported star system is missing.')
     }
-    layout.systemPositions[addedSystemId] = initialClusterSystemPosition(
-      workspace.cluster.systems.length,
-    )
+    const anchor = standaloneAnchor ?? initialClusterSystemPosition(workspace.cluster.systems.length)
+    if (!isPoint(anchor)) throw new Error('Choose a finite Cluster position for the imported star system.')
+    layout.systemPositions[addedSystemId] = { x: anchor.x, y: anchor.y }
   }
   const importedOrbitRadii = normalizeOrbitRadii(
     map.layout.orbitRadii,
     map.layout.orbitEllipseRadii ?? {},
   )
   if (!importedOrbitRadii) {
-    throw new Error('Choose a valid version 1, version 2, version 3, or version 4 Jump Cluster or star system JSON export.')
+    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
   }
   for (const [sourceId, radii] of Object.entries(importedOrbitRadii)) {
     layout.orbitRadii[ids.get(sourceId)!] = radii
   }
   const importedOrbitRotations = normalizeOrbitRotations(map.layout.orbitRotations ?? {})
   if (!importedOrbitRotations) {
-    throw new Error('Choose a valid version 1, version 2, version 3, or version 4 Jump Cluster or star system JSON export.')
+    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
   }
   for (const [sourceId, rotation] of Object.entries(importedOrbitRotations)) {
     layout.orbitRotations[ids.get(sourceId)!] = rotation
@@ -607,7 +636,7 @@ export function jsonImportReviewEffects(
 ): { signature: string; existingFieldIds: string[] } {
   const map = prepareImportedMap(value)
   if (!isImportedMap(map)) {
-    throw new Error('Choose a valid version 1, version 2, version 3, or version 4 Jump Cluster or star system JSON export.')
+    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
   }
 
   const fieldState = (field: CustomFieldDefinition, includeId: boolean): object => ({

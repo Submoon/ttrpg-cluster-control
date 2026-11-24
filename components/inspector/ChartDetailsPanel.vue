@@ -49,7 +49,7 @@
       </p>
     </section>
 
-    <template v-if="chartEditSystemId || (props.allowOpenSystem && props.mode === 'system' && props.selectedSystem) || props.hasChartNameDraft" #footer>
+    <template v-if="chartEditSystemId || props.hasChartNameDraft" #footer>
       <div class="chart-details-actions grid gap-2">
         <UButton
           v-if="chartEditSystemId"
@@ -61,15 +61,6 @@
           @click="commands.charts.beginNamesEdit(chartEditSystemId)"
         >
           Edit
-        </UButton>
-        <UButton
-          v-if="props.allowOpenSystem && props.mode === 'system' && props.selectedSystem"
-          block
-          class="w-full min-w-0 justify-center"
-          color="primary"
-          @click="emit('open-system', props.selectedSystem.id)"
-        >
-          Open system
         </UButton>
       </div>
       <span v-if="props.hasChartNameDraft" class="chart-details-draft-status save-feedback text-sm" role="status">
@@ -104,21 +95,6 @@
     <p v-if="props.mode === 'cluster' && props.editorError" class="feedback m-0 error-text" role="alert">
       {{ props.editorError }}
     </p>
-    <div v-if="props.mode === 'system' && props.selectedSystem" class="chart-details-system-delete">
-      <p v-if="props.workspace.cluster.systems.length <= 1" id="chart-details-system-delete-restriction" class="inspector-intro m-0" role="status">
-        A Jump Cluster must keep at least one star system.
-      </p>
-      <UButton
-        color="error"
-        variant="outline"
-        :disabled="props.saving || props.workspace.cluster.systems.length <= 1"
-        :aria-label="`Delete ${props.selectedSystem.name} system`"
-        :aria-describedby="props.workspace.cluster.systems.length <= 1 ? 'chart-details-system-delete-restriction' : undefined"
-        @click="emit('delete-system', props.selectedSystem.id)"
-      >
-        Delete system…
-      </UButton>
-    </div>
   </UCard>
 </template>
 
@@ -143,14 +119,9 @@ const props = defineProps<{
   hasChartNameDraft: boolean
   editorError?: string
   saving: boolean
-  allowOpenSystem?: boolean
   publicationBusy?: boolean
 }>()
 
-const emit = defineEmits<{
-  'open-system': [systemId: string]
-  'delete-system': [systemId: string]
-}>()
 const commands = useEditorCommands()
 const jumpPointCount = computed(() => jumpPointsInCluster(props.workspace.cluster).length)
 const chartEditSystemId = computed(() => props.chartEditSystemId
@@ -178,13 +149,4 @@ function setSystemPublication(mode: PublicationMode): void {
 
 <style scoped>
 .chart-details-card-heading { min-width: 0; }
-.chart-details-system-delete {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  border-top: 1px solid var(--line-soft);
-  padding-top: 0.75rem;
-}
 </style>

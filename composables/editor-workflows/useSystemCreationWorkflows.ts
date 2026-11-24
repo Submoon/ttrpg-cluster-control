@@ -1,5 +1,5 @@
 /** Owns persistent Add intent and one transient, single-use completion token. */
-import { computed, ref, watch, type Ref } from 'vue'
+import { computed, ref, shallowRef, watch, type Ref } from 'vue'
 import {
   createOrbit,
   createSystemObject,
@@ -30,6 +30,8 @@ import {
 import { isCircularOrbitRadiusAvailable, nearestAvailableCircularOrbitRadius } from '../../utils/orbit-drag-geometry'
 import type {
   EntityCommand,
+  OrbitCreationMapPreview,
+  OrbitDragOwner,
   SystemCreationCandidate,
   SystemCreationInputs,
   SystemCreationPreview,
@@ -51,6 +53,8 @@ interface OrbitRadiusInputOwnership {
 
 interface OrbitDragReservation {
   session: SystemCreationSession
+  formSession: SystemCreationSession | null
+  explicitOwner: boolean
   target: Extract<SystemCreationTarget, { kind: 'free' | 'host' }>
   center: Point
   workspaceSnapshot: LocalWorkspace
@@ -173,12 +177,14 @@ export function useSystemCreationWorkflows({
   const store = useEditorUiStore()
   const selectedSystem = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
   const creationSession = ref<SystemCreationSession | null>(null)
+  const orbitDragPreview = shallowRef<OrbitCreationMapPreview | null>(null)
   let sessionSequence = 0
   let previewSequence = 0
   let confirmingPreviewId: number | null = null
   let explicitObjectOrbitPreference: { sessionId: number; orbitId: string } | null = null
   let orbitRadiusInputOwnership: OrbitRadiusInputOwnership | null = null
   let orbitDragReservation: OrbitDragReservation | null = null
+  let clusterOrbitSessionId: number | null = null
 
   watch(
     [() => store.activeView, () => store.selectedSystemId, () => workspace.value?.cluster.id],
@@ -226,7 +232,7 @@ export function useSystemCreationWorkflows({
   }
 
   function invalidatePreview(session: SystemCreationSession): void {
-    if (orbitDragReservation?.session === session) orbitDragReservation = null
+    if (orbitDragReservation?.formSession === session) cancelOrbitDrag()
     session.preview = null
     session.candidates = []
     session.notice = ''
@@ -234,35 +240,21 @@ export function useSystemCreationWorkflows({
 
   function sessionMatchesCurrentContext(session: SystemCreationSession): boolean {
     const currentWorkspace = workspace.value
-    const system = selectedSystem.value
+    const clusterOrbit = clusterOrbitSessionId === session.id
+      || orbitDragReservation?.session === session && orbitDragReservation.explicitOwner
     return !!currentWorkspace
       && currentWorkspace.cluster.id === session.clusterId
-      && store.activeView === 'system'
-      && !!system
-      && system.id === session.systemId
+      && (clusterOrbit
+        ? store.activeView === 'cluster'
+        : store.activeView === 'system' && selectedSystem.value?.id === session.systemId)
       && currentWorkspace.cluster.systems.some(candidate => candidate.id === session.systemId)
   }
 
-  async function chooseCreationType(type: SystemCreationType): Promise<boolean> {
-    if (confirmingPreviewId !== null || !await beforeWorkspaceOperation()) return false
-    const currentWorkspace = workspace.value
-    const system = selectedSystem.value
-    if (!currentWorkspace || !system
-      || !currentWorkspace.cluster.systems.some(candidate => candidate.id === system.id)) return false
-
-    if (creationSession.value && sameCreationType(creationSession.value.type, type)
-      && sessionMatchesCurrentContext(creationSession.value)) {
-      invalidatePreview(creationSession.value)
-      creationSession.value.errors = {}
-      return true
-    }
-
-    sessionSequence += 1
-    explicitObjectOrbitPreference = null
-    const session: SystemCreationSession = {
-      id: sessionSequence,
-      clusterId: currentWorkspace.cluster.id,
-      systemId: system.id,
+  function createSession(clusterId: string, systemId: string, type: SystemCreationType): SystemCreationSession {
+    return {
+      id: ++sessionSequence,
+      clusterId,
+      systemId,
       type,
       candidates: [],
       preview: null,
@@ -271,18 +263,60 @@ export function useSystemCreationWorkflows({
       errors: {},
       notice: '',
     }
-    creationSession.value = session
-    orbitRadiusInputOwnership = type.kind === 'orbit'
-      ? { sessionId: session.id, horizontal: false, vertical: false }
+  }
+
+  async function chooseCreationType(
+    type: SystemCreationType,
+    orbitOwnerId?: string,
+    isCurrent: () => boolean = () => true,
+  ): Promise<boolean> {
+    if (confirmingPreviewId !== null || !isCurrent() || !await beforeWorkspaceOperation() || !isCurrent()) return false
+    const currentWorkspace = workspace.value
+    if (orbitOwnerId && (type.kind !== 'orbit' || store.activeView !== 'cluster')) return false
+    const system = orbitOwnerId
+      ? currentWorkspace?.cluster.systems.find(candidate => candidate.id === orbitOwnerId)
+      : selectedSystem.value
+    if (!currentWorkspace || !system
+      || !currentWorkspace.cluster.systems.some(candidate => candidate.id === system.id)) return false
+
+    const previous = creationSession.value
+    if (previous && sameCreationType(previous.type, type)
+      && previous.systemId === system.id && sessionMatchesCurrentContext(previous)) {
+      invalidatePreview(previous)
+      previous.errors = {}
+      return true
+    }
+
+    const previousGeometry = orbitOwnerId && previous?.type.kind === 'orbit'
+      && clusterOrbitSessionId === previous.id && sessionMatchesCurrentContext(previous)
+      ? { inputs: previous.inputs, ownership: radiusInputOwnership(previous) }
       : null
+    cancelOrbitDrag()
+    explicitObjectOrbitPreference = null
+    const session = createSession(currentWorkspace.cluster.id, system.id, type)
     if (type.kind === 'orbit') fillDefaultOrbitGeometry(session, system, null)
     session.appliedInputs = { ...session.inputs }
+
+    if (previousGeometry) {
+      if (previousGeometry.ownership.horizontal) session.inputs.horizontalRadius = previousGeometry.inputs.horizontalRadius
+      if (previousGeometry.ownership.vertical) session.inputs.verticalRadius = previousGeometry.inputs.verticalRadius
+      if (previousGeometry.inputs.rotation.trim()) session.inputs.rotation = previousGeometry.inputs.rotation
+    }
+    orbitRadiusInputOwnership = type.kind === 'orbit'
+      ? {
+          sessionId: session.id,
+          horizontal: previousGeometry?.ownership.horizontal ?? false,
+          vertical: previousGeometry?.ownership.vertical ?? false,
+        }
+      : null
+    clusterOrbitSessionId = orbitOwnerId ? session.id : null
+    creationSession.value = session
     return true
   }
 
   const hasPendingHistoryInput = computed(() => {
     const session = creationSession.value
-    return !!session && (
+    return orbitDragPreview.value !== null || !!session && (
       session.preview !== null
       || session.candidates.length > 0
       || !sameCreationInputs(session.inputs, session.appliedInputs)
@@ -423,7 +457,7 @@ export function useSystemCreationWorkflows({
     reservation: OrbitDragReservation,
     currentWorkspace: LocalWorkspace | null = workspace.value,
   ): boolean {
-    if (!currentWorkspace || creationSession.value !== reservation.session
+    if (!currentWorkspace || creationSession.value !== reservation.formSession
       || !sessionMatchesCurrentContext(reservation.session)
       || currentWorkspace !== reservation.workspaceSnapshot
       || currentWorkspace.cluster.id !== reservation.session.clusterId) return false
@@ -601,18 +635,27 @@ export function useSystemCreationWorkflows({
     return null
   }
 
-  function beginOrbitDrag(scenePoint: Point): boolean {
+  function beginOrbitDrag(scenePoint: Point, mapCandidates?: SystemCreationCandidate[], owner?: OrbitDragOwner): boolean {
     if (confirmingPreviewId !== null || orbitDragReservation) return false
-    const session = creationSession.value
+    const formSession = creationSession.value
     const currentWorkspace = workspace.value
-    const system = session && currentWorkspace ? currentSystemForSession(session) : undefined
-    if (!session || session.type.kind !== 'orbit' || !currentWorkspace || !system
-      || !sessionMatchesCurrentContext(session)
-      || !Number.isFinite(scenePoint.x) || !Number.isFinite(scenePoint.y)) return false
+    if (!currentWorkspace || !Number.isFinite(scenePoint.x) || !Number.isFinite(scenePoint.y)
+      || (owner && (store.activeView !== 'cluster' || owner.workspace !== currentWorkspace))) return false
+    const system = owner
+      ? currentWorkspace.cluster.systems.find(candidate => candidate.id === owner.systemId)
+      : formSession && currentSystemForSession(formSession)
+    if (!system) return false
+
+    // A press in another system reserves its own geometry without replacing the Placement form.
+    const session = formSession?.type.kind === 'orbit' && formSession.systemId === system.id
+      && sessionMatchesCurrentContext(formSession) ? formSession
+      : owner ? createSession(currentWorkspace.cluster.id, system.id, { kind: 'orbit' })
+      : null
+    if (!session) return false
 
     let candidates: SystemCreationCandidate[]
     try {
-      candidates = systemMapRef.value?.getCreationCandidates(scenePoint, session.type)
+      candidates = mapCandidates ?? systemMapRef.value?.getCreationCandidates(scenePoint, session.type)
         ?? creationCandidatesAtPoint(system, scenePoint, session.type, geometryForWorkspace(currentWorkspace))
     } catch {
       return false
@@ -650,10 +693,11 @@ export function useSystemCreationWorkflows({
     const minimumRadius = minimumOrbitRadius(system, prospectiveOrbit(system, hostId))
     const existingCircularRadii = concentricCircularRadii(system, selected.target, geometryForWorkspace(currentWorkspace))
     invalidatePreview(session)
-    clearErrors()
-    session.notice = ''
+    session.errors = {}
     orbitDragReservation = {
       session,
+      formSession,
+      explicitOwner: owner !== undefined,
       target: selected.target,
       center,
       workspaceSnapshot: currentWorkspace,
@@ -704,12 +748,16 @@ export function useSystemCreationWorkflows({
       orbitDrag: true,
     }
     reservation.session.notice = ''
+    if (reservation.session !== reservation.formSession) {
+      orbitDragPreview.value = { systemId: reservation.session.systemId, preview: reservation.session.preview }
+    }
   }
 
   function cancelOrbitDrag(): void {
     const reservation = orbitDragReservation
     if (!reservation) return
     orbitDragReservation = null
+    orbitDragPreview.value = null
     if (reservation.session.preview?.orbitDrag
       && (reservation.previewId === null || reservation.session.preview.id === reservation.previewId)) {
       reservation.session.preview = null
@@ -731,15 +779,14 @@ export function useSystemCreationWorkflows({
     const error = validateOrbitDragPreview(reservation, system, preview, currentWorkspace)
     if (error) {
       cancelOrbitDrag()
-      if (error === duplicateOrbitGeometryMessage) setTargetError(reservation.target, error)
+      if (error === duplicateOrbitGeometryMessage && reservation.session === creationSession.value) {
+        setTargetError(reservation.target, error)
+      }
       return false
     }
 
-    const completed = await confirmCreation(preview.id)
-    if (orbitDragReservation === reservation) {
-      if (completed) orbitDragReservation = null
-      else cancelOrbitDrag()
-    }
+    const completed = await confirmCreation(preview.id, reservation)
+    if (orbitDragReservation === reservation) cancelOrbitDrag()
     return completed
   }
 
@@ -952,8 +999,11 @@ export function useSystemCreationWorkflows({
     return completeCreation(target)
   }
 
-  async function offerCreationCandidates(candidates: SystemCreationCandidate[]): Promise<boolean> {
-    if (confirmingPreviewId !== null || !await beforeWorkspaceOperation()) return false
+  async function offerCreationCandidates(
+    candidates: SystemCreationCandidate[],
+    isCurrent: () => boolean = () => true,
+  ): Promise<boolean> {
+    if (confirmingPreviewId !== null || !isCurrent() || !await beforeWorkspaceOperation() || !isCurrent()) return false
     const session = creationSession.value
     if (!session) return false
     invalidatePreview(session)
@@ -1014,9 +1064,9 @@ export function useSystemCreationWorkflows({
   }
 
   function cancelCreationPreview(): void {
+    cancelOrbitDrag()
     const session = creationSession.value
     if (!session) return
-    cancelOrbitDrag()
     session.preview = null
     session.candidates = []
     session.notice = session.type.kind === 'object'
@@ -1024,15 +1074,18 @@ export function useSystemCreationWorkflows({
       : 'Choose another map target or adjust the Orbit geometry in Placement.'
   }
 
-  async function confirmCreation(previewId: number): Promise<boolean> {
+  async function confirmCreation(previewId: number, drag?: OrbitDragReservation): Promise<boolean> {
     if (confirmingPreviewId !== null || !await beforeWorkspaceOperation()) return false
-    const session = creationSession.value
-    if (!session?.preview || session.preview.id !== previewId) return false
+    const session = drag?.session ?? creationSession.value
+    const ownsSession = () => drag
+      ? orbitDragReservation === drag && creationSession.value === drag.formSession
+      : creationSession.value === session
+    if (!ownsSession() || !session?.preview || session.preview.id !== previewId) return false
     let currentWorkspace = workspace.value
     let system = currentSystemForSession(session)
     if (!currentWorkspace || !system) {
       invalidatePreview(session)
-      setError('target', 'The star system for this Add session is no longer available.')
+      if (session === creationSession.value) setError('target', 'The star system for this Add session is no longer available.')
       return false
     }
 
@@ -1041,7 +1094,7 @@ export function useSystemCreationWorkflows({
     const error = validateTarget(session, system, target)
     if (error) {
       invalidatePreview(session)
-      setTargetError(target, error)
+      if (session === creationSession.value) setTargetError(target, error)
       return false
     }
     let previewSignature = JSON.stringify(preview)
@@ -1052,7 +1105,7 @@ export function useSystemCreationWorkflows({
         : 'The Orbit drag preview is no longer current.'
       if (dragError) {
         cancelOrbitDrag()
-        if (dragError === duplicateOrbitGeometryMessage) setTargetError(target, dragError)
+        if (dragError === duplicateOrbitGeometryMessage && session === creationSession.value) setTargetError(target, dragError)
         return false
       }
     }
@@ -1074,7 +1127,7 @@ export function useSystemCreationWorkflows({
         // Replacing the selected object's edit session is a guarded navigation. Resolve it
         // before publishing the new object so Stay leaves Add, selection, and focus untouched.
         if (!await resolveObjectCreationTransition()) return false
-        if (creationSession.value !== session || session.preview?.id !== previewId
+        if (!ownsSession() || session.preview?.id !== previewId
           || !sessionMatchesCurrentContext(session)) return false
 
         currentWorkspace = workspace.value
@@ -1122,7 +1175,7 @@ export function useSystemCreationWorkflows({
             : { kind: 'orbit', id: identityId, systemId: session.systemId },
           parent: { kind: 'system', id: session.systemId },
         },
-        isCurrent: () => creationSession.value === session
+        isCurrent: () => ownsSession()
           && confirmingPreviewId === previewId
           && session.preview?.id === previewId
           && JSON.stringify(session.preview) === previewSignature
@@ -1131,7 +1184,7 @@ export function useSystemCreationWorkflows({
         prepare: (latestWorkspace) => {
           const latestSystem = latestWorkspace.cluster.systems.find(candidate => candidate.id === session.systemId)
           if (latestWorkspace.cluster.id !== session.clusterId || !latestSystem
-            || creationSession.value !== session || session.preview?.id !== previewId
+            || !ownsSession() || session.preview?.id !== previewId
             || JSON.stringify(session.preview) !== previewSignature) {
             throw new Error('The star system or Add preview changed before this item could be added.')
           }
@@ -1212,7 +1265,7 @@ export function useSystemCreationWorkflows({
       })
       if (result.status === 'applied') void result.durable.catch(() => undefined)
       throwIfRejected(result)
-      if (creationSession.value !== session || session.preview?.id !== previewId) return false
+      if (!ownsSession() || session.preview?.id !== previewId) return false
       session.preview = null
       session.candidates = []
       if (result.status === 'applied') {
@@ -1232,7 +1285,7 @@ export function useSystemCreationWorkflows({
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      setError('form', message)
+      if (session === creationSession.value) setError('form', message)
       if (message === duplicateOrbitGeometryMessage) {
         session.preview = null
         session.notice = message
@@ -1263,7 +1316,7 @@ export function useSystemCreationWorkflows({
   function quitAdd(): void {
     explicitObjectOrbitPreference = null
     orbitRadiusInputOwnership = null
-    orbitDragReservation = null
+    cancelOrbitDrag()
     creationSession.value = null
   }
 
@@ -1327,6 +1380,7 @@ export function useSystemCreationWorkflows({
 
   return {
     creationSession,
+    orbitDragPreview,
     hasPendingHistoryInput,
     chooseCreationType,
     updateCreationInput,

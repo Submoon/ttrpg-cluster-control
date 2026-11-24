@@ -28,14 +28,15 @@ export function captureEffectiveObjectAngles(
     occupants.set(object.placement.orbitId, siblings)
   }
 
-  const angles: Record<string, number> = {}
+  const angles = new Map<string, number>()
   for (const siblings of occupants.values()) {
     siblings.forEach((object, index) => {
-      angles[object.id] = workspace.layout.objectAngles[object.id]
-        ?? defaultObjectOrbitAngle(index, siblings.length)
+      angles.set(object.id, Object.hasOwn(workspace.layout.objectAngles, object.id)
+        ? workspace.layout.objectAngles[object.id]!
+        : defaultObjectOrbitAngle(index, siblings.length))
     })
   }
-  return angles
+  return Object.fromEntries(angles)
 }
 
 /**

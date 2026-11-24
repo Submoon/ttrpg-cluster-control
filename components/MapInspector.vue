@@ -1,5 +1,9 @@
 <template>
   <div class="map-inspector-layout">
+    <SystemObjectTransferReviewDialog
+      :session="props.systemTransferSession ?? null"
+      @intent="emit('system-transfer-intent', $event)"
+    />
     <slot v-if="props.chartEditing" name="chart-editor" />
     <template v-else>
     <div v-if="hasResumableEntitySession" class="map-inspector-resume-draft" role="status">
@@ -31,11 +35,10 @@
         :saving="props.saving"
         :editor-error="props.editorError"
         :session="props.routeSession"
-        @open-system="emit('open-system', $event)"
-        @delete-system="emit('delete-system', $event)"
         @request-route-edit="emit('request-route-edit', $event)"
         @set-route-sharing="(routeId, playerShared) => emit('set-route-sharing', routeId, playerShared)"
         @update-route-input="(sessionId, field, value) => emit('update-route-input', sessionId, field, value)"
+        @choose-route-system="(sessionId, systemId) => emit('choose-route-system', sessionId, systemId)"
         @choose-route-point="(sessionId, pointId) => emit('choose-route-point', sessionId, pointId)"
         @apply-route-session="emit('apply-route-session', $event)"
         @discard-route-session="emit('discard-route-session', $event)"
@@ -57,6 +60,8 @@
           :key="props.selectedObject?.id ?? 'current'"
           :workspace="props.workspace"
           :publication-busy="props.publicationBusy"
+          :transfer-busy="props.systemTransferSession !== null && props.systemTransferSession !== undefined"
+          :system-transfer-enabled="props.systemTransferEnabled"
           :selected-system="props.selectedSystem"
           :selected-object="props.selectedObject"
           :draft-object="props.draftSystem?.objects.find(object => object.id === props.selectedObject?.id)"
@@ -84,6 +89,7 @@
           @resume-chart-draft="emit('resume-chart-draft')"
           @retry-save="emit('retry-save')"
           @export-current-json="emit('export-current-json')"
+          @system-transfer-intent="emit('system-transfer-intent', $event)"
         />
       </div>
       <div v-else-if="props.selectedOrbit" class="map-inspector-entity-content">
@@ -128,7 +134,6 @@
           :publication-busy="props.publicationBusy"
           :has-chart-name-draft="props.hasChartNameDraft"
           :saving="props.saving"
-          @delete-system="emit('delete-system', $event)"
         />
       </div>
     </div>
@@ -146,6 +151,10 @@ import type { EntityInspectorSession, ObjectInspectorFocusRequest } from '../com
 import type { SaveState } from '../composables/editor-workflows/types'
 import type { RouteDraftField, RouteInspectorSession } from '../composables/editor-workflows/useRouteInspectorSession'
 import type {
+  SystemObjectTransferIntent,
+  SystemObjectTransferReviewState,
+} from '../composables/editor-workflows/system-object-transfer-types'
+import type {
   JumpRoute,
   LocalWorkspace,
   Orbit,
@@ -156,10 +165,12 @@ import ChartDetailsPanel from './inspector/ChartDetailsPanel.vue'
 import JumpRouteInspector from './inspector/JumpRouteInspector.vue'
 import MapObjectInspector from './inspector/MapObjectInspector.vue'
 import OrbitInspector from './inspector/OrbitInspector.vue'
+import SystemObjectTransferReviewDialog from './inspector/SystemObjectTransferReviewDialog.vue'
 
 const props = defineProps<{
   mode: 'cluster' | 'system'
   workspace: LocalWorkspace
+  systemTransferEnabled?: boolean
   selectedSystem?: StarSystem
   draftSystem?: StarSystem
   inspectedClusterSystem?: StarSystem
@@ -184,11 +195,10 @@ const props = defineProps<{
   saveError: string | null
   exportError: string
   publicationBusy?: boolean
+  systemTransferSession?: SystemObjectTransferReviewState | null
 }>()
 
 const emit = defineEmits<{
-  'open-system': [systemId: string]
-  'delete-system': [systemId: string]
   hide: []
   'request-object-edit': []
   'object-focus-request-consumed': [requestId: number]
@@ -206,6 +216,7 @@ const emit = defineEmits<{
   'request-route-edit': [routeId: string]
   'set-route-sharing': [routeId: string, playerShared: boolean]
   'update-route-input': [sessionId: number, field: RouteDraftField, value: string | boolean]
+  'choose-route-system': [sessionId: number, systemId: string]
   'choose-route-point': [sessionId: number, pointId: string]
   'apply-route-session': [sessionId: number]
   'discard-route-session': [sessionId: number]
@@ -214,6 +225,7 @@ const emit = defineEmits<{
   'resume-chart-draft': []
   'retry-save': []
   'export-current-json': []
+  'system-transfer-intent': [intent: SystemObjectTransferIntent]
 }>()
 
 const objectSession = computed(() => props.entitySession?.kind === 'object' ? props.entitySession : null)

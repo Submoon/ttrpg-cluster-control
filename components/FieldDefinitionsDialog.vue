@@ -1,6 +1,7 @@
 <template>
   <UButton
     v-if="!props.hideTrigger"
+    ref="trigger"
     class="field-definitions-trigger workspace-control"
     color="neutral"
     variant="outline"
@@ -281,6 +282,7 @@ const props = defineProps<{
   inspectorConflictError?: string
   hideTrigger?: boolean
   hasModifiedDraft?: boolean
+  focusFallback?: () => void
 }>()
 
 const emit = defineEmits<{
@@ -288,6 +290,7 @@ const emit = defineEmits<{
 }>()
 
 const contentRoot = ref<HTMLElement | null>(null)
+const trigger = ref<{ $el?: HTMLElement } | null>(null)
 const fieldList = ref<ComponentPublicInstance | null>(null)
 const isCompact = ref(false)
 const visualViewportMetrics = ref({ height: 0, offsetTop: 0 })
@@ -437,7 +440,10 @@ function onCloseAutoFocus(event: Event): void {
 
 function restoreOpenerFocus(): void {
   if (props.session.open) return
+  const desktopTrigger = trigger.value?.$el
   if (actualOpener && isVisibleFocusTarget(actualOpener)) actualOpener.focus({ preventScroll: true })
+  else if (desktopTrigger && isVisibleFocusTarget(desktopTrigger)) desktopTrigger.focus({ preventScroll: true })
+  else props.focusFallback?.()
   actualOpener = null
 }
 

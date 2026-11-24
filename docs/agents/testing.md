@@ -24,6 +24,28 @@ For a bug fix, choose the lowest boundary that can reproduce the actual failure.
 
 Use case counts and runtime to spot suites that need review. Decide what to retain by the user outcome, the distinct regression it catches, and the boundary needed to prove it. [Playwright best practices](https://playwright.dev/docs/best-practices) and [Playwright browser isolation](https://playwright.dev/docs/browser-contexts).
 
+### Browser journey inventory
+
+Choose one happy path for each important user goal. Keep a separate critical path when it proves a distinct risk such as data loss, disclosure, or native input ownership. Before adding or retaining a browser case, name the user-visible failure that the current journeys, domain tests, and controller tests would miss. Add the smallest assertion to the existing journey when it proves the same outcome. Use the current inventory to find the owning journey.
+
+| Area | Browser journeys |
+| --- | --- |
+| Local workspace | Create and reopen; recover a damaged workspace from its last valid copy. |
+| Warden navigation | Use one camera to pan, select, zoom into detail and return to the overview with usable focus; hand off from an editing touch to pinch navigation and resume editing. |
+| Systems | Create, rename, move and resize a system and reopen it; review a keyboard-requested cascade and restore it through Undo. |
+| Objects | Edit and move a multi-selection with an Orbit placement; transfer a hosted branch and resolve a Location key conflict. |
+| Orbits | Create and resize an occupied Orbit; select and resize a clipped Orbit at maximum zoom. |
+| Jump Routes | Create or edit a route, inspect its stroke, and place an unresolved destination. |
+| Search and filtering | Find an object in another system and verify independent Search and map filter criteria. |
+| Fields | Assign a choice, review removal of that choice and verify the value is cleared. |
+| History | Resume a retained draft, apply it and traverse Undo and Redo with observable history position. |
+| Private files | Replace a Cluster from a complete backup; place an independent imported system; download the named system as SVG and PNG. |
+| Player publication | Publish a system, object and route, preview them and open the generated link in an isolated reader. |
+| Player reader | Open a player JSON document, find and inspect an object, and download a public image. |
+| Compact layout | Use the workspace menu in short landscape and return focus to a reachable control. |
+
+Run the preview smoke subset through the existing tagged cases for local create and reopen, Warden map navigation, and player publication. Treat smoke as a selection of the browser journeys. For suite cleanup, finish by listing the discovered browser and non-browser cases and running the affected projects. Retain existing pure and development-storage coverage unless the cleanup explicitly includes it.
+
 ## Permanent behavior and temporary visual checks
 
 Keep a permanent test when it can catch a specific important user or verification failure that existing coverage would miss. Apply that question to whole journeys as well as individual assertions. A previous failure or the existence of a test prompts a review of the risk it still protects.
@@ -82,7 +104,7 @@ Official guidance: [auto-retrying assertions](https://playwright.dev/docs/test-a
 | `PLAYWRIGHT_SUITE=checks npm test` | Selects `pure` and the one `development-storage` case. The global web server still starts because the storage project uses the local app. This is not a no-server pure-only command. |
 | `PLAYWRIGHT_SUITE=browser npm test` | Selects the browser project. It uses the local development app by default. `PLAYWRIGHT_PRODUCTION_URL` accepts only an immutable HTTPS Vercel Preview of this project and suppresses the local server when this is the selected suite. |
 | `npm run test:ui` | Selects the cases tagged `@ui-smoke`; this remains a Playwright selection, not a separate test implementation. |
-| `npm run test:local -- tests/workspace-ui-smoke.spec.ts --project=browser` | Uses the local launcher for a focused browser run. It starts and owns a local server on `127.0.0.1:3100` (`LOCAL_TEST_PORT` overrides it), checks HTTP and hydrated-browser readiness, monitors verification inputs, writes a server log and run artifacts, and supports Enter-to-rerun in an interactive terminal. It refuses an occupied port. |
+| `npm run test:local -- tests/workspace-panels.spec.ts --project=browser` | Uses the local launcher for a focused browser run. It starts and owns a local server on `127.0.0.1:3100` (`LOCAL_TEST_PORT` overrides it), checks HTTP and hydrated-browser readiness, monitors verification inputs, writes a server log and run artifacts, and supports Enter-to-rerun in an interactive terminal. It refuses an occupied port. |
 
 Pass Playwright file, project, or grep arguments after `npm test --`. For example, `npm test -- tests/workspace-recovery.spec.ts --project=pure development-storage` is mixed and keeps the local server because its storage case uses the app. Every explicitly selected project must be `pure` to suppress the server. `PLAYWRIGHT_BASE_URL` supplies an already-running app and disables the configured web server. `PLAYWRIGHT_PRODUCTION_URL` is for the validated Preview host used by the browser project; it does not make the `checks` project pure-only. For a combined `all` selection, the local server is still required by the non-browser projects.
 
@@ -92,7 +114,7 @@ Set `PLAYWRIGHT_CHANNEL` to use an alternate installed browser channel such as C
 
 To test a local production build with browser cases, serve it with `npm run preview` and set `PLAYWRIGHT_BASE_URL` to the local address with `PLAYWRIGHT_SUITE=browser`. Keep the development-storage case on the development server.
 
-Choose the file and case that own the changed behavior before starting a local server. For a codec change, run `npm run test:pure -- tests/workspace-codec.spec.ts`. For a launch default or initial save change, exercise the public form and reload with `npm run test:local -- tests/workspace-launch.spec.ts --project=browser --grep "the product root creates and resumes"`. For a launch layout or focus change, select `keyboard focus remains visible on launch and recovery actions` in the same file. For editor footer reachability, use `npm run test:local -- tests/workspace-ui-smoke.spec.ts --project=browser --grep "footer actions fit and receive pointer hits"`. Shared runtime, fixture, or configuration changes can require broader qualification.
+Choose the file and case that own the changed behavior before starting a local server. For a codec change, run `npm run test:pure -- tests/workspace-codec.spec.ts`. For a launch default or initial save change, exercise the public form and reload with `npm run test:local -- tests/workspace-launch.spec.ts --project=browser`. For compact menu reachability or focus, use `tests/workspace-panels.spec.ts`. Shared runtime, fixture, or configuration changes can require broader qualification.
 
 Browser tests use zero retries, retain a trace for each failed attempt, and capture a failure screenshot when the test has a live page. A trace is kept from the first failure, so a successful rerun is not needed to produce diagnostic evidence.
 
@@ -124,7 +146,7 @@ Use the shared helpers for screen/SVG conversion and native mouse gestures. Deri
 
 For cancellation during a held contact, assert both the cancelled state before release and the outcome of the eventual release. When suppression has a deadline, hold beyond that deadline so an expired guard cannot hide an activation, then verify that a fresh contact still works. Establish the requested mode independently before each action that can reset it.
 
-When changing map placement or numerical admission, preserve the relevant regressions for [untouched-route independence and previews](../../tests/cluster-map-geometry.spec.ts), [saved-map restoration and identical-point saving](../../tests/unresolved-exit-layout.spec.ts), and [the public unresolved-exit move/confirm/export journey](../../tests/workspace-unresolved-exit-placement.spec.ts). Use [UI guidance](ui.md) when assessing editor-specific states.
+When changing map placement or numerical admission, preserve the relevant regressions for [untouched-route independence and previews](../../tests/cluster-map-geometry.spec.ts), [saved-map restoration and identical-point saving](../../tests/unresolved-exit-layout.spec.ts), and [public route selection and unresolved-exit placement](../../tests/workspace-continuous-routes.spec.ts). Use [UI guidance](ui.md) when assessing editor-specific states.
 
 ## Verification workflow
 
@@ -132,7 +154,7 @@ Run focused checks for changed behavior during development. Keep one concise rec
 
 CI classifies the complete change before selecting checks. The documentation allowlist is defined in [verification inputs](../../scripts/verification-inputs.mjs); unknown paths and runtime, test, script or configuration changes require full qualification. Documentation checks validate local references across the maintained corpus, including references to deleted targets. Documentation paths are explicitly excluded from Tailwind source detection so their utility-class examples do not alter application CSS.
 
-Full qualification runs lint, typecheck, a production build, pure tests and the local storage regression. A short browser smoke then exercises the maintained painted Search icon and deep Hierarchy journeys through `npm run test:preview-smoke`, before both full browser shards. These cases also remain in the full suite. Same-repository pull requests use a successful immutable Vercel Preview for the exact head SHA; forks, main pushes and manual runs use local development servers. One worker and zero retries remain the browser policy.
+Full qualification runs lint, typecheck, a production build, pure tests and the local storage regression. It runs the browser smoke selection through `npm run test:preview-smoke` before both full browser shards. Same-repository pull requests use a successful immutable Vercel Preview for the exact head SHA. Forks, main pushes and manual runs use local development servers. One worker and zero retries remain the browser policy.
 
 A documentation-only closure commit on a code-changing PR can reuse a full qualification only on same-repository synchronization, with an unchanged base, a documentation-only difference from the exact previous head, and a matching successful full-run artifact. Missing, expired, incomplete or mismatched evidence selects full qualification. Reused runs do not issue another full-run artifact, so a second consecutive documentation push may need a full run. Manual dispatch forces full qualification. The unchanged required `quality (1.64.0)` gate validates the explicit documentation, full or verified-reuse result matrix; unexpected skips and failed checks cannot produce success.
 

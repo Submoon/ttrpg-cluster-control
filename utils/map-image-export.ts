@@ -1,11 +1,23 @@
 /**
- * Exports the full applied SVG scene with inlined styles before serialization or rasterization.
+ * Exports an applied Warden or detached player SVG scene with inlined styles before serialization or rasterization.
  */
+import type { MapImageScope } from './map-image-scope'
+
 export type MapImageFormat = 'png' | 'svg'
 export type MapImagePalette = 'active' | 'print-light'
 
+export interface MapImageExportOptions {
+  /** Detached applied scene to render. Omit for legacy map images. */
+  scope?: MapImageScope | null
+  selectedSystemId?: string | null
+  /** A superseded export returns null after asynchronous rasterization. */
+  isCurrent?: () => boolean
+}
+
 export interface MapImageExporter {
-  exportImage(format: MapImageFormat, palette?: MapImagePalette): Promise<Blob>
+  exportImage(format: MapImageFormat, palette?: MapImagePalette, options?: MapImageExportOptions): Promise<Blob | null>
+  /** Stable key for camera, semantic detail, and applied display filters during rasterization. */
+  getImageContextKey?(scope?: MapImageScope | null): string
 }
 
 export type PrepareMapExportClone = (clone: SVGSVGElement) => void
@@ -42,7 +54,35 @@ const styleProperties = [
   'stroke-width',
   'text-anchor',
   'visibility',
+  'vector-effect',
 ] as const
+const gradientStopProperties = ['stop-color', 'stop-opacity'] as const
+
+export interface MapImageSceneFrame {
+  x: number
+  y: number
+  width: number
+  height: number
+  outputWidth?: number
+  outputHeight?: number
+  ariaLabel?: string
+}
+
+/** Builds an image from a detached scene with an explicit frame instead of measuring the live map DOM. */
+export async function exportMapImageScene(
+  source: SVGSVGElement,
+  format: MapImageFormat,
+  palette: MapImagePalette,
+  frame: MapImageSceneFrame,
+  prepareClone: PrepareMapExportClone,
+  isCurrent: () => boolean = () => true,
+): Promise<Blob | null> {
+  if (!isCurrent()) return null
+  const { blob, width, height } = createExplicitExportSvg(source, palette, frame, prepareClone)
+  if (format === 'svg') return isCurrent() ? blob : null
+  const image = await rasterizeMapSvg(blob, width, height)
+  return isCurrent() ? image : null
+}
 
 /** Removes visible interaction state and edit-only targets from the export copy. */
 function cleanExportClone(clone: SVGSVGElement): void {
@@ -154,6 +194,66 @@ function createExportHost(palette: MapImagePalette): HTMLDivElement {
   return host
 }
 
+function inlineComputedStyles(copy: SVGSVGElement): void {
+  const copyElements: SVGElement[] = [copy, ...Array.from(copy.querySelectorAll<SVGElement>('*'))]
+  const styleSnapshots = copyElements.map(element => {
+    const computedStyle = getComputedStyle(element)
+    const properties = element.localName === 'stop' ? [...styleProperties, ...gradientStopProperties] : styleProperties
+    return properties.flatMap(property => {
+      const value = computedStyle.getPropertyValue(property)
+      return value ? [[property, standalonePaintUrl(value)] as const] : []
+    })
+  })
+  for (const [index, element] of copyElements.entries()) {
+    const snapshot = styleSnapshots[index]
+    if (!snapshot) throw new Error('The map scene could not be styled for export.')
+    for (const [property, value] of snapshot) element.style.setProperty(property, value)
+  }
+}
+
+function createExplicitExportSvg(
+  source: SVGSVGElement,
+  palette: MapImagePalette,
+  frame: MapImageSceneFrame,
+  prepareClone: PrepareMapExportClone,
+): { blob: Blob; width: number; height: number } {
+  const values = [frame.x, frame.y, frame.width, frame.height]
+  const width = frame.outputWidth ?? frame.width
+  const height = frame.outputHeight ?? frame.height
+  if (!values.every(Number.isFinite) || frame.width <= 0 || frame.height <= 0
+    || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    throw new Error('The map scene has unsafe export bounds.')
+  }
+
+  const copy = source.cloneNode(true) as SVGSVGElement
+  const host = createExportHost(palette)
+  document.body.append(host)
+  host.append(copy)
+  try {
+    prepareClone(copy)
+    cleanExportClone(copy)
+    inlineComputedStyles(copy)
+    copy.setAttribute('xmlns', svgNamespace)
+    copy.setAttribute('viewBox', `${frame.x} ${frame.y} ${frame.width} ${frame.height}`)
+    copy.setAttribute('width', String(width))
+    copy.setAttribute('height', String(height))
+    copy.setAttribute('role', 'img')
+    copy.setAttribute('preserveAspectRatio', 'xMidYMid meet')
+    copy.removeAttribute('tabindex')
+    copy.removeAttribute('aria-describedby')
+    if (frame.ariaLabel) copy.setAttribute('aria-label', frame.ariaLabel)
+    return {
+      blob: new Blob([new XMLSerializer().serializeToString(copy)], {
+        type: 'image/svg+xml;charset=utf-8',
+      }),
+      width,
+      height,
+    }
+  } finally {
+    host.remove()
+  }
+}
+
 /**
  * Clones and serializes the applied scene with palette-resolved styles and export-only bounds.
  * The renderer callback projects its authoritative applied geometry onto this clone before cleanup.
@@ -217,19 +317,7 @@ function createExportSvg(
     }
 
     content.removeAttribute('transform')
-    const copyElements: SVGElement[] = [copy, ...Array.from(copy.querySelectorAll<SVGElement>('*'))]
-    const styleSnapshots = copyElements.map(element => {
-      const computedStyle = getComputedStyle(element)
-      return styleProperties.map(property => {
-        const value = computedStyle.getPropertyValue(property)
-        return value ? [property, standalonePaintUrl(value)] as const : null
-      }).filter((entry): entry is readonly [typeof styleProperties[number], string] => entry !== null)
-    })
-    for (const [index, element] of copyElements.entries()) {
-      const snapshot = styleSnapshots[index]
-      if (!snapshot) throw new Error('The map scene could not be styled for export.')
-      for (const [property, value] of snapshot) element.style.setProperty(property, value)
-    }
+    inlineComputedStyles(copy)
 
     if (exportTitle) {
       const titleElement = copy.ownerDocument.createElementNS(svgNamespace, 'text')

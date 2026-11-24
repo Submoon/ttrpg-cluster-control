@@ -38,7 +38,7 @@ test('player projection emits only the marker information allowed by each public
 
   expect(document).toMatchObject({
     format: 'ttrpg-cluster-control-player',
-    version: 1,
+    version: 2,
     title: 'Player Jump Cluster',
     systems: [
       { id: 'system-1', disclosure: 'unknown', label: 'Unknown presence' },
@@ -89,6 +89,15 @@ test('hidden distant systems and private source extensions do not affect the pub
   hidden.layout.systemPositions[withHiddenSystem.system.id] = { x: 100_000, y: -100_000 }
   const before = structuredClone(hidden)
   const projected = projectPlayerCluster(hidden)
+  const withPrivateFrame = {
+    ...hidden,
+    layout: {
+      ...hidden.layout,
+      systemFrames: {
+        [initialSystem.id]: { left: 50_000, top: 60_000, right: 70_000, bottom: 80_000 },
+      },
+    },
+  }
   const extended = {
     ...hidden,
     privateExtension: 'UNKNOWN WORKSPACE PROPERTY',
@@ -96,7 +105,7 @@ test('hidden distant systems and private source extensions do not affect the pub
       ...hidden.cluster,
       privateExtension: 'UNKNOWN CLUSTER PROPERTY',
       name: 'Changed Private Cluster Name',
-      routes: [{ id: 'SECRET ROUTE ID', name: 'SECRET ROUTE NAME', jumpLevel: 1, playerShared: false, fromPointId: 'SECRET POINT', toPointId: null, unresolvedExit: 'SECRET EXIT' }],
+      routes: [{ id: 'SECRET ROUTE ID', name: 'SECRET ROUTE NAME', jumpLevel: 1, playerShared: false, fromSystemId: initialSystem.id, fromPointId: 'SECRET POINT', toSystemId: null, toPointId: null, unresolvedExit: 'SECRET EXIT' }],
       systems: hidden.cluster.systems.map(system => system.id === initialSystem.id
         ? {
             ...system,
@@ -120,6 +129,7 @@ test('hidden distant systems and private source extensions do not affect the pub
   }
 
   expect(projectPlayerCluster(extended)).toEqual(projected)
+  expect(projectPlayerCluster(withPrivateFrame)).toEqual(projected)
   expect(projected.systems).toHaveLength(1)
   expect(projected.systems[0]?.id).toBe('system-1')
   expect(JSON.stringify(projected)).not.toMatch(/SECRET|UNKNOWN|Far Hidden System|Secret Internal Name/)

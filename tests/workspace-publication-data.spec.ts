@@ -20,7 +20,7 @@ test('new systems start with known-type publication and a generic player title @
   expect(workspace.cluster.playerTitle).toBe('Player Jump Cluster')
 })
 
-test('version 4 workspaces reject missing publication fields and unsupported versions @pure', () => {
+test('version 5 workspaces reject missing publication fields and unsupported versions @pure', () => {
   const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const missingMode = structuredClone(workspace) as unknown as Record<string, unknown>
   const cluster = missingMode.cluster as { systems: Array<Record<string, unknown>> }
@@ -42,7 +42,7 @@ test('version 4 workspaces reject missing publication fields and unsupported ver
   expect(isLocalWorkspace(malformedObjectMode)).toBe(false)
   expect(restoreLocalWorkspace(missingObjectMode)).toBeNull()
   expect(restoreLocalWorkspace(malformedObjectMode)).toBeNull()
-  expect(restoreLocalWorkspace({ ...workspace, version: 5 })).toBeNull()
+  expect(restoreLocalWorkspace({ ...workspace, version: 6 })).toBeNull()
   expect(restoreLocalWorkspace({ ...workspace, version: 1 })).toBeNull()
   expect(restoreLocalWorkspace({
     ...workspace,
@@ -61,7 +61,7 @@ test('version 4 workspaces reject missing publication fields and unsupported ver
   })).toBeNull()
 })
 
-test('version 4 exports and independent imports preserve publication while v1/v2 imports use safe object defaults @pure', () => {
+test('version 5 cluster exports and v4 standalone exports preserve publication while v1/v2 imports use safe object defaults @pure', () => {
   const source = createLocalWorkspace('Source Reach', 'Iria')
   const sourceSystem = source.cluster.systems[0]!
   const published = updateChartDetails(source, sourceSystem.id, {
@@ -74,7 +74,7 @@ test('version 4 exports and independent imports preserve publication while v1/v2
   const systemExport = exportStarSystem(published, sourceSystem.id)
   const savedSnapshot = createWorkspaceSnapshot(published)
 
-  expect(clusterExport.version).toBe(4)
+  expect(clusterExport.version).toBe(5)
   expect(clusterExport.layout.version).toBe(1)
   expect(clusterExport.cluster.playerTitle).toBe('Aster Reach')
   expect(systemExport.version).toBe(4)
@@ -139,7 +139,7 @@ test('version 4 exports and independent imports preserve publication while v1/v2
   }
   malformedV2.version = 2
   delete malformedV2.system.publication
-  expect(() => prepareJsonImport(destination, malformedV2)).toThrow(/version 1, version 2, version 3, or version 4/)
+  expect(() => prepareJsonImport(destination, malformedV2)).toThrow(/version 1, version 2, version 3, version 4/)
 
   const malformedV2Cluster = JSON.parse(JSON.stringify(clusterExport)) as {
     version: number
@@ -147,7 +147,7 @@ test('version 4 exports and independent imports preserve publication while v1/v2
   }
   malformedV2Cluster.version = 2
   delete malformedV2Cluster.cluster.playerTitle
-  expect(() => prepareJsonImport(destination, malformedV2Cluster)).toThrow(/version 1, version 2, version 3, or version 4/)
+  expect(() => prepareJsonImport(destination, malformedV2Cluster)).toThrow(/version 1, version 2, version 3, version 4/)
 
   const invalidV2SystemPublication = JSON.parse(JSON.stringify(clusterExport)) as {
     version: number
@@ -159,7 +159,7 @@ test('version 4 exports and independent imports preserve publication while v1/v2
     delete object.publication
   }
   expect(() => prepareJsonImport(destination, invalidV2SystemPublication))
-    .toThrow(/version 1, version 2, version 3, or version 4/)
+    .toThrow(/version 1, version 2, version 3, version 4/)
 
   const malformedV3Object = JSON.parse(JSON.stringify(clusterExport)) as {
     version: number
@@ -167,7 +167,7 @@ test('version 4 exports and independent imports preserve publication while v1/v2
   }
   malformedV3Object.version = 3
   delete malformedV3Object.cluster.systems[0]?.objects[0]?.publication
-  expect(() => prepareJsonImport(destination, malformedV3Object)).toThrow(/version 1, version 2, version 3, or version 4/)
+  expect(() => prepareJsonImport(destination, malformedV3Object)).toThrow(/version 1, version 2, version 3, version 4/)
 
   const invalidV3Object = JSON.parse(JSON.stringify(clusterExport)) as {
     version: number
@@ -175,5 +175,5 @@ test('version 4 exports and independent imports preserve publication while v1/v2
   }
   invalidV3Object.version = 3
   invalidV3Object.cluster.systems[0]!.objects[0]!.publication = 'classified'
-  expect(() => prepareJsonImport(destination, invalidV3Object)).toThrow(/version 1, version 2, version 3, or version 4/)
+  expect(() => prepareJsonImport(destination, invalidV3Object)).toThrow(/version 1, version 2, version 3, version 4/)
 })

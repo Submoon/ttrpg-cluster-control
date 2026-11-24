@@ -21,7 +21,7 @@ function deferred<T>() {
 function playerDocument(marker: PlayerSystemMarker | null = revealedSystem()): PlayerClusterDocument {
   return {
     format: 'ttrpg-cluster-control-player',
-    version: 1,
+    version: 2,
     title: 'Pilgrim Reach',
     systems: marker ? [marker] : [],
     routes: [],
@@ -159,6 +159,31 @@ test('a stale prepared context prevents download and unexpected failures stay ge
   await failed.downloadPlayerJson()
   expect(failed.playerExportError.value).toBe(genericExportError)
   expect(failed.playerExportError.value).not.toContain('PRIVATE')
+})
+
+test('a newer scoped player image replaces an older one before download @pure', async () => {
+  const document = playerDocument()
+  const first = deferred<{
+    document: PlayerClusterDocument
+    image: { scope: 'cluster' }
+    isCurrent: () => boolean
+  }>()
+  await withDownloadBoundary(async downloads => {
+    const owner = usePlayerFileExports({
+      prepare: async () => null,
+      prepareImage: scope => scope === 'cluster'
+        ? first.promise
+        : Promise.resolve({ document, image: { scope: 'system', systemId: 'system-1' }, isCurrent: () => true }),
+    })
+
+    const old = owner.downloadPlayerImage('svg', 'print-light', 'cluster')
+    await owner.downloadPlayerImage('svg', 'print-light', 'system')
+    first.resolve({ document, image: { scope: 'cluster' }, isCurrent: () => true })
+    await old
+
+    expect(downloads.map(download => download.filename)).toEqual(['Vesper-player-star-system.svg'])
+    await expect(downloads[0]!.blob.text()).resolves.toContain('Vesper player map')
+  })
 })
 
 test('empty and ineligible image scenes are refused while an empty Revealed system remains valid JSON @pure', async () => {

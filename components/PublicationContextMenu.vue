@@ -8,7 +8,7 @@
     @update:open="onOpenChange"
   >
     <template #default>
-      <span class="pointer-events-none sr-only" tabindex="-1">Player visibility</span>
+      <span class="pointer-events-none sr-only" tabindex="-1">Map item actions</span>
     </template>
     <template #content-top="{ sub }">
       <span v-if="!sub" :ref="captureMenuContent" class="hidden" aria-hidden="true" />
@@ -17,23 +17,35 @@
 </template>
 
 <script setup lang="ts">
-import { computed, shallowRef, watch } from 'vue'
+import { computed, nextTick, shallowRef, watch } from 'vue'
 import type { PublicationMode } from '../domain/workspace'
 import type { PublicationMenuView } from '../composables/editor-workflows/publication-types'
+import { useDialogCloseFocusBarrier } from '../composables/useDialogCloseFocusBarrier'
 import { publicationModes, publicationPresentation } from '../utils/publication-presentation'
 
 const props = defineProps<{
   request: PublicationMenuView | null
   currentMode: PublicationMode | null
+  routeShared?: boolean
+  emptyOrbit?: boolean
+  lastSystem?: boolean
+  saving?: boolean
   busy?: boolean
   moveSelectionAvailable?: boolean
 }>()
 
 const emit = defineEmits<{
   select: [mode: PublicationMode]
+  'share-route': [shared: boolean]
+  edit: []
+  delete: []
   'move-selection': []
   dismiss: []
 }>()
+
+const closeFocus = useDialogCloseFocusBarrier(computed(() => props.request !== null))
+
+defineExpose({ whenClosingFocusSettled: closeFocus.whenClosingFocusSettled })
 
 const virtualAnchor = computed(() => ({
   getBoundingClientRect() {
@@ -75,6 +87,12 @@ watch(() => props.request, (request) => {
 }, { flush: 'sync' })
 
 const items = computed(() => [
+  {
+    label: 'Edit',
+    icon: 'i-lucide-pencil',
+    disabled: props.busy,
+    onSelect: () => emit('edit'),
+  },
   ...(props.moveSelectionAvailable ? [{
     label: 'Move selection',
     icon: 'i-lucide-move',
@@ -84,23 +102,44 @@ const items = computed(() => [
   {
     label: 'Change Visibility',
     icon: 'i-lucide-eye',
-    disabled: props.busy,
+    disabled: props.busy || props.emptyOrbit,
     content: {
       prioritizePosition: true,
       collisionPadding: 8,
     },
-    children: publicationModes.map((mode) => {
-      const presentation = publicationPresentation(mode)
-      return {
-        type: 'checkbox' as const,
-        checked: props.currentMode === mode,
-        label: presentation.label,
-        icon: presentation.icon,
-        disabled: props.busy,
-        onUpdateChecked: () => undefined,
-        onSelect: () => emit('select', mode),
-      }
-    }),
+    children: props.request?.target.kind === 'route'
+      ? [false, true].map(shared => ({
+          type: 'checkbox' as const,
+          checked: props.routeShared === shared,
+          label: shared ? 'Shared with players' : 'Private',
+          icon: shared ? 'i-lucide-eye' : 'i-lucide-eye-off',
+          onUpdateChecked: () => undefined,
+          onSelect: () => emit('share-route', shared),
+        }))
+      : [
+          ...(props.request?.target.kind === 'orbit'
+            ? [{ type: 'label' as const, label: 'Objects on this Orbit and its branches' }]
+            : []),
+          ...publicationModes.map((mode) => {
+            const presentation = publicationPresentation(mode)
+            return {
+              type: 'checkbox' as const,
+              checked: props.currentMode === mode,
+              label: presentation.label,
+              icon: presentation.icon,
+              onUpdateChecked: () => undefined,
+              onSelect: () => emit('select', mode),
+            }
+          }),
+        ],
+  },
+  {
+    label: 'Delete',
+    description: props.lastSystem ? 'A Jump Cluster must keep at least one star system.' : undefined,
+    icon: 'i-lucide-trash-2',
+    color: 'error' as const,
+    disabled: props.busy || props.lastSystem || props.saving,
+    onSelect: () => emit('delete'),
   },
 ])
 
@@ -108,10 +147,15 @@ function onOpenChange(open: boolean): void {
   if (!open) emit('dismiss')
 }
 
-function onCloseAutoFocus(event: Event): void {
+async function onCloseAutoFocus(event: Event): Promise<void> {
   event.preventDefault()
   const content = event.target instanceof Element ? event.target : null
   const request = content ? requestByContent.get(content) : null
-  if (request) void request.restoreFocus(content)
+  try {
+    if (request) await request.restoreFocus(content)
+  } finally {
+    await nextTick()
+    closeFocus.settleClosingFocus()
+  }
 }
 </script>

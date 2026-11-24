@@ -96,6 +96,7 @@ import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { useDialogCloseFocusBarrier } from '../../composables/useDialogCloseFocusBarrier'
 import type { PlayerLinkGenerationResult } from '../../composables/usePlayerFileExports'
 import type { MapImageFormat } from '../../utils/map-image-export'
+import { effectiveWardenMapImageScope, type MapImageScope } from '../../utils/map-image-scope'
 import MapFilesItemHint from './MapFilesItemHint.vue'
 import WorkspaceMapFilesObstructionMarker from './WorkspaceMapFilesObstructionMarker.vue'
 import MapFilesTriggerHint from './MapFilesTriggerHint.vue'
@@ -113,6 +114,10 @@ const props = withDefaults(defineProps<{
   workspaceId: string
   scope: string
   activeView: 'cluster' | 'system'
+  continuousMap?: boolean
+  imageClusterId?: string | null
+  selectedImageSystemId?: string | null
+  imageSystems?: readonly { id: string; name: string }[]
   imageAvailable: boolean
   restoreLoading?: boolean
   exportError: string
@@ -126,12 +131,16 @@ const props = withDefaults(defineProps<{
 }>(), {
   cloudBackupItems: () => [],
   cloudRestoreItems: () => [],
+  continuousMap: false,
+  imageClusterId: null,
+  selectedImageSystemId: null,
+  imageSystems: () => [],
 })
 
 const emit = defineEmits<{
   'export-cluster-json': []
   'export-system-json': []
-  'export-warden-image': [format: MapImageFormat, lightForPrinting: boolean]
+  'export-warden-image': [format: MapImageFormat, lightForPrinting: boolean, scope: MapImageScope, explicitSystemId: string | null, systemImageTarget: 'inspected' | 'explicit']
   'export-player-json': []
   'export-player-image': [format: MapImageFormat, lightForPrinting: boolean]
   'preview-player-view': [focusMapFiles: () => void]
@@ -145,6 +154,8 @@ const open = defineModel<boolean>('open', { required: true })
 const closeFocus = useDialogCloseFocusBarrier(open)
 const trigger = useTemplateRef('trigger')
 const printLight = ref(false)
+const wardenImageScope = ref<MapImageScope>('cluster')
+const explicitImageSystemId = ref<string | null>(null)
 const linkDialogOpen = ref(false)
 const linkDialogMode = ref<'ready' | 'error' | null>(null)
 const linkDialogError = ref('')
@@ -156,10 +167,43 @@ const generatedWorkspaceId = ref(props.generatedPlayerUrl ? props.workspaceId : 
 const dropdownContent = computed(() => ({
   align: 'end' as const,
   collisionPadding: 8,
-  onCloseAutoFocus: closeFocus.settleClosingFocus,
+  onCloseAutoFocus: restoreMapFilesFocus,
 }))
 const canViewGeneratedLink = computed(() => Boolean(props.generatedPlayerUrl)
   && generatedWorkspaceId.value === props.workspaceId)
+const imageScopeChoices: ReadonlyArray<{ value: MapImageScope; label: string }> = [
+  { value: 'cluster', label: 'Entire Cluster' },
+  { value: 'system', label: 'Selected system' },
+  { value: 'viewport', label: 'Current viewport' },
+]
+const explicitImageSystem = computed(() => props.imageSystems.find(system => system.id === explicitImageSystemId.value) ?? null)
+const activeWardenImageScope = computed(() => explicitImageSystem.value
+  ? 'system'
+  : effectiveWardenMapImageScope(wardenImageScope.value, props.selectedImageSystemId, props.continuousMap))
+const selectedImageScopeLabel = computed(() => explicitImageSystem.value
+  ? `Selected system · ${explicitImageSystem.value.name}`
+  : imageScopeChoices.find(choice => choice.value === activeWardenImageScope.value)?.label ?? 'Entire Cluster')
+const systemFilterInputProps = {
+  placeholder: 'Filter systems',
+  'aria-label': 'Filter systems',
+}
+
+watch([() => props.workspaceId, () => props.imageClusterId], () => {
+  wardenImageScope.value = 'cluster'
+  explicitImageSystemId.value = null
+})
+watch(() => props.imageSystems, (systems) => {
+  if (explicitImageSystemId.value && !systems.some(system => system.id === explicitImageSystemId.value)) {
+    explicitImageSystemId.value = null
+  }
+}, { flush: 'sync' })
+watch(
+  [() => props.continuousMap, () => props.selectedImageSystemId],
+  ([continuousMap, selectedSystemId]) => {
+    if (continuousMap && !selectedSystemId && wardenImageScope.value === 'system') wardenImageScope.value = 'cluster'
+  },
+  { flush: 'sync' },
+)
 
 const groups = computed(() => [
   { value: 'download' as const, label: 'Download or back up', icon: 'i-lucide-download' },
@@ -169,9 +213,10 @@ const groups = computed(() => [
 ])
 
 function keepSubmenuOpenOnParentFocus(event: Event): void {
-  // Reka can briefly focus the parent menu when the mouse leaves a submenu trigger.
-  const parentMenu = ownedMenu(triggerElement())
-  if (parentMenu && event.target === parentMenu) event.preventDefault()
+  // Reka can briefly focus any parent menu in this nested menu stack when the mouse leaves a submenu trigger.
+  if (event.target instanceof HTMLElement && event.target.matches('.workspace-map-files-content[role="menu"]')) {
+    event.preventDefault()
+  }
 }
 
 const items = computed<MenuItem[][]>(() => {
@@ -197,19 +242,56 @@ const items = computed<MenuItem[][]>(() => {
     onSelect: () => emit('export-system-json'),
   }
 
+  const wardenImageScopeItem: MenuItem = {
+    menuValue: 'warden-image-scope',
+    label: `Warden image scope · ${selectedImageScopeLabel.value}`,
+    icon: 'i-lucide-crop',
+    content,
+    children: imageScopeChoices.map(choice => ({
+      menuValue: `warden-image-scope-${choice.value}`,
+      label: choice.label,
+      disabled: choice.value === 'system' && !props.selectedImageSystemId,
+      onSelect: (event: Event) => {
+        event.preventDefault()
+        wardenImageScope.value = choice.value
+        explicitImageSystemId.value = null
+      },
+    })),
+  }
+
+  const wardenSystemImageItem: MenuItem = {
+    menuValue: 'warden-image-system',
+    label: 'Export a system…',
+    icon: 'i-lucide-orbit',
+    disabled: props.imageSystems.length === 0,
+    filter: systemFilterInputProps,
+    content,
+    children: props.imageSystems.map(system => ({
+      menuValue: `warden-image-system-${system.id}`,
+      label: system.name,
+      icon: explicitImageSystemId.value === system.id ? 'i-lucide-check' : undefined,
+      hint: `${props.scope} · Warden image target · ${system.name}. Includes private Warden content.`,
+      onSelect: (event: Event) => {
+        event.preventDefault()
+        explicitImageSystemId.value = system.id
+        wardenImageScope.value = 'system'
+      },
+    })),
+  }
+
   const imageAction = (audience: 'Warden' | 'Player', format: MapImageFormat): MenuItem => ({
     menuValue: `${audience.toLowerCase()}-${format.toLowerCase()}`,
     label: `${audience} ${format.toUpperCase()}`,
     icon: format === 'png' ? 'i-lucide-image' : 'i-lucide-shapes',
     disabled: !props.imageAvailable,
-    hint: `${props.scope} · ${audience} image · ${format}. ${audience === 'Warden' ? 'Includes private Warden content.' : 'Includes only player-visible content.'}`,
+    hint: `${props.scope} · ${audience === 'Warden' && props.continuousMap ? `${selectedImageScopeLabel.value} · ` : ''}${audience} image · ${format}. ${audience === 'Warden' ? 'Includes private Warden content.' : 'Includes only player-visible content.'}`,
     onSelect: () => exportImage(audience, format),
   })
 
   const children: Record<GroupValue, MenuItem[]> = {
     download: [
       { type: 'label', label: props.scope },
-      ...(props.activeView === 'system' ? [systemJson, clusterJson] : [clusterJson]),
+      ...(props.selectedImageSystemId || props.activeView === 'system' ? [systemJson, clusterJson] : [clusterJson]),
       ...props.cloudBackupItems.map(item => ({ ...item } as MenuItem)),
     ],
     restore: [
@@ -242,6 +324,7 @@ const items = computed<MenuItem[][]>(() => {
         onSelect: event => event.preventDefault(),
         onUpdateChecked: checked => { printLight.value = checked },
       },
+      ...(props.continuousMap ? [wardenImageScopeItem, wardenSystemImageItem] : []),
       { type: 'separator' },
       imageAction('Warden', 'png'),
       imageAction('Warden', 'svg'),
@@ -339,6 +422,12 @@ function triggerElement(): HTMLElement | null {
 
 function focusTrigger(): void {
   triggerElement()?.focus({ preventScroll: true })
+}
+
+function restoreMapFilesFocus(event: Event): void {
+  event.preventDefault()
+  if (hasMapFilesFocusOwnership()) focusTrigger()
+  closeFocus.settleClosingFocus()
 }
 
 function ownedMenu(owner: Element | null | undefined): HTMLElement | null {
@@ -453,7 +542,9 @@ async function reopenLink(): Promise<void> {
 function exportImage(audience: 'Warden' | 'Player', format: MapImageFormat): void {
   const lightForPrinting = printLight.value
   printLight.value = false
-  if (audience === 'Warden') emit('export-warden-image', format, lightForPrinting)
+  if (audience === 'Warden') {
+    emit('export-warden-image', format, lightForPrinting, activeWardenImageScope.value, explicitImageSystem.value?.id ?? null, explicitImageSystem.value ? 'explicit' : 'inspected')
+  }
   else emit('export-player-image', format, lightForPrinting)
 }
 

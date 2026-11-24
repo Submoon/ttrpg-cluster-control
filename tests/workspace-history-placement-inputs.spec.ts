@@ -11,6 +11,7 @@ import { useSystemObjectPlacement } from '../composables/editor-workflows/useSys
 import { useEditorUiStore } from '../stores/editor-ui'
 import { nearestAvailableCircularOrbitRadius } from '../utils/orbit-drag-geometry'
 import { objectPositions } from '../utils/system-map-geometry'
+import { orbitGeometrySource } from '../utils/orbit-geometry-source'
 
 function createHistoryHarness(initial: LocalWorkspace) {
   const workspace = ref<LocalWorkspace | null>(initial)
@@ -538,6 +539,36 @@ test('Add Orbit drag reserves the nearest frontmost host and commits its exact c
   }
 })
 
+test('adding an Orbit on the Cluster map uses the chosen system without changing the inspected system @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = addStarSystem(createLocalWorkspace('Kestrel Reach', 'Vesper')).workspace
+  const [inspected, owner] = initial.cluster.systems
+  const host = owner!.objects[0]!
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+  const store = useEditorUiStore()
+  store.setSelection({ activeView: 'cluster', selectedSystemId: inspected!.id })
+
+  try {
+    expect(await controller.creation.chooseCreationType({ kind: 'orbit' }, owner!.id)).toBe(true)
+    expect(await controller.creation.offerCreationCandidates([{
+      key: host.id,
+      label: host.name,
+      target: { kind: 'host', objectId: host.id },
+      error: null,
+    }])).toBe(true)
+    expect(store.activeView).toBe('cluster')
+    expect(store.selectedSystemId).toBe(inspected!.id)
+    expect(harness.workspace.value?.cluster.systems[0]?.orbits).toHaveLength(0)
+    expect(harness.workspace.value?.cluster.systems[1]?.orbits).toMatchObject([{ hostId: host.id }])
+    expect(await harness.history.undo()).toMatchObject({ status: 'applied' })
+    expect(harness.workspace.value?.cluster.systems[1]?.orbits).toHaveLength(0)
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
+})
+
 test('Orbit drag cancellation and workspace changes discard the captured preview @pure', async () => {
   setActivePinia(createPinia())
   const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
@@ -578,6 +609,110 @@ test('Orbit drag cancellation and workspace changes discard the captured preview
     expect(controller.creation.creationSession.value?.preview).toBeNull()
     expect(await controller.creation.completeOrbitDrag()).toBe(false)
     expect(harness.workspace.value?.cluster.systems[0]?.orbits).toHaveLength(0)
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
+})
+
+test('a clicked Orbit owner inherits edited geometry and calculates untouched radii from that system @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = addStarSystem(createLocalWorkspace('Kestrel Reach', 'Vesper')).workspace
+  const [inspected, owner] = initial.cluster.systems
+  const host = owner!.objects[0]!
+  owner!.orbits.push(createOrbit(owner!, host.id))
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+  const store = useEditorUiStore()
+  store.setSelection({ activeView: 'cluster', inspectedTarget: { kind: 'system', systemId: inspected!.id } })
+
+  try {
+    expect(await controller.creation.chooseCreationType({ kind: 'orbit' }, inspected!.id)).toBe(true)
+    controller.creation.updateCreationInput('hostId', inspected!.objects[0]!.id)
+    controller.creation.updateCreationInput('horizontalRadius', '186')
+    controller.creation.updateCreationInput('rotation', '27')
+
+    expect(await controller.creation.chooseCreationType({ kind: 'orbit' }, owner!.id)).toBe(true)
+    expect(controller.creation.creationSession.value?.inputs).toMatchObject({
+      hostId: '', horizontalRadius: '186', rotation: '27',
+    })
+    expect(controller.creation.hasPendingHistoryInput.value).toBe(true)
+    expect(await controller.creation.offerCreationCandidates([{
+      key: host.id,
+      label: host.name,
+      target: { kind: 'host', objectId: host.id },
+      error: null,
+    }])).toBe(true)
+
+    const placed = harness.workspace.value!
+    const orbit = placed.cluster.systems[1]!.orbits[1]!
+    expect(orbit.hostId).toBe(host.id)
+    expect(placed.layout.orbitRadii[orbit.id]).toEqual({ horizontal: 186, vertical: 170 })
+    expect(placed.layout.orbitRotations[orbit.id]).toBe(27)
+    expect(placed.cluster.systems[0]?.orbits).toHaveLength(0)
+    expect(store.inspectedTarget).toEqual({ kind: 'system', systemId: inspected!.id })
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
+})
+
+test('a definite Orbit drag owns its pressed system without changing another owner’s form @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = addStarSystem(createLocalWorkspace('Kestrel Reach', 'Vesper')).workspace
+  const [inspected, owner] = initial.cluster.systems
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+  const store = useEditorUiStore()
+  store.setSelection({ activeView: 'cluster', inspectedTarget: { kind: 'system', systemId: inspected!.id } })
+  const center = { x: 480, y: 280 }
+  const candidates = [{
+    key: 'free-center',
+    label: 'Unoccupied center',
+    target: { kind: 'free' as const, point: { x: 0.5, y: 0.5 } },
+    error: null,
+  }]
+
+  const beginInOwner = () => controller.creation.beginOrbitDrag(center, candidates, {
+    systemId: owner!.id,
+    workspace: harness.workspace.value!,
+  })
+
+  try {
+    expect(await controller.creation.chooseCreationType({ kind: 'orbit' }, inspected!.id)).toBe(true)
+    controller.creation.updateCreationInput('horizontalRadius', '192')
+    const form = controller.creation.creationSession.value
+    const formInputs = { ...form!.inputs }
+
+    expect(beginInOwner()).toBe(true)
+    controller.creation.updateOrbitDrag({ x: center.x + 142, y: center.y }, 4)
+    expect(controller.creation.creationSession.value).toBe(form)
+    expect(form?.preview).toBeNull()
+    expect(form?.inputs).toEqual(formInputs)
+    controller.creation.cancelOrbitDrag()
+    expect(await controller.creation.completeOrbitDrag()).toBe(false)
+    expect(harness.workspace.value?.cluster.systems[1]?.orbits).toHaveLength(0)
+
+    expect(beginInOwner()).toBe(true)
+    controller.creation.updateOrbitDrag({ x: center.x + 142, y: center.y }, 4)
+    expect(await controller.creation.completeOrbitDrag()).toBe(true)
+    const placed = harness.workspace.value!
+    const orbit = placed.cluster.systems[1]!.orbits[0]!
+    expect(orbit).toMatchObject({ hostId: null, center: { x: 0.5, y: 0.5 } })
+    expect(placed.layout.orbitRadii[orbit.id]).toEqual({ horizontal: 142, vertical: 142 })
+    expect(placed.cluster.systems[0]?.orbits).toHaveLength(0)
+    expect(controller.creation.creationSession.value).toBe(form)
+    expect(form?.inputs).toEqual(formInputs)
+    expect(store.inspectedTarget).toEqual({ kind: 'system', systemId: inspected!.id })
+
+    controller.creation.quitAdd()
+    expect(beginInOwner()).toBe(true)
+    controller.creation.updateOrbitDrag({ x: center.x + 180, y: center.y }, 4)
+    harness.workspace.value = { ...placed }
+    expect(await controller.creation.completeOrbitDrag()).toBe(false)
+    expect(controller.creation.beginOrbitDrag(center, candidates, { systemId: owner!.id, workspace: placed })).toBe(false)
+    expect(controller.creation.creationSession.value).toBeNull()
+    expect(harness.workspace.value?.cluster.systems[1]?.orbits).toHaveLength(1)
   } finally {
     controller.dispose()
     harness.dispose()
@@ -737,5 +872,71 @@ test('accepted geometry changes preserve genuinely edited placement inputs and b
 
   controller.dispose()
   stopGuard()
+  harness.dispose()
+})
+
+test('a continuous direct resize cannot overwrite an Orbit adjustment published by its async preflight @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const system = initial.cluster.systems[0]!
+  const orbit = createOrbit(system, null)
+  const initialRadii = { horizontal: 220, vertical: 180 }
+  const prepared: LocalWorkspace = {
+    ...initial,
+    cluster: { ...initial.cluster, systems: [{ ...system, orbits: [orbit] }] },
+    layout: {
+      ...initial.layout,
+      orbitRadii: { ...initial.layout.orbitRadii, [orbit.id]: initialRadii },
+    },
+  }
+  const sourceGeometry = orbitGeometrySource(prepared, prepared.cluster.systems[0]!, orbit)
+  const harness = createHistoryHarness(prepared)
+  const store = useEditorUiStore()
+  store.setSelection({
+    activeView: 'cluster',
+    selectedSystemId: system.id,
+    inspectedTarget: { kind: 'orbit', systemId: system.id, orbitId: orbit.id },
+  })
+  store.setMode('move')
+  const orbitAdjustments = createContinuousOrbitAdjustmentController({ history: harness.history })
+  const editorError = ref('')
+  const preflightRadii = { horizontal: 246, vertical: 180 }
+  const mapWorkflows = useMapWorkflows({
+    workspace: harness.workspace,
+    mutations: harness.history,
+    systemMapRef: shallowRef(null),
+    continuousMap: ref(true),
+    resolveTransition: async () => true,
+    beginObjectSession: () => undefined,
+    beginOrbitSession: () => undefined,
+    isEntityCommandBlocked: () => false,
+    editorError,
+    orbitAdjustments,
+    beforeWorkspaceOperation: async () => {
+      const result = await harness.history.execute({
+        action: {
+          kind: 'resize',
+          label: 'Finish pending Orbit adjustment',
+          target: { kind: 'orbit', id: orbit.id, systemId: system.id },
+          parent: { kind: 'system', id: system.id },
+        },
+        prepare: current => ({
+          ...current,
+          layout: {
+            ...current.layout,
+            orbitRadii: { ...current.layout.orbitRadii, [orbit.id]: preflightRadii },
+          },
+        }),
+      })
+      return result.status === 'applied' || result.status === 'unchanged'
+    },
+  })
+
+  await mapWorkflows.resizeMapOrbit(orbit.id, { horizontal: 340, vertical: 290 }, system.id, sourceGeometry)
+
+  expect(harness.workspace.value?.layout.orbitRadii[orbit.id]).toEqual(preflightRadii)
+  expect(editorError.value).toBe('The Orbit geometry changed before this resize could be applied.')
+
+  orbitAdjustments.dispose()
   harness.dispose()
 })

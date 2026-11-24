@@ -1013,7 +1013,8 @@ p-note {
   z-index: 15;
   top: 0.7rem;
   left: 50%;
-  width: min(64rem, calc(100% - 2rem));
+  width: max-content;
+  max-width: min(64rem, calc(100% - 2rem));
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -1062,10 +1063,9 @@ p-note {
   border: 1px solid var(--line-soft);
   border-radius: 0.35rem;
   padding: 0.4rem;
-  background: color-mix(in srgb, var(--panel) 95%, transparent);
+  background: var(--panel);
   color: var(--text-primary);
   box-shadow: 0 0.5rem 1.8rem rgb(0 0 0 / 20%);
-  backdrop-filter: blur(12px);
 }
 .workspace-dock-tools,
 .workspace-dock-mode {
@@ -1075,11 +1075,25 @@ p-note {
   align-items: center;
   gap: 0.25rem;
 }
+.workspace-dock-placement-controls {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  border-left: 1px solid var(--line-soft);
+  padding-left: 0.35rem;
+}
+.workspace-dock-placement-instruction {
+  max-width: 15rem;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
 .workspace-dock-mode { border-right: 1px solid var(--line-soft); padding-right: 0.35rem; }
-.workspace-zoom-controls {
+.map-workspace-shell .workspace-zoom-controls {
   border-color: var(--line-soft);
-  background: color-mix(in srgb, var(--panel) 95%, transparent);
-  backdrop-filter: blur(12px);
+  background: var(--panel);
 }
 
 .workspace-resizable-panel {
@@ -1094,7 +1108,10 @@ p-note {
   border-radius: 0.35rem;
   background: color-mix(in srgb, var(--panel-raised) 96%, transparent);
   box-shadow: 0 0.7rem 2.2rem rgb(0 0 0 / 22%);
-  backdrop-filter: blur(16px);
+}
+.player-document-view .workspace-resizable-panel { backdrop-filter: blur(16px); }
+.map-workspace-shell .workspace-resizable-panel {
+  background: var(--panel-raised);
 }
 .workspace-resizable-panel-left { left: 0.75rem; }
 .workspace-resizable-panel-right { right: 0.75rem; }
@@ -1264,12 +1281,12 @@ p-note {
 
 @media (max-width: 1000px) and (min-width: 761px) and (min-height: 601px) {
   .workspace-side-panel-content { padding: 0.75rem; }
-  .workspace-map-chrome-region { width: calc(100% - 1.5rem); }
+  .workspace-map-chrome-region { max-width: calc(100% - 1.5rem); }
 }
 
 @media (max-width: 760px), (max-height: 600px) {
   .map-workspace-shell .workspace-header { min-height: 3rem; padding: 0.4rem 0.55rem; }
-  .workspace-map-chrome-region { top: 0.5rem; width: calc(100% - 1rem); }
+  .workspace-map-chrome-region { top: 0.5rem; max-width: calc(100% - 1rem); }
   .workspace-resizable-panel:not(.workspace-resizable-panel-compact) { top: var(--workspace-map-chrome-clearance, 4.3rem); bottom: var(--workspace-bottom-controls-clearance, 4.4rem); }
   .workspace-bottom-controls {
     right: max(0.5rem, env(safe-area-inset-right));
@@ -1295,6 +1312,8 @@ p-note {
   .map-workspace-shell .workspace-dock { gap: 0.2rem; padding: 0.25rem; }
   .workspace-dock-mode { justify-content: center; border-right: 0; padding-right: 0; }
   .workspace-dock-mode > button { min-height: 2rem; padding-inline: 0.4rem; }
+  .workspace-dock-placement-controls { justify-content: center; border-left: 0; padding-left: 0; }
+  .workspace-dock-placement-instruction { flex-basis: 100%; max-width: 100%; text-align: center; }
   .workspace-zoom-controls { gap: 0.15rem; padding: 0.2rem; }
   .workspace-zoom-value { min-width: 2.8rem; }
   .workspace-resizable-panel:not(.workspace-resizable-panel-compact) .workspace-panel-resize-handle { display: none; }

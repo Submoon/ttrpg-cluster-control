@@ -19,7 +19,7 @@
         {{ dropboxRestore.message.value }}
       </p>
       <p
-        v-if="activeView === 'system' && mapMode === 'move' && selectedObjectIds.length > 1 && moveSelectionError"
+        v-if="mapMode === 'move' && selectedObjectIds.length > 1 && moveSelectionError"
         class="feedback m-0 error-text"
         role="alert"
         aria-live="assertive"
@@ -67,16 +67,16 @@
       </WorkspaceWelcome>
       <section v-else-if="workspace" class="editor">
           <MapEditorLayout
-          :mode="activeView"
+          mode="cluster"
           :hierarchy-label="activeView === 'cluster' ? 'Jump Cluster contents' : 'System hierarchy'"
-          :inspector-label="activeView === 'cluster' ? 'Jump Route inspector' : 'Object inspector'"
+          :inspector-label="inspectorLabel"
           :hierarchy-visible="hierarchyPanelVisible"
           :inspector-visible="inspectorPanelVisible"
-          :entity-inspector-active="!chartEditing && activeView === 'system' && Boolean(selectedObject || selectedOrbit)"
+          :entity-inspector-active="!chartEditing && inspectorMode === 'system' && Boolean(inspectorSelectedObject || inspectorSelectedOrbit)"
           :route-session-active="!chartEditing && activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelPresentationOpen"
           :compact-panel="compactPanel"
-          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || mapTypeFiltersOpen || helpOpen || publicationMenuRequest !== null"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || mobileMenuOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || mapTypeFiltersOpen || helpOpen || publicationMenuRequest !== null || creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen"
           :is-compact-viewport="isCompactViewport"
           @close-panel="closePanel"
         >
@@ -108,11 +108,17 @@
           </template>
           <template #header>
             <WorkspaceHeader
+              ref="workspaceHeader"
               :workspace="wardenDraftWorkspace ?? workspace"
               :active-view="activeView"
               :selected-system="selectedSystem"
               :compact-modal-open="compactPanelPresentationOpen"
+              :is-compact-viewport="isCompactViewport"
+              v-model:mobile-menu-open="mobileMenuOpen"
+              :has-field-draft="hasModifiedFieldDefinitionsSession"
               show-privacy-link
+              @open-fields="openFieldsFromMobileMenu"
+              @open-help="openHelpFromMobileMenu"
             >
               <template #editor-actions>
                 <FieldDefinitionsDialog
@@ -125,11 +131,15 @@
                   :inspector-conflict="fieldDefinitionInspectorConflict"
                   :inspector-conflict-error="'Resolve the Inspector draft before changing this field.'"
                   :has-modified-draft="hasModifiedFieldDefinitionsSession"
+                  :hide-trigger="isCompactViewport"
+                  :focus-fallback="focusMobileWorkspaceMenu"
                   @intent="handleFieldDefinitionsIntent"
                 />
                 <WorkspaceMapHelp
                   v-model:open="helpOpen"
-                  @active-change="helpOwnsFocus = $event"
+                  :external-opener="mobileHelpOpener"
+                  :focus-fallback="focusMobileWorkspaceMenu"
+                  @active-change="onHelpActiveChange"
                 />
               </template>
             </WorkspaceHeader>
@@ -140,8 +150,9 @@
               ref="workspaceMapChrome"
               :workspace="workspace"
               :active-view="activeView"
+              continuous-map
+              :selected-image-system-id="continuousInspectorSystemId"
               :selected-system="selectedSystem"
-              :display-name="activeView === 'cluster' ? wardenDraftWorkspace?.cluster.name : wardenSystem?.name"
               :cluster-map="clusterMapRef"
               :system-map="systemMapRef"
               :export-error="exportError"
@@ -153,7 +164,7 @@
               :hierarchy-open="hierarchyPanelVisible"
               :inspector-open="inspectorPanelVisible"
               :compact-modal-open="compactPanelOpen"
-              :creation-session="activeView === 'system' ? creationSession : null"
+              :creation-session="creationSession"
               :creation-type-label="creationTypeLabel"
               :cluster-add-presentation="clusterAddPresentation"
               :cluster-move-presentation="clusterMovePresentation"
@@ -175,9 +186,8 @@
               @preview-player-view="openPlayerPreview"
               :generate-player-link="generatePlayerLink"
               @copy-player-link="copyPlayerLink"
-              @import-file="importJsonFile"
+              @import-file="handleWorkspaceJsonImport"
               @restore-file="openLocalWorkspaceRestore"
-              @show-cluster="showClusterMap"
               @toggle-hierarchy="togglePanel('hierarchy')"
               @toggle-inspector="togglePanel('inspector')"
               @files-open-change="headerFilesOpen = $event"
@@ -221,6 +231,61 @@
                 </div>
               </template>
             </UModal>
+            <UModal
+              v-model:open="continuousObjectOwnerChooserOpen"
+              title="Choose the owning system"
+              description="The Add target overlaps systems or falls outside every system. Choose the owning system."
+              @update:open="onContinuousObjectOwnerChooserOpenChange"
+            >
+              <template #body>
+                <div class="grid gap-2">
+                  <UButton
+                    v-for="systemId in addOwnerChoiceIds"
+                    :key="systemId"
+                    color="neutral"
+                    variant="outline"
+                    class="justify-start"
+                    :aria-label="`Add ${orbitAddArmed ? 'Orbit' : continuousObjectAddLabel} to ${continuousObjectOwnerName(systemId)}`"
+                    @click="chooseAddOwner(systemId)"
+                  >
+                    {{ continuousObjectOwnerName(systemId) }}
+                  </UButton>
+                </div>
+                <p v-if="editorError" class="m-0 mt-3 error-text" role="alert">{{ editorError }}</p>
+              </template>
+              <template #footer>
+                <div class="flex w-full justify-end">
+                  <UButton color="neutral" variant="ghost" @click="cancelContinuousObjectOwnerChoice">Cancel</UButton>
+                </div>
+              </template>
+            </UModal>
+            <UModal
+              v-model:open="continuousObjectOtherTypeOpen"
+              title="Name this object type"
+              description="Enter the label to use for this Other object type."
+              @update:open="onContinuousObjectOtherTypeOpenChange"
+            >
+              <template #body>
+                <form class="grid gap-3" @submit.prevent="confirmContinuousObjectOtherType">
+                  <UFormField label="Type name" :error="continuousObjectOtherTypeError">
+                    <UInput
+                      v-model="continuousObjectOtherTypeName"
+                      aria-label="Type name"
+                      autocomplete="off"
+                    />
+                  </UFormField>
+                  <p v-if="continuousObjectOtherTypeError" class="m-0 error-text" role="alert">
+                    {{ continuousObjectOtherTypeError }}
+                  </p>
+                </form>
+              </template>
+              <template #footer>
+                <div class="flex w-full justify-end gap-2">
+                  <UButton color="neutral" variant="ghost" @click="cancelContinuousObjectOtherType">Cancel</UButton>
+                  <UButton color="primary" @click="confirmContinuousObjectOtherType">Start Add</UButton>
+                </div>
+              </template>
+            </UModal>
             <GoogleDriveRestoreButton
               ref="googleDriveRestoreButton"
               :controller="googleDriveRestore"
@@ -249,10 +314,10 @@
             <WorkspaceDock
               ref="workspaceDockRef"
               v-model:add-open="creationChooserOpen"
-              :creation-session="activeView === 'system' ? creationSession : null"
+              :creation-session="creationSession"
               :creation-type-label="creationTypeLabel"
-              :cluster-add-label="clusterAddPresentation?.label ?? null"
-              :cluster-move-targeting="clusterMoveTargeting && clusterAddType === null"
+              :cluster-add-label="standaloneImportPlacementEnabled ? null : clusterAddPresentation?.label ?? null"
+              :cluster-move-targeting="!standaloneImportPlacementEnabled && clusterMoveTargeting && clusterAddType === null"
               :system-object-move-available="systemObjectMoveAvailable"
               :system-object-move-destination="systemObjectMoveDestination"
               :system-object-move-destination-options="systemObjectMoveDestinationOptions"
@@ -260,14 +325,14 @@
               :system-object-move-candidate-request="systemObjectMoveCandidateRequest"
               :system-object-move-preview="systemObjectMovePreview"
               :system-object-move-error="systemObjectMoveError"
-              :unresolved-exit-available="unresolvedExitAvailable"
-              :unresolved-exit-preview="unresolvedExitPreview"
-              :unresolved-exit-error="unresolvedExitError"
-              :orbit-center-move-available="orbitCenterMoveAvailable"
-              :orbit-center-map-move-targeting="orbitCenterMapMoveTargeting"
-              :orbit-center-move-preview="orbitCenterMovePreview"
-              :orbit-center-move-error="orbitCenterMoveError"
-              :selected-system="selectedSystem"
+              :unresolved-exit-available="!standaloneImportPlacementEnabled && unresolvedExitAvailable"
+              :unresolved-exit-preview="standaloneImportPlacementEnabled ? null : unresolvedExitPreview"
+              :unresolved-exit-error="standaloneImportPlacementEnabled ? '' : unresolvedExitError"
+              :orbit-center-move-available="!standaloneImportPlacementEnabled && orbitCenterMoveAvailable"
+              :orbit-center-map-move-targeting="!standaloneImportPlacementEnabled && orbitCenterMapMoveTargeting"
+              :orbit-center-move-preview="standaloneImportPlacementEnabled ? null : orbitCenterMovePreview"
+              :orbit-center-move-error="standaloneImportPlacementEnabled ? '' : orbitCenterMoveError"
+              :selected-system="creationSystem"
               @update-creation-input="updateCreationInput"
               @add-from-inputs="addCreationFromInputs"
               @choose-creation-candidate="chooseCreationCandidate"
@@ -286,22 +351,55 @@
               @keyboard-add-escape="restoreMapFocusAfterKeyboardAdd"
             >
               <template #add="{ close }">
-                <template v-if="activeView === 'cluster'">
-                  <button class="workspace-control tool-button" type="button" aria-label="Add star system" @click="armSystemAddAndClose(close)">
-                    Add star system
-                  </button>
-                  <button class="workspace-control tool-button" type="button" aria-label="Add Jump Route" @click="beginRoute(); close()">
-                    Add Jump Route
-                  </button>
-                </template>
                 <ObjectPalette
-                  v-else
                   v-model:active-family="objectPaletteActiveFamily"
-                  :selected-orbit="selectedOrbit"
                   :saving="saveState === 'saving'"
                   @add-object="chooseObjectCreationType"
                   @add-orbit="chooseOrbitCreationType"
                 />
+                <section class="object-palette" aria-label="Cluster creation">
+                  <span class="section-kicker">ADD TO CLUSTER</span>
+                  <div class="object-palette-controls">
+                    <UButton
+                      class="object-palette-button"
+                      type="button"
+                      size="sm"
+                      color="neutral"
+                      variant="outline"
+                      icon="i-lucide-orbit"
+                      @click="armSystemAddAndClose(close)"
+                    >
+                      Add star system
+                    </UButton>
+                    <UButton
+                      class="object-palette-button"
+                      type="button"
+                      size="sm"
+                      color="neutral"
+                      variant="outline"
+                      icon="i-lucide-network"
+                      @click="beginRouteAndClose(close)"
+                    >
+                      Add Jump Route
+                    </UButton>
+                  </div>
+                </section>
+              </template>
+              <template #placement>
+                <div
+                  v-if="standaloneImportPlacementEnabled"
+                  class="workspace-dock-placement-controls"
+                  role="group"
+                  aria-label="Standalone star system placement controls"
+                  @keydown.esc.stop.prevent="handleStandaloneImportPlacementEscape"
+                >
+                  <span class="workspace-dock-placement-instruction">
+                    Click map or focus it and press Enter to place {{ standaloneImportPlacement?.system.name ?? 'the imported system' }}; arrows pan; Escape cancels.
+                  </span>
+                  <UButton size="xs" color="neutral" variant="soft" @click="frameStandaloneImportPlacement">Frame preview</UButton>
+                  <UButton size="xs" color="primary" @click="reviewStandaloneImportPlacement">Review placement</UButton>
+                  <UButton size="xs" color="neutral" variant="ghost" @click="cancelStandaloneImportPlacement">Cancel</UButton>
+                </div>
               </template>
             </WorkspaceDock>
           </template>
@@ -310,10 +408,13 @@
             <WorkspaceZoomControls
               :zoom-level="zoomLevel"
               :minimum-zoom-level="minimumZoomLevel"
+              :system-relative="continuousMap && activeView === 'cluster'"
+              :center-available="inspectedTarget !== null"
               :compact-modal-open="compactPanelOpen"
               @zoom-by="zoomActiveMap"
               @zoom-to="setViewportPercentage"
               @fit-map="fitActiveMap"
+              @center-map="centerInspectedTarget"
               @pan-by="panActiveMap"
             />
           </template>
@@ -321,28 +422,34 @@
           <template #hierarchy>
             <MapHierarchy
               :workspace="wardenDraftWorkspace ?? workspace"
+              continuous-map
+              :inspected-target="inspectedTarget"
               :dimmed-object-ids="dimmedMapObjectIds"
               :has-chart-name-draft="hasChartNameDraft"
-              :saving="saveState === 'saving'"
             />
           </template>
 
           <template #map>
             <section
               class="panel map-panel flex min-w-0 flex-col p-[0.7rem]"
-              :aria-label="activeView === 'cluster' ? 'Jump Cluster map workspace' : 'System map workspace'"
+              aria-label="Jump Cluster map workspace"
             >
               <div
                 class="map-frame workspace-canvas flex min-h-0 min-w-0 overflow-hidden bg-[var(--map-bg)]"
-                :class="{ 'system-map-canvas': activeView === 'system' }"
               >
                 <ClientOnly>
                   <WorkspaceMapCanvas
-                    v-if="activeView === 'cluster'"
-                    :key="activeMapKey ?? 'cluster-map'"
+                    :key="`${workspace.id}:${activeMapKey ?? 'cluster-map'}`"
                     ref="clusterMapRef"
                     @editing-gesture-change="mapControls.setEditingGestureActive"
-                    :active-view="activeView"
+                    active-view="cluster"
+                    continuous-map
+                    :standalone-import-placement-enabled="standaloneImportPlacementEnabled"
+                    :standalone-import-placement="standaloneImportPlacement"
+                    :keyboard-owned-overlay-open="mapKeyboardOverlayOpen"
+                    :inspected-target="inspectedTarget"
+                    :dimmed-object-ids="dimmedMapObjectIds"
+                    :applied-dimmed-object-ids="dimmedAppliedObjectIds"
                     :map-key="activeMapKey ?? ''"
                     :initial-viewport="initialViewport"
                     :workspace="workspace"
@@ -354,17 +461,25 @@
                     :selected-orbit-id="selectedOrbitId"
                     :selected-route-id="selectedRouteId"
                     :mode="mapMode"
-                    :creation-type="null"
-                    :creation-preview="null"
+                    :creation-type="standaloneImportPlacementEnabled ? null : mapCreationType"
+                    :orbit-creation-preview="orbitCreationPreview"
+                    :creation-other-type="continuousObjectAddType === 'other' ? continuousObjectAddOtherType : null"
+                    :object-add-pinned-owner-id="continuousObjectPinnedOwnerId"
+                    :creation-preview="creationSession?.preview ?? null"
                     :creation-chooser-open="creationChooserOpen"
-                    :cluster-add-type="clusterAddType"
-                    :cluster-move-targeting="clusterSystemMapMoveTargeting && clusterAddType === null"
-                    :move-targeting="mapMoveTargeting"
-                    :cluster-chooser-open="creationChooserOpen"
+                    :cluster-add-type="standaloneImportPlacementEnabled ? null : clusterAddType"
+                    :cluster-move-targeting="!standaloneImportPlacementEnabled && clusterSystemMapMoveTargeting && clusterAddType === null"
+                    :move-targeting="!standaloneImportPlacementEnabled && mapMoveTargeting"
+                    :cluster-chooser-open="creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen"
+                    :is-entity-command-blocked="isEntityCommandBlocked"
+                    :orbit-adjustment-preview="orbitAdjustmentPreview"
+                    :system-object-transfer-preview="transferMapPreview"
+                    :system-object-transfer-map-lease="transferMapPlacementLease"
                     :feedback-element="workspaceFeedbackRef"
-                    @navigate-system="selectSystem"
                     @select-cluster-system="selectClusterSystem"
                     @move-select-cluster-system="selectClusterSystem($event, false)"
+                    @select-continuous-object="(systemId: string, objectId: string, openInspector?: boolean) => inspectContinuousTarget({ kind: 'object', systemId, objectId }, openInspector)"
+                    @select-continuous-orbit="(systemId: string, orbitId: string, openInspector?: boolean) => inspectContinuousTarget({ kind: 'orbit', systemId, orbitId }, openInspector)"
                     @select-route="selectRoute"
                     @move-select-route="selectRoute($event, false)"
                     @select-object="selectObject"
@@ -375,87 +490,40 @@
                     @move-unresolved-exit="moveUnresolvedExit"
                     @move-target="handleMapMoveTarget"
                     @move-nudge="handleMapMoveNudge"
+                    @standalone-import-placement-anchor="previewStandaloneImportAnchor"
+                    @cancel-standalone-import-placement="cancelStandaloneImportPlacement"
                     @cancel-map-move="cancelMapMove"
                     @cluster-target="handleClusterTarget"
+                    @continuous-object-add-target="handleContinuousObjectAddTarget"
+                    @continuous-orbit-add-target="handleOrbitAddTarget"
+                    @move-object-in-system="handleContinuousObjectMove"
+                    @resize-system-frame="resizeSystemFrame"
+                    @transfer-object-on-drop="transfer.dropObject"
+                    @orbit-adjustment="updateOrbitAdjustment"
+                    @entity-command-blocked="handleBlockedEntityCommand"
                     @cancel-cluster-preview="cancelClusterPlacement"
                     @move-object="moveMapObject"
-                    @move-orbit-center="moveMapOrbitCenter"
+                    @move-orbit-center="handleMapOrbitCenterMove"
                     @orbit-center-candidates="placement.interactions.handleOrbitCenterCandidates"
                     @rotate-object="rotateMapObject"
                     @resize-orbit="resizeMapOrbit"
                     @rotate-orbit="rotateMapOrbit"
                     @place-object-in-orbit="placeMapObjectInOrbit"
                     @viewport-change="recordViewport($event.key, $event.viewport)"
-                  />
-                  <WorkspaceMapCanvas
-                    v-else-if="selectedSystem"
-                    :key="activeMapKey ?? 'system-map'"
-                    ref="systemMapRef"
-                    @editing-gesture-change="mapControls.setEditingGestureActive"
-                    :active-view="activeView"
-                    :map-key="activeMapKey ?? ''"
-                    :initial-viewport="initialViewport"
-                    :workspace="workspace"
-                    :draft-workspace="wardenDraftWorkspace"
-                    :system="selectedSystem"
-                    :selected-system-id="clusterSelectedSystemId"
-                    :selected-object-id="selectedObjectId"
-                    :selected-object-ids="selectedObjectIds"
-                    :selected-orbit-id="selectedOrbitId"
-                    :dimmed-object-ids="dimmedMapObjectIds"
-                    :selected-route-id="selectedRouteId"
-                    :mode="mapMode"
-                    :creation-type="creationSession?.type ?? null"
-                    :creation-preview="creationSession?.preview ?? null"
-                    :creation-chooser-open="creationChooserOpen"
-                    :feedback-element="workspaceFeedbackRef"
-                    :is-object-move-blocked="isObjectMoveBlocked"
-                    :move-targeting="mapMoveTargeting"
-                    :is-entity-command-blocked="isEntityCommandBlocked"
-                    :orbit-adjustment-preview="orbitAdjustmentPreview"
-                    @navigate-system="selectSystem"
-                    @select-cluster-system="selectClusterSystem"
-                    @move-select-cluster-system="selectClusterSystem($event, false)"
-                    @select-route="selectRoute"
-                    @move-select-route="selectRoute($event, false)"
-                    @select-object="selectObject"
-                    @move-select-object="selectObject($event, false)"
-                    @select-orbit="selectOrbit"
-                    @move-select-orbit="selectOrbit($event, false)"
-                    @move-object="moveMapObject"
-                    @move-target="handleMapMoveTarget"
-                    @move-nudge="handleMapMoveNudge"
-                    @cancel-map-move="cancelMapMove"
-                    @object-move-candidates="placement.interactions.handleObjectMoveCandidates"
-                    @object-move-blocked="handleBlockedObjectMove"
-                    @entity-command-blocked="handleBlockedEntityCommand"
-                    @move-orbit-center="moveMapOrbitCenter"
-                    @orbit-center-candidates="placement.interactions.handleOrbitCenterCandidates"
-                    @rotate-object="rotateMapObject"
-                    @resize-orbit="resizeMapOrbit"
-                    @rotate-orbit="rotateMapOrbit"
-                    @orbit-adjustment="updateOrbitAdjustment"
-                    @place-object-in-orbit="placeMapObjectInOrbit"
-                    @creation-target="offerCreationCandidates"
-                    @creation-drop-target="handleCreationDrop"
-                    @cancel-creation-preview="cancelCreationPreview"
-                    @cancel-object-placement-preview="cancelSystemObjectMovePreview"
-                    @cancel-orbit-placement-preview="cancelOrbitPlacementPreview"
-                    @viewport-change="recordViewport($event.key, $event.viewport)"
+                    @system-transfer-placement-preview="transfer.previewMapPlacement($event.lease, $event.placement)"
+                    @system-transfer-placement-complete="transfer.completeMapPlacement($event.lease, $event.placement)"
+                    @system-transfer-placement-cancel="transfer.handleIntent({ kind: 'cancel-map-placement', sessionId: $event.sessionId, lease: $event })"
                   />
                   <template #fallback>
                     <div class="map-fallback grid min-h-[31rem] w-full place-items-center max-[760px]:min-h-96" role="status">
-                      {{ activeView === 'cluster' ? 'Preparing the Jump Cluster chart...' : 'Preparing the orbital chart...' }}
+                      Preparing the Jump Cluster chart...
                     </div>
                   </template>
                 </ClientOnly>
               </div>
               <p v-if="activeView === 'cluster'" class="map-note mb-[1em] flex justify-between gap-3 px-[0.2rem] pt-[0.55rem] pb-[0.1rem] max-[760px]:flex-col">
-                <span>{{ clusterAddType === 'system' ? 'ADD SYSTEM / OPEN CLUSTER SPACE' : clusterAddType === 'route' ? 'ADD JUMP ROUTE / CHOOSE LOGICAL ENDPOINTS' : clusterMoveTargeting ? 'MOVE SYSTEM / CHOOSE A DESTINATION' : 'KNOWN SYSTEMS / ROUTES / EXTERNAL EXITS' }}</span>
-                <span>{{ clusterAddType === 'system' ? 'Choose clear Cluster space, or pan with the arrow keys and press Enter.' : clusterAddType === 'route' ? 'Choose a system, then a logical Jump Point for each endpoint.' : clusterMoveTargeting ? 'Choose Move selected system on map, then click or use the arrow keys to preview.' : 'Select a system or route to inspect it; use Navigate to enter a system.' }}</span>
-              </p>
-              <p v-else class="map-note mb-[1em] px-[0.2rem] pt-[0.55rem] pb-[0.1rem]">
-                Select a mark or Orbit to inspect it.
+                <span>{{ continuousObjectAddType ? `ADD ${continuousObjectAddLabel.toUpperCase()} / CHOOSE A SYSTEM LOCATION` : clusterAddType === 'system' ? 'ADD SYSTEM / OPEN CLUSTER SPACE' : clusterAddType === 'route' ? 'ADD JUMP ROUTE / CHOOSE SYSTEMS' : clusterMoveTargeting ? 'MOVE SYSTEM / CHOOSE A DESTINATION' : 'KNOWN SYSTEMS / ROUTES / EXTERNAL EXITS' }}</span>
+                <span>{{ continuousObjectAddType ? 'Choose an object mark, Orbit, or clear map position; select a system when prompted for an owner.' : clusterAddType === 'system' ? 'Choose clear Cluster space, or pan with the arrow keys and press Enter.' : clusterAddType === 'route' ? 'Choose a system for each endpoint; local Jump Points are optional.' : clusterMoveTargeting ? 'Choose Move selected system on map, then click or use the arrow keys to preview.' : 'Select a system or route to inspect it. Use Center selection or zoom to reveal system detail.' }}</span>
               </p>
             </section>
           </template>
@@ -497,20 +565,21 @@
 
           <template #inspector>
             <MapInspector
-              :mode="activeView"
+              :mode="inspectorMode"
               :workspace="workspace"
+              system-transfer-enabled
               :publication-busy="publicationBusy"
-              :selected-system="selectedSystem"
+              :selected-system="inspectorSelectedSystem"
               :draft-system="wardenSystem"
-              :inspected-cluster-system="inspectedClusterSystem"
-              :selected-object="selectedObject"
+              :inspected-cluster-system="inspectorSelectedSystem"
+              :selected-object="inspectorSelectedObject"
               :selected-object-count="selectedObjectIds.length"
               :object-focus-request="objectInspectorFocusRequest"
               :inspector-visible="inspectorPanelVisible"
-              :selected-orbit="selectedOrbit"
+              :selected-orbit="inspectorSelectedOrbit"
               :selected-route="selectedRoute"
               :route-session="routeSession"
-              :selected-route-summary="selectedRoute ? routeEndpointSummary(selectedRoute) : ''"
+              :selected-route-summary="selectedRoute ? wardenRouteSummary(selectedRoute) : ''"
               :has-chart-name-draft="hasChartNameDraft"
               :chart-editing="chartEditing"
               :has-uncommitted-names="hasUncommittedNames"
@@ -523,8 +592,7 @@
               :save-message="saveMessage"
               :save-error="saveError"
               :export-error="exportError"
-              @open-system="selectSystem"
-              @delete-system="deleteSystem"
+              :system-transfer-session="systemTransferSession"
               @hide="closePanel('inspector')"
               @request-object-edit="beginObjectEdit"
               @object-focus-request-consumed="acknowledgeObjectInspectorFocusRequest"
@@ -541,6 +609,7 @@
               @request-route-edit="beginRouteEdit"
               @set-route-sharing="setRouteSharing"
               @update-route-input="updateRouteInput"
+              @choose-route-system="chooseRouteSystem"
               @choose-route-point="chooseRoutePoint"
               @apply-route-session="applyRouteSession"
               @discard-route-session="discardRouteDraft"
@@ -550,6 +619,7 @@
               @retry-save="retryLatestSave"
               @export-current-json="downloadClusterJson"
               @open-field-definitions="openFieldDefinitions"
+              @system-transfer-intent="inspector.handleSystemTransferIntent"
             >
               <template #chart-editor>
                 <ChartDetailsEditor
@@ -569,12 +639,20 @@
           </template>
         </MapEditorLayout>
         <PublicationContextMenu
+          ref="publicationContextMenu"
           :request="publicationMenuRequest"
           :current-mode="publicationMenuMode"
+          :route-shared="publicationMenuRouteShared"
+          :empty-orbit="publicationMenuOrbitObjects?.length === 0"
+          :last-system="publicationMenuRequest?.target.kind === 'system' && workspace.cluster.systems.length === 1"
+          :saving="saveState === 'saving'"
           :busy="publicationBusy"
           :move-selection-available="publicationMenuMoveSelectionAvailable"
           @select="selectPublicationMenuMode"
-          @move-selection="moveSelectedObjectsFromMenu"
+          @share-route="shareRouteFromMenu"
+          @edit="editEntityFromMenu"
+          @move-selection="moveEntityFromMenu"
+          @delete="deleteEntityFromMenu"
           @dismiss="publicationControls.closeMenu()"
         />
       </section>
@@ -638,14 +716,22 @@
 /**
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch, type Ref } from 'vue'
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { catalogueTypes, jumpPointsInCluster, projectPlayerCluster, type CatalogueSubtype, type JumpRoute, type ObjectFamily, type Point } from '../domain/workspace'
+import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type JumpRoute, type LocalWorkspace, type ObjectFamily, type Point, type SystemFrameInsets } from '../domain/workspace'
+import { validName } from '../domain/workspace-validation'
 import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { EntityCommand, SearchPresentationSettlement, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
+import {
+  createContinuousObjectAddRequestLease,
+  selectContinuousObjectAddCandidate,
+  type ContinuousObjectAddTarget,
+  type OwnedContinuousObjectAddRequest,
+} from '../utils/continuous-map-editing'
 import type { WorkspaceHistoryTraversalContext } from '../composables/editor-workflows/workspace-mutations'
 import { provideEditorCommands } from '../composables/editor-workflows/editor-command-context'
-import type { PublicationMenuRequest } from '../composables/editor-workflows/publication-types'
+import type { EntityContextTarget, PublicationMenuRequest } from '../composables/editor-workflows/publication-types'
+import { orbitBranchObjects } from '../utils/map-hierarchy'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { useLocalWorkspace } from '../composables/useLocalWorkspace'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
@@ -669,6 +755,7 @@ import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
 import WorkspaceRestoreReview from './WorkspaceRestoreReview.vue'
 import WorkspaceFeedback from './WorkspaceFeedback.vue'
+import WorkspaceHeader from './WorkspaceHeader.vue'
 import PlayerViewPreviewDialog from './PlayerViewPreviewDialog.vue'
 import WorkspaceMapChrome from './WorkspaceMapChrome.vue'
 import DropboxRestoreDialog from './DropboxRestoreDialog.vue'
@@ -729,6 +816,7 @@ watch(dropboxBackup.lastSaved, receipt => {
 })
 const runtimeConfig = useRuntimeConfig()
 const editorUi = useEditorUiStore()
+const continuousMap = computed(() => true)
 
 let readEditorHistoryBlockReason: () => string | null = () => 'The editor is opening.'
 let endCleanHistorySessions: () => void = () => undefined
@@ -736,7 +824,34 @@ let revealHistoryContext: (context: WorkspaceHistoryTraversalContext) => void = 
 let publicationFocusRestoreAllowed: (request: PublicationMenuRequest) => boolean = () => false
 const historyOpen = ref(false)
 const helpOpen = ref(false)
+const mobileMenuOpen = ref(false)
+const workspaceHeader = ref<InstanceType<typeof WorkspaceHeader> | null>(null)
+const mobileHelpOpener = shallowRef<HTMLElement | null>(null)
 const helpOwnsFocus = ref(false)
+
+function focusMobileWorkspaceMenu(): HTMLElement | null {
+  return workspaceHeader.value?.focusMobileMenuToggle() ?? null
+}
+
+async function closeMobileMenuForAction(): Promise<HTMLElement | null> {
+  mobileMenuOpen.value = false
+  await nextTick()
+  return focusMobileWorkspaceMenu()
+}
+
+async function openFieldsFromMobileMenu(): Promise<void> {
+  await closeMobileMenuForAction()
+  await openFieldDefinitions()
+}
+
+async function openHelpFromMobileMenu(): Promise<void> {
+  mobileHelpOpener.value = await closeMobileMenuForAction()
+  helpOpen.value = true
+}
+function onHelpActiveChange(active: boolean): void {
+  helpOwnsFocus.value = active
+  if (!active) mobileHelpOpener.value = null
+}
 const playerPreviewOpen = ref(false)
 const playerClusterDocument = computed(() => workspace.value ? projectPlayerCluster(workspace.value) : null)
 const history = useWorkspaceHistory({
@@ -923,6 +1038,7 @@ async function waitForSearchPresentation(signal: AbortSignal): Promise<SearchPre
 
 const workflows = useEditorWorkflows({
   workspace,
+  continuousMap,
   saveState,
   saveError,
   appliedRevision,
@@ -949,19 +1065,44 @@ const workflows = useEditorWorkflows({
     icon: 'i-lucide-info',
   }),
 })
-const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search, filterCriteria } = workflows
+const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search, filterCriteria, transfer } = workflows
+const transferMapPreview = transfer.mapPreview
+const transferMapPlacementLease = transfer.pendingMapPlacement
+const systemTransferSession = inspector.systemTransferSession
+watch(
+  [() => workspace.value?.id, () => workspace.value?.cluster.id, hydrationState],
+  ([workspaceId, clusterId]) => {
+    if (workspaceId && clusterId) editorUi.setSelection({ activeView: 'cluster' })
+  },
+  { flush: 'sync', immediate: true },
+)
 const publicationControls = workflows.publication
 const publicationMenuRequest = publicationControls.menuRequest
+const publicationContextMenu = ref<{ whenClosingFocusSettled: () => Promise<void> } | null>(null)
+let publicationMenuRevision = 0
+watch(publicationMenuRequest, () => { publicationMenuRevision += 1 }, { flush: 'sync' })
 const publicationBusy = publicationControls.busy
 const setRouteSharing = publicationControls.setRouteSharing
+const publicationMenuRouteShared = computed(() => {
+  const target = publicationMenuRequest.value?.target
+  if (target?.kind !== 'route') return undefined
+  return workspace.value?.cluster.routes.find(route => route.id === target.id)?.playerShared
+})
+const publicationMenuOrbitObjects = computed(() => {
+  const target = publicationMenuRequest.value?.target
+  if (target?.kind !== 'orbit') return null
+  return orbitBranchObjects(workspace.value?.cluster.systems.find(system => system.id === target.systemId), target.id)
+})
 const publicationMenuMode = computed(() => {
-  const request = publicationMenuRequest.value
-  if (!workspace.value || !request) return null
-  if (request.target.kind === 'system') {
-    return workspace.value.cluster.systems.find(system => system.id === request.target.id)?.publication ?? null
+  const target = publicationMenuRequest.value?.target
+  if (!target || target.kind === 'route') return null
+  if (target.kind === 'orbit') {
+    const objects = publicationMenuOrbitObjects.value
+    const mode = objects?.[0]?.publication
+    return mode && objects?.every(object => object.publication === mode) ? mode : null
   }
-  return workspace.value.cluster.systems.find(system => system.id === request.target.systemId)
-    ?.objects.find(object => object.id === request.target.id)?.publication ?? null
+  const system = workspace.value?.cluster.systems.find(system => system.id === target.systemId)
+  return (target.kind === 'system' ? system : system?.objects.find(object => object.id === target.id))?.publication ?? null
 })
 function currentSelectedObjectIds(): string[] {
   return selectedObjectIds.value.length
@@ -970,23 +1111,32 @@ function currentSelectedObjectIds(): string[] {
 }
 function canMoveSelectedObjectsFromMenu(request: typeof publicationMenuRequest.value): boolean {
   const target = request?.target
-  const system = selectedSystem.value
   const selectedIds = currentSelectedObjectIds()
   return !!request
     && (request.source === 'map' || request.source === 'hierarchy')
     && target?.kind === 'object'
-    && activeView.value === 'system'
-    && selectedSystemId.value === target.systemId
     && selectedIds.length > 0
-    && system?.id === target.systemId
-    && !!system.objects.find(object => object.id === target.id)
+    && !!workspace.value?.cluster.systems.find(system => system.id === target.systemId)
+      ?.objects.some(object => object.id === target.id)
 }
 const publicationMenuMoveSelectionAvailable = computed(() =>
-  canMoveSelectedObjectsFromMenu(publicationMenuRequest.value))
+  publicationMenuRequest.value?.target.kind === 'system'
+  || publicationMenuRequest.value?.target.kind === 'orbit'
+  || canMoveSelectedObjectsFromMenu(publicationMenuRequest.value))
 
-function moveSelectedObjectsFromMenu(): void {
+async function moveEntityFromMenu(): Promise<void> {
   const request = publicationMenuRequest.value
-  if (!request || request.target.kind !== 'object' || !canMoveSelectedObjectsFromMenu(request)) return
+  if (!request || !publicationMenuMoveSelectionAvailable.value || request.target.kind === 'route') return
+  publicationControls.closeMenu()
+  if (request.target.kind !== 'object') {
+    if (!await selectContextEntity(request.target, false)) return
+    const { id, systemId, kind } = request.target
+    const isCurrent = () => kind === 'system'
+      ? clusterSelectedSystemId.value === id
+      : selectedSystemId.value === systemId && selectedOrbitId.value === id
+    if (mapMode.value !== 'move') await changeMapMode('move', isCurrent)
+    return
+  }
   const systemId = request.target.systemId
   const objectId = request.target.id
   const entryMode = mapMode.value
@@ -994,31 +1144,118 @@ function moveSelectedObjectsFromMenu(): void {
   const selectedIds = currentSelectedObjectIds()
   const isCurrent = (): boolean => {
     const currentSelectedIds = currentSelectedObjectIds()
-    return activeView.value === 'system'
-      && mapMode.value === entryMode
-      && selectedSystemId.value === systemId
+    return mapMode.value === entryMode
       && activeMapKey.value === mapKey
       && currentSelectedIds.length === selectedIds.length
       && selectedIds.every((id, index) => currentSelectedIds[index] === id)
-      && !!selectedSystem.value?.objects.some(object => object.id === objectId)
+      && !!workspace.value?.cluster.systems.find(system => system.id === systemId)
+        ?.objects.some(object => object.id === objectId)
   }
-  publicationControls.closeMenu()
   if (entryMode === 'move') return
-  void changeMapMode('move', isCurrent)
+  await changeMapMode('move', isCurrent)
+}
+
+async function selectContextEntity(target: EntityContextTarget, openInspector: boolean): Promise<boolean> {
+  const workspaceId = workspace.value?.id
+  const clusterId = workspace.value?.cluster.id
+  const sameWorkspace = () => workspace.value?.id === workspaceId && workspace.value?.cluster.id === clusterId
+
+  if (target.kind === 'route') {
+    await selectRoute(target.id, openInspector)
+    return sameWorkspace() && selectedRouteId.value === target.id
+  }
+  if (continuousMap.value) {
+    const entity = target.kind === 'object'
+      ? { kind: 'object' as const, systemId: target.systemId, objectId: target.id }
+      : target.kind === 'orbit'
+        ? { kind: 'orbit' as const, systemId: target.systemId, orbitId: target.id }
+        : { kind: 'system' as const, systemId: target.systemId }
+    return await inspectContinuousTarget(entity, openInspector) && sameWorkspace()
+  }
+  if (target.kind === 'system') {
+    if (activeView.value !== 'cluster') await showClusterMap()
+    if (!sameWorkspace() || activeView.value !== 'cluster') return false
+    await selectClusterSystem(target.id, openInspector)
+    return sameWorkspace() && clusterSelectedSystemId.value === target.id
+  }
+  if (target.kind === 'object') await selectObject(target.id, openInspector)
+  else await selectOrbit(target.id, openInspector)
+  return sameWorkspace() && selectedSystemId.value === target.systemId
+    && (target.kind === 'object' ? selectedObjectId.value : selectedOrbitId.value) === target.id
+}
+
+async function editEntityFromMenu(): Promise<void> {
+  const target = publicationMenuRequest.value?.target
+  publicationControls.closeMenu()
+  if (!target || !await selectContextEntity(target, true)) return
+  if (target.kind === 'system') await beginChartNamesEdit(target.id)
+  else if (target.kind === 'route') {
+    if (routeSession.value?.routeId !== target.id) await beginRouteEdit(target.id)
+  } else if (entitySession.value?.kind !== target.kind || entitySession.value.systemId !== target.systemId
+    || entitySession.value.targetId !== target.id) {
+    if (target.kind === 'object') await beginObjectEdit()
+    else await beginOrbitEdit()
+  }
+}
+
+async function deleteEntityFromMenu(): Promise<void> {
+  const request = publicationMenuRequest.value
+  const current = workspace.value
+  if (!request || !current || deletionReview.value) {
+    publicationControls.closeMenu()
+    return
+  }
+
+  const target = { ...request.target }
+  const workspaceId = current.id
+  const clusterId = current.cluster.id
+  const menuRevision = publicationMenuRevision
+  publicationControls.closeMenu()
+
+  await nextTick()
+  await publicationContextMenu.value?.whenClosingFocusSettled()
+  await nextTick()
+
+  if (publicationMenuRevision !== menuRevision + 1 || publicationMenuRequest.value !== null
+    || workspace.value !== current || workspace.value?.id !== workspaceId
+    || workspace.value.cluster.id !== clusterId || deletionReview.value !== null) return
+
+  switch (target.kind) {
+    case 'system':
+      await openDeletionReview({ kind: 'system', systemId: target.id })
+      break
+    case 'object':
+      await openDeletionReview({ kind: 'object', systemId: target.systemId, objectId: target.id })
+      break
+    case 'orbit':
+      await openDeletionReview({ kind: 'orbit', systemId: target.systemId, orbitId: target.id })
+      break
+    case 'route':
+      await openDeletionReview({ kind: 'route', routeId: target.id })
+      break
+  }
 }
 
 function selectPublicationMenuMode(mode: import('../domain/workspace').PublicationMode): void {
   const request = publicationMenuRequest.value
   publicationControls.closeMenu()
-  if (!request) return
+  if (!request || request.target.kind === 'route') return
   void publicationControls.set({ targets: [request.target], mode })
+}
+
+function shareRouteFromMenu(shared: boolean): void {
+  const target = publicationMenuRequest.value?.target
+  publicationControls.closeMenu()
+  if (target?.kind === 'route') void setRouteSharing(target.id, shared, 'context-menu')
 }
 const searchOpen = search.open
 const searchQuery = search.query
 const searchResults = search.results
 const noSearchResults: readonly never[] = []
 async function revealSearchTarget(target: Parameters<typeof search.reveal>[0]): Promise<Awaited<ReturnType<typeof search.reveal>>> {
+  const orbitAddChoice = orbitAddArmed.value ? continuousObjectAddChoiceId : null
   const outcome = await search.reveal(target)
+  if (outcome.status === 'revealed' && orbitAddChoice === continuousObjectAddChoiceId) clearOrbitAdd()
   if (outcome.status === 'rejected') await chartNamesDialog.value?.whenClosingFocusSettled()
   return outcome
 }
@@ -1027,15 +1264,38 @@ revealHistoryContext = navigation.revealHistoryContext
 const {
   activeView, mapMode, selectedSystemId, clusterSelectedSystemId, selectedObjectId, selectedObjectIds, selectedOrbitId,
   selectedRouteId, selectedSystem, selectedObject, selectedOrbit, selectedRoute, clusterSelectedSystem,
-  inspectedClusterSystem, routeEndpointSummary, showClusterMap, selectSystem,
-  selectClusterSystem, selectObject, replaceObjectSelection, toggleObjectSelection, selectOrbit, selectRoute, showChartDetails,
+  inspectedTarget, routeEndpointSummary, showClusterMap, selectSystem,
+  selectClusterSystem, inspectContinuousTarget, selectObject, replaceObjectSelection, toggleObjectSelection, selectOrbit, selectRoute, showChartDetails,
 } = navigation
+const continuousInspectorSystemId = computed(() => {
+  const target = inspectedTarget.value
+  return target?.kind === 'system' || target?.kind === 'object' || target?.kind === 'orbit'
+    ? target.systemId
+    : null
+})
+const inspectorSelectedSystem = computed(() => workspace.value?.cluster.systems
+  .find(system => system.id === continuousInspectorSystemId.value))
+const inspectorSelectedObject = computed(() => {
+  const target = inspectedTarget.value
+  if (target?.kind !== 'object') return selectedObject.value
+  return workspace.value?.cluster.systems.find(system => system.id === target.systemId)?.objects
+    .find(object => object.id === target.objectId)
+})
+const inspectorSelectedOrbit = computed(() => {
+  const target = inspectedTarget.value
+  if (target?.kind !== 'orbit') return selectedOrbit.value
+  return workspace.value?.cluster.systems.find(system => system.id === target.systemId)?.orbits
+    .find(orbit => orbit.id === target.orbitId)
+})
 const { wardenDraftWorkspace } = workflows
 const wardenWorkspace = computed(() => wardenDraftWorkspace.value ?? workspace.value)
-const wardenSystem = computed(() => wardenDraftWorkspace.value?.cluster.systems.find(system => system.id === selectedSystem.value?.id))
+const wardenSystem = computed(() => wardenDraftWorkspace.value?.cluster.systems.find(system => system.id === inspectorSelectedSystem.value?.id))
 const wardenFilterSystem = computed(() => wardenSystem.value ?? selectedSystem.value)
-const wardenJumpPoints = computed(() => wardenDraftWorkspace.value && jumpPointsInCluster(wardenDraftWorkspace.value.cluster))
-const wardenRouteSummary = (route: JumpRoute): string => routeEndpointSummary(route, wardenJumpPoints.value ?? undefined)
+function wardenRouteSummary(route: JumpRoute): string {
+  const cluster = wardenWorkspace.value?.cluster
+  const displayedRoute = cluster?.routes.find(candidate => candidate.id === route.id) ?? route
+  return routeEndpointSummary(displayedRoute, cluster)
+}
 const mapTypeFiltersOpen = computed({
   get: () => editorUi.mapTypeFiltersOpen,
   set: open => editorUi.setMapTypeFiltersOpen(open),
@@ -1044,10 +1304,19 @@ const wardenFilters = useWardenMapFilters({
   workspace: wardenWorkspace,
   selectedSystem: wardenFilterSystem,
   activeView,
+  continuousMap,
   criteria: filterCriteria.map.criteria,
   fieldOptions: filterCriteria.fieldOptions,
 })
 const { dimmedObjectIds: dimmedMapObjectIds } = wardenFilters
+const { dimmedObjectIds: dimmedAppliedObjectIds } = useWardenMapFilters({
+  workspace,
+  selectedSystem,
+  activeView,
+  continuousMap,
+  criteria: filterCriteria.map.criteria,
+  fieldOptions: filterCriteria.fieldOptions,
+})
 watch(activeView, view => {
   if (view === 'cluster') mapTypeFiltersOpen.value = false
 })
@@ -1067,10 +1336,26 @@ const {
   objectInspectorFocusRequest, acknowledgeObjectInspectorFocusRequest,
   entitySession, hasModifiedEntitySession, orbitPlacementPreview, applyEntitySession, discardEntitySession,
   updateObjectPlacement, updateOrbitHost, previewOrbitPlacement, isEntityCommandBlocked, resumeEntitySession,
-  cancelOrbitPlacementPreview, beginObjectEdit, beginOrbitEdit,
-  routeSession, hasModifiedRouteSession, offerRouteSystems, chooseRoutePoint, updateRouteInput,
+  beginObjectEdit, beginOrbitEdit,
+  routeSession, hasModifiedRouteSession, offerRouteSystems, chooseRouteSystem, chooseRoutePoint, updateRouteInput,
   applyRouteSession, discardRouteSession, cancelRouteCreation,
 } = inspector
+const inspectorMode = computed(() => {
+  // An admitted route creation session owns the form while retaining the previous inspected target.
+  if (activeView.value === 'cluster' && routeSession.value?.routeId === null) return 'cluster'
+  return inspectedTarget.value?.kind === 'object' || inspectedTarget.value?.kind === 'orbit' ? 'system' : 'cluster'
+})
+const inspectorLabel = computed(() => {
+  if (chartEditing.value) return 'Jump Cluster details editor'
+  if (inspectorMode.value === 'system') {
+    if (selectedObjectIds.value.length > 1) return 'Object selection'
+    if (inspectorSelectedObject.value) return 'Object inspector'
+    if (inspectorSelectedOrbit.value) return 'Orbit inspector'
+  } else if (routeSession.value || selectedRoute.value) {
+    return 'Jump Route inspector'
+  }
+  return inspectorSelectedSystem.value ? 'Star System details' : 'Jump Cluster details'
+})
 const { editorError } = feedback
 const moveSelectionError = workflows.move.error
 const { orbitAdjustmentPreview, updateOrbitAdjustment, beforeWorkspaceOperation, resetOrbitAdjustments } = adjustments
@@ -1085,7 +1370,7 @@ const {
   clusterMapRef, systemMapRef, activeMapKey, initialViewport, hierarchyPanelVisible, inspectorPanelVisible,
   isCompactViewport, compactPanelOpen, compactPanel, editingGestureActive, zoomLevel, minimumZoomLevel,
   requestPanel, closePanel, togglePanel,
-  zoomActiveMap, panActiveMap, setViewportPercentage, fitActiveMap, recordViewport, setMapMode,
+  zoomActiveMap, panActiveMap, setViewportPercentage, fitActiveMap, centerInspectedTarget, recordViewport, setMapMode,
 } = mapControls
 
 watch(inspectorPanelVisible, visible => {
@@ -1153,7 +1438,8 @@ const {
   quitAdd,
 } = placement
 const {
-  moveSystem, moveMapObject, placeMapObjectInOrbit, rotateMapObject, resizeMapOrbit, rotateMapOrbit,
+  moveSystem, moveMapObject, moveMapObjectInSystem, resizeSystemFrame, addMapObjectInSystem,
+  placeMapObjectInOrbit, rotateMapObject, resizeMapOrbit, rotateMapOrbit,
   moveMapOrbitCenter, detachSelectedOrbit,
 } = mapPlacement
 const {
@@ -1189,20 +1475,28 @@ const {
 } = orbitCenter
 const mapMoveTargeting = computed(() => activeView.value === 'cluster'
   ? unresolvedExitTargeting.value || clusterSystemMapMoveTargeting.value
+    || systemObjectMapMoveTargeting.value || orbitCenterMapMoveTargeting.value
   : systemObjectMapMoveTargeting.value || orbitCenterMapMoveTargeting.value)
 const {
-  creationSession, chooseCreationType, chooseCreationCandidate, updateCreationInput,
-  offerCreationCandidates, addCreationFromInputs, cancelCreationPreview,
-  handleCreationDrop: processCreationDrop,
+  creationSession, orbitDragPreview, chooseCreationType, chooseCreationCandidate, updateCreationInput,
+  offerCreationCandidates, addCreationFromInputs,
 } = creation
+const orbitCreationPreview = computed(() => {
+  if (orbitDragPreview.value) return orbitDragPreview.value
+  const session = creationSession.value
+  return session?.type.kind === 'orbit' && session.preview
+    ? { systemId: session.systemId, preview: session.preview }
+    : null
+})
 const {
-  beginRoute, beginRouteEdit, deleteSystem, deleteSelectedObject, deleteSelectedOrbit, deleteSelectedRoute,
+  beginRoute, beginRouteEdit, openDeletionReview, deleteSelectedObject, deleteSelectedOrbit, deleteSelectedRoute,
   deletionReview, cancelDeletionReview, confirmDeletionReview,
 } = cluster
 
 provideEditorCommands({
   navigation: {
     selectSystem,
+    inspectContinuousTarget,
     selectObject,
     replaceObjectSelection,
     toggleObjectSelection,
@@ -1214,7 +1508,6 @@ provideEditorCommands({
     routeSummary: wardenRouteSummary,
   },
   charts: { beginNamesEdit: beginChartNamesEdit },
-  cluster: { deleteSystem },
   creation: {
     beginOrbitDrag: creation.beginOrbitDrag,
     updateOrbitDrag: creation.updateOrbitDrag,
@@ -1234,16 +1527,11 @@ const fieldDefinitionInspectorConflict = computed(() => {
   return fieldId !== null && isEntityCommandBlocked({ kind: 'definition-mutation', fieldId })
 })
 
-function isObjectMoveBlocked(objectId: string): boolean {
-  const object = selectedSystem.value?.objects.find(candidate => candidate.id === objectId)
-  if (!object) return isEntityCommandBlocked({ kind: 'object-placement', objectId })
-  const orbitId = object.placement.kind === 'orbit' ? object.placement.orbitId : null
-  return isEntityCommandBlocked({ kind: 'object-placement', objectId, fromOrbitId: orbitId, toOrbitId: orbitId })
-}
-
 function handleMapMoveTarget(point: Point): void {
   if (activeView.value === 'cluster' && unresolvedExitTargeting.value) previewUnresolvedExitAt(point)
   else if (activeView.value === 'cluster' && clusterSystemMapMoveTargeting.value) previewSystemMoveAt(point)
+  else if (activeView.value === 'cluster' && systemObjectMapMoveTargeting.value) previewSystemObjectMoveAt(point)
+  else if (activeView.value === 'cluster' && orbitCenterMapMoveTargeting.value) previewOrbitCenterMoveAt(point)
   else if (activeView.value === 'system' && systemObjectMapMoveTargeting.value) previewSystemObjectMoveAt(point)
   else if (activeView.value === 'system' && orbitCenterMapMoveTargeting.value) previewOrbitCenterMoveAt(point)
 }
@@ -1251,8 +1539,20 @@ function handleMapMoveTarget(point: Point): void {
 function handleMapMoveNudge(delta: Point): void {
   if (activeView.value === 'cluster' && unresolvedExitTargeting.value) nudgeUnresolvedExit(delta)
   else if (activeView.value === 'cluster' && clusterSystemMapMoveTargeting.value) nudgeClusterSystemMove(delta)
+  else if (activeView.value === 'cluster' && systemObjectMapMoveTargeting.value) nudgeSystemObjectMove(delta)
+  else if (activeView.value === 'cluster' && orbitCenterMapMoveTargeting.value) nudgeOrbitCenterMove(delta)
   else if (activeView.value === 'system' && systemObjectMapMoveTargeting.value) nudgeSystemObjectMove(delta)
   else if (activeView.value === 'system' && orbitCenterMapMoveTargeting.value) nudgeOrbitCenterMove(delta)
+}
+
+function handleMapOrbitCenterMove(
+  orbitId: string,
+  center: Point,
+  hostId: string | null,
+  systemId?: string,
+  sourceGeometry?: string,
+): void {
+  void moveMapOrbitCenter(orbitId, center, hostId, undefined, systemId, sourceGeometry)
 }
 
 function cancelClusterPlacement(): void {
@@ -1264,12 +1564,6 @@ function cancelMapMove(): void {
   cancelClusterPlacement()
   cancelSystemObjectMovePreview()
   cancelOrbitCenterMove()
-}
-
-function handleBlockedObjectMove(objectId: string): void {
-  if (!isObjectMoveBlocked(objectId)) return
-  editorError.value = 'Resolve the Inspector draft before moving an object or changing a related placement.'
-  requestPanel('inspector')
 }
 
 function handleBlockedEntityCommand(command: EntityCommand): void {
@@ -1303,15 +1597,71 @@ const recoveryDetailsOpen = ref(false)
 const workspaceFeedbackRef = ref<HTMLElement | null>(null)
 const objectPaletteActiveFamily = ref<ObjectFamily>('CelestialBody')
 const creationChooserOpen = ref(false)
+const orbitAddArmed = ref(false)
+interface OrbitAddOwner {
+  systemId: string
+  candidates: SystemCreationCandidate[]
+}
+interface OrbitAddRequest {
+  owners: readonly OrbitAddOwner[]
+  workspace: LocalWorkspace
+}
+const pendingOrbitAdd = shallowRef<OrbitAddRequest | null>(null)
+const creationSystem = computed(() => workspace.value?.cluster.systems
+  .find(system => system.id === creationSession.value?.systemId))
+watch(creationSession, (current, previous) => {
+  if (!current && previous?.type.kind === 'orbit') clearOrbitAdd()
+})
+const continuousObjectAddType = ref<CatalogueSubtype | null>(null)
+const continuousObjectOwnerChooserOpen = ref(false)
+const continuousObjectOtherTypeOpen = ref(false)
+const continuousObjectOtherTypeName = ref('')
+const continuousObjectOtherTypeError = ref('')
+const continuousObjectAddOtherType = ref('')
+const continuousObjectPinnedOwnerId = ref<string | null>(null)
+const continuousObjectAddRequestLease = createContinuousObjectAddRequestLease<ContinuousObjectAddTarget>()
+const pendingContinuousObjectAdd = ref<OwnedContinuousObjectAddRequest<ContinuousObjectAddTarget> | null>(null)
+const addOwnerChoiceIds = computed(() => (
+  pendingOrbitAdd.value?.owners ?? pendingContinuousObjectAdd.value?.request.owners ?? []
+).map(owner => owner.systemId))
+let continuousObjectAddChoiceId = 0
 const workspaceDockRef = ref<{ openAddChooserFromKeyboard(): void } | null>(null)
 const keyboardAddOriginMapKey = ref<string | null>(null)
+const continuousObjectCreationType = computed<SystemCreationType | null>(() => activeView.value === 'cluster' && continuousObjectAddType.value
+  ? { kind: 'object', subtype: continuousObjectAddType.value }
+  : null)
+const ORBIT_CREATION_TYPE = { kind: 'orbit' } as const
+const mapCreationType = computed(() => orbitAddArmed.value ? ORBIT_CREATION_TYPE : continuousObjectCreationType.value)
+const continuousObjectAddLabel = computed(() => {
+  const subtype = continuousObjectAddType.value
+  if (subtype === 'other' && continuousObjectAddOtherType.value) return continuousObjectAddOtherType.value
+  return subtype
+    ? catalogueTypes.find(candidate => candidate.value === subtype)?.label ?? subtype
+    : 'object'
+})
 const creationTypeLabel = computed(() => {
-  const type = creationSession.value?.type
+  const type = creationSession.value?.type ?? continuousObjectCreationType.value
   if (!type) return ''
   if (type.kind === 'orbit') return 'Orbit'
   return catalogueTypes.find(candidate => candidate.value === type.subtype)?.label ?? type.subtype
 })
-const clusterAddPresentation = computed(() => clusterAddType.value === 'system'
+const clusterAddPresentation = computed(() => orbitAddArmed.value
+  ? {
+      label: 'Orbit',
+      status: creationSession.value?.type.kind === 'orbit' && creationSession.value.notice
+        ? `ADD Orbit · ${creationSession.value.notice}`
+        : 'ADD Orbit · Choose a host or clear map position.',
+      error: editorError.value || undefined,
+    }
+  : continuousObjectAddType.value !== null
+  ? {
+      label: continuousObjectAddLabel.value,
+      status: continuousObjectPinnedOwnerId.value
+        ? `ADD ${continuousObjectAddLabel.value} · ${continuousObjectOwnerName(continuousObjectPinnedOwnerId.value)} owns this placement. Click an Orbit or clear position in that system.`
+        : `ADD ${continuousObjectAddLabel.value} · Click a system object, Orbit, or clear space in the owning system.`,
+      error: editorError.value || undefined,
+    }
+  : clusterAddType.value === 'system'
   ? {
       label: 'System',
       status: 'ADD System · Choose a clear map point, or pan with the arrow keys and press Enter.',
@@ -1320,7 +1670,7 @@ const clusterAddPresentation = computed(() => clusterAddType.value === 'system'
   : clusterAddType.value === 'route'
     ? {
         label: 'Jump Route',
-        status: `ADD Jump Route · Choose a system to select the ${routeSession.value?.endpointToChoose === 'to' ? 'destination' : 'origin'} Jump Point.`,
+        status: `ADD Jump Route · Choose the ${routeSession.value?.endpointToChoose === 'to' ? 'destination' : 'origin'} system.`,
         error: routeSession.value?.error || undefined,
       }
     : null)
@@ -1340,42 +1690,345 @@ const clusterMovePresentation = computed(() => {
 })
 watch(
   [activeView, selectedSystemId, clusterSelectedSystemId, mapMode, hierarchyPanelVisible, inspectorPanelVisible, isCompactViewport],
-  () => { creationChooserOpen.value = false },
+  () => {
+    creationChooserOpen.value = false
+    if (activeView.value !== 'cluster') clearContinuousObjectAdd()
+  },
 )
-watch([creationSession, clusterAddType], ([creationIntent, clusterIntent]) => {
-  if (creationIntent || clusterIntent) cancelMapMove()
+watch([creationSession, clusterAddType, continuousObjectAddType, orbitAddArmed], ([creationIntent, clusterIntent, objectIntent, orbitIntent]) => {
+  if (creationIntent || clusterIntent || objectIntent || orbitIntent) cancelMapMove()
+}, { flush: 'sync' })
+watch(() => workspace.value, current => {
+  if (continuousObjectPinnedOwnerId.value) continuousObjectPinnedOwnerId.value = null
+  if (pendingOrbitAdd.value && pendingOrbitAdd.value.workspace !== current) clearOrbitOwnerChoice()
+  const pending = pendingContinuousObjectAdd.value
+  if (pending && pending.request.workspaceSnapshot !== current) {
+    clearContinuousObjectAddRequest(pending)
+    continuousObjectOwnerChooserOpen.value = false
+  }
+}, { flush: 'sync' })
+watch([() => workspace.value?.id, () => workspace.value?.cluster.id], ([workspaceId, clusterId], [previousWorkspaceId, previousClusterId]) => {
+  if (workspaceId !== previousWorkspaceId || clusterId !== previousClusterId) {
+    clearContinuousObjectAdd()
+    clearOrbitAdd()
+  }
 }, { flush: 'sync' })
 
 async function chooseObjectCreationType(subtype: CatalogueSubtype): Promise<void> {
-  if (!await beforeWorkspaceOperation()) return
+  const currentWorkspace = workspace.value
+  if (!currentWorkspace) return
+  const choiceId = ++continuousObjectAddChoiceId
+  const workspaceId = currentWorkspace.id
+  const clusterId = currentWorkspace.cluster.id
+  const mapKey = activeMapKey.value
+  const startingActiveView = activeView.value
+  const startingRouteSessionId = routeSession.value?.id ?? null
+  const leavingArmedAdd = Boolean(creationSession.value || clusterAddType.value || orbitAddArmed.value)
+  const resolvingRouteCreation = activeView.value === 'cluster'
+    && leavingArmedAdd
+    && routeSession.value?.routeId === null
+    && hasModifiedRouteSession.value
+  let routeMayBeClosed = false
+  const isCurrent = (): boolean => {
+    const latest = workspace.value
+    const currentRoute = routeSession.value
+    const routeContextIsCurrent = currentRoute === null
+      ? startingRouteSessionId === null || resolvingRouteCreation || routeMayBeClosed
+      : currentRoute.id === startingRouteSessionId
+      || (resolvingRouteCreation && currentRoute.routeId === null
+        && currentRoute.clusterId === clusterId && !hasModifiedRouteSession.value)
+    return choiceId === continuousObjectAddChoiceId
+      && latest !== null && latest.id === workspaceId && latest.cluster.id === clusterId
+      && activeView.value === startingActiveView
+      && activeMapKey.value === mapKey
+      && routeContextIsCurrent
+  }
+
+  if (resolvingRouteCreation) {
+    if (!await resolveTransition({ leaveChart: false, leaveEntitySession: false }, isCurrent)) return
+    routeMayBeClosed = true
+  } else if (!await beforeWorkspaceOperation() || !isCurrent()) {
+    return
+  }
+  if (!isCurrent()) return
+  if (activeView.value === 'cluster') {
+    cancelMapMove()
+    if (creationSession.value || clusterAddType.value || orbitAddArmed.value) {
+      routeMayBeClosed = true
+      if (!await quitSystemAdd(isCurrent)) return
+    }
+    if (!isCurrent()) return
+    clearContinuousObjectAdd()
+    continuousObjectAddType.value = subtype
+    editorError.value = ''
+    creationChooserOpen.value = false
+    if (subtype === 'other') {
+      continuousObjectOtherTypeName.value = ''
+      continuousObjectOtherTypeError.value = ''
+      continuousObjectOtherTypeOpen.value = true
+    }
+    return
+  }
   if (!await chooseCreationType({ kind: 'object', subtype })) return
   creationChooserOpen.value = false
 }
 
+function clearContinuousObjectAdd(): void {
+  continuousObjectAddRequestLease.clearAll()
+  continuousObjectAddType.value = null
+  pendingContinuousObjectAdd.value = null
+  continuousObjectOwnerChooserOpen.value = false
+  continuousObjectOtherTypeOpen.value = false
+  continuousObjectOtherTypeName.value = ''
+  continuousObjectOtherTypeError.value = ''
+  continuousObjectAddOtherType.value = ''
+  continuousObjectPinnedOwnerId.value = null
+}
+
+function confirmContinuousObjectOtherType(): void {
+  try {
+    continuousObjectAddOtherType.value = validName(continuousObjectOtherTypeName.value, 'Object type')
+    continuousObjectOtherTypeError.value = ''
+    continuousObjectOtherTypeOpen.value = false
+  } catch (error) {
+    continuousObjectOtherTypeError.value = error instanceof Error ? error.message : 'Enter a valid object type.'
+  }
+}
+
+function cancelContinuousObjectOtherType(): void {
+  clearContinuousObjectAdd()
+}
+
+function onContinuousObjectOtherTypeOpenChange(open: boolean): void {
+  continuousObjectOtherTypeOpen.value = open
+  if (!open && continuousObjectAddType.value === 'other' && !continuousObjectAddOtherType.value) {
+    clearContinuousObjectAdd()
+  }
+}
+
+function continuousObjectOwnerName(systemId: string): string {
+  return workspace.value?.cluster.systems.find(system => system.id === systemId)?.name ?? 'Unknown system'
+}
+
+function continuousAddRequestIsCurrent(owned: OwnedContinuousObjectAddRequest<ContinuousObjectAddTarget>): boolean {
+  const request = owned.request
+  if (!continuousObjectAddRequestLease.isCurrent(owned)) return false
+  return activeView.value === 'cluster'
+    && continuousObjectAddType.value === request.subtype
+    && (request.subtype !== 'other' || request.otherType === continuousObjectAddOtherType.value)
+    && toRaw(workspace.value) === toRaw(request.workspaceSnapshot)
+}
+
+function handleContinuousObjectAddTarget(request: ContinuousObjectAddTarget): void {
+  if (activeView.value !== 'cluster'
+    || continuousObjectAddType.value !== request.subtype
+    || (request.subtype === 'other' && request.otherType !== continuousObjectAddOtherType.value)
+    || toRaw(workspace.value) !== toRaw(request.workspaceSnapshot)) return
+  const owned = continuousObjectAddRequestLease.capture(request)
+  pendingContinuousObjectAdd.value = null
+  continuousObjectOwnerChooserOpen.value = false
+  if (request.owners.length === 1 && !request.requiresOwnerChoice) {
+    void addContinuousObjectToOwner(owned, request.owners[0]!.systemId)
+    return
+  }
+  if (request.owners.length === 0) {
+    editorError.value = 'Choose an available system before adding an object.'
+    clearContinuousObjectAddRequest(owned)
+    return
+  }
+  pendingContinuousObjectAdd.value = owned
+  continuousObjectOwnerChooserOpen.value = true
+  editorError.value = ''
+}
+
+function continuousAddCandidate(
+  request: ContinuousObjectAddTarget,
+  systemId: string,
+): ReturnType<typeof selectContinuousObjectAddCandidate> {
+  const candidates = request.owners.find(owner => owner.systemId === systemId)?.candidates ?? []
+  return selectContinuousObjectAddCandidate(candidates, request.directTarget)
+}
+
+async function addContinuousObjectToOwner(
+  owned: OwnedContinuousObjectAddRequest<ContinuousObjectAddTarget>,
+  systemId: string,
+): Promise<boolean> {
+  const request = owned.request
+  const requestIsCurrent = () => continuousAddRequestIsCurrent(owned)
+  if (!requestIsCurrent()) {
+    clearContinuousObjectAddRequest(owned)
+    return false
+  }
+  const choice = continuousAddCandidate(request, systemId)
+  if (choice.error) {
+    if (request.directTarget?.kind === 'object' && !choice.candidate) {
+      continuousObjectPinnedOwnerId.value = systemId
+      const systemName = continuousObjectOwnerName(systemId)
+      editorError.value = `${systemName} is selected. Choose an Orbit or clear position in this system.`
+    } else {
+      editorError.value = choice.error
+    }
+    return false
+  }
+  const candidate = choice.candidate
+  if (!candidate) return false
+  if (candidate.target.kind !== 'free' && candidate.target.kind !== 'orbit') {
+    editorError.value = 'Choose a clear map position or eligible Orbit for this object.'
+    return false
+  }
+  const applied = await addMapObjectInSystem(
+    systemId,
+    request.subtype,
+    candidate.target,
+    request.otherType,
+    request.workspaceSnapshot,
+    requestIsCurrent,
+  )
+  if (!applied) return false
+  if (!continuousObjectAddRequestLease.isCurrent(owned)) return true
+  continuousObjectPinnedOwnerId.value = null
+  editorError.value = ''
+  clearContinuousObjectAddRequest(owned)
+  return true
+}
+
+function chooseContinuousObjectOwner(systemId: string): void {
+  const request = pendingContinuousObjectAdd.value
+  if (request) void addContinuousObjectToOwner(request, systemId)
+}
+
+function clearContinuousObjectAddRequest(owned: OwnedContinuousObjectAddRequest<ContinuousObjectAddTarget>): void {
+  if (!continuousObjectAddRequestLease.clear(owned)) return
+  if (pendingContinuousObjectAdd.value?.id === owned.id) pendingContinuousObjectAdd.value = null
+  continuousObjectOwnerChooserOpen.value = false
+}
+
+function onContinuousObjectOwnerChooserOpenChange(open: boolean): void {
+  if (open) return
+  if (pendingOrbitAdd.value) clearOrbitOwnerChoice()
+  const pending = pendingContinuousObjectAdd.value
+  if (pending) clearContinuousObjectAddRequest(pending)
+  else continuousObjectOwnerChooserOpen.value = false
+}
+
+function cancelContinuousObjectOwnerChoice(): void {
+  if (pendingOrbitAdd.value) clearOrbitOwnerChoice()
+  const pending = pendingContinuousObjectAdd.value
+  if (pending) clearContinuousObjectAddRequest(pending)
+  else continuousObjectOwnerChooserOpen.value = false
+}
+
+function handleContinuousObjectMove(
+  systemId: string,
+  objectId: string,
+  position: Point,
+  workspaceSnapshot: LocalWorkspace,
+  frameInsets?: SystemFrameInsets,
+): void {
+  void moveMapObjectInSystem(systemId, objectId, position, workspaceSnapshot, frameInsets)
+}
+
+function clearOrbitOwnerChoice(): void {
+  pendingOrbitAdd.value = null
+  continuousObjectOwnerChooserOpen.value = false
+}
+
+function clearOrbitAdd(): void {
+  orbitAddArmed.value = false
+  if (pendingOrbitAdd.value) clearOrbitOwnerChoice()
+}
+
 async function chooseOrbitCreationType(): Promise<void> {
-  if (!await beforeWorkspaceOperation()) return
-  if (!await chooseCreationType({ kind: 'orbit' })) return
+  const current = workspace.value
+  if (!current) return
+  if (orbitAddArmed.value) {
+    creationChooserOpen.value = false
+    return
+  }
+  const choice = ++continuousObjectAddChoiceId
+  const isCurrent = () => choice === continuousObjectAddChoiceId && workspace.value?.id === current.id
+    && workspace.value.cluster.id === current.cluster.id
+  if (routeSession.value?.routeId === null && hasModifiedRouteSession.value
+    && !await resolveTransition({ leaveChart: false, leaveEntitySession: false }, isCurrent)) return
+  if (!await quitSystemAdd(isCurrent)) return
+  if (!isCurrent()) return
+  const systems = workspace.value?.cluster.systems ?? []
+  const owner = inspectorSelectedSystem.value ?? (systems.length === 1 ? systems[0] : undefined)
+  if (owner && !await chooseCreationType(ORBIT_CREATION_TYPE, owner.id, isCurrent)) return
+  if (!isCurrent()) return
+  orbitAddArmed.value = true
+  editorError.value = ''
   creationChooserOpen.value = false
 }
 
-async function handleCreationDrop(type: SystemCreationType, candidates: SystemCreationCandidate[]): Promise<boolean> {
-  // Keep the palette mounted through the browser's drop dispatch; close it only after the shared
-  // owner has accepted the exact candidate set or exposed an ambiguity for correction.
-  if (!await beforeWorkspaceOperation()) return false
-  const completed = await processCreationDrop(type, candidates)
-  if (completed) creationChooserOpen.value = false
-  return completed
+function handleOrbitAddTarget(
+  owners: readonly OrbitAddOwner[],
+  requiresOwnerChoice: boolean,
+  source: LocalWorkspace,
+): void {
+  if (!orbitAddArmed.value || source !== workspace.value) return
+  const request = { owners, workspace: source }
+  if (!owners.length) {
+    editorError.value = 'Add a star system before creating an Orbit.'
+    return
+  }
+  if (requiresOwnerChoice) {
+    pendingOrbitAdd.value = request
+    continuousObjectOwnerChooserOpen.value = true
+    return
+  }
+  const owner = owners[0]
+  if (owner) void addOrbitForOwner(request, owner)
+}
+
+async function addOrbitForOwner(request: OrbitAddRequest, owner: OrbitAddOwner): Promise<void> {
+  const choice = ++continuousObjectAddChoiceId
+  const fromOwnerChoice = pendingOrbitAdd.value === request
+  let ownerChoiceAccepted = false
+  const isCurrent = () => choice === continuousObjectAddChoiceId && orbitAddArmed.value
+    && workspace.value === request.workspace
+    && (!fromOwnerChoice || ownerChoiceAccepted || pendingOrbitAdd.value === request)
+  if (!isCurrent()) return
+  if (creationSession.value?.systemId !== owner.systemId
+    && !await chooseCreationType(ORBIT_CREATION_TYPE, owner.systemId, isCurrent)) return
+  if (!isCurrent()) return
+  if (fromOwnerChoice) {
+    ownerChoiceAccepted = true
+    clearOrbitOwnerChoice()
+  }
+  await offerCreationCandidates(owner.candidates, isCurrent)
+}
+
+function chooseAddOwner(systemId: string): void {
+  const orbit = pendingOrbitAdd.value
+  if (!orbit) {
+    chooseContinuousObjectOwner(systemId)
+    return
+  }
+  const owner = orbit.owners.find(candidate => candidate.systemId === systemId)
+  if (owner) void addOrbitForOwner(orbit, owner)
 }
 
 async function armSystemAddAndClose(close: () => void): Promise<void> {
   if (!await beforeWorkspaceOperation()) return
+  clearContinuousObjectAdd()
+  if (orbitAddArmed.value && !await quitSystemAdd()) return
   armSystemAdd()
   close()
 }
 
-async function quitSystemAdd(): Promise<boolean> {
-  if (!await beforeWorkspaceOperation()) return false
-  quitAdd()
+async function beginRouteAndClose(close: () => void): Promise<void> {
+  clearContinuousObjectAdd()
+  if (orbitAddArmed.value && !await quitSystemAdd()) return
+  beginRoute()
+  close()
+}
+
+async function quitSystemAdd(isCurrent: () => boolean = () => true): Promise<boolean> {
+  if (!isCurrent() || !await beforeWorkspaceOperation() || !isCurrent()) return false
+  if (!await quitAdd(isCurrent) || !isCurrent()) return false
+  clearContinuousObjectAdd()
+  clearOrbitAdd()
   creationChooserOpen.value = false
   return true
 }
@@ -1405,15 +2058,53 @@ function discardRouteDraft(sessionId: number): void {
 }
 
 async function handleClusterSystemMove(systemId: string, position: Point): Promise<void> {
-  if (!await beforeWorkspaceOperation()) return
-  cancelSystemMovePreview()
-  await moveSystem(systemId, position)
+  const capturedMap = clusterMapRef.value
+  const previewVersion = capturedMap?.getClusterSystemPositionPreviewVersion?.(systemId)
+  const startingWorkspace = workspace.value
+  const startingSystem = startingWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
+  const startingAnchor = startingWorkspace?.layout.systemPositions[systemId]
+  if (!startingWorkspace || !startingSystem || !startingAnchor
+    || activeView.value !== 'cluster' || mapMode.value !== 'move') {
+    if (clusterMapRef.value === capturedMap) {
+      capturedMap?.setClusterSystemPositionPreview?.(systemId, null, previewVersion)
+    }
+    return
+  }
+  const captured = {
+    workspaceId: startingWorkspace.id,
+    clusterId: startingWorkspace.cluster.id,
+    systemId,
+    originPosition: { ...startingAnchor },
+  }
+  const isCurrent = (): boolean => {
+    const latest = workspace.value
+    const latestSystem = latest?.cluster.systems.find(candidate => candidate.id === captured.systemId)
+    const latestAnchor = latest?.layout.systemPositions[captured.systemId]
+    return latest !== null && latest !== undefined
+      && latest.id === captured.workspaceId
+      && latest.cluster.id === captured.clusterId
+      && latestSystem !== undefined
+      && latestAnchor?.x === captured.originPosition.x
+      && latestAnchor.y === captured.originPosition.y
+      && activeView.value === 'cluster'
+      && mapMode.value === 'move'
+  }
+  try {
+    if (!await beforeWorkspaceOperation() || !isCurrent()) return
+    cancelSystemMovePreview()
+    await moveSystem(systemId, position, captured)
+  } finally {
+    if (clusterMapRef.value === capturedMap) {
+      capturedMap?.setClusterSystemPositionPreview?.(systemId, null, previewVersion)
+    }
+  }
 }
 
-async function changeMapMode(mode: 'navigate' | 'select' | 'move', isCurrent: () => boolean = () => true): Promise<void> {
+async function changeMapMode(mode: 'select' | 'move', isCurrent: () => boolean = () => true): Promise<void> {
   if (!await beforeWorkspaceOperation()) return
   if (!isCurrent()) return
-  if ((creationSession.value || clusterAddType.value) && !await quitSystemAdd()) return
+  if ((creationSession.value || clusterAddType.value || continuousObjectAddType.value || orbitAddArmed.value)
+    && !await quitSystemAdd()) return
   if (!isCurrent()) return
   await setMapMode(mode, isCurrent)
 }
@@ -1421,7 +2112,8 @@ async function changeMapMode(mode: 'navigate' | 'select' | 'move', isCurrent: ()
 async function handleAddEscape(event: KeyboardEvent): Promise<void> {
   const hasMovePreview = clusterSystemMovePreview.value !== null
   if (helpOpen.value || event.key !== 'Escape' || event.defaultPrevented
-    || (!creationSession.value && !clusterAddType.value && !hasMovePreview && !systemObjectMovePreview.value && !mapMoveTargeting.value)
+    || (!creationSession.value && !clusterAddType.value && !continuousObjectAddType.value && !orbitAddArmed.value
+      && !hasMovePreview && !systemObjectMovePreview.value && !mapMoveTargeting.value)
     || creationChooserOpen.value) return
   if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
   if (document.querySelector('[role="listbox"][data-state="open"]')) return
@@ -1547,16 +2239,52 @@ async function resolveImportDefinitionChanges(existingFieldIds: string[]): Promi
 
 const workspaceFiles = useWorkspaceFiles({
   workspace,
-  selectedSystem,
+  selectedSystem: inspectorSelectedSystem,
   mutations,
-  getCurrentMapImage: (kind) => {
+  getCurrentMapImage: (kind, scope, systemId, systemImageTarget) => {
+    if (scope) {
+      if (activeView.value !== 'cluster') return null
+      if (scope === 'system') {
+        if (!systemId || (systemImageTarget === 'inspected' && systemId !== continuousInspectorSystemId.value)) return null
+        const system = workspace.value?.cluster.systems.find(candidate => candidate.id === systemId)
+        if (!system) return null
+        return {
+          map: clusterMapRef.value,
+          name: system.name,
+          kind: 'star-system',
+          scope,
+          selectedSystemId: systemId,
+        }
+      }
+      return {
+        map: clusterMapRef.value,
+        name: workspace.value?.cluster.name,
+        kind: 'jump-cluster',
+        scope,
+        selectedSystemId: null,
+      }
+    }
+    if (scope !== null) return null
     if (kind === 'jump-cluster') {
       if (activeView.value !== 'cluster') return null
-      return { map: clusterMapRef.value, name: workspace.value?.cluster.name }
+      return {
+        map: clusterMapRef.value,
+        name: workspace.value?.cluster.name,
+        kind,
+        scope,
+        selectedSystemId: null,
+      }
     }
     if (activeView.value !== 'system') return null
-    return { map: systemMapRef.value, name: selectedSystem.value?.name }
+    return {
+      map: systemMapRef.value,
+      name: selectedSystem.value?.name,
+      kind,
+      scope,
+      selectedSystemId: null,
+    }
   },
+  getAppliedRevision: () => appliedRevision.value,
   getFieldDefinitionImportConflict,
   resolveImportDefinitionChanges,
   beforeWorkspaceOperation,
@@ -1597,11 +2325,14 @@ function draftConsentState(): { signature: string; hasDrafts: boolean } {
 
 function resetAfterWorkspaceReplacement(): void {
   workflows.historyGuards.resetForWorkspaceReplacement()
+  clearOrbitAdd()
   editorUi.setSelection({ activeView: 'cluster' })
   cancelJsonImport()
   history.resolveCapacity(false)
   historyOpen.value = false
   helpOpen.value = false
+  mobileMenuOpen.value = false
+  mobileHelpOpener.value = null
   helpOwnsFocus.value = false
   playerPreviewOpen.value = false
   headerFilesOpen.value = false
@@ -1829,15 +2560,49 @@ const {
   downloadMapImage,
   importJsonFile,
   importReview,
+  standaloneImportPlacement,
+  standaloneImportPlacementEnabled,
+  previewStandaloneImportAnchor,
+  reviewStandaloneImportPlacement,
+  cancelStandaloneImportPlacement,
   confirmJsonImport,
   cancelJsonImport,
   reviewImportFields,
   resumeImportReview,
 } = workspaceFiles
 
+async function handleWorkspaceJsonImport(event: Event): Promise<void> {
+  await importJsonFile(event)
+  if (!standaloneImportPlacementEnabled.value) return
+
+  if (compactPanelOpen.value && compactPanel.value) closePanel(compactPanel.value)
+}
+
+function frameStandaloneImportPlacement(): void {
+  if (!standaloneImportPlacementEnabled.value) return
+  clusterMapRef.value?.frameStandaloneImportPlacement?.()
+}
+
+function handleStandaloneImportPlacementEscape(): void {
+  if (!mapKeyboardOverlayOpen.value) cancelStandaloneImportPlacement()
+}
+
+watch(activeView, view => {
+  if (view !== 'cluster' && standaloneImportPlacement.value) cancelStandaloneImportPlacement()
+}, { flush: 'sync' })
+
+watch(
+  [() => workspace.value?.id, () => workspace.value?.cluster.id],
+  () => {
+    if (standaloneImportPlacement.value) cancelStandaloneImportPlacement()
+  },
+  { flush: 'sync' },
+)
+
 publicationFocusRestoreAllowed = request => !(
   historyOpen.value
   || helpOpen.value
+  || mobileMenuOpen.value
   || chartNamesDialogOpen.value
   || playerPreviewOpen.value
   || fieldDefinitionDialogOpen.value
@@ -1848,6 +2613,8 @@ publicationFocusRestoreAllowed = request => !(
   || mapTypeFiltersOpen.value
   || deletionReview.value !== null
   || creationChooserOpen.value
+  || continuousObjectOwnerChooserOpen.value
+  || continuousObjectOtherTypeOpen.value
   || (compactPanelOpen.value && request.source === 'map')
   || editingGestureActive.value
   || importReview.value.open
@@ -1858,6 +2625,7 @@ publicationFocusRestoreAllowed = request => !(
 const workspaceOverlayAvailable = computed(() => workspace.value !== null
   && !historyOpen.value
   && !helpOpen.value
+  && !mobileMenuOpen.value
   && !chartNamesDialogOpen.value
   && !playerPreviewOpen.value
   && !fieldDefinitionDialogOpen.value
@@ -1866,12 +2634,19 @@ const workspaceOverlayAvailable = computed(() => workspace.value !== null
   && historyCapacityRequest.value === null
   && !mapTypeFiltersOpen.value
   && !creationChooserOpen.value
+  && !continuousObjectOwnerChooserOpen.value
+  && !continuousObjectOtherTypeOpen.value
   && deletionReview.value === null
   && !importReview.value.open
   && !importReview.value.suspended
   && !importReview.value.confirming
   && !compactPanelOpen.value
   && !editingGestureActive.value)
+
+const mapKeyboardOverlayOpen = computed(() => !workspaceOverlayAvailable.value
+  || searchOpen.value
+  || publicationMenuRequest.value !== null
+  || googleDriveBackupDialogOpen.value)
 
 function openPlayerPreview(focusMapFiles: () => void): void {
   if (!workspaceOverlayAvailable.value || searchOpen.value || publicationMenuRequest.value) return
@@ -1880,12 +2655,13 @@ function openPlayerPreview(focusMapFiles: () => void): void {
 }
 
 readEditorHistoryBlockReason = () => {
+  if (standaloneImportPlacement.value) return 'Finish or cancel standalone system placement before using Undo or Redo.'
   if (historyOpen.value) return 'Close History before using Undo or Redo.'
   if (helpOpen.value) return 'Close Help before using Undo or Redo.'
   if (searchOpen.value) return 'Close Search before using Undo or Redo.'
   if (mapTypeFiltersOpen.value) return 'Close Filters before using Undo or Redo.'
   if (chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value || headerFilesOpen.value
-    || recoveryDetailsOpen.value || creationChooserOpen.value || compactPanelOpen.value) {
+    || recoveryDetailsOpen.value || creationChooserOpen.value || continuousObjectOwnerChooserOpen.value || continuousObjectOtherTypeOpen.value || compactPanelOpen.value) {
     return 'Close the open panel or dialog before using Undo or Redo.'
   }
   if (importReview.value.open || importReview.value.suspended || importReview.value.confirming) {
@@ -1898,28 +2674,18 @@ endCleanHistorySessions = workflows.historyGuards.endCleanSessions
 useWorkspaceHistoryShortcuts({
   status: historyStatus,
   workspaceEnabled: () => workspace.value !== null,
-  pageOverlayOpen: () => historyOpen.value || helpOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
-    || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
-    || searchOpen.value
-    || mapTypeFiltersOpen.value
-    || creationChooserOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
-    || importReview.value.open || importReview.value.suspended || importReview.value.confirming,
+  pageOverlayOpen: () => mapKeyboardOverlayOpen.value || standaloneImportPlacement.value !== null,
   undo: undoWorkspace,
   redo: redoWorkspace,
 })
 
 const mapToolShortcuts = useMapToolShortcuts({
   workspaceEnabled: () => workspace.value !== null,
-  pageOverlayOpen: () => historyOpen.value || helpOpen.value || chartNamesDialogOpen.value || playerPreviewOpen.value || fieldDefinitionDialogOpen.value
-    || headerFilesOpen.value || recoveryDetailsOpen.value || historyCapacityRequest.value !== null
-    || searchOpen.value
-    || mapTypeFiltersOpen.value
-    || creationChooserOpen.value || compactPanelOpen.value || cluster.deletionReview.value !== null
-    || importReview.value.open || importReview.value.suspended || importReview.value.confirming,
+  pageOverlayOpen: () => mapKeyboardOverlayOpen.value || standaloneImportPlacement.value !== null,
   editingGestureActive: () => editingGestureActive.value,
   activeMapKey: () => activeMapKey.value,
   mapMode: () => mapMode.value,
-  addIntentActive: () => creationSession.value !== null || clusterAddType.value !== null,
+  addIntentActive: () => mapCreationType.value !== null || clusterAddType.value !== null,
   changeMapMode,
   openAddChooser: openMapAddChooserFromKeyboard,
   focusActiveMap: mapControls.focusActiveMap,

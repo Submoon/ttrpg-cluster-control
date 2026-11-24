@@ -4,14 +4,14 @@
 import type { JumpClusterExport, LocalWorkspace, StarSystemExport } from './workspace-model'
 
 /**
- * Projects the complete Cluster and durable workspace layout into the version 4 JSON export shape.
+ * Projects the complete Cluster and durable workspace layout into the version 5 JSON export shape.
  * @param workspace Workspace to export.
  * @returns Cluster data, shared field definitions, and saved map layout; no transient renderer state.
  */
 export function exportJumpCluster(workspace: LocalWorkspace): JumpClusterExport {
   return {
     format: 'ttrpg-cluster-control-map',
-    version: 4,
+    version: 5,
     type: 'cluster',
     cluster: workspace.cluster,
     objectFieldSettings: workspace.objectFieldSettings,

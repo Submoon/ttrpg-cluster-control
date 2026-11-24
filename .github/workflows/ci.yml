@@ -236,7 +236,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run the Search and Hierarchy preview smoke cases
+      - name: Run the browser smoke cases on the preview
         if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
         env:
           PLAYWRIGHT_SUITE: browser
@@ -245,7 +245,7 @@ jobs:
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: npm run test:preview-smoke -- --reporter=github,html
 
-      - name: Run the Search and Hierarchy smoke cases against a local server
+      - name: Run the browser smoke cases against a local server
         if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository }}
         env:
           PLAYWRIGHT_SUITE: browser

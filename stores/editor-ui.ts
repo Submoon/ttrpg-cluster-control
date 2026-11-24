@@ -5,18 +5,28 @@ import type { FieldCondition } from '../utils/field-filter-matching'
 
 export interface EditorUiSelection {
   activeView: 'cluster' | 'system'
+  inspectedTarget: InspectedMapTarget | null
   selectedSystemId: string | null
   clusterSelectedSystemId: string | null
   inspectedClusterSystemId: string | null
   selectedObjectId: string | null
-  /** Transient map selection when more than one object is selected. */
+  /** Transient membership; continuous-map selection can retain one member while the Warden toggles it. */
   selectedObjectIds: string[]
   selectedOrbitId: string | null
   selectedRouteId: string | null
 }
 
+/** Inspector focus on the continuous Cluster canvas, independent from the legacy map visit. */
+export type InspectedMapTarget =
+  | { kind: 'cluster' }
+  | { kind: 'system'; systemId: string }
+  | { kind: 'object'; systemId: string; objectId: string }
+  | { kind: 'orbit'; systemId: string; orbitId: string }
+  | { kind: 'route'; routeId: string }
+
 const emptySelection = (): EditorUiSelection => ({
   activeView: 'system',
+  inspectedTarget: null,
   selectedSystemId: null,
   clusterSelectedSystemId: null,
   inspectedClusterSystemId: null,
@@ -53,6 +63,10 @@ export const useEditorUiStore = defineStore('editor-ui', {
     /** Applies a selection snapshot only after its owning navigation or gesture guard accepts. */
     setSelection(selection: Partial<EditorUiSelection>): void {
       Object.assign(this, selection)
+    },
+    /** Publishes the independently owned Inspector target on the continuous Cluster canvas. */
+    setInspectedTarget(target: InspectedMapTarget | null): void {
+      this.inspectedTarget = target
     },
     /** Applies the accepted interaction tool after any pending workflow has been resolved. */
     setMode(mode: MapInteractionMode): void {

@@ -16,19 +16,26 @@ import type {
   Point,
   PublicationMode,
   SystemObject,
+  SystemObjectTransferPlacement,
 } from '../../domain/workspace'
 import type { MapImageExporter } from '../../utils/map-image-export'
 import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
 import type { SearchTarget } from '../../utils/workspace-search'
+import type { InspectedMapTarget } from '../../stores/editor-ui'
 import type { WorkspaceHistoryCoordinator } from './workspace-mutations'
+import type { SystemObjectTransferMapPreview } from './system-object-transfer-types'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type MapHistoryTarget =
-  | { kind: 'system' | 'route'; id: string }
-  | { kind: 'object' | 'orbit'; id: string; systemId: string }
+  | { kind: 'system'; id: string }
+  | { kind: 'route'; id: string }
+  | { kind: 'object'; id: string; systemId: string }
+  | { kind: 'orbit'; id: string; systemId: string }
 export type TransitionGuard = 'chart' | 'inspector' | null
 export type TransitionDecision = 'apply' | 'discard' | 'stay'
 export interface TransitionOptions {
+  /** Lets a guarded command capture the exact revision published by its accepted draft Apply. */
+  onDraftApplied?: () => void
   /** Keeps a resumable chart-name session open for a command independent of its captured chart target. */
   leaveChart?: boolean
   /** Lets a read-only dialog open while an entity draft remains owned by its Inspector session. */
@@ -234,6 +241,18 @@ export interface SystemCreationPreview {
   orbitDrag?: true
 }
 
+/** The definite owner and exact applied workspace captured when an Orbit drag begins. */
+export interface OrbitDragOwner {
+  systemId: string
+  workspace: LocalWorkspace
+}
+
+/** An Orbit Add preview drawn in the owning system's local coordinates. */
+export interface OrbitCreationMapPreview {
+  systemId: string
+  preview: SystemCreationPreview
+}
+
 export interface SystemCreationInputs {
   x: string
   y: string
@@ -267,6 +286,8 @@ export interface EditorWorkflowOptions {
   appliedRevision?: Readonly<Ref<number>>
   /** Resolves after guarded navigation overlays have completed their presentation teardown. */
   waitForSearchPresentation?: (signal: AbortSignal) => Promise<SearchPresentationSettlement>
+  /** Keeps Warden inspection on the continuous Cluster canvas while legacy map views remain available. */
+  continuousMap?: Readonly<Ref<boolean>>
   /** Shared application boundary for ordinary editor mutations. */
   mutations: WorkspaceHistoryCoordinator
   /** Publishes the first workspace as an explicit baseline, not as an editing action. */
@@ -314,20 +335,64 @@ export interface MapNavigationHandle extends MapImageExporter {
   moveTouchNavigation(event: TouchEvent): void
   endTouchNavigation(event: TouchEvent): void
   /** Minimally pans to reveal a retained-history target without changing zoom or panel state. */
-  revealHistoryTarget?(target: MapHistoryTarget): boolean
+  revealHistoryTarget?(target: MapHistoryTarget, usableRect?: SvgViewportRect): boolean
+  /** Fits the surviving Cluster after a history target was removed. */
+  revealHistoryCluster?(): boolean
   /** Resolves after this canvas has restored its initial visit and is ready for navigation. */
   whenReady?(): Promise<boolean>
+  /** Camera input generation used to abandon a pending Search frame after manual movement. */
+  getCameraInteractionVersion?(): number
+  /** Records a toolbar-driven camera change as user input without tagging programmatic Search framing. */
+  noteManualCameraInteraction?(): void
   /** Frames a search destination inside the current obstruction-aware map area. */
   frameSearchTarget?(target: SearchTarget): boolean
+  /** Centers the current independent Inspector target inside the unobstructed map area. */
+  centerInspectedTarget?(target: InspectedMapTarget, usableRect?: SvgViewportRect): boolean
+  /** Frames the detached standalone-system preview without changing committed Cluster bounds. */
+  frameStandaloneImportPlacement?(): boolean
   /** Captures a locator attempt for the current map, published only after accepted Search framing. */
   prepareSearchLocator?(objectId: string): (() => void) | undefined
   dismissSearchLocator?(): void
   /** Stable keyboard target when a traversal removes the focused map item. */
   focusMap?(): void
   /** Shows or clears one transient cluster-system move preview without rebuilding the map. */
-  setClusterSystemPositionPreview?(systemId: string, position: Point | null): void
+  setClusterSystemPositionPreview?(systemId: string, position: Point | null, expectedVersion?: number): number | void
+  /** Returns the current generation so delayed move completion can clear only its own preview. */
+  getClusterSystemPositionPreviewVersion?(systemId: string): number | undefined
   /** Shows or clears a transient unresolved target in scene coordinates. */
   setUnresolvedExitPositionPreview?(routeId: string, position: Point | null): void
+  /** Shows or clears a precise object placement preview in its owning system's local scene. */
+  setObjectPlacementPreview?(objectId: string, scenePoint: Point | null, systemId?: string): void
+  /** Shows or clears an explicit precise object destination without resolving it through drag snapping. */
+  setObjectMoveTargetPreview?(objectId: string, target: SystemObjectMoveTarget | null, systemId?: string): void
+  /** Shows or clears an Orbit placement draft preview for its owning system. */
+  setOrbitPlacementPreview?(orbitId: string, preview: OrbitPlacementPreview | null, systemId?: string): void
+  /** Shows or clears a precise unoccupied Orbit-center preview in its owning system. */
+  setOrbitCenterMovePreview?(orbitId: string, scenePoint: Point | null, systemId?: string): void
+  /** Confirms this mounted renderer owns the requested destination system. */
+  isSystemTransferDestination?(systemId: string): boolean
+  /** Captures the exact child renderer that will receive transfer placement input. */
+  captureSystemTransferMapOwner?(systemId: string): object | null
+  /** Rechecks the exact child renderer captured by a placement lease. */
+  isSystemTransferMapOwnerCurrent?(systemId: string, owner: object): boolean
+  /** Converts a client point to the requested owner's normalized local map coordinates. */
+  systemTransferPointAtClient?(systemId: string, clientX: number, clientY: number): Point | null
+  /** Resolves map input against the transfer's captured Free or Orbit destination choice. */
+  systemTransferPlacementAtClient?(
+    systemId: string,
+    rootObjectId: string,
+    selectedPlacement: Readonly<SystemObjectTransferPlacement>,
+    clientX: number,
+    clientY: number,
+  ): SystemObjectTransferPlacement | null
+  /** Frames the requested destination so its placement surface and Orbits are accessible. */
+  frameSystemTransferDestination?(systemId: string): boolean
+  /** Paints a pointer-transparent transfer ghost that is excluded from map exports. */
+  setSystemObjectTransferPreview?(preview: SystemObjectTransferMapPreview | null): void
+  /** Resolves a cluster-scene target into the owner's legacy system-map scene. */
+  toSystemScenePoint?(systemId: string, clusterPoint: Point): Point | null
+  /** Finds a clear normalized local center for detaching an Orbit from its host. */
+  getDetachedOrbitCenter?(orbitId: string, systemId?: string): Point | undefined
 }
 
 /** Session-only selection saved for one map visit. */
@@ -375,18 +440,18 @@ export interface MapVisitMemory {
 export interface SystemMapHandle extends MapNavigationHandle {
   focusMap(): void
   /** Shows or clears one transient existing-object placement preview in SVG scene coordinates. */
-  setObjectPlacementPreview(objectId: string, scenePoint: Point | null): void
+  setObjectPlacementPreview(objectId: string, scenePoint: Point | null, systemId?: string): void
   /** Shows or clears one transient proposed-host preview in SVG scene coordinates. */
-  setOrbitPlacementPreview(orbitId: string, preview: OrbitPlacementPreview | null): void
+  setOrbitPlacementPreview(orbitId: string, preview: OrbitPlacementPreview | null, systemId?: string): void
   /** Owns a center-move overlay independently from an Inspector's proposed-host preview. */
-  setOrbitCenterMovePreview(orbitId: string, scenePoint: Point | null): void
+  setOrbitCenterMovePreview(orbitId: string, scenePoint: Point | null, systemId?: string): void
   /**
    * Finds a clear normalized center for detaching this Orbit.
    * Clearance is checked against object positions and other unoccupied centers, not whole Orbit rings.
    * @param orbitId Hosted Orbit whose former center is being relocated.
    * @returns Normalized map coordinates, or undefined when no candidate passes the point-clearance checks.
    */
-  getDetachedOrbitCenter(orbitId: string): Point | undefined
+  getDetachedOrbitCenter(orbitId: string, systemId?: string): Point | undefined
   /** Resolves all named creation targets near a raw SVG scene point. */
   getCreationCandidates(point: Point, type: SystemCreationType): SystemCreationCandidate[]
 }

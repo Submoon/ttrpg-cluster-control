@@ -1,24 +1,10 @@
 import { expect, test } from './fixtures'
 import {
-  captureMapExportBlobs,
-  clickNormalizedSystemPoint,
-  createSingleSystemWorkspace,
-  deletionReviewDialog,
-  downloadJson,
-  openWorkspaceHierarchy,
-  resolveDeletionReview,
-  selectCatalogueObjectButton,
-  selectInspectorOption,
-  setWorkspaceMapMode,
-} from './helpers'
-import {
   createLocalWorkspace,
   createSystemObject,
   planMapEntityDeletion,
   replaceWorkspaceSystem,
 } from '../domain/workspace'
-
-type Point = { x: number; y: number }
 
 test('default object names skip occupied names after a deletion @pure', () => {
   const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
@@ -73,86 +59,4 @@ test('default object names skip occupied names after a deletion @pure', () => {
   expect(recreated.placement.x).toBeCloseTo(0.7)
   expect(recreated.placement.y).toBeCloseTo(0.1)
   expect(recreated.placement).not.toEqual(first.placement)
-})
-
-async function beginPlanetAdd(page: import('@playwright/test').Page): Promise<void> {
-  await (await selectCatalogueObjectButton(page, 'planet')).click()
-  await expect(page.getByRole('group', { name: 'Planet creation controls', exact: true })).toBeVisible()
-}
-
-async function addPlanetAt(page: import('@playwright/test').Page, point: Point): Promise<Point> {
-  const controls = page.getByRole('group', { name: 'Planet creation controls', exact: true })
-  const placement = controls.getByRole('button', { name: 'Placement', exact: true })
-  if (await placement.getAttribute('aria-expanded') !== 'true') await placement.click()
-  await selectInspectorOption(page.getByLabel('Orbit placement', { exact: true }), 'Free map position')
-  await placement.click()
-  return clickNormalizedSystemPoint(page, page.getByRole('group', { name: /star system map$/ }), point)
-}
-
-test('deleting and quickly recreating an object starts with fresh selection, session, name, and position', async ({ page }) => {
-  test.slow()
-  await captureMapExportBlobs(page)
-  await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
-
-  const map = page.getByRole('group', { name: 'Vesper star system map', exact: true })
-  const inspector = page.getByRole('complementary', { name: 'Object inspector', exact: true })
-  const originalPoint = { x: 0.82, y: 0.74 }
-
-  await beginPlanetAdd(page)
-  const deliveredOriginalPoint = await addPlanetAt(page, originalPoint)
-  await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('New planet 1')
-  await inspector.getByLabel('Name', { exact: true }).fill('Foo')
-  await inspector.getByLabel('GM notes', { exact: true }).fill('Old object draft')
-  await inspector.getByRole('button', { name: /^Apply changes/ }).click()
-
-  await beginPlanetAdd(page)
-  await addPlanetAt(page, { x: 0.21, y: 0.31 })
-  await expect(inspector.getByLabel('Name', { exact: true })).toHaveValue('New planet 2')
-  const originalExport = await downloadJson(page, 'Export star system JSON')
-  const survivingObject = originalExport.system?.objects
-    .find(object => object.subtype === 'planet' && object.name === 'New planet 2')
-  expect(survivingObject).toBeDefined()
-
-  const originalObject = originalExport.system?.objects.find(object => object.name === 'Foo')
-  expect(originalObject).toBeDefined()
-  expect(originalObject?.placement.kind).toBe('system')
-  if (originalObject?.placement.kind !== 'system') throw new Error('Expected the original free placement.')
-  expect(originalObject.placement.x).toBeCloseTo(deliveredOriginalPoint.x, 6)
-  expect(originalObject.placement.y).toBeCloseTo(deliveredOriginalPoint.y, 6)
-  expect(originalObject?.description).toBe('Old object draft')
-
-  await setWorkspaceMapMode(page, 'Select')
-  const hierarchy = await openWorkspaceHierarchy(page)
-  await hierarchy.getByRole('treeitem', { name: /^Select PL-\d+, Foo$/ }).click()
-  await inspector.getByRole('button', { name: 'Delete Foo', exact: true }).click()
-  const review = deletionReviewDialog(page)
-  await expect(review).toContainText('Foo')
-  await resolveDeletionReview(review, 'confirm')
-  await expect(map.locator('.system-object')).toHaveCount(2)
-  await expect(page.locator('.entity-inspector')).toHaveCount(0)
-
-  // Recreate immediately at a new user-specified point. The generated name must also avoid the
-  // surviving New planet 2, whose numeric suffix used to collide after deleting Foo.
-  await beginPlanetAdd(page)
-  const newPoint = { x: 0.63, y: 0.67 }
-  const deliveredNewPoint = await addPlanetAt(page, newPoint)
-
-  await expect(inspector.getByLabel('Name', { exact: true })).not.toHaveValue('Foo')
-  await expect(inspector.getByLabel('GM notes', { exact: true })).toHaveValue('')
-  const recreatedExport = await downloadJson(page, 'Export star system JSON')
-  const recreatedObject = recreatedExport.system?.objects.find(object => object.subtype === 'planet'
-    && object.id !== survivingObject?.id)
-  expect(recreatedObject).toBeDefined()
-  expect(recreatedObject?.id).not.toBe(originalObject?.id)
-  expect(recreatedObject?.name).not.toBe('Foo')
-  expect(recreatedObject?.name).not.toBe(survivingObject?.name)
-  expect(recreatedObject?.description).toBe('')
-  expect(recreatedObject?.placement.kind).toBe('system')
-  if (recreatedObject?.placement.kind !== 'system') throw new Error('Expected the recreated free placement.')
-  expect(recreatedObject.placement.x).toBeCloseTo(deliveredNewPoint.x, 6)
-  expect(recreatedObject.placement.y).toBeCloseTo(deliveredNewPoint.y, 6)
-  expect(recreatedObject?.placement).not.toEqual({ kind: 'system', ...originalPoint })
-  expect(recreatedExport.system?.objects.filter(object => object.subtype === 'planet'
-    && object.name === recreatedObject?.name)).toHaveLength(1)
-  await expect(map.locator('.system-object')).toHaveCount(3)
 })

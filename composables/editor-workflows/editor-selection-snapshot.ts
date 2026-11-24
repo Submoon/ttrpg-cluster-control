@@ -4,6 +4,7 @@ import type { EditorUiSelection } from '../../stores/editor-ui'
 export function snapshotEditorSelection(selection: EditorUiSelection): EditorUiSelection {
   return {
     activeView: selection.activeView,
+    inspectedTarget: selection.inspectedTarget ? { ...selection.inspectedTarget } : null,
     selectedSystemId: selection.selectedSystemId,
     clusterSelectedSystemId: selection.clusterSelectedSystemId,
     inspectedClusterSystemId: selection.inspectedClusterSystemId,

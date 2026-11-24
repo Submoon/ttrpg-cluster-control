@@ -1,13 +1,21 @@
 import { expect, test } from './fixtures'
 import {
+  addStarSystem,
+  createJumpRoute,
   createLocalWorkspace,
   defaultObjectFieldSettings,
+  exportJumpCluster,
+  exportStarSystem,
   prepareJsonImport,
+  restoreJumpClusterBackup,
+  restoreLocalWorkspace,
   type CustomFieldDefinition,
   type JumpClusterExport,
   type LocalWorkspace,
   type StarSystem,
 } from '../domain/workspace'
+import { createWorkspaceSnapshot } from '../utils/workspace-storage'
+import { jsonImportReviewEffects } from '../domain/workspace-json-import'
 
 function sourceFieldValue(field: CustomFieldDefinition): string | number | boolean {
   switch (field.type) {
@@ -119,7 +127,7 @@ function sourceClusterExport(options: {
 
   return {
     format: 'ttrpg-cluster-control-map',
-    version: 4,
+    version: 5,
     type: 'cluster',
     cluster: {
       id: 'source-cluster',
@@ -132,7 +140,9 @@ function sourceClusterExport(options: {
           name: 'Known corridor',
           playerShared: false,
           jumpLevel: 7,
+          fromSystemId: 'source-alpha',
           fromPointId: 'source-origin-point',
+          toSystemId: 'source-beta',
           toPointId: 'source-destination-point',
         },
         {
@@ -140,7 +150,9 @@ function sourceClusterExport(options: {
           name: 'Rimward corridor',
           playerShared: false,
           jumpLevel: 12,
+          fromSystemId: 'source-beta',
           fromPointId: 'source-destination-point',
+          toSystemId: null,
           toPointId: null,
           unresolvedExit: 'The Quiet Expanse',
         },
@@ -179,11 +191,14 @@ function importedCopyEntityIds(prepared: ReturnType<typeof prepareJsonImport>): 
     if (!system) throw new Error(`Imported system ${id} is missing from the prepared workspace.`)
     return system
   })
+  const systemIds = new Set(systems.map(system => system.id))
   const pointIds = new Set(systems.flatMap(system => system.objects
     .filter(object => object.family === 'JumpPoint')
     .map(object => object.id)))
   const routes = prepared.workspace.cluster.routes.filter(route =>
-    pointIds.has(route.fromPointId)
+    systemIds.has(route.fromSystemId)
+    || (route.toSystemId !== null && systemIds.has(route.toSystemId))
+    || (route.fromPointId !== null && pointIds.has(route.fromPointId))
     || (route.toPointId !== null && pointIds.has(route.toPointId)),
   )
   return [
@@ -252,8 +267,11 @@ function workspaceWithOriginalRecords(): LocalWorkspace {
         name: 'Original lane',
         playerShared: false,
         jumpLevel: 4,
+        fromSystemId: home.id,
         fromPointId: origin.id,
-        toPointId: destination.id,
+        toSystemId: null,
+        toPointId: null,
+        unresolvedExit: 'Uncharted exit',
       }],
     },
     layout: {
@@ -269,6 +287,42 @@ function workspaceWithOriginalRecords(): LocalWorkspace {
     },
   }
 }
+
+test('standalone system import uses the chosen finite Cluster anchor, including coordinates beyond the normalized map @pure', () => {
+  const sourceWorkspace = createLocalWorkspace('Source Reach', 'Standalone System')
+  const sourceSystem = sourceWorkspace.cluster.systems[0]
+  if (!sourceSystem) throw new Error('The source workspace needs one star system.')
+  const standalone = exportStarSystem(sourceWorkspace, sourceSystem.id)
+  const destination = createLocalWorkspace('Destination Reach', 'Home')
+  const anchor = { x: -1.75, y: 2.4 }
+
+  const prepared = prepareJsonImport(destination, standalone, anchor)
+  const importedSystemId = prepared.addedSystemIds[0]
+
+  expect(importedSystemId).toBeTruthy()
+  expect(prepared.workspace.layout.systemPositions[importedSystemId!]).toEqual(anchor)
+  expect(prepared.workspace.layout.systemPositions[sourceSystem.id]).toEqual(undefined)
+  expect(destination.cluster.systems).toHaveLength(1)
+})
+
+test('standalone review effects include the selected anchor but ignore regenerated copy identities @pure', () => {
+  const sourceWorkspace = createLocalWorkspace('Source Reach', 'Standalone System')
+  const sourceSystem = sourceWorkspace.cluster.systems[0]
+  if (!sourceSystem) throw new Error('The source workspace needs one star system.')
+  const standalone = exportStarSystem(sourceWorkspace, sourceSystem.id)
+  const destination = createLocalWorkspace('Destination Reach', 'Home')
+  const anchor = { x: -1.75, y: 2.4 }
+  const initialPrepared = prepareJsonImport(destination, standalone, anchor)
+  const repeatedPrepared = prepareJsonImport(destination, standalone, anchor)
+  const movedPrepared = prepareJsonImport(destination, standalone, { x: -1.75, y: 2.5 })
+
+  const initialSignature = jsonImportReviewEffects(destination, standalone, initialPrepared).signature
+  const repeatedSignature = jsonImportReviewEffects(destination, standalone, repeatedPrepared).signature
+  const movedSignature = jsonImportReviewEffects(destination, standalone, movedPrepared).signature
+
+  expect(repeatedSignature).toBe(initialSignature)
+  expect(movedSignature).not.toBe(initialSignature)
+})
 
 test('cluster import remaps identities and preserves exact relationships and geometry @pure', () => {
   const current = createLocalWorkspace('Local Reach', 'Home System')
@@ -328,13 +382,17 @@ test('cluster import remaps identities and preserves exact relationships and geo
   expect(knownRoute).toMatchObject({
     playerShared: false,
     jumpLevel: 7,
+    fromSystemId: alpha.id,
     fromPointId: importedOrigin.id,
+    toSystemId: beta.id,
     toPointId: importedDestination.id,
   })
   expect(unresolvedRoute).toMatchObject({
     playerShared: false,
     jumpLevel: 12,
+    fromSystemId: beta.id,
     fromPointId: importedDestination.id,
+    toSystemId: null,
     toPointId: null,
     unresolvedExit: 'The Quiet Expanse',
   })
@@ -358,6 +416,139 @@ test('cluster import remaps identities and preserves exact relationships and geo
     [importedPlanet.id]: 2.23,
     [importedMoon.id]: 5.18,
   })
+})
+
+test('current cluster import remaps route system IDs and preserves omitted Jump Point attachments @pure', () => {
+  const source = addStarSystem(createLocalWorkspace('Source Reach', 'Alpha'), 'Beta').workspace
+  const [origin, destination] = source.cluster.systems
+  if (!origin || !destination) throw new Error('The import fixture needs two systems.')
+  const route = createJumpRoute(source.cluster, {
+    jumpLevel: 5,
+    fromSystemId: origin.id,
+    fromPointId: null,
+    toSystemId: destination.id,
+    toPointId: null,
+  })
+  const sourceWithRoute = {
+    ...source,
+    cluster: { ...source.cluster, routes: [route] },
+  }
+
+  const prepared = prepareJsonImport(
+    createLocalWorkspace('Destination Reach', 'Home'),
+    exportJumpCluster(sourceWithRoute),
+  )
+  const imported = prepared.workspace.cluster.routes[0]
+
+  expect(imported?.id).not.toBe(route.id)
+  expect(imported).toMatchObject({
+    fromSystemId: prepared.addedSystemIds[0],
+    fromPointId: null,
+    toSystemId: prepared.addedSystemIds[1],
+    toPointId: null,
+  })
+  expect(prepared.workspace.cluster.systems.slice(-prepared.addedSystemIds.length).map(system => system.id))
+    .toEqual(prepared.addedSystemIds)
+})
+
+test('version 4 cluster import migrates point routes, preserves sharing, and removes only legacy loops @pure', () => {
+  const currentExport = sourceClusterExport()
+  const legacyExport = structuredClone(currentExport) as unknown as {
+    version: number
+    cluster: {
+      routes: Array<Record<string, unknown>>
+      systems: Array<{ objects: Array<Record<string, unknown>> }>
+    }
+    layout: { unresolvedExitPositions: Record<string, { x: number; y: number }> }
+  }
+  legacyExport.version = 4
+  const alpha = legacyExport.cluster.systems[0]!
+  const originPoint = alpha.objects.find(object => object.id === 'source-origin-point')!
+  alpha.objects.push({
+    ...originPoint,
+    id: 'source-return-point',
+    locationKey: 'JP-03',
+    name: 'Alpha Return',
+  })
+  legacyExport.cluster.routes = legacyExport.cluster.routes.map(route => {
+    const oldRoute = { ...route }
+    delete oldRoute.fromSystemId
+    delete oldRoute.toSystemId
+    if (route.name === 'Known corridor') oldRoute.playerShared = true
+    return oldRoute
+  })
+  legacyExport.cluster.routes.push({
+    id: 'source-loop-route',
+    name: 'Alpha loop',
+    jumpLevel: 2,
+    fromPointId: 'source-origin-point',
+    toPointId: 'source-return-point',
+    playerShared: true,
+  })
+  legacyExport.layout.unresolvedExitPositions['source-loop-route'] = { x: 1800, y: 210 }
+
+  const prepared = prepareJsonImport(createLocalWorkspace('Destination Reach', 'Home'), legacyExport)
+  const alphaCopy = prepared.workspace.cluster.systems.find(system => system.name === 'Imported Alpha')!
+  const betaCopy = prepared.workspace.cluster.systems.find(system => system.name === 'Imported Beta')!
+  const knownRoute = prepared.workspace.cluster.routes.find(route => route.name === 'Known corridor')
+  const exitRoute = prepared.workspace.cluster.routes.find(route => route.name === 'Rimward corridor')
+
+  expect(alphaCopy.objects.some(object => object.name === 'Alpha Return')).toBe(true)
+  expect(prepared.workspace.cluster.routes).toHaveLength(2)
+  expect(knownRoute).toMatchObject({
+    playerShared: true,
+    fromSystemId: alphaCopy.id,
+    fromPointId: alphaCopy.objects.find(object => object.name === 'Alpha Gate')?.id,
+    toSystemId: betaCopy.id,
+    toPointId: betaCopy.objects.find(object => object.name === 'Beta Gate')?.id,
+  })
+  expect(exitRoute?.toSystemId).toBeNull()
+  expect(prepared.workspace.layout.unresolvedExitPositions).toEqual({
+    [exitRoute!.id]: { x: 1250, y: -340 },
+  })
+})
+
+test('legacy route ID __proto__ keeps its saved exit through local restore, backup restore, save, and copy @pure', () => {
+  const currentExport = sourceClusterExport()
+  const externalRoute = currentExport.cluster.routes.find(route => route.toSystemId === null)
+  if (!externalRoute) throw new Error('The source Cluster needs an unresolved route.')
+  const savedExit = { x: 1250, y: -340 }
+  const legacyRoutes = currentExport.cluster.routes.map(route => {
+    const oldRoute: Record<string, unknown> = { ...route }
+    delete oldRoute.fromSystemId
+    delete oldRoute.toSystemId
+    if (route.id === externalRoute.id) oldRoute.id = '__proto__'
+    return oldRoute
+  })
+  const legacyPositions = Object.fromEntries([['__proto__', savedExit]])
+  const legacyBase = {
+    ...currentExport,
+    version: 4,
+    cluster: { ...currentExport.cluster, routes: legacyRoutes },
+    layout: { ...currentExport.layout, unresolvedExitPositions: legacyPositions },
+  }
+  const legacyLocal = { ...legacyBase, id: 'legacy-local-workspace' }
+
+  const restored = restoreLocalWorkspace(legacyLocal)
+  expect(restored).not.toBeNull()
+  if (!restored) throw new Error('The legacy local workspace should restore.')
+  expect(restored.cluster.routes.map(route => route.id)).toContain('__proto__')
+  expect(Object.hasOwn(restored.layout.unresolvedExitPositions ?? {}, '__proto__')).toBe(true)
+  expect(restored.layout.unresolvedExitPositions?.['__proto__']).toEqual(savedExit)
+  const saved = createWorkspaceSnapshot(restored)
+  expect(Object.hasOwn(saved.layout.unresolvedExitPositions ?? {}, '__proto__')).toBe(true)
+  expect(saved.layout.unresolvedExitPositions?.['__proto__']).toEqual(savedExit)
+
+  const backup = restoreJumpClusterBackup(legacyBase)
+  expect(backup.cluster.routes.map(route => route.id)).toContain('__proto__')
+  expect(Object.hasOwn(backup.layout.unresolvedExitPositions ?? {}, '__proto__')).toBe(true)
+  expect(backup.layout.unresolvedExitPositions?.['__proto__']).toEqual(savedExit)
+
+  const copied = prepareJsonImport(createLocalWorkspace('Copy Destination', 'Home'), legacyBase)
+  const copiedRoute = copied.workspace.cluster.routes.find(route => route.toSystemId === null)
+  expect(copiedRoute).toBeTruthy()
+  expect(copiedRoute?.id).not.toBe('__proto__')
+  expect(copiedRoute && copied.workspace.layout.unresolvedExitPositions?.[copiedRoute.id]).toEqual(savedExit)
 })
 
 test('second import creates a disjoint entity copy while reusing a compatible field @pure', () => {
@@ -457,10 +648,10 @@ test('invalid version and foreign layout reject without changing the destination
   }
 
   expect(() => prepareJsonImport(destination, invalidVersion))
-    .toThrow('Choose a valid version 1, version 2, version 3, or version 4 Jump Cluster or star system JSON export.')
+    .toThrow('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
   expect(destination).toEqual(before)
   expect(() => prepareJsonImport(destination, foreignSystemLayout))
-    .toThrow('Choose a valid version 1, version 2, version 3, or version 4 Jump Cluster or star system JSON export.')
+    .toThrow('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
   expect(destination).toEqual(before)
 })
 

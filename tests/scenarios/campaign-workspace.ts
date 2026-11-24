@@ -1,16 +1,17 @@
 import { expect, type Page } from '@playwright/test'
+import type { JumpClusterExport } from '../../domain/workspace'
 import campaignBaselineFixture from '../fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import {
   waitForWorkspaceSaved,
   captureMapExportBlobs,
+  fitWorkspaceMap,
   jumpClusterRestoreReviewDialog,
   openJumpClusterRestorePicker,
   resolveJumpClusterRestoreReview,
-  returnToClusterMap,
   setJsonFile,
   waitForWorkspaceStartup,
+  wardenMap,
   workspaceMapContextType,
-  workspaceZoomControls,
 } from '../helpers'
 
 export type CampaignFixture = typeof campaignBaselineFixture
@@ -18,7 +19,7 @@ export type CampaignFixture = typeof campaignBaselineFixture
 /** Imports the public baseline through the UI and waits for its IndexedDB save to finish. */
 export async function importCampaignWorkspace(
   page: Page,
-  fixture: CampaignFixture = campaignBaselineFixture,
+  fixture: CampaignFixture | JumpClusterExport = campaignBaselineFixture,
   viewport?: { width: number; height: number },
 ): Promise<void> {
   await captureMapExportBlobs(page)
@@ -40,7 +41,8 @@ export async function importCampaignWorkspace(
   await resolveJumpClusterRestoreReview(preview, 'confirm')
   await expect(preview).toBeHidden()
   await expect(workspaceMapContextType(page)).toHaveText('Jump Cluster')
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+  await expect(wardenMap(page)).toHaveAccessibleName(`${fixture.cluster.name} continuous map`)
+  await fitWorkspaceMap(page)
   await waitForWorkspaceSaved(page)
 }
 
@@ -53,7 +55,7 @@ export async function openImportedCampaignWorkspace(
   if (viewport) await page.setViewportSize(viewport)
   await page.goto('/')
   await waitForWorkspaceStartup(page)
-  await returnToClusterMap(page)
-  await workspaceZoomControls(page).getByRole('button', { name: 'Fit map', exact: true }).click()
+  await expect(wardenMap(page)).toBeVisible()
+  await fitWorkspaceMap(page)
   await waitForWorkspaceSaved(page)
 }

@@ -3,57 +3,16 @@
     v-if="workspace"
     as="nav"
     class="workspace-map-chrome"
-    :ui="{ left: 'workspace-map-context', right: 'workspace-map-actions' }"
+    :ui="{
+      left: hasContextStatus ? 'workspace-map-context' : 'workspace-map-context-empty',
+      right: 'workspace-map-actions',
+    }"
     aria-label="Map context and commands"
     data-map-obstruction
     :inert="props.compactModalOpen ? true : undefined"
   >
     <template #left>
-      <div class="workspace-map-context-line">
-        <div class="workspace-map-title">
-          <UTooltip v-if="activeView === 'system'" text="Back to Jump Cluster">
-            <UButton
-              class="workspace-control workspace-map-back workspace-map-icon-control"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              aria-label="Back to Jump Cluster"
-              @click="emit('show-cluster')"
-            >
-              <UIcon name="i-lucide-arrow-left" aria-hidden="true" />
-            </UButton>
-          </UTooltip>
-          <div class="workspace-map-heading">
-            <span data-testid="workspace-map-context-kind">{{ activeView === 'cluster' ? 'Jump Cluster' : 'Star System' }}</span>
-            <h2 :aria-labelledby="mapNameLabelId">
-              <UPopover
-                v-model:open="mapNameDisclosureOpen"
-                :modal="false"
-                :content="{
-                  side: 'bottom', align: 'start', sideOffset: 4, collisionPadding: 12,
-                  onOpenAutoFocus: event => event.preventDefault(),
-                }"
-              >
-                <UButton
-                  class="workspace-control workspace-map-name-trigger"
-                  color="neutral"
-                  variant="ghost"
-                  size="sm"
-                  :aria-label="`${contextName}, show full map name`"
-                  :aria-expanded="mapNameDisclosureOpen"
-                >
-                  <span :id="mapNameLabelId" class="workspace-map-name-text">{{ contextName }}</span>
-                  <UIcon name="i-lucide-chevron-down" class="workspace-map-name-disclosure-icon" aria-hidden="true" />
-                </UButton>
-                <template #content>
-                  <div class="workspace-map-name-popover" data-map-obstruction>
-                    <p class="workspace-map-full-name">{{ contextName }}</p>
-                  </div>
-                </template>
-              </UPopover>
-            </h2>
-          </div>
-        </div>
+      <div v-if="hasContextStatus" class="workspace-map-context-line">
         <template v-if="props.creationSession || props.clusterAddPresentation">
           <span class="workspace-add-status" role="status" aria-live="polite">
             {{ props.clusterAddPresentation?.status ?? `ADD ${props.creationTypeLabel} · ${creationProgress}` }}
@@ -106,9 +65,12 @@
     </template>
 
     <template #right>
+      <span class="sr-only" data-testid="workspace-map-context-kind">
+        {{ activeView === 'cluster' ? 'Jump Cluster' : 'Star System' }}
+      </span>
       <slot name="history" />
       <MapTypeFilters
-        v-if="activeView === 'system' && selectedSystem"
+        v-if="(activeView === 'system' && selectedSystem) || props.continuousMap"
         :icon-only="true"
         v-model:open="typeFiltersOpen"
         :selected-types="mapCriteriaValues.types"
@@ -191,6 +153,10 @@
         :workspace-id="workspace.id"
         :scope="mapFileScope"
         :active-view="activeView"
+        :continuous-map="props.continuousMap"
+        :image-cluster-id="workspace.cluster.id"
+        :selected-image-system-id="props.selectedImageSystemId"
+        :image-systems="imageSystems"
         :image-available="Boolean(activeMap)"
         :restore-loading="props.restoreLoading"
         :export-error="props.exportError"
@@ -237,13 +203,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
 import type { SystemCreationSession } from '../composables/editor-workflows/types'
 import type { PlayerLinkGenerationResult } from '../composables/usePlayerFileExports'
 import type { WardenFilterControl, WardenFilterCriteriaOwner } from '../composables/useWardenFilterCriteria'
 import type { MapImageExporter, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
+import type { MapImageScope } from '../utils/map-image-scope'
 import type { SearchResult, SearchTarget } from '../utils/workspace-search'
 import WorkspaceMapFilesMenu from './workspace-map-files/WorkspaceMapFilesMenu.vue'
 import WorkspaceSearch from './WorkspaceSearch.vue'
@@ -252,8 +219,9 @@ import MapTypeFilters from './MapTypeFilters.vue'
 const props = withDefaults(defineProps<{
   workspace: LocalWorkspace | null
   activeView: 'cluster' | 'system'
+  continuousMap?: boolean
+  selectedImageSystemId?: string | null
   selectedSystem: StarSystem | null | undefined
-  displayName?: string
   clusterMap: MapImageExporter | null
   systemMap: MapImageExporter | null
   exportError: string
@@ -293,14 +261,21 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   'export-cluster-json': []
   'export-system-json': []
-  'export-map-image': [map: MapImageExporter | null, name: string | undefined, kind: 'jump-cluster' | 'star-system', format: MapImageFormat, palette: MapImagePalette]
+  'export-map-image': [
+    map: MapImageExporter | null,
+    kind: 'jump-cluster' | 'star-system',
+    format: MapImageFormat,
+    palette: MapImagePalette,
+    scope: MapImageScope | null,
+    selectedSystemId: string | null,
+    systemImageTarget: 'inspected' | 'explicit',
+  ]
   'export-player-json': []
   'export-player-image': [format: MapImageFormat, palette: MapImagePalette]
   'preview-player-view': [focusMapFiles: () => void]
   'copy-player-link': []
   'import-file': [event: Event]
   'restore-file': [event: Event, returnFocusTarget: HTMLElement | null]
-  'show-cluster': []
   'toggle-hierarchy': []
   'toggle-inspector': []
   'files-open-change': [open: boolean]
@@ -311,8 +286,6 @@ const emit = defineEmits<{
 
 const headerMapActionsOpen = ref(false)
 const mapFiles = ref<InstanceType<typeof WorkspaceMapFilesMenu> | null>(null)
-const mapNameDisclosureOpen = ref(false)
-const mapNameLabelId = `workspace-map-name-${useId()}`
 const searchOpen = defineModel<boolean>('searchOpen', { required: true })
 const searchQuery = defineModel<string>('searchQuery', { required: true })
 const typeFiltersOpen = defineModel<boolean>('typeFiltersOpen', { required: true })
@@ -331,13 +304,14 @@ const searchCriteriaValues = computed(() => mutableCriteriaValues(props.filterCr
 const systemImportFileInput = ref<HTMLInputElement | null>(null)
 const clusterRestoreFileInput = ref<HTMLInputElement | null>(null)
 const workspace = computed(() => props.workspace)
+const imageSystems = computed(() => workspace.value?.cluster.systems.map(({ id, name }) => ({ id, name })) ?? [])
 const selectedSystem = computed(() => props.selectedSystem)
 const activeView = computed(() => props.activeView)
 const hierarchyOpen = computed(() => props.hierarchyOpen)
 const inspectorOpen = computed(() => props.inspectorOpen)
-const contextName = computed(() => props.displayName ?? (activeView.value === 'cluster'
-  ? workspace.value?.cluster.name ?? 'Jump Cluster'
-  : selectedSystem.value?.name ?? 'Star System'))
+const hasContextStatus = computed(() => Boolean(
+  props.creationSession || props.clusterAddPresentation || props.clusterMovePresentation,
+))
 const creationProgress = computed(() => {
   const session = props.creationSession
   if (!session) return ''
@@ -351,8 +325,6 @@ const mapFileScope = computed(() => activeView.value === 'cluster'
   : `Star System ${selectedSystem.value?.name ?? ''}`)
 const activeMap = computed(() => activeView.value === 'cluster' ? props.clusterMap : props.systemMap)
 
-watch(contextName, () => { mapNameDisclosureOpen.value = false })
-
 function whenSearchClosingFocusSettled(): Promise<void> {
   return workspaceSearch.value?.whenClosingFocusSettled() ?? Promise.resolve()
 }
@@ -364,12 +336,28 @@ watch(() => props.compactModalOpen, open => {
   if (open) headerMapActionsOpen.value = false
 })
 
-function exportMapImage(format: MapImageFormat, lightForPrinting: boolean): void {
-  const map = activeMap.value
-  const isCluster = activeView.value === 'cluster'
-  const name = isCluster ? workspace.value?.cluster.name : selectedSystem.value?.name
+function exportMapImage(
+  format: MapImageFormat,
+  lightForPrinting: boolean,
+  imageScope: MapImageScope,
+  explicitSystemId: string | null = null,
+  systemImageTargetOverride: 'inspected' | 'explicit' = 'inspected',
+): void {
+  const continuousMap = props.continuousMap ?? false
+  const selectedSystemId = continuousMap && imageScope === 'system'
+    ? explicitSystemId ?? props.selectedImageSystemId ?? null
+    : null
+  const systemImageTarget = systemImageTargetOverride
+  const selectedImageSystem = selectedSystemId
+    ? workspace.value?.cluster.systems.find(system => system.id === selectedSystemId)
+    : undefined
+  const selectedSystemScope = continuousMap && imageScope === 'system' && selectedImageSystem
+  const map = continuousMap ? props.clusterMap : activeMap.value
+  const kind = selectedSystemScope || (!continuousMap && activeView.value === 'system')
+    ? 'star-system'
+    : 'jump-cluster'
   const palette: MapImagePalette = lightForPrinting ? 'print-light' : 'active'
-  emit('export-map-image', map, name, isCluster ? 'jump-cluster' : 'star-system', format, palette)
+  emit('export-map-image', map, kind, format, palette, continuousMap ? imageScope : null, selectedSystemId, systemImageTarget)
 }
 
 function exportPlayerImage(format: MapImageFormat, lightForPrinting: boolean): void {
@@ -416,11 +404,14 @@ defineExpose({ whenSearchClosingFocusSettled, mapFilesTriggerElement, closeMapFi
 :global(.workspace-map-chrome .workspace-map-context) {
   display: grid;
   min-width: 0;
-  flex: 1 1 9rem;
+  flex: 0 1 auto;
   gap: 0.12rem;
 }
 
-.workspace-map-heading > span,
+:global(.workspace-map-chrome .workspace-map-context-empty) {
+  display: none;
+}
+
 .workspace-map-files-heading {
   margin: 0;
   color: var(--text-muted);
@@ -429,89 +420,12 @@ defineExpose({ whenSearchClosingFocusSettled, mapFilesTriggerElement, closeMapFi
   text-transform: uppercase;
 }
 
-:global(.workspace-map-chrome .workspace-map-context h2) {
-  width: 100%;
-  min-width: 0;
-  max-width: min(52vw, 36rem);
-  flex: 1 1 auto;
-  margin: 0;
-  font-family: Georgia, serif;
-  font-size: 1.2rem;
-  font-weight: 600;
-  line-height: 1.1;
-}
-
 .workspace-map-context-line {
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem 0.6rem;
-}
-
-.workspace-map-title {
-  display: flex;
-  min-width: 0;
-  flex: 0 1 auto;
-  flex-wrap: nowrap;
-  align-items: flex-end;
-  gap: 0.25rem 0.6rem;
-}
-
-.workspace-map-heading {
-  display: grid;
-  min-width: 0;
-  flex: 1 1 auto;
-  gap: 0.12rem;
-}
-
-.workspace-map-name-trigger {
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  min-height: 1.5rem;
-  max-width: 100%;
-  justify-content: flex-start;
-  gap: 0.3rem;
-  overflow: hidden;
-  padding: 0 0.15rem;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-}
-
-.workspace-map-name-text {
-  display: block;
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workspace-map-name-disclosure-icon {
-  flex: 0 0 auto;
-  width: 0.85rem;
-  height: 0.85rem;
-  color: var(--text-muted);
-}
-
-.workspace-map-name-popover {
-  max-width: min(30rem, calc(100vw - 2rem));
-  border: 1px solid var(--line-soft);
-  border-radius: 0.35rem;
-  padding: 0.65rem 0.8rem;
-  background: var(--panel-raised);
-  color: var(--text-primary);
-  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 24%);
-}
-
-.workspace-map-full-name {
-  margin: 0;
-  overflow-wrap: anywhere;
-  color: var(--text-primary);
-  font-size: 0.95rem;
-  font-weight: 500;
 }
 
 .workspace-add-status {
@@ -582,17 +496,12 @@ defineExpose({ whenSearchClosingFocusSettled, mapFilesTriggerElement, closeMapFi
   }
 
   :global(.workspace-map-chrome .workspace-map-context) {
-    flex: 1 1 8rem;
-  }
-
-  :global(.workspace-map-chrome .workspace-map-context h2) {
-    max-width: 100%;
-    font-size: 1.05rem;
+    flex: 0 1 auto;
   }
 
   :global(.workspace-map-chrome .workspace-map-actions) {
-    width: 100%;
-    justify-content: space-between;
+    width: auto;
+    justify-content: flex-end;
   }
 
   .workspace-map-back {
@@ -603,11 +512,6 @@ defineExpose({ whenSearchClosingFocusSettled, mapFilesTriggerElement, closeMapFi
 @media (max-height: 600px) and (min-width: 761px) {
   :global(.workspace-map-chrome) {
     flex-wrap: nowrap;
-  }
-
-  :global(.workspace-map-chrome .workspace-map-context h2) {
-    max-width: min(30vw, 22rem);
-    font-size: 1.05rem;
   }
 
   :global(.workspace-map-chrome .workspace-map-actions) {

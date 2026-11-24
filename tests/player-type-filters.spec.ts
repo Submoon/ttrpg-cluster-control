@@ -54,7 +54,7 @@ test('player Type choices come only from public maps and Unknown objects share o
   const unknown = publicObject('unknown', 'unknown')
   const document: PlayerClusterDocument = {
     format: 'ttrpg-cluster-control-player',
-    version: 1,
+    version: 2,
     title: 'Public Reach',
     systems: [
       { id: 'revealed-a', position: { x: 0, y: 0 }, disclosure: 'revealed', type: 'star-system', label: 'A', map: publicSystem([planet, revealedPlanet, moon, unknown]) },

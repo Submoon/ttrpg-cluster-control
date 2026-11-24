@@ -1,8 +1,11 @@
 import { expect, test } from '@playwright/test'
 import { createLocalWorkspace, replaceWorkspaceSystem, type LocalWorkspace, type StarSystem, type SystemObject } from '../domain/workspace'
+import { addStarSystem } from '../domain/workspace-cluster'
 import {
+  applyContinuousSelectedObjectTranslation,
   applySelectedObjectTranslation,
   planSelectedObjectTranslation,
+  prepareContinuousSelectedObjectTranslation,
   prepareSelectedObjectTranslation,
 } from '../utils/selected-object-placement'
 import { objectPositions, toNormalizedMapPoint } from '../utils/system-map-geometry'
@@ -367,4 +370,94 @@ test('moves descendants once with a selected ancestor and keeps the ancestor Orb
     })
   }
   expect(plan!.departingObjectIds.size).toBe(0)
+})
+
+test('a continuous group uses only the grabbed system Orbit magnet and keeps exact companion attachments @pure', () => {
+  const base = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const first = base.cluster.systems[0]!
+  const firstWithGrabbed = replaceWorkspaceSystem(base, {
+    ...first,
+    objects: [object('grabbed', { kind: 'system', ...toNormalizedMapPoint({ x: 480, y: 280 }) })],
+    orbits: [{ id: 'grabbed-orbit', hostId: null, center: toNormalizedMapPoint({ x: 480, y: 280 }), order: 1 }],
+  })
+  const second = addStarSystem(firstWithGrabbed, 'Near companion').system
+  const third = addStarSystem(firstWithGrabbed, 'Exact companion').system
+  const workspace = {
+    ...firstWithGrabbed,
+    cluster: {
+      ...firstWithGrabbed.cluster,
+      systems: [
+        firstWithGrabbed.cluster.systems[0]!,
+        { ...second, objects: [object('near', { kind: 'system', ...toNormalizedMapPoint({ x: 480, y: 280 }) })], orbits: [{ id: 'near-orbit', hostId: null, center: toNormalizedMapPoint({ x: 480, y: 280 }), order: 1 }] },
+        { ...third, objects: [object('exact', { kind: 'system', ...toNormalizedMapPoint({ x: 480, y: 280 }) })], orbits: [{ id: 'exact-orbit', hostId: null, center: toNormalizedMapPoint({ x: 480, y: 280 }), order: 1 }] },
+      ],
+    },
+    layout: {
+      ...firstWithGrabbed.layout,
+      systemPositions: {
+        ...firstWithGrabbed.layout.systemPositions,
+        [second.id]: { x: 0.5, y: 0.5 },
+        [third.id]: { x: 0.8, y: 0.5 },
+      },
+      orbitRadii: {
+        ...firstWithGrabbed.layout.orbitRadii,
+        'grabbed-orbit': { horizontal: 60, vertical: 60 },
+        'near-orbit': { horizontal: 60.5, vertical: 60.5 },
+        'exact-orbit': { horizontal: 60, vertical: 60 },
+      },
+    },
+  }
+  const scales = new Map(workspace.cluster.systems.map(system => [system.id, 0.2]))
+  const prepare = prepareContinuousSelectedObjectTranslation(
+    workspace,
+    ['grabbed', 'near', 'exact'],
+    first.id,
+    'grabbed',
+    scales,
+  )
+
+  expect(prepare).not.toBeNull()
+  const plan = prepare!({ x: 15, y: 0 })!
+  expect(plan.effectiveSceneDelta).toEqual({ x: 12, y: 0 })
+  expect(plan.positions.get('grabbed')).toEqual({ x: 540, y: 280 })
+  expect(plan.positions.get('near')).toEqual({ x: 540, y: 280 })
+  expect(plan.changes.find(({ change }) => change.objectId === 'near')?.change.nextPlacement.kind).toBe('system')
+  expect(plan.positions.get('exact')).toEqual({ x: 540, y: 280 })
+  expect(plan.changes.find(({ change }) => change.objectId === 'exact')?.change.nextPlacement)
+    .toEqual({ kind: 'orbit', orbitId: 'exact-orbit' })
+  expect(plan.arrivingObjectIds).toEqual(new Set(['grabbed', 'exact']))
+
+  const applied = applyContinuousSelectedObjectTranslation(workspace, plan)
+  expect(applied.cluster.systems.find(system => system.id === first.id)?.objects[0]?.placement)
+    .toEqual({ kind: 'orbit', orbitId: 'grabbed-orbit' })
+  expect(applied.cluster.systems.find(system => system.id === second.id)?.objects[0]?.placement.kind).toBe('system')
+  expect(applied.cluster.systems.find(system => system.id === third.id)?.objects[0]?.placement)
+    .toEqual({ kind: 'orbit', orbitId: 'exact-orbit' })
+})
+
+test('a continuous group deduplicates a selected host and descendant across owners @pure', () => {
+  const fixture = createFixture()
+  const first = fixture.cluster.systems[0]!
+  const added = addStarSystem(fixture, 'Far system')
+  const second = { ...added.system, objects: [object('far-object', { kind: 'system', x: 0.5, y: 0.5 })] }
+  const workspace = {
+    ...added.workspace,
+    cluster: {
+      ...added.workspace.cluster,
+      systems: [first, second],
+    },
+  }
+  const prepare = prepareContinuousSelectedObjectTranslation(
+    workspace,
+    [hostId, planetId, 'far-object'],
+    first.id,
+    hostId,
+    new Map([[first.id, 0.2], [second.id, 0.2]]),
+  )!
+  const plan = prepare({ x: 3, y: -4 })!
+
+  expect(plan.systemPlans.get(first.id)?.movedObjectIds).toEqual([hostId, planetId, siblingId, moonId])
+  expect(plan.systemPlans.get(second.id)?.movedObjectIds).toEqual(['far-object'])
+  expect(plan.positions.size).toBe(5)
+  expect(plan.effectiveSceneDelta).toEqual({ x: 3, y: -4 })
 })

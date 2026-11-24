@@ -262,8 +262,10 @@ test('an accepted route result cannot apply an entity session replaced while the
   const routeDraft: RouteDraftValues = {
     playerShared: false,
     jumpLevel: '1',
+    fromSystemId: 'system-a',
     fromPointId: 'point-a',
-    destination: 'point',
+    destination: 'system',
+    toSystemId: 'system-b',
     toPointId: 'point-b',
     unresolvedExit: '',
   }
@@ -331,4 +333,95 @@ test('an accepted route result cannot apply an entity session replaced while the
   expect(revision).toBe(0)
   await expect(pendingTransition).resolves.toBe(false)
   mountedTransition.dispose()
+})
+
+test('a route-only transition keeps creation active on Stay and accepts an applied route before object Add @pure', async () => {
+  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const routeDraft: RouteDraftValues = {
+    playerShared: false,
+    jumpLevel: '1',
+    fromSystemId: '',
+    fromPointId: '',
+    destination: 'system',
+    toSystemId: '',
+    toPointId: '',
+    unresolvedExit: '',
+  }
+  const routeSession = ref<RouteInspectorSession | null>({
+    id: 1,
+    clusterId: workspace.cluster.id,
+    routeId: null,
+    initial: { ...routeDraft },
+    draft: { ...routeDraft, jumpLevel: '3' },
+    sourceSystemIds: null,
+    destinationSystemIds: null,
+    endpointToChoose: 'from',
+    errors: {},
+    error: '',
+  })
+  const routeHasModified = ref(true)
+  let routeApplyCount = 0
+  const transitions = mountTransitions({
+    chart: {
+      session: ref<ChartNamesSession | null>(null),
+      editing: ref(false),
+      hasUncommittedNames: ref(false),
+      apply: async () => true,
+      discard: () => undefined,
+    },
+    entity: {
+      session: ref<EntityInspectorSession | null>(null),
+      hasModified: ref(false),
+      apply: async () => true,
+      discard: () => undefined,
+    },
+    route: {
+      session: routeSession,
+      hasModified: routeHasModified,
+      apply: async id => {
+        const current = routeSession.value
+        if (!current || current.id !== id) return false
+        routeApplyCount++
+        routeSession.value = {
+          ...current,
+          id: id + 1,
+          initial: { ...routeDraft },
+          draft: { ...routeDraft },
+        }
+        routeHasModified.value = false
+        return true
+      },
+      discard: id => {
+        if (routeSession.value?.id === id) routeSession.value = null
+      },
+    },
+    clearEditorError: () => undefined,
+  })
+  const workspaceId = workspace.id
+  const clusterId = workspace.cluster.id
+  const isContextCurrent = () => workspace.id === workspaceId && routeSession.value?.clusterId === clusterId
+
+  try {
+    const staying = transitions.transitions.resolveTransition({
+      leaveChart: false,
+      leaveEntitySession: false,
+    }, isContextCurrent)
+    expect(transitions.transitions.transitionGuard.value).toBe('inspector')
+    await transitions.transitions.resolveTransitionChoice('stay')
+    await expect(staying).resolves.toBe(false)
+    expect(routeSession.value?.draft.jumpLevel).toBe('3')
+    expect(routeHasModified.value).toBe(true)
+
+    const applying = transitions.transitions.resolveTransition({
+      leaveChart: false,
+      leaveEntitySession: false,
+    }, isContextCurrent)
+    await transitions.transitions.resolveTransitionChoice('apply')
+    await expect(applying).resolves.toBe(true)
+    expect(routeApplyCount).toBe(1)
+    expect(routeSession.value).toBeNull()
+    expect(routeHasModified.value).toBe(false)
+  } finally {
+    transitions.dispose()
+  }
 })

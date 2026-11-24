@@ -8,6 +8,14 @@ export interface Point {
   y: number
 }
 
+/** Distances from a system anchor to the four edges of its saved preferred frame, in Cluster scene units. */
+export interface SystemFrameInsets {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
 export const catalogueTypes = [
   { value: 'star', family: 'CelestialBody', label: 'Star', keyPrefix: 'STAR' },
   { value: 'planet', family: 'CelestialBody', label: 'Planet', keyPrefix: 'PL' },
@@ -120,18 +128,36 @@ export type Orbit = {
   | { hostId: null; center: Point }
 )
 
+/** A selected Jump Point is optional at either known system endpoint. */
+export type JumpRouteEndpoint = {
+  systemId: string
+  pointId: string | null
+}
+
 /**
- * Routes connect logical Jump Point IDs; a null destination records an unresolved external exit.
+ * A route connects distinct known systems, optionally through local Jump Points, or ends at an unresolved exit.
  */
 export type JumpRoute = {
   id: string
   name?: string
   jumpLevel: number
-  fromPointId: string
+  fromSystemId: string
+  fromPointId: string | null
   playerShared: boolean
 } & (
-  | { toPointId: string; unresolvedExit?: never }
-  | { toPointId: null; unresolvedExit: string }
+  | { toSystemId: string; toPointId: string | null; unresolvedExit?: never }
+  | { toSystemId: null; toPointId: null; unresolvedExit: string }
+)
+
+/** New route values accepted by the domain create and update operations. */
+export type JumpRouteInput = {
+  jumpLevel: number
+  fromSystemId: string
+  fromPointId: string | null
+  playerShared?: boolean
+} & (
+  | { toSystemId: string; toPointId: string | null; unresolvedExit?: never }
+  | { toSystemId: null; toPointId: null; unresolvedExit: string }
 )
 
 export interface StarSystem {
@@ -171,12 +197,14 @@ export interface JumpPointReference {
  * Durable local campaign map; temporary view/zoom state is intentionally kept outside this shape.
  */
 export interface LocalWorkspace {
-  version: 4
+  version: 5
   id: string
   cluster: JumpCluster
   layout: {
     /** Normalized cluster positions; interactive system drags clamp each axis to [0, 1]. */
     systemPositions: Record<string, Point>
+    /** Optional Warden-authored preferred frame sizes relative to each system anchor. */
+    systemFrames?: Record<string, SystemFrameInsets>
     /** Manually placed unresolved-exit targets in absolute SVG scene coordinates, keyed by route ID. */
     unresolvedExitPositions?: Record<string, Point>
     /** Orbit radii in SVG scene units. */
@@ -198,11 +226,13 @@ export interface ExportedLayout {
   objectAngles: Record<string, number>
   /** Optional for older files; manually placed unresolved targets are keyed by Cluster route ID. */
   unresolvedExitPositions?: Record<string, Point>
+  /** Optional saved Warden frames, keyed by Cluster system ID. */
+  systemFrames?: Record<string, SystemFrameInsets>
 }
 
 export type JumpClusterExport = {
   format: 'ttrpg-cluster-control-map'
-  version: 4
+  version: 5
   type: 'cluster'
   cluster: JumpCluster
   objectFieldSettings: ObjectFieldSettings
@@ -215,7 +245,7 @@ export type StarSystemExport = {
   type: 'system'
   system: StarSystem
   objectFieldSettings: ObjectFieldSettings
-  layout: ExportedLayout
+  layout: Omit<ExportedLayout, 'systemFrames'>
 }
 
 /** Informational import preview; possible name/key matches do not merge map entities. */
@@ -269,6 +299,12 @@ export interface MapDeletionPlan {
   removedObjectIds: string[]
   removedOrbitIds: string[]
   removedRouteIds: string[]
+  detachedRouteAttachments: Array<{
+    routeId: string
+    end: 'from' | 'to'
+    pointId: string
+    systemId: string
+  }>
   clearedStationLinks: Array<{ objectId: string; stationId: string }>
   reorderedOrbits: Array<{ orbitId: string; label: string; fromOrder: number; toOrder: number }>
   /** Stable description of semantic consequences; excludes unrelated workspace edits. */

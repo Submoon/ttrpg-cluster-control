@@ -13,7 +13,7 @@
       />
     </UTooltip>
 
-    <output class="workspace-zoom-value" aria-live="polite">{{ formatPercentage(props.zoomLevel) }}%</output>
+    <output class="workspace-zoom-value" aria-live="polite">{{ formatPercentage(displayZoomLevel) }}%</output>
 
     <UTooltip text="Zoom in">
       <UButton
@@ -23,7 +23,7 @@
         size="sm"
         icon="i-lucide-plus"
         aria-label="Zoom in"
-        :disabled="props.zoomLevel >= 1600"
+        :disabled="props.zoomLevel >= maximumZoomLevel"
         @click="emit('zoom-by', 1.2)"
       />
     </UTooltip>
@@ -37,6 +37,18 @@
         icon="i-lucide-expand"
         aria-label="Fit map"
         @click="emit('fit-map')"
+      />
+    </UTooltip>
+
+    <UTooltip v-if="props.centerAvailable" text="Center selected target">
+      <UButton
+        class="workspace-control"
+        color="neutral"
+        variant="outline"
+        size="sm"
+        icon="i-lucide-focus"
+        aria-label="Center selected target"
+        @click="emit('center-map')"
       />
     </UTooltip>
 
@@ -67,17 +79,17 @@
         >
           <div class="workspace-zoom-slider-heading">
             <label for="workspace-map-zoom-level">Zoom level</label>
-            <output aria-live="polite">{{ formatPercentage(props.zoomLevel) }}%</output>
+            <output aria-live="polite">{{ formatPercentage(displayZoomLevel) }}%</output>
           </div>
           <USlider
             id="workspace-map-zoom-level"
             v-model="sliderValue"
             class="workspace-control workspace-zoom-slider"
-            :min="props.minimumZoomLevel"
-            :max="1600"
-            :step="1"
+            :min="displayMinimumZoomLevel"
+            :max="displayMaximumZoomLevel"
+            :step="percentageFactor"
             aria-label="Map zoom level"
-            :aria-valuetext="`${formatPercentage(props.zoomLevel)}%`"
+            :aria-valuetext="`${formatPercentage(displayZoomLevel)}%`"
           />
 
           <div class="workspace-zoom-pan" role="group" aria-label="Pan map">
@@ -118,7 +130,7 @@
               @click="emit('pan-by', 80, 0)"
             />
           </div>
-          <p class="workspace-zoom-range-note">Zoom ranges from {{ formatPercentage(props.minimumZoomLevel) }}% to 1600%.</p>
+          <p class="workspace-zoom-range-note">Zoom ranges from {{ formatPercentage(displayMinimumZoomLevel) }}% to {{ formatPercentage(displayMaximumZoomLevel) }}%.</p>
         </div>
       </template>
     </UPopover>
@@ -127,34 +139,47 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { CONTINUOUS_MAP_SYSTEM_SCALE } from '../utils/continuous-map-projection'
+import { MAP_ZOOM_MAX_SCALE, MAP_ZOOM_MIN_SCALE } from '../utils/map-zoom'
 
 const props = withDefaults(defineProps<{
   zoomLevel: number
   minimumZoomLevel?: number
+  systemRelative?: boolean
   compactModalOpen?: boolean
+  centerAvailable?: boolean
 }>(), {
   compactModalOpen: false,
-  minimumZoomLevel: 25,
+  minimumZoomLevel: MAP_ZOOM_MIN_SCALE * 100,
 })
 
 const emit = defineEmits<{
   'zoom-by': [factor: number]
   'zoom-to': [percentage: number]
   'fit-map': []
+  'center-map': []
   'pan-by': [dx: number, dy: number]
 }>()
 
 const navigationOpen = ref(false)
+const maximumZoomLevel = MAP_ZOOM_MAX_SCALE * 100
+// A Warden system at 100% maps local system units to viewport units at 1:1.
+const percentageFactor = computed(() => props.systemRelative ? CONTINUOUS_MAP_SYSTEM_SCALE : 1)
+const displayZoomLevel = computed(() => props.zoomLevel * percentageFactor.value)
+const displayMinimumZoomLevel = computed(() => props.minimumZoomLevel * percentageFactor.value)
+const displayMaximumZoomLevel = computed(() => maximumZoomLevel * percentageFactor.value)
+
 function formatPercentage(value: number): string {
-  return value >= 1 ? String(Math.round(value)) : Number(value.toPrecision(3)).toString()
+  if (value < 1) return Number(value.toPrecision(3)).toString()
+  return String(props.systemRelative ? Number(value.toFixed(1)) : Math.round(value))
 }
 watch(() => props.compactModalOpen, open => {
   if (open) navigationOpen.value = false
 })
 const sliderValue = computed({
-  get: () => props.zoomLevel,
+  get: () => displayZoomLevel.value,
   set: (value: number | undefined) => {
-    if (typeof value === 'number' && Number.isFinite(value)) emit('zoom-to', value)
+    if (typeof value === 'number' && Number.isFinite(value)) emit('zoom-to', value / percentageFactor.value)
   },
 })
 </script>
