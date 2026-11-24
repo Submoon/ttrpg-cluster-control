@@ -575,7 +575,7 @@ function observePublicLayout(): void {
   refreshObservedLayoutObstructions(root)
   layoutMutationObserver = new MutationObserver((records) => {
     // The map owns its SVG paint. Panel and wrapper changes still invalidate the usable area.
-    const map = root.querySelector('svg.player-continuous-map-scene')
+    const map = root.querySelector<SVGSVGElement>('svg.player-continuous-map-scene')
     if (!records.some(record => affectsPublicLayout(record, root, map))) return
     refreshObservedLayoutObstructions(root)
     publicLayoutChanged()

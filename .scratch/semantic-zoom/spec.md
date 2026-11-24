@@ -191,7 +191,7 @@ Count stars among the objects. Include dense and sparse neighbors, overlapping e
 
 - Aim for **60 frames per second** during sustained pan and zoom on a typical laptop and a mid-range smartphone in both scenes. Movement remains regular, with **no visible freeze longer than 100 ms** during a gesture. Visible click or tap selection feedback arrives in **under 100 ms**, and semantic detail settles in **under 200 ms** after zoom input ends. The camera responds during the gesture.
 - Use mouse/wheel and trackpad on the laptop, and one-finger pan and two-finger pinch on a physical phone. Record device, browser version, viewport, refresh rate, and the visible object, Orbit and label counts for each tested camera segment. Measure after scene admission and initial render. Cover first reveal, repeated threshold crossings, neighboring systems, and sustained movement. Record frame intervals, observed pacing, longest pauses, selection latency and settling time. Record initial load separately if measured.
-- The [prototype evidence](prototype-evaluation.md) supports the interaction choice. The measured demanding zoom samples were below the target and compact emulation was run on the laptop. Final renderer measurements and physical smartphone results remain pending.
+- The [prototype evidence](prototype-evaluation.md) supports the interaction choice. For ticket 21's closeout on 2026-11-24, the user waived physical-mobile acceptance and chose web-only qualification. [Ticket 21](tickets/21-qualify-semantic-zoom-performance.md) records the desktop browser results and remaining misses; no physical-phone or trackpad result is claimed. This waiver does not change the performance targets above.
 
 ## Out of Scope
 
