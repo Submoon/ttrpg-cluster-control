@@ -242,7 +242,10 @@
                   :aria-label="`Select ${object.locationKey}, ${object.name}`"
                   :aria-pressed="isSelectedObject(projection.id, object.id)"
                 >
-                  <circle class="continuous-warden-object-hit-target" :r="18 * detailPaintScale(projection)" />
+                  <circle
+                    class="continuous-warden-object-hit-target"
+                    :r="objectHitRadius(projection) * detailPaintScale(projection)"
+                  />
                   <circle
                     v-if="localObject(projection.id, object.id)?.markerColor !== undefined"
                     class="continuous-warden-object-marker-outline"
@@ -296,7 +299,7 @@
                   :identity="`object-${projection.id}-${object.id}`"
                   :mode="localObject(projection.id, object.id)?.publication"
                   :parent-publication="sceneSystems.get(projection.id)?.publication"
-                  :transform="`${objectTransform(projection, object)} ${publicationBadgeTransform(projection)}`"
+                  :transform="`${objectTransform(projection, object)} ${publicationBadgeTransform}`"
                   :opacity="dimmedObjectIds.has(object.id) ? .14 : undefined"
                 />
               </g>
@@ -1482,11 +1485,15 @@ function detailObjectPaintStyle(projection: ContinuousWardenSystemProjection) {
   }
 }
 
-/** Place the badge outside the marker while keeping its glyph the same size on screen. */
-function publicationBadgeTransform(projection: ContinuousWardenSystemProjection): string {
-  const scale = detailPaintScale(projection)
+/** Keep both the badge's size and its offset from the object fixed in screen pixels. */
+const publicationBadgeTransform = computed(() => {
   const screenUnit = 1 / svgPixelScale.value
-  return `translate(${18 * scale + 8 * screenUnit} ${-13 * scale}) scale(${screenUnit})`
+  return `translate(${24 * screenUnit} ${-13 * screenUnit}) scale(${screenUnit})`
+})
+
+/** Cap Add's hit area around the visible glyph, independently of the selection hit area. */
+function objectHitRadius(projection: ContinuousWardenSystemProjection): number {
+  return props.creationType?.kind === 'object' ? Math.min(18, 22 / systemScreenScale(projection)) : 18
 }
 
 function orbitPaintTransform(
@@ -2529,12 +2536,14 @@ function addOwnersAtPoint(
     if (!projection || !system) return []
     const delta = anchorDelta(projection)
     const localPoint = projection.unprojectLocalPoint({ x: point.x - delta.x, y: point.y - delta.y })
+    const detailTargetsVisible = detailSystemIds.value.has(systemId)
     const candidates = creationCandidatesAtPoint(
       system,
       localPoint,
       { kind: 'object', subtype },
       geometry,
-      detailSystemIds.value.has(systemId),
+      detailTargetsVisible,
+      detailTargetsVisible ? objectHitRadius(projection) : undefined,
     )
       .map(candidate => candidate.target.kind === 'orbit'
         && props.isEntityCommandBlocked?.({ kind: 'object-create', orbitId: candidate.target.orbitId })
