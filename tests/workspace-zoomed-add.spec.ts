@@ -47,7 +47,7 @@ test('zoom keeps the visibility badge close and Add accepts clear space beside a
   const y = hit.y + hit.height / 2
   await expect.poll(() => star.evaluate((mark, point) => mark.contains(document.elementFromPoint(point.x, point.y)), { x, y })).toBe(true)
   await page.mouse.click(x, y)
-  await expect(page.getByText('This object mark is occupied. Choose an Orbit or clear map position.', { exact: true })).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Vesper owns this placement.' })).toBeVisible()
   await expect(map.locator('.continuous-warden-object')).toHaveCount(1)
 
   const updatedHit = await hitArea.boundingBox()
