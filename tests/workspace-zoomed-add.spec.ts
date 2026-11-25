@@ -2,6 +2,7 @@ import { expect, test } from './fixtures'
 import {
   centerWorkspaceSelection,
   createSingleSystemWorkspace,
+  hideWorkspaceInspector,
   selectCatalogueObjectButton,
   waitForWorkspaceSaved,
   wardenMap,
@@ -55,4 +56,35 @@ test('zoom keeps the visibility badge close and Add accepts clear space beside a
   await page.mouse.click(updatedHit.x + updatedHit.width / 2 + 34, updatedHit.y + updatedHit.height / 2)
   await expect(map.locator('.continuous-warden-object')).toHaveCount(2)
   await waitForWorkspaceSaved(page)
+})
+
+test('the Warden selection rings stay proportional to the star glyph at high zoom', async ({ page }) => {
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+    viewport: { width: 1440, height: 900 },
+  })
+  const star = wardenObjectMark(page, systemId, primaryObjectId)
+  await star.press('Enter')
+  await expect(star).toHaveAttribute('aria-pressed', 'true')
+  await hideWorkspaceInspector(page)
+  await centerWorkspaceSelection(page)
+
+  const rings = ['.system-object-selection-outline', '.system-object-selection-dashes', '.continuous-warden-object-marker-outline']
+  const hitArea = star.locator('.continuous-warden-object-hit-target')
+  await expect(hitArea).toBeInViewport()
+
+  const measureRatios = () => star.evaluate((mark, selectors) => {
+    const glyphHeight = mark.querySelector('.continuous-warden-object-glyph')!.getBoundingClientRect().height
+    return selectors.map(selector => mark.querySelector(selector)!.getBoundingClientRect().width / glyphHeight)
+  }, rings)
+  const initialRatios = await measureRatios()
+  const initialHit = await hitArea.boundingBox()
+  if (!initialHit) throw new Error('The star must be painted before zooming.')
+  await page.mouse.move(initialHit.x + initialHit.width / 2, initialHit.y + initialHit.height / 2)
+  await page.mouse.wheel(0, -1800)
+  await expect.poll(async () => (await hitArea.boundingBox())?.width ?? 0).toBeGreaterThan(Math.max(55, initialHit.width + 10))
+  await expect(star.locator('.continuous-warden-object-glyph')).toBeInViewport()
+  const zoomedRatios = await measureRatios()
+  for (const [index, initial] of initialRatios.entries()) {
+    expect(Math.abs(zoomedRatios[index]! - initial)).toBeLessThan(.08)
+  }
 })
