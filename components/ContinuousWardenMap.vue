@@ -22,7 +22,7 @@
     >
       <title>{{ sceneCluster.name }} continuous Warden map</title>
       <desc id="continuous-warden-map-keyboard-help">
-        Zoom continuously to reveal each system interior independently. In Move, drag an object to move it within its owning system or drop it inside another system’s frame to transfer it. Drag a system anchor or name to update its Cluster position. Use any system frame’s resize corner buttons, or focus a corner and use the arrow keys, to resize its frame.
+        Zoom continuously to reveal each system interior independently. In Move, drag an object to move it within its owning system or drop it inside another system’s frame to transfer it. Select a system, then drag its name to move it. Select a system or Orbit to reveal its editing handles.
       </desc>
       <defs>
         <radialGradient :id="`${haloGradientId}-fill`" cx="50%" cy="50%" r="55%">
@@ -107,23 +107,11 @@
             />
 
             <g
-              class="cluster-system-node continuous-warden-system-anchor"
-              :class="{
-                'is-selected': selectedSystemId === projection.id,
-                'is-move-preview': previewPositions.has(projection.id),
-                'is-covered-by-central-star': centralStarOverlapsAnchor(projection),
-              }"
+              class="continuous-warden-system-anchor"
               :data-system-id="projection.id"
               :transform="anchorTransform(projection)"
-              :style="{ '--anchor-detail-progress': detailMotion.progressFor(projection.id) }"
-              role="button"
-              tabindex="0"
-              :aria-label="`Select ${projection.name}`"
-            >
-              <circle class="continuous-warden-anchor-hit-target" r="16" />
-              <circle class="continuous-warden-anchor-mark" r="7" />
-              <circle class="continuous-warden-anchor-core" r="2" />
-            </g>
+              aria-hidden="true"
+            />
             </g>
 
             <g
@@ -156,7 +144,7 @@
                 />
                 <template v-for="orbit in projection.orbits" :key="`${orbit.id}-edit-controls`">
                   <circle
-                    v-if="props.mode === 'move' && isSelectedOrbit(projection.id, orbit.id)"
+                    v-if="canEditOrbit(projection.id, orbit.id) && isSelectedOrbit(projection.id, orbit.id)"
                     class="continuous-warden-orbit-edit-handle continuous-warden-orbit-axis-handle"
                     :data-system-id="projection.id"
                     :data-orbit-id="orbit.id"
@@ -171,7 +159,7 @@
                     :r="orbitEditHandleRadius(projection) * detailPaintScale(projection)"
                   />
                   <circle
-                    v-if="props.mode === 'move' && isSelectedOrbit(projection.id, orbit.id)"
+                    v-if="canEditOrbit(projection.id, orbit.id) && isSelectedOrbit(projection.id, orbit.id)"
                     class="continuous-warden-orbit-edit-handle continuous-warden-orbit-axis-handle"
                     :data-system-id="projection.id"
                     :data-orbit-id="orbit.id"
@@ -187,7 +175,7 @@
                     :r="orbitEditHandleRadius(projection) * detailPaintScale(projection)"
                   />
                   <circle
-                    v-if="props.mode === 'move' && isSelectedOrbit(projection.id, orbit.id)"
+                    v-if="canEditOrbit(projection.id, orbit.id) && isSelectedOrbit(projection.id, orbit.id)"
                     class="continuous-warden-orbit-edit-handle continuous-warden-orbit-rotation-handle"
                     :data-system-id="projection.id"
                     :data-orbit-id="orbit.id"
@@ -204,7 +192,7 @@
                     :r="orbitEditHandleRadius(projection) * detailPaintScale(projection)"
                   />
                   <circle
-                    v-if="props.mode === 'move' && localOrbit(projection.id, orbit.id)?.hostId === null"
+                    v-if="canEditOrbit(projection.id, orbit.id) && localOrbit(projection.id, orbit.id)?.hostId === null"
                     class="continuous-warden-orbit-edit-handle continuous-warden-orbit-center-handle"
                     :data-system-id="projection.id"
                     :data-orbit-id="orbit.id"
@@ -419,7 +407,7 @@
             />
             <g
               class="cluster-system-node continuous-warden-name-target"
-              :class="{ 'is-selected': selectedSystemId === label.id, 'is-move-preview': previewPositions.has(label.id) }"
+              :class="{ 'is-selected': selectedSystemId === label.id, 'is-draggable': isSelectedSystem(label.id), 'is-move-preview': previewPositions.has(label.id) }"
               :data-system-id="label.id"
               :transform="`translate(${label.x} ${label.y})`"
               role="button"
@@ -518,7 +506,6 @@ import {
   projectWardenSystem,
   unprojectWardenClusterAnchor,
   wardenStarHaloRadius,
-  wardenStarOverlapsAnchor,
   type ContinuousWardenSystemProjection,
 } from '../utils/continuous-map-projection'
 import { systemFrameInsetsFromRect } from '../utils/continuous-map-projection'
@@ -941,9 +928,10 @@ function baselineDisplayedFrameInputs(): ContinuousSystemFrameInput[] {
   return inputs.map(frame => ({ ...frame, envelope: displayed.get(frame.id) ?? frame.envelope }))
 }
 const systemFrameResizeHandles = computed(() => {
-  if (props.mode !== 'move' || props.presentation) return []
+  if (props.presentation) return []
   const size = SYSTEM_RESIZE_HANDLE_PIXELS / svgPixelScale.value
   return presentationProjections.value.flatMap(projection => {
+    if (!canResizeSystemFrame(projection.id)) return []
     const frame = displayFrames.value.get(projection.id)
     if (!hasPositiveFrame(frame)) return []
     const left = viewport.value.x + viewport.value.k * frame.x
@@ -1279,7 +1267,7 @@ function startSystemFrameResize(
   element: SVGSVGElement,
   target: NonNullable<ReturnType<typeof systemFrameResizeTarget>>,
 ): void {
-  if (props.mode !== 'move' || props.presentation || props.creationType || props.clusterAddType || props.clusterChooserOpen
+  if (event.button !== 0 || !event.isPrimary || !canResizeSystemFrame(target.systemId) || props.presentation || props.creationType || props.clusterAddType || props.clusterChooserOpen
     || props.moveTargeting || props.clusterMoveTargeting || props.standaloneImportPlacementEnabled
     || props.systemObjectTransferPreview || props.keyboardOwnedOverlayOpen) return
   const projection = presentationProjections.value.find(candidate => candidate.id === target.systemId)
@@ -1394,7 +1382,7 @@ function resizeFrameWithKeyboard(
   event: KeyboardEvent,
 ): boolean {
   if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)
-    || props.mode !== 'move' || props.presentation || props.creationType || props.clusterAddType
+    || !canResizeSystemFrame(target.systemId) || props.presentation || props.creationType || props.clusterAddType
     || props.clusterChooserOpen || props.moveTargeting || props.clusterMoveTargeting
     || props.standaloneImportPlacementEnabled || props.systemObjectTransferPreview
     || props.keyboardOwnedOverlayOpen) return false
@@ -1438,12 +1426,13 @@ function resizeFrameWithKeyboard(
   return true
 }
 
-function systemIdsAtDisplayPoint(point: Point): string[] {
+function systemIdsAtDisplayPoint(point: Point, rounded = false): string[] {
   return presentationProjections.value.filter(projection => {
     const frame = displayFrameFor(projection.id)
-    return hasPositiveFrame(frame)
-      && point.x >= frame.x && point.x <= frame.x + frame.width
-      && point.y >= frame.y && point.y <= frame.y + frame.height
+    return hasPositiveFrame(frame) && (rounded
+      ? continuousMapRoundedFrameContains(point, frame)
+      : point.x >= frame.x && point.x <= frame.x + frame.width
+        && point.y >= frame.y && point.y <= frame.y + frame.height)
   }).map(projection => projection.id)
 }
 
@@ -1556,7 +1545,7 @@ function positionNameLabel(label: ContinuousMapNameLabel, progress: number): Con
       progress,
       svgViewport.value,
       12,
-      props.mode === 'move' && !props.presentation ? SYSTEM_RESIZE_HANDLE_PIXELS : 0,
+      canResizeSystemFrame(label.id) && !props.presentation ? SYSTEM_RESIZE_HANDLE_PIXELS : 0,
     ),
     hasLeader: label.hasLeader && progress < .12,
   }
@@ -1652,13 +1641,6 @@ function starHaloRadius(projection: ContinuousWardenSystemProjection): number {
   return wardenStarHaloRadius(systemScreenScale(projection))
 }
 
-function centralStarOverlapsAnchor(projection: ContinuousWardenSystemProjection): boolean {
-  if (!mountedDetailSystemIds.value.has(projection.id)) return false
-  const pixelsPerSceneUnit = viewport.value.k * svgPixelScale.value
-  return projection.objects.some(object => objectSubtype(projection.id, object.id) === 'star'
-    && wardenStarOverlapsAnchor(projection, object.scenePosition, pixelsPerSceneUnit))
-}
-
 function orbitEditHandleRadius(projection: ContinuousWardenSystemProjection): number {
   const screenScale = systemScreenScale(projection)
   return screenScale > 0 ? 7 / screenScale : 7
@@ -1677,6 +1659,18 @@ function isSelectedObject(systemId: string, objectId: string): boolean {
 
 function isSelectedOrbit(systemId: string, orbitId: string): boolean {
   return selectedOrbitIdForSystem(systemId) === orbitId
+}
+
+function isSelectedSystem(systemId: string): boolean {
+  return props.inspectedTarget?.kind === 'system' && props.inspectedTarget.systemId === systemId
+}
+
+function canResizeSystemFrame(systemId: string): boolean {
+  return props.mode === 'move' || (props.mode === 'select' && isSelectedSystem(systemId))
+}
+
+function canEditOrbit(systemId: string, orbitId: string): boolean {
+  return props.mode === 'move' || (props.mode === 'select' && isSelectedOrbit(systemId, orbitId))
 }
 
 function selectedOrbitIdForSystem(systemId: string): string | null {
@@ -2385,6 +2379,8 @@ function orbitEditCommand(target: OrbitEditTarget): EntityCommand {
 
 function moveTargetAtPoint(event: PointerEvent, element: SVGSVGElement | null): WardenMoveHit {
   if (!element) return { target: null, blockedCommand: null }
+  const systemId = systemIdAtTarget(event.target)
+  if (systemId) return { target: isSelectedSystem(systemId) ? { kind: 'anchor', systemId } : null, blockedCommand: null }
   const hits = element.ownerDocument.elementsFromPoint(event.clientX, event.clientY)
     .filter(hit => hit === element || element.contains(hit))
   const orderedHits = hits.length ? hits : [event.target]
@@ -2398,8 +2394,6 @@ function moveTargetAtPoint(event: PointerEvent, element: SVGSVGElement | null): 
   }
   let blockedCommand: EntityCommand | null = null
   for (const hit of orderedHits) {
-    const systemId = systemIdAtTarget(hit)
-    if (systemId) return { target: { kind: 'anchor', systemId }, blockedCommand }
     const editTarget = orbitEditTargetAtTarget(hit)
     if (editTarget) {
       const command = orbitEditCommand(editTarget)
@@ -2578,12 +2572,12 @@ function emitOrbitAdjustment(event: KeyboardEvent | WheelEvent, input: OrbitAdju
 }
 
 function onOrbitAdjustmentKeydown(event: KeyboardEvent): boolean {
-  if (event.defaultPrevented || props.standaloneImportPlacementEnabled || props.mode !== 'move'
+  if (event.defaultPrevented || props.standaloneImportPlacementEnabled
     || props.creationType != null || props.clusterAddType != null || props.clusterChooserOpen
     || props.moveTargeting || props.clusterMoveTargeting
     || !['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return false
   const target = orbitTargetAtTarget(event.target)
-  if (!target) return false
+  if (!target || !canEditOrbit(target.systemId, target.orbitId)) return false
   const editTarget = orbitEditTargetAtTarget(event.target)
   if (!editTarget || editTarget.kind === 'center') return false
   const system = props.cluster.systems.find(candidate => candidate.id === target.systemId)
@@ -2747,7 +2741,7 @@ function orbitGestureLocalPoint(gesture: OrbitGestureBase, event: PointerEvent):
 }
 
 function orbitGestureSourceIsCurrent(gesture: OrbitGestureBase): boolean {
-  if (props.mode !== 'move' || toRaw(props.workspace) !== gesture.workspaceSnapshot
+  if (!canEditOrbit(gesture.systemId, gesture.orbitId) || toRaw(props.workspace) !== gesture.workspaceSnapshot
     || props.workspace.id !== gesture.workspaceSnapshot.id
     || props.cluster.id !== gesture.workspaceSnapshot.cluster.id) return false
   const system = props.cluster.systems.find(candidate => candidate.id === gesture.systemId)
@@ -2907,10 +2901,10 @@ function startOrbitGesture(
   element: SVGSVGElement | null,
   explicitTarget?: OrbitEditTarget,
 ): boolean {
-  if (!element || event.button !== 0 || props.mode !== 'move' || props.moveTargeting
+  if (!element || event.button !== 0 || props.moveTargeting
     || props.clusterMoveTargeting || props.clusterAddType != null || props.creationType != null) return false
   const target = explicitTarget ?? orbitEditTargetAtTarget(event.target)
-  if (!target) return false
+  if (!target || !canEditOrbit(target.systemId, target.orbitId)) return false
   const sourceSystem = props.workspace.cluster.systems.find(system => system.id === target.systemId)
   const orbit = sourceSystem?.orbits.find(candidate => candidate.id === target.orbitId)
   const projection = projections.value.find(candidate => candidate.id === target.systemId)
@@ -3444,17 +3438,23 @@ function onPointerDownCapture(event: PointerEvent): void {
     if (activeSystemFrameResize?.pointerId === event.pointerId) return
   }
   if (props.mode === 'select') {
+    if (!event.isPrimary || event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey
+      || !element || props.presentation || props.standaloneImportPlacementEnabled || props.moveTargeting
+      || props.clusterMoveTargeting || props.clusterAddType || props.creationType || props.clusterChooserOpen
+      || props.keyboardOwnedOverlayOpen) return
+    const systemId = systemIdAtTarget(event.target)
+    if (systemId && isSelectedSystem(systemId)) {
+      startSystemNameDrag(event, element, systemId)
+      return
+    }
+    const orbitHandle = orbitEditTargetAtTarget(event.target)
+    if (orbitHandle && startOrbitGesture(event, element, orbitHandle)) return
     const objectTarget = objectTargetAtTarget(event.target)
     const canSelectDrag = canStartSelectedObjectDrag(
       event,
       objectTarget?.objectId ?? null,
       props.selectedObjectIds,
-      !props.standaloneImportPlacementEnabled
-        && !props.moveTargeting
-        && !props.clusterMoveTargeting
-        && props.clusterAddType == null
-        && props.creationType == null
-        && !props.clusterChooserOpen,
+      true,
     )
     if (!canSelectDrag || !objectTarget || !canMoveObjectInSystem(objectTarget) || !element) return
     const target = { kind: 'object', ...objectTarget } as const
@@ -3494,15 +3494,18 @@ function onPointerDownCapture(event: PointerEvent): void {
     return
   }
   const systemId = moveTarget?.kind === 'anchor' ? moveTarget.systemId : null
-  const projection = projections.value.find(candidate => candidate.id === systemId)
-  const origin = props.systemPositions[systemId ?? '']
+  if (systemId && element) startSystemNameDrag(event, element, systemId)
+}
+
+function startSystemNameDrag(event: PointerEvent, element: SVGSVGElement, systemId: string): void {
+  const origin = props.systemPositions[systemId]
   const scene = cameraPoint(event)
-  if (!projection || !origin || !scene || !element) return
+  if (!origin || !scene) return
   event.preventDefault()
   event.stopPropagation()
   event.stopImmediatePropagation()
   activeAnchorDrag = {
-    systemId: projection.id,
+    systemId,
     pointerId: event.pointerId,
     startClient: { x: event.clientX, y: event.clientY },
     startScene: scene,
@@ -3738,7 +3741,7 @@ function onClickCapture(event: MouseEvent): void {
     event.stopImmediatePropagation()
     const normalized = clampWardenClusterAnchor(unprojectWardenClusterAnchor(point))
     const directSystemId = systemIdAtTarget(event.target)
-    const systemIds = directSystemId ? [directSystemId] : systemIdsAtDisplayPoint(point)
+    const systemIds = directSystemId ? [directSystemId] : systemIdsAtDisplayPoint(point, props.clusterAddType === 'system')
     emit('cluster-target', normalized, systemIds)
     return
   }
@@ -3858,7 +3861,7 @@ function onKeydownCapture(event: KeyboardEvent): void {
       return
     }
     const normalized = clampWardenClusterAnchor(unprojectWardenClusterAnchor(scenePoint))
-    const systemIds = systemId ? [systemId] : systemIdsAtDisplayPoint(scenePoint)
+    const systemIds = systemId ? [systemId] : systemIdsAtDisplayPoint(scenePoint, props.clusterAddType === 'system')
     emit('cluster-target', normalized, systemIds)
     return
   }
@@ -4159,19 +4162,17 @@ function clearViewportFeedbackTimer(): void {
 }
 
 function startTouchNavigation(event: TouchEvent): void {
-  if (event.touches.length <= 1 && (activeExitDrag || activeOrbitGesture || activeSystemFrameResize || activeObjectDrag || activeSelectedObjectDrag)) {
+  if (event.touches.length <= 1 && (activeExitDrag || activeOrbitGesture || activeSystemFrameResize
+    || activeAnchorDrag || activeObjectDrag || activeSelectedObjectDrag)) {
     touchCameraNavigation.clearDoubleTap()
     return
   }
   if (activeExitDrag) finishExitDrag(true)
   if (activeOrbitGesture) finishOrbitGesture(true)
   if (activeSystemFrameResize) finishSystemFrameResize(true)
+  if (activeAnchorDrag) finishAnchorDrag(true)
   if (activeObjectDrag) finishObjectDrag(true)
   if (activeSelectedObjectDrag) finishSelectedObjectDrag(true)
-  if (activeAnchorDrag) {
-    touchCameraNavigation.clearDoubleTap()
-    return
-  }
   touchCameraNavigation.start(event)
 }
 
@@ -4303,6 +4304,13 @@ watch(() => props.cluster.systems.map(system => system.id).join('\u0000'), ids =
   if (activeAnchorDrag && !ids.split('\u0000').includes(activeAnchorDrag.systemId)) cancelActiveGesture()
 })
 watch(presentationProjections, () => updateDetailReveal(viewport.value.k))
+watch(() => props.inspectedTarget, () => {
+  if ((activeAnchorDrag && !isSelectedSystem(activeAnchorDrag.systemId))
+    || (activeSystemFrameResize && !canResizeSystemFrame(activeSystemFrameResize.systemId))
+    || (activeOrbitGesture && !canEditOrbit(activeOrbitGesture.systemId, activeOrbitGesture.orbitId))) {
+    cancelActiveGesture()
+  }
+}, { flush: 'sync' })
 watch(() => props.selectedObjectIds.join('\u0000'), (ids, previousIds) => {
   if (ids === previousIds) return
   selectObjectDragGeneration += 1
@@ -4756,35 +4764,14 @@ defineExpose({
 }
 .continuous-warden-object-text { pointer-events: none; }
 
-.continuous-warden-anchor-hit-target {
-  fill: transparent;
-  pointer-events: all;
-}
-
-.continuous-warden-anchor-mark {
-  fill: var(--map-bg);
-  stroke: var(--map-selected);
-  stroke-width: 2;
-  vector-effect: non-scaling-stroke;
-}
-
-.continuous-warden-anchor-core {
-  fill: var(--map-selected);
-  pointer-events: none;
-}
-
-.continuous-warden-system-anchor.is-covered-by-central-star:not(:hover):not(:focus):not(.is-selected):not(.is-move-preview) .continuous-warden-anchor-mark,
-.continuous-warden-system-anchor.is-covered-by-central-star:not(:hover):not(:focus):not(.is-selected):not(.is-move-preview) .continuous-warden-anchor-core {
-  fill-opacity: calc(1 - var(--anchor-detail-progress));
-  stroke-opacity: calc(1 - var(--anchor-detail-progress));
-}
-
-.continuous-warden-system-anchor,
 .continuous-warden-name-target {
   cursor: pointer;
 }
 
-.continuous-warden-system-anchor.is-move-preview .continuous-warden-anchor-mark,
+.continuous-warden-name-target.is-draggable {
+  cursor: grab;
+}
+
 .continuous-warden-name-target.is-move-preview .continuous-warden-name-background {
   stroke: var(--focus);
   stroke-width: 2;
@@ -4817,10 +4804,7 @@ defineExpose({
 
 .continuous-warden-name-target:hover .continuous-warden-name-background,
 .continuous-warden-name-target:focus .continuous-warden-name-background,
-.continuous-warden-name-target.is-selected .continuous-warden-name-background,
-.continuous-warden-system-anchor:hover .continuous-warden-anchor-mark,
-.continuous-warden-system-anchor:focus .continuous-warden-anchor-mark,
-.continuous-warden-system-anchor.is-selected .continuous-warden-anchor-mark {
+.continuous-warden-name-target.is-selected .continuous-warden-name-background {
   stroke: var(--map-selected);
   stroke-width: 2;
 }

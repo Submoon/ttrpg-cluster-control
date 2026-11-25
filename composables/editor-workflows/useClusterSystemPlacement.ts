@@ -9,6 +9,7 @@ import { useEditorUiStore } from '../../stores/editor-ui'
 
 interface ClusterSystemPlacementOptions {
   workspace: Readonly<Ref<LocalWorkspace | null>>
+  continuousMap?: Readonly<Ref<boolean>>
   clusterMapRef: Readonly<Ref<MapNavigationHandle | null>>
   mutations: EditorWorkflowOptions['mutations']
   beforeWorkspaceOperation: () => Promise<boolean>
@@ -33,7 +34,7 @@ function normalizedPointForScenePosition(point: Point): Point {
   }
 }
 
-export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations, beforeWorkspaceOperation }: ClusterSystemPlacementOptions) {
+export function useClusterSystemPlacement({ workspace, continuousMap, clusterMapRef, mutations, beforeWorkspaceOperation }: ClusterSystemPlacementOptions) {
   const store = useEditorUiStore()
   const clusterAddType = ref<ClusterAddType | null>(null)
   const formError = ref('')
@@ -139,9 +140,13 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations,
       return false
     }
 
-    const targetScenePosition = scenePositionForNormalizedPoint(point)
-    const liveSystemIds = new Set(currentWorkspace.cluster.systems.map(system => system.id))
-    if (systemIds.some(id => liveSystemIds.has(id)) || pointOverlapsSystem(targetScenePosition, currentWorkspace)) {
+    const usesContinuousMap = continuousMap?.value === true
+    const blocksPlacement = (workspace: LocalWorkspace): boolean => workspace.cluster.systems
+      .some(system => {
+        const anchor = workspace.layout.systemPositions[system.id]
+        return systemIds.includes(system.id) || (usesContinuousMap && anchor?.x === point.x && anchor.y === point.y)
+      }) || (!usesContinuousMap && pointOverlapsSystem(scenePositionForNormalizedPoint(point), workspace))
+    if (blocksPlacement(currentWorkspace)) {
       formError.value = 'Choose an open point clear of existing systems.'
       return false
     }
@@ -161,7 +166,7 @@ export function useClusterSystemPlacement({ workspace, clusterMapRef, mutations,
           && clusterAddType.value === 'system',
         prepare: (latest) => {
           if (latest.cluster.id !== clusterId) throw new Error('The Jump Cluster changed before this system could be added.')
-          if (pointOverlapsSystem(scenePositionForNormalizedPoint(point), latest)) {
+          if (blocksPlacement(latest)) {
             throw new Error('Choose an open point clear of existing systems.')
           }
           const created = addStarSystem(latest)

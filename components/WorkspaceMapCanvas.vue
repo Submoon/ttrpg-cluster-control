@@ -760,7 +760,7 @@ function forwardMoveObjectInSystem(
 }
 
 function forwardResizeSystemFrame(systemId: string, insets: SystemFrameInsets, workspaceSnapshot: LocalWorkspace): void {
-  if (props.mode !== 'move') return
+  if (props.mode !== 'move' && !(props.mode === 'select' && isInspectedSystem(systemId))) return
   holdClickSuppression()
   emit('resize-system-frame', systemId, insets, workspaceSnapshot)
 }
@@ -832,6 +832,31 @@ function isSelectedContinuousObjectDrag(event: PointerEvent): boolean {
     props.selectedObjectIds,
     props.activeView === 'cluster' && props.continuousMap === true,
   )
+}
+
+function isInspectedSystem(systemId: string): boolean {
+  return props.continuousMap === true && props.activeView === 'cluster'
+    && props.inspectedTarget?.kind === 'system' && props.inspectedTarget.systemId === systemId
+}
+
+function canEditMapOrbit(systemId: string | undefined, orbitId: string): boolean {
+  return props.mode === 'move'
+    || (props.mode === 'select' && props.continuousMap === true && props.activeView === 'cluster'
+      && props.inspectedTarget?.kind === 'orbit' && props.inspectedTarget.systemId === systemId
+      && props.inspectedTarget.orbitId === orbitId)
+}
+
+function isSelectedContinuousEditPress(event: PointerEvent): boolean {
+  if (props.mode !== 'select' || !props.continuousMap || props.activeView !== 'cluster'
+    || event.button !== 0 || !event.isPrimary || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey
+    || hasMapAddIntent() || props.moveTargeting || props.clusterMoveTargeting || props.clusterChooserOpen
+    || props.keyboardOwnedOverlayOpen || !(event.target instanceof Element)) return false
+  const systemControl = event.target.closest('.continuous-warden-name-target, [data-system-resize-handle]')
+  const systemId = systemControl?.getAttribute('data-system-id')
+  if (systemId && isInspectedSystem(systemId)) return true
+  const orbitHandle = event.target.closest('.continuous-warden-orbit-edit-handle')
+  const orbitId = orbitHandle?.getAttribute('data-orbit-id')
+  return !!orbitId && canEditMapOrbit(orbitHandle?.getAttribute('data-system-id') ?? undefined, orbitId)
 }
 
 function inspectLongPress(target: EventTarget | null): void {
@@ -921,7 +946,7 @@ function onPointerDownCapture(event: PointerEvent): void {
   const isBackgroundPan = props.mode === 'move' && !hasContinuousObjectAddIntent() && !props.moveTargeting
     && event.button === 0 && !isMapEntityTarget(event.target)
   const isNavigationPan = props.mode !== 'move' && !hasContinuousObjectAddIntent() && event.button === 0
-    && !isSelectedContinuousObjectDrag(event)
+    && !isSelectedContinuousObjectDrag(event) && !isSelectedContinuousEditPress(event)
   if (!isRightPan && !isBackgroundPan && !isNavigationPan) return
 
   if (isRightPan && props.moveTargeting) emit('cancel-map-move')
@@ -1556,7 +1581,7 @@ function publicationTargetAt(target: EventTarget | null): { target: EntityContex
     const systemId = systemMark?.getAttribute('data-system-id') ?? resizeHandle?.getAttribute('data-system-id')
     if (!systemId) return null
     const focusMark = systemMark ?? [...(canvasRoot.value?.querySelectorAll<SVGElement>(
-      '.continuous-warden-name-target[data-system-id], .continuous-warden-system-anchor[data-system-id]',
+      '.continuous-warden-name-target[data-system-id]',
     ) ?? [])].find(mark => mark.getAttribute('data-system-id') === systemId) ?? null
     return focusMark ? { target: { kind: 'system', id: systemId, systemId }, mark: focusMark } : null
   }
@@ -1797,13 +1822,15 @@ function forwardOrbitAdjustment(input: OrbitAdjustmentInput): void {
   const system = props.system
   const activeOwnerMatches = props.activeView === 'system' && system?.id === input.systemId
     || continuousOwnerMatches
-  if (props.mode !== 'move' || !activeOwnerMatches
+  if (!canEditMapOrbit(input.systemId, input.orbitId) || !activeOwnerMatches
     || props.creationType != null || props.creationChooserOpen || props.clusterAddType != null || props.clusterChooserOpen
     || props.moveTargeting || props.clusterMoveTargeting) return
   emit('orbit-adjustment', { ...input, workspaceId: props.workspace.id })
 }
 
-function forwardMoveSystem(id: string, position: Point): void { if (props.mode === 'move') emit('move-system', id, position) }
+function forwardMoveSystem(id: string, position: Point): void {
+  if (props.mode === 'move' || (props.mode === 'select' && isInspectedSystem(id))) emit('move-system', id, position)
+}
 function forwardClusterTarget(point: Point, systemIds: string[]): void {
   if (props.activeView !== 'cluster'
     || (!hasClusterAddIntent() && !props.clusterMoveTargeting)
@@ -1830,19 +1857,19 @@ function forwardObjectMoveCandidates(id: string, candidates: SystemObjectMoveCan
 function forwardOrbitCenterCandidates(id: string, candidates: OrbitCenterMoveCandidate[], systemId?: string): void {
   if (props.activeView === 'system' && props.mode === 'move') {
     emit('orbit-center-candidates', id, candidates, systemId ?? props.system?.id)
-  } else if (props.activeView === 'cluster' && props.continuousMap && props.mode === 'move' && systemId) {
+  } else if (props.activeView === 'cluster' && props.continuousMap && systemId && canEditMapOrbit(systemId, id)) {
     emit('orbit-center-candidates', id, candidates, systemId)
   }
 }
 function forwardMoveOrbitCenter(id: string, center: Point, hostId: string | null, systemId?: string, sourceGeometry?: string): void {
-  if (props.mode === 'move') emit('move-orbit-center', id, center, hostId, systemId ?? props.system?.id, sourceGeometry)
+  if (canEditMapOrbit(systemId, id)) emit('move-orbit-center', id, center, hostId, systemId ?? props.system?.id, sourceGeometry)
 }
 function forwardRotateObject(id: string, angle: number): void { if (props.mode === 'move') emit('rotate-object', id, angle) }
 function forwardResizeOrbit(id: string, radii: OrbitRadii, systemId?: string, sourceGeometry?: string): void {
-  if (props.mode === 'move') emit('resize-orbit', id, radii, systemId ?? props.system?.id, sourceGeometry)
+  if (canEditMapOrbit(systemId, id)) emit('resize-orbit', id, radii, systemId ?? props.system?.id, sourceGeometry)
 }
 function forwardRotateOrbit(id: string, rotation: number, systemId?: string, sourceGeometry?: string): void {
-  if (props.mode === 'move') emit('rotate-orbit', id, rotation, systemId ?? props.system?.id, sourceGeometry)
+  if (canEditMapOrbit(systemId, id)) emit('rotate-orbit', id, rotation, systemId ?? props.system?.id, sourceGeometry)
 }
 function forwardPlaceObject(id: string, orbitId: string, angle: number): void {
   if (props.mode === 'move') emit('place-object-in-orbit', id, orbitId, angle)

@@ -194,6 +194,12 @@ test('near-ring Warden Orbit targets remain operable at maximum zoom', async ({ 
   await expect(page.getByRole('button', { name: 'Edit Orbit', exact: true })).toBeVisible()
   await expect(ring).toBeFocused()
   await closeVisiblePanels(page)
+  const rotateHandle = map.getByRole('slider', { name: /Rotate .*Orbit 1$/ })
+  const beforeRotation = await rotateHandle.getAttribute('aria-valuenow')
+  expect(beforeRotation).not.toBeNull()
+  await rotateHandle.press('ArrowRight')
+  await expect(rotateHandle).not.toHaveAttribute('aria-valuenow', beforeRotation!)
+  await waitForWorkspaceSaved(page)
   await setWorkspaceMapMode(page, 'Move')
 
   const before = await wardenOrbitLocalGeometry(ring, systemId)

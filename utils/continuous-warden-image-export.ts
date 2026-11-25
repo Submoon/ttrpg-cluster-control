@@ -2,7 +2,6 @@ import type { JumpCluster, StarSystem } from '../domain/workspace'
 import {
   continuousMapTextScale,
   wardenStarHaloRadius,
-  wardenStarOverlapsAnchor,
   type ContinuousWardenSystemProjection,
 } from './continuous-map-projection'
 import type { MapViewport, SvgViewportRect } from './map-zoom'
@@ -171,25 +170,6 @@ function appendSystem(
     appendSystemDetail(group, projection, system, dimmedObjectIds, pixelsPerSceneUnit, scope === 'system')
   }
 
-  if (scope !== 'system') {
-    const anchor = createScopedElement(parent, 'g', 'cluster-system-node continuous-warden-system-anchor')
-    anchor.setAttribute('data-system-id', projection.id)
-    const scale = 1 / Math.max(0.0001, pixelsPerSceneUnit)
-    anchor.setAttribute('transform', `translate(${projection.anchor.x} ${projection.anchor.y}) scale(${scale})`)
-    const hitTarget = createScopedElement(parent, 'circle', 'continuous-warden-anchor-hit-target')
-    hitTarget.setAttribute('r', '16')
-    hitTarget.setAttribute('aria-hidden', 'true')
-    const mark = createScopedElement(parent, 'circle', 'continuous-warden-anchor-mark')
-    mark.setAttribute('r', '7')
-    const core = createScopedElement(parent, 'circle', 'continuous-warden-anchor-core')
-    core.setAttribute('r', '2')
-    anchor.append(hitTarget)
-    const coveredByStar = detailed && projection.objects.some(object =>
-      wardenStarOverlapsAnchor(projection, object.scenePosition, pixelsPerSceneUnit)
-      && system?.objects.some(source => source.id === object.id && source.subtype === 'star'))
-    if (!coveredByStar) anchor.append(mark, core)
-    group.append(anchor)
-  }
   parent.append(group)
 }
 

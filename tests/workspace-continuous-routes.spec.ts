@@ -56,7 +56,9 @@ async function usesIndependentlyRevealedEnds(mark: Locator): Promise<boolean> {
     if (!(element instanceof SVGPathElement)) return false
     const map = element.ownerSVGElement!
     const departure = map.querySelector<SVGGElement>('.continuous-warden-object[aria-label$="Vesper Departure"]')
-    const destination = map.querySelector('.continuous-warden-system-anchor[aria-label="Select Harrow"]')?.closest('.continuous-warden-system')
+    const destinationId = map.querySelector('.continuous-warden-name-target[aria-label="Select Harrow"]')?.getAttribute('data-system-id')
+    const destination = [...map.querySelectorAll('.continuous-warden-system')].find(system =>
+      system.getAttribute('data-system-id') === destinationId)
     const frame = destination?.querySelector<SVGRectElement>('.continuous-warden-system-envelope')
     if (!departure || !frame || destination?.querySelector('.continuous-warden-system-detail')) return false
     const start = element.getPointAtLength(0).matrixTransform(element.getScreenCTM()!)

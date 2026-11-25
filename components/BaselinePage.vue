@@ -2064,8 +2064,12 @@ async function handleClusterSystemMove(systemId: string, position: Point): Promi
   const startingWorkspace = workspace.value
   const startingSystem = startingWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
   const startingAnchor = startingWorkspace?.layout.systemPositions[systemId]
+  const startingMode = mapMode.value
+  const canMove = () => activeView.value === 'cluster' && mapMode.value === startingMode
+    && (startingMode === 'move' || (startingMode === 'select'
+      && inspectedTarget.value?.kind === 'system' && inspectedTarget.value.systemId === systemId))
   if (!startingWorkspace || !startingSystem || !startingAnchor
-    || activeView.value !== 'cluster' || mapMode.value !== 'move') {
+    || !canMove()) {
     if (clusterMapRef.value === capturedMap) {
       capturedMap?.setClusterSystemPositionPreview?.(systemId, null, previewVersion)
     }
@@ -2087,8 +2091,7 @@ async function handleClusterSystemMove(systemId: string, position: Point): Promi
       && latestSystem !== undefined
       && latestAnchor?.x === captured.originPosition.x
       && latestAnchor.y === captured.originPosition.y
-      && activeView.value === 'cluster'
-      && mapMode.value === 'move'
+      && canMove()
   }
   try {
     if (!await beforeWorkspaceOperation() || !isCurrent()) return
