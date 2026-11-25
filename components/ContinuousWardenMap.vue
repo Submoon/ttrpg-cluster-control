@@ -289,6 +289,17 @@
                   </g>
                 </g>
               </g>
+              <g aria-hidden="true" pointer-events="none">
+                <WardenObjectPublicationBadge
+                  v-for="object in projection.objects"
+                  :key="object.id"
+                  :identity="`object-${projection.id}-${object.id}`"
+                  :mode="localObject(projection.id, object.id)?.publication"
+                  :parent-publication="sceneSystems.get(projection.id)?.publication"
+                  :transform="`${objectTransform(projection, object)} ${publicationBadgeTransform(projection)}`"
+                  :opacity="dimmedObjectIds.has(object.id) ? .14 : undefined"
+                />
+              </g>
             </g>
             <g
               v-if="orbitAddPreview?.systemId === projection.id"
@@ -570,6 +581,7 @@ import type { SelectedObjectDrag, SelectedObjectDragPreview } from '../composabl
 import { useContinuousMapDetailMotion } from '../composables/useContinuousMapDetailMotion'
 import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
 import ContinuousWardenOrbitLayer from './maps/ContinuousWardenOrbitLayer.vue'
+import WardenObjectPublicationBadge from './maps/WardenObjectPublicationBadge.vue'
 
 const EMPTY_ORBIT_PAINT_MARKS = [] as const
 const SEARCH_LOCATOR_LOCAL_RADIUS = 25
@@ -1470,6 +1482,13 @@ function detailObjectPaintStyle(projection: ContinuousWardenSystemProjection) {
   }
 }
 
+/** Place the badge outside the marker while keeping its glyph the same size on screen. */
+function publicationBadgeTransform(projection: ContinuousWardenSystemProjection): string {
+  const scale = detailPaintScale(projection)
+  const screenUnit = 1 / svgPixelScale.value
+  return `translate(${18 * scale + 8 * screenUnit} ${-13 * scale}) scale(${screenUnit})`
+}
+
 function orbitPaintTransform(
   projection: ContinuousWardenSystemProjection,
   localCenter: Point,
@@ -1559,6 +1578,7 @@ const nameLabels = computed(() => nameLabelLayout.value.map(label =>
   positionNameLabel(label, detailMotion.progressFor(label.id)),
 ))
 
+const sceneSystems = computed(() => new Map(sceneCluster.value.systems.map(system => [system.id, system])))
 const sceneObjects = computed(() => new Map(sceneCluster.value.systems.map(system =>
   [system.id, new Map(system.objects.map(object => [object.id, object]))],
 )))
