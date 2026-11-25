@@ -1485,7 +1485,7 @@ function detailObjectPaintStyle(projection: ContinuousWardenSystemProjection) {
 /** Keep both the badge's size and its offset from the object fixed in screen pixels. */
 const publicationBadgeTransform = computed(() => {
   const screenUnit = 1 / svgPixelScale.value
-  return `translate(${24 * screenUnit} ${-13 * screenUnit}) scale(${screenUnit})`
+  return `translate(${24 * screenUnit} ${-13 * screenUnit}) scale(${1.5 * screenUnit})`
 })
 
 /** Cap Add's hit area around the visible glyph, independently of the selection hit area. */
