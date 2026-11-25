@@ -99,7 +99,7 @@ async function withHarness(
   })
 }
 
-function createContinuousHarness() {
+function createContinuousHarness(continuousMap = false) {
   setActivePinia(createPinia())
   const base = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const firstSystem = base.cluster.systems[0]!
@@ -134,6 +134,7 @@ function createContinuousHarness() {
     workspace,
     appliedRevision,
     mutations: history,
+    continuousMap: ref(continuousMap),
     initializeWorkspace: async () => undefined,
     saveState: ref<SaveState>('saved'),
     saveError: ref<string | null>(null),
@@ -161,7 +162,7 @@ function createContinuousHarness() {
     store,
     scales,
     get publications() { return publications },
-    begin() { return owner.value.move.beginSelectedObjectDrag(first.id, scales) },
+    begin(mode: 'select' | 'move' = 'move') { return owner.value.move.beginSelectedObjectDrag(first.id, scales, mode) },
     dispose() {
       owner.unmount()
       history.dispose()
@@ -326,6 +327,56 @@ test('a continuous group move publishes once across owning systems and remains o
         harness.first.placement,
         harness.second.placement,
       ])
+    } finally {
+      harness.dispose()
+    }
+  })
+})
+
+test('a continuous group drag started in Select records one move without changing selection or tool @pure', async () => {
+  await withControlledBrowserEnvironment(async () => {
+    const harness = createContinuousHarness(true)
+    try {
+      harness.store.setMode('select')
+      const before = harness.workspace.value
+      const drag = harness.begin('select')
+      expect(drag).not.toBeNull()
+      expect(drag!.preview({ x: 2.4, y: -1.4 })?.positions.size).toBe(2)
+      expect(harness.workspace.value).toBe(before)
+
+      await drag!.complete({ x: 2.4, y: -1.4 })
+      expect(harness.history.getEntries()).toHaveLength(1)
+      expect(harness.publications).toBe(1)
+      expect(harness.store.mapMode).toBe('select')
+      expect(harness.store.selectedObjectIds).toEqual([harness.first.id, harness.second.id])
+    } finally {
+      harness.dispose()
+    }
+  })
+})
+
+test('a single Select drop publishes only while the map gesture still owns it @pure', async () => {
+  await withControlledBrowserEnvironment(async () => {
+    const harness = createContinuousHarness(true)
+    try {
+      harness.store.setMode('select')
+      harness.store.setSelection({ selectedObjectIds: [harness.first.id] })
+      const before = harness.workspace.value!
+      let current = false
+      const move = () => harness.owner.value.placement.map.moveMapObjectInSystem(
+        harness.firstSystemId, harness.first.id, { x: 0.5625, y: 0.53125 }, before, undefined,
+        { selectedObjectIds: [harness.first.id], isCurrent: () => current },
+      )
+      await move()
+      expect(harness.workspace.value).toBe(before)
+      expect(harness.history.getEntries()).toHaveLength(0)
+
+      current = true
+      await move()
+      expect(harness.workspace.value?.cluster.systems[0]?.objects[0]?.placement)
+        .toEqual({ kind: 'system', x: 0.5625, y: 0.53125 })
+      expect(harness.history.getEntries()).toHaveLength(1)
+      expect(harness.store.selectedObjectIds).toEqual([harness.first.id])
     } finally {
       harness.dispose()
     }

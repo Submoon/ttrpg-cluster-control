@@ -418,6 +418,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   })
   const clusterSystemPlacement = useClusterSystemPlacement({
     workspace,
+    continuousMap: options.continuousMap,
     clusterMapRef: mapControls.clusterMapRef,
     mutations,
     beforeWorkspaceOperation,

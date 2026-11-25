@@ -9,7 +9,7 @@ import {
   setWorkspaceMapMode,
   wardenMap,
   wardenObjectMark,
-  wardenSystemMark,
+  wardenSystemAnchor,
   workspaceNavigation,
 } from './helpers'
 
@@ -42,7 +42,7 @@ test('one Warden camera retains selection and focus through semantic zoom, Fit, 
   await expect(scene).not.toHaveAttribute('transform', initialCamera)
 
   await moveMode.click()
-  const system = wardenSystemMark(page, systemId)
+  const system = wardenSystemAnchor(page, systemId)
   const anchorBeforeDrag = await system.getAttribute('transform')
   const viewportBeforeDrag = await scene.getAttribute('transform')
   if (!anchorBeforeDrag || !viewportBeforeDrag) throw new Error('The map target and camera must be ready for right-drag.')

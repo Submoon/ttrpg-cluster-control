@@ -906,6 +906,10 @@ export function wardenMap(page: import('@playwright/test').Page): Locator {
 }
 
 export function wardenSystemMark(page: import('@playwright/test').Page, systemId: string): Locator {
+  return wardenMap(page).locator(`.continuous-warden-name-target${domainIdentitySelector('data-system-id', systemId)}`)
+}
+
+export function wardenSystemAnchor(page: import('@playwright/test').Page, systemId: string): Locator {
   return wardenMap(page).locator(`.continuous-warden-system-anchor${domainIdentitySelector('data-system-id', systemId)}`)
 }
 
@@ -921,7 +925,7 @@ export async function wardenLocalCoordinates(page: import('@playwright/test').Pa
   fromClient(point: ScreenPoint): WorldPoint
 }> {
   const mapCoordinates = await snapshotSvgCoordinates(wardenMap(page).locator('.cluster-map-content'))
-  const markCoordinates = await snapshotSvgCoordinates(wardenSystemMark(page, systemId))
+  const markCoordinates = await snapshotSvgCoordinates(wardenSystemAnchor(page, systemId))
   const anchor = mapCoordinates.fromClient(markCoordinates.toClient({ x: 0, y: 0 }))
   return {
     toClient: point => mapCoordinates.toClient({

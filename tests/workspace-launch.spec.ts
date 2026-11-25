@@ -10,7 +10,7 @@ async function expectOpenedWorkspace(
   await expect(map).toHaveCount(1)
   await expect(map).toBeVisible()
   await expect(map).toHaveAccessibleName(`${clusterName} continuous map`)
-  const system = map.locator('.continuous-warden-system-anchor')
+  const system = map.getByRole('button', { name: `Select ${systemName}`, exact: true })
   await expect(system).toHaveAccessibleName(`Select ${systemName}`)
   await expect(system).toBeVisible()
 }

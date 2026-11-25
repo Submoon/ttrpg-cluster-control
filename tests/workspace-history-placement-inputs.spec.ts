@@ -245,6 +245,7 @@ test('armed Cluster Add System stays history-safe across Undo and Redo without d
   const adjustmentBindings = createMapAdjustmentBindings(harness.history)
   const placement = scope.run(() => useClusterSystemPlacement({
     workspace: harness.workspace,
+    continuousMap: ref(true),
     clusterMapRef: shallowRef(null),
     mutations: harness.history,
     beforeWorkspaceOperation: adjustmentBindings.beforeWorkspaceOperation,
@@ -267,7 +268,11 @@ test('armed Cluster Add System stays history-safe across Undo and Redo without d
   expect(placement.clusterAddType.value).toBe('system')
   expect(placement.hasPendingHistoryInput.value).toBe(false)
 
-  expect(await placement.addSystemAt({ x: 0.75, y: 0.1 })).toBe(true)
+  const existingId = initial.cluster.systems[0]!.id
+  const existing = initial.layout.systemPositions[existingId]!
+  expect(await placement.addSystemAt(existing, [existingId])).toBe(false)
+  const nearbyOpenPoint = { x: existing.x + 0.08, y: existing.y }
+  expect(await placement.addSystemAt(nearbyOpenPoint)).toBe(true)
   expect(harness.workspace.value?.cluster.systems).toHaveLength(2)
   expect(placement.clusterAddType.value).toBe('system')
   expect(placement.hasPendingHistoryInput.value).toBe(false)

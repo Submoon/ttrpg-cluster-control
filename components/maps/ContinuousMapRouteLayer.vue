@@ -4,7 +4,7 @@
       v-for="mark in paintedMarks"
       :key="mark.id"
       class="cluster-route"
-      :class="{ 'is-unresolved': mark.unresolved, 'is-selected': mark.id === selectedRouteId }"
+      :class="{ 'is-unresolved': mark.unresolved, 'is-selected': mark.id === selectedRouteId, 'has-draggable-exit': moveSelectedExit && mark.id === selectedRouteId }"
       :data-route-id="mark.id"
       :aria-label="mark.accessibleLabel"
       :aria-pressed="mark.id === selectedRouteId"
@@ -83,6 +83,7 @@ const props = defineProps<{
   svgPixelScale: number
   labelObstacles?: readonly SvgViewportRect[]
   moveEnabled?: boolean
+  moveSelectedExit?: boolean
   destinationsInForeground?: boolean
 }>()
 
@@ -279,7 +280,9 @@ defineExpose({ routeIdAtStroke, focusRoute, getRenderedRouteEnd })
 }
 
 .is-move-enabled .cluster-exit-hit-target,
-.is-move-enabled .cluster-exit-mark {
+.is-move-enabled .cluster-exit-mark,
+.has-draggable-exit .cluster-exit-hit-target,
+.has-draggable-exit .cluster-exit-mark {
   cursor: grab;
 }
 </style>

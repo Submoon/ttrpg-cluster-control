@@ -7,7 +7,6 @@ import {
   dockAction,
   quitSystemAdd,
   selectInspectorOption,
-  setWorkspaceMapMode,
   wardenMap,
   wardenObjectMark,
   wardenOrbitLocalGeometry,
@@ -168,7 +167,7 @@ async function orbitOffStrokeDragPoints(
   }, { start: painted.start, offsetPixels, dragPixels })
 }
 
-test('near-ring Warden Orbit targets remain operable at maximum zoom', async ({ page }) => {
+test('Select supports resizing a selected Orbit from its near-ring target at maximum zoom', async ({ page }) => {
   const { map, ring, systemId, primaryObjectId } = await createHostedOrbit(page)
   const controls = workspaceZoomControls(page)
   const zoomIn = controls.getByRole('button', { name: 'Zoom in', exact: true })
@@ -189,13 +188,27 @@ test('near-ring Warden Orbit targets remain operable at maximum zoom', async ({ 
   await ring.press('Enter')
   await expect(page.getByRole('button', { name: 'Edit Orbit', exact: true })).toBeVisible()
   await wardenObjectMark(page, systemId, primaryObjectId).press('Enter')
+  await closeVisiblePanels(page)
+  const unselectedRadii = (await wardenOrbitLocalGeometry(ring, systemId)).radii
+  const unselectedDrag = await orbitOffStrokeDragPoints(ring, .65, 8, 24)
+  await page.mouse.move(unselectedDrag.start.x, unselectedDrag.start.y)
+  await page.mouse.down()
+  await page.mouse.move(unselectedDrag.end.x, unselectedDrag.end.y, { steps: 5 })
+  await page.mouse.up()
+  const afterUnselectedDrag = (await wardenOrbitLocalGeometry(ring, systemId)).radii
+  expect(afterUnselectedDrag.horizontal).toBeCloseTo(unselectedRadii.horizontal, 2)
+  expect(afterUnselectedDrag.vertical).toBeCloseTo(unselectedRadii.vertical, 2)
   const painted = await orbitDragPoints(ring, 1, .65)
   await page.mouse.click(painted.start.x, painted.start.y)
   await expect(page.getByRole('button', { name: 'Edit Orbit', exact: true })).toBeVisible()
   await expect(ring).toBeFocused()
   await closeVisiblePanels(page)
-  await setWorkspaceMapMode(page, 'Move')
-
+  const rotateHandle = map.getByRole('slider', { name: /Rotate .*Orbit 1$/ })
+  const beforeRotation = await rotateHandle.getAttribute('aria-valuenow')
+  expect(beforeRotation).not.toBeNull()
+  await rotateHandle.press('ArrowRight')
+  await expect(rotateHandle).not.toHaveAttribute('aria-valuenow', beforeRotation!)
+  await waitForWorkspaceSaved(page)
   const before = await wardenOrbitLocalGeometry(ring, systemId)
   const drag = await orbitOffStrokeDragPoints(ring, .65, 8, 24)
   expect(drag.hitClass.split(/\s+/)).toContain('continuous-warden-orbit-hit-target')
@@ -212,4 +225,16 @@ test('near-ring Warden Orbit targets remain operable at maximum zoom', async ({ 
   await waitForWorkspaceSaved(page)
   expect((await wardenOrbitLocalGeometry(ring, systemId)).radii.horizontal)
     .toBeGreaterThan(before.radii.horizontal + .5)
+
+  const wheelPoint = (await orbitDragPoints(ring, 1, .65)).start
+  const rotationBeforeWheel = await rotateHandle.getAttribute('aria-valuenow')
+  await page.mouse.move(wheelPoint.x, wheelPoint.y)
+  await page.keyboard.down('Control')
+  try {
+    await page.mouse.wheel(0, 100)
+  } finally {
+    await page.keyboard.up('Control')
+  }
+  await expect(rotateHandle).not.toHaveAttribute('aria-valuenow', rotationBeforeWheel!)
+  await expect(page.getByRole('button', { name: /^Undo: Rotate Orbit 1/ })).toBeEnabled()
 })

@@ -1,6 +1,6 @@
 import { computed, watch, type Ref } from 'vue'
 import type { LocalWorkspace, ObjectPlacement, Point } from '../../domain/workspace'
-import type { CommittedObjectPosition, EntityCommand } from './types'
+import type { CommittedObjectPosition, EntityCommand, MapInteractionMode } from './types'
 import type { WorkspaceMutationExecutor } from './workspace-mutations'
 import { useEditorUiStore } from '../../stores/editor-ui'
 import {
@@ -51,6 +51,7 @@ interface CapturedGesture {
   revision: number | undefined
   systemId: string
   activeView: 'cluster' | 'system'
+  mapMode: Extract<MapInteractionMode, 'select' | 'move'>
   selectedSystemId: string | null
   inspectedTargetSignature: string
   objectIds: readonly string[]
@@ -137,7 +138,7 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
       && currentWorkspace.cluster.id === captured.workspace.cluster.id
       && (appliedRevision === undefined || appliedRevision.value === captured.revision)
       && store.activeView === captured.activeView
-      && store.mapMode === 'move'
+      && store.mapMode === captured.mapMode
       && store.selectedSystemId === captured.selectedSystemId
       && JSON.stringify(store.inspectedTarget) === captured.inspectedTargetSignature
       && store.selectedObjectIds.length === captured.objectIds.length
@@ -156,10 +157,11 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
   function beginSelectedObjectDrag(
     anchorId: string,
     continuousSystemScales?: ReadonlyMap<string, number>,
+    expectedMode: Extract<MapInteractionMode, 'select' | 'move'> = 'move',
   ): SelectedObjectDrag | null {
     const currentWorkspace = workspace.value
     const selectedIds = [...store.selectedObjectIds]
-    if (!currentWorkspace || store.mapMode !== 'move' || selectedIds.length < 2 || !selectedIds.includes(anchorId)) return null
+    if (!currentWorkspace || store.mapMode !== expectedMode || selectedIds.length < 2 || !selectedIds.includes(anchorId)) return null
     const ownerSystemId = currentWorkspace.cluster.systems.find(system => system.objects.some(object => object.id === anchorId))?.id
     if (!ownerSystemId) return null
     const continuous = store.activeView === 'cluster'
@@ -197,6 +199,7 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
       revision: appliedRevision?.value,
       systemId: ownerSystemId,
       activeView: store.activeView,
+      mapMode: expectedMode,
       selectedSystemId: store.selectedSystemId,
       inspectedTargetSignature: JSON.stringify(store.inspectedTarget),
       objectIds: selectedIds,
