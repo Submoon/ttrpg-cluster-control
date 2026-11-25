@@ -19,7 +19,7 @@
         {{ dropboxRestore.message.value }}
       </p>
       <p
-        v-if="mapMode === 'move' && selectedObjectIds.length > 1 && moveSelectionError"
+        v-if="(mapMode === 'select' || mapMode === 'move') && selectedObjectIds.length > 1 && moveSelectionError"
         class="feedback m-0 error-text"
         role="alert"
         aria-live="assertive"
@@ -721,7 +721,7 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type JumpRoute, type LocalWorkspace, type ObjectFamily, type Point, type SystemFrameInsets } from '../domain/workspace'
 import { validName } from '../domain/workspace-validation'
 import type { CurrentPlayerMapScene } from '../domain/player-scene'
-import type { EntityCommand, SearchPresentationSettlement, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
+import type { EntityCommand, SearchPresentationSettlement, SelectMapObjectDragContext, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
 import {
   createContinuousObjectAddRequestLease,
   selectContinuousObjectAddCandidate,
@@ -1924,8 +1924,9 @@ function handleContinuousObjectMove(
   position: Point,
   workspaceSnapshot: LocalWorkspace,
   frameInsets?: SystemFrameInsets,
+  selectDrag?: SelectMapObjectDragContext,
 ): void {
-  void moveMapObjectInSystem(systemId, objectId, position, workspaceSnapshot, frameInsets)
+  void moveMapObjectInSystem(systemId, objectId, position, workspaceSnapshot, frameInsets, selectDrag)
 }
 
 function clearOrbitOwnerChoice(): void {
@@ -2063,8 +2064,12 @@ async function handleClusterSystemMove(systemId: string, position: Point): Promi
   const startingWorkspace = workspace.value
   const startingSystem = startingWorkspace?.cluster.systems.find(candidate => candidate.id === systemId)
   const startingAnchor = startingWorkspace?.layout.systemPositions[systemId]
+  const startingMode = mapMode.value
+  const canMove = () => activeView.value === 'cluster' && mapMode.value === startingMode
+    && (startingMode === 'move' || (startingMode === 'select'
+      && inspectedTarget.value?.kind === 'system' && inspectedTarget.value.systemId === systemId))
   if (!startingWorkspace || !startingSystem || !startingAnchor
-    || activeView.value !== 'cluster' || mapMode.value !== 'move') {
+    || !canMove()) {
     if (clusterMapRef.value === capturedMap) {
       capturedMap?.setClusterSystemPositionPreview?.(systemId, null, previewVersion)
     }
@@ -2086,8 +2091,7 @@ async function handleClusterSystemMove(systemId: string, position: Point): Promi
       && latestSystem !== undefined
       && latestAnchor?.x === captured.originPosition.x
       && latestAnchor.y === captured.originPosition.y
-      && activeView.value === 'cluster'
-      && mapMode.value === 'move'
+      && canMove()
   }
   try {
     if (!await beforeWorkspaceOperation() || !isCurrent()) return

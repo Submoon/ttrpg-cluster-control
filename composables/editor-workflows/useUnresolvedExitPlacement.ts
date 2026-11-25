@@ -157,7 +157,12 @@ export function useUnresolvedExitPlacement({
     if (result.status === 'rejected') throw new Error(result.message)
   }
 
-  async function publish(routeId: string, clusterId: string, position: Point, previewToken?: number): Promise<boolean> {
+  async function publish(
+    routeId: string,
+    clusterId: string,
+    position: Point,
+    isCurrent: () => boolean,
+  ): Promise<boolean> {
     try {
       const result = await mutations.execute({
         action: {
@@ -170,8 +175,7 @@ export function useUnresolvedExitPlacement({
           const latest = workspace.value
           return latest?.cluster.id === clusterId
             && latest.cluster.routes.some(route => route.id === routeId && route.toSystemId === null)
-            && (previewToken === undefined || preview.value?.token === previewToken
-              && store.activeView === 'cluster' && selectedRouteId.value === routeId)
+            && isCurrent()
         },
         prepare: (latest) => {
           if (latest.cluster.id !== clusterId) throw new Error('The Jump Cluster changed before this target could be moved.')
@@ -199,7 +203,9 @@ export function useUnresolvedExitPlacement({
       error.value = 'The selected Jump Route changed. Preview the target again.'
       return false
     }
-    if (!await publish(active.routeId, active.clusterId, active.position, active.token)) return false
+    const ownsPreview = () => preview.value?.token === active.token
+      && store.activeView === 'cluster' && selectedRouteId.value === active.routeId
+    if (!await publish(active.routeId, active.clusterId, active.position, ownsPreview)) return false
     if (preview.value?.token !== active.token) return false
     clearPreview()
     targetingIntent.value = false
@@ -209,14 +215,17 @@ export function useUnresolvedExitPlacement({
 
   /** A completed marker drag is an immediate one-action commit, independent of selection drafts. */
   async function move(routeId: string, position: Point): Promise<boolean> {
+    const startingMode = store.mapMode
+    const ownsMove = () => startingMode !== 'select' || (store.mapMode === 'select'
+      && store.activeView === 'cluster' && selectedRouteId.value === routeId)
     const startingClusterId = workspace.value?.cluster.id
-    if (!startingClusterId || !await beforeWorkspaceOperation()) return false
+    if (!startingClusterId || !ownsMove() || !await beforeWorkspaceOperation() || !ownsMove()) return false
     const current = workspace.value
     if (!current || current.cluster.id !== startingClusterId
       || !current.cluster.routes.some(route => route.id === routeId && route.toSystemId === null)) return false
     const applied = positionFor(routeId)
     if (applied?.x === position.x && applied.y === position.y) return true
-    const result = await publish(routeId, startingClusterId, position)
+    const result = await publish(routeId, startingClusterId, position, ownsMove)
     if (result) {
       clearPreview()
       targetingIntent.value = false

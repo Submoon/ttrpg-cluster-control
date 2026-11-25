@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test as freshTest, type Locator } from './fixtures'
 import {
+  createSingleSystemWorkspace,
   type DownloadWindow,
   editMapObject,
   exposedContinuousObjectHitPoint,
@@ -18,6 +19,7 @@ import {
   wardenObjectLocalPosition,
   wardenOrbitLocalGeometry,
   wardenMap,
+  workspaceNavigation,
   workspaceZoomControls,
 } from './helpers'
 
@@ -45,7 +47,67 @@ async function downloadJsonFromFile(
   }
 }
 
-freshTest('a Warden edits an object and moves a group onto an Orbit', async ({ page }) => {
+freshTest('Select distinguishes a single object drag from a selection click', async ({ page }) => {
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+    viewport: { width: 1440, height: 900 },
+  })
+  const star = wardenObjectMark(page, systemId, primaryObjectId)
+  const hitPoint = async () => {
+    const point = await exposedContinuousObjectHitPoint(star)
+    if (!point) throw new Error('The primary Star needs an exposed pointer target.')
+    return point
+  }
+  const dragStar = async () => {
+    const { x, y } = await hitPoint()
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x + 24, y + 18, { steps: 5 })
+  }
+  const undoMove = page.getByRole('button', { name: /^Undo: Move / })
+  const originalPosition = await wardenObjectLocalPosition(star)
+  await expect(star).toHaveAttribute('aria-pressed', 'false')
+  await dragStar()
+  await page.mouse.up()
+  await expect(star).toHaveAttribute('aria-pressed', 'false')
+  await expect(undoMove).toHaveCount(0)
+  const positionAfterUnselectedDrag = await wardenObjectLocalPosition(star)
+  expect(positionAfterUnselectedDrag.x).toBeCloseTo(originalPosition.x, 2)
+  expect(positionAfterUnselectedDrag.y).toBeCloseTo(originalPosition.y, 2)
+
+  const clickStar = async () => {
+    const { x, y } = await hitPoint()
+    await page.mouse.click(x, y)
+  }
+  await clickStar()
+  await expect(star).toHaveAttribute('aria-pressed', 'true')
+  await hideWorkspaceInspector(page)
+  await clickStar()
+  await expect(page.getByRole('region', { name: 'Object inspector', exact: true })).toBeVisible()
+  await hideWorkspaceInspector(page)
+  await dragStar()
+  await expect.poll(async () => (await wardenObjectLocalPosition(star)).x)
+    .not.toBeCloseTo(originalPosition.x, 2)
+  await page.keyboard.press('Escape')
+  await page.mouse.up()
+  await expect.poll(async () => (await wardenObjectLocalPosition(star)).x)
+    .toBeCloseTo(originalPosition.x, 2)
+  await expect(undoMove).toHaveCount(0)
+
+  await dragStar()
+  await page.mouse.up()
+  await waitForWorkspaceSaved(page)
+  await expect.poll(async () => (await wardenObjectLocalPosition(star)).x)
+    .not.toBeCloseTo(originalPosition.x, 2)
+  await expect(star).toHaveAttribute('aria-pressed', 'true')
+  await expect(undoMove).toBeEnabled()
+  await undoMove.click()
+  await waitForWorkspaceSaved(page)
+  await expect.poll(async () => (await wardenObjectLocalPosition(star)).x)
+    .toBeCloseTo(originalPosition.x, 2)
+  await expect(undoMove).toHaveCount(0)
+})
+
+freshTest('a Warden edits an object and moves a group onto an Orbit in Select', async ({ page }) => {
   freshTest.setTimeout(60_000)
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/')
@@ -220,9 +282,12 @@ freshTest('a Warden edits an object and moves a group onto an Orbit', async ({ p
   await expect(otherRow).toBeHidden()
   await page.getByRole('button', { name: 'Hierarchy', exact: true }).click()
 
+  await setWorkspaceMapMode(page, 'Select')
   await moveSelectedGroup()
   await expect(page.getByRole('status').filter({ hasText: /Moving 2 selected objects/ })).toBeVisible()
   await page.mouse.up()
+  await expect(workspaceNavigation(page).getByRole('button', { name: 'Select', exact: true }))
+    .toHaveAttribute('aria-pressed', 'true')
   await waitForWorkspaceSaved(page)
   const clusterAfterGroupMove = await downloadJsonFromFile(page, 'Export Jump Cluster JSON')
   const movedOwner = clusterAfterGroupMove.cluster?.systems.find(candidate => candidate.id === otherOwner.id)

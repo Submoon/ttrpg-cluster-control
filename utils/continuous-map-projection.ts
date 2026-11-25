@@ -52,24 +52,11 @@ export const CONTINUOUS_MAP_MINIMUM_FRAME = Object.freeze({ width: 120, height: 
 
 const wardenStarHaloLocalRadius = 18
 const wardenStarHaloMaximumPixels = 18
-const wardenAnchorRadiusPixels = 7
 
 export function wardenStarHaloRadius(pixelsPerLocalUnit: number): number {
   return pixelsPerLocalUnit > 0
     ? Math.min(wardenStarHaloLocalRadius, wardenStarHaloMaximumPixels / pixelsPerLocalUnit)
     : wardenStarHaloLocalRadius
-}
-
-export function wardenStarOverlapsAnchor(
-  projection: Pick<ContinuousWardenSystemProjection, 'anchor' | 'scale'>,
-  starScenePosition: Point,
-  pixelsPerSceneUnit: number,
-): boolean {
-  if (!Number.isFinite(pixelsPerSceneUnit) || pixelsPerSceneUnit <= 0) return false
-  const pixelsPerLocalUnit = pixelsPerSceneUnit * projection.scale
-  const radius = wardenAnchorRadiusPixels + wardenStarHaloRadius(pixelsPerLocalUnit) * pixelsPerLocalUnit
-  const offset = Math.hypot(starScenePosition.x - projection.anchor.x, starScenePosition.y - projection.anchor.y)
-  return offset * pixelsPerSceneUnit <= radius
 }
 
 export interface ResolvedContinuousObjectGeometry {

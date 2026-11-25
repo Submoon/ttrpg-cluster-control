@@ -2,8 +2,10 @@ import { expect, test, type Locator } from './fixtures'
 import campaignFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 import {
+  centerWorkspaceSelection,
   clusterCircleScenePosition,
   clickDockAction,
+  hideWorkspaceInspector,
   selectInspectorOption,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
@@ -56,7 +58,9 @@ async function usesIndependentlyRevealedEnds(mark: Locator): Promise<boolean> {
     if (!(element instanceof SVGPathElement)) return false
     const map = element.ownerSVGElement!
     const departure = map.querySelector<SVGGElement>('.continuous-warden-object[aria-label$="Vesper Departure"]')
-    const destination = map.querySelector('.continuous-warden-system-anchor[aria-label="Select Harrow"]')?.closest('.continuous-warden-system')
+    const destinationId = map.querySelector('.continuous-warden-name-target[aria-label="Select Harrow"]')?.getAttribute('data-system-id')
+    const destination = [...map.querySelectorAll('.continuous-warden-system')].find(system =>
+      system.getAttribute('data-system-id') === destinationId)
     const frame = destination?.querySelector<SVGRectElement>('.continuous-warden-system-envelope')
     if (!departure || !frame || destination?.querySelector('.continuous-warden-system-detail')) return false
     const start = element.getPointAtLength(0).matrixTransform(element.getScreenCTM()!)
@@ -155,4 +159,20 @@ test('continuous routes support clipped selection, guarded inspection and author
   await page.getByRole('button', { name: 'Confirm move', exact: true }).click()
   await waitForWorkspaceSaved(page)
   await expect.poll(async () => (await clusterCircleScenePosition(marker)).x).toBeCloseTo(originalX + 10, 2)
+
+  await setWorkspaceMapMode(page, 'Select')
+  await expect(exit).toHaveAttribute('aria-pressed', 'true')
+  await hideWorkspaceInspector(page)
+  await centerWorkspaceSelection(page)
+  await expect(marker).toBeInViewport()
+  const bounds = await marker.boundingBox()
+  if (!bounds) throw new Error('The selected exit must expose its drag marker.')
+  const start = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  await page.mouse.move(start.x + 24, start.y, { steps: 5 })
+  await page.mouse.up()
+  await waitForWorkspaceSaved(page)
+  await expect.poll(async () => (await clusterCircleScenePosition(marker)).x).toBeGreaterThan(originalX + 10)
+  await expect(exit).toHaveAttribute('aria-pressed', 'true')
 })
