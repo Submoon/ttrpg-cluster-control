@@ -174,7 +174,7 @@
           </div>
           <UBadge color="neutral" variant="subtle">{{ placedObjectCount }} {{ placedObjectCount === 1 ? 'object' : 'objects' }}</UBadge>
         </div>
-        <p class="inspector-footnote m-0">Orbit rings show structure, not measured distance. In Move mode, drag an unoccupied center or use its map placement controls.</p>
+        <p class="inspector-footnote m-0">Orbit rings show structure; their size does not represent distance.</p>
       </section>
 
       <section class="entity-inspector-delete entity-inspector-secondary-actions" aria-label="Orbit actions">

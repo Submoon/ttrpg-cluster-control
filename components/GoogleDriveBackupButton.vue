@@ -1,8 +1,8 @@
 <template>
   <div class="google-drive-backup">
     <p :id="retentionNoticeId" class="m-0 basis-full text-xs text-muted">
-      This app keeps the {{ GOOGLE_DRIVE_BACKUP_LIMIT }} newest Google Drive backups for this account across all Jump Clusters.
-      By backing up, you agree that older backups will be permanently deleted after the new backup is saved.
+      This app keeps the {{ GOOGLE_DRIVE_BACKUP_LIMIT }} newest Google Drive backups across all Jump Clusters in this account.
+      After saving a new backup, it permanently deletes older backups.
       Download JSON to keep a copy.
     </p>
     <UButton

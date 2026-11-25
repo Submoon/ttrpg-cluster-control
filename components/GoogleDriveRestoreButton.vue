@@ -233,7 +233,7 @@ const restoreToastKey = computed(() => restoreProgressTitle.value
   ? `progress:${restoreProgressTitle.value}`
   : `completed:${completedToastVersion.value}`)
 const restoreToastUi = computed(() => ({ icon: restoreProgressTitle.value ? 'motion-safe:animate-spin' : undefined }))
-const retentionMessage = `The app keeps the ${GOOGLE_DRIVE_BACKUP_LIMIT} newest dated backups for this account across all Jump Clusters. Older backups are permanently deleted after a new save.`
+const retentionMessage = `This app keeps the ${GOOGLE_DRIVE_BACKUP_LIMIT} newest dated Google Drive backups across all Jump Clusters in this account. After a new backup is saved, it permanently deletes older backups.`
 const triggerClass = computed(() => props.surface === 'welcome'
   ? 'secondary-button launch-action'
   : 'workspace-control workspace-map-import-button w-full')

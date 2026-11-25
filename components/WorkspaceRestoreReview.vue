@@ -3,8 +3,8 @@
     v-model:open="dialogOpen"
     :title="props.review?.canDownloadCurrent ? 'Replace Jump Cluster' : 'Open Jump Cluster'"
     :description="props.review?.canDownloadCurrent
-      ? 'Review the complete backup and confirm before replacing the active Jump Cluster.'
-      : 'Review the complete backup and confirm to open this Jump Cluster.'"
+      ? `Your current Jump Cluster will become this browser's last valid recovery copy.`
+      : 'Open a complete backup as your active Jump Cluster.'"
     :dismissible="!props.review?.confirming"
     :content="{ onOpenAutoFocus: captureOpener, onCloseAutoFocus: restoreFocus }"
     :ui="{
@@ -16,20 +16,11 @@
     <template #body>
       <div v-if="props.review" class="grid gap-4">
         <section class="grid gap-3" aria-label="Replacement details">
-          <div>
-            <span class="section-kicker">COMPLETE BACKUP</span>
-            <h2 class="mb-1 mt-2 break-words text-xl">
-              {{ props.review.canDownloadCurrent ? 'Replace the active Jump Cluster?' : 'Open this Jump Cluster backup?' }}
-            </h2>
-            <p v-if="props.review.canDownloadCurrent" class="m-0 break-words">
-              {{ props.review.activeName }} will be replaced by {{ props.review.incomingName }}.
-            </p>
-            <p v-else class="m-0 break-words">Open {{ props.review.incomingName }} from this complete backup.</p>
-            <p class="m-0 break-words text-sm text-muted">Source file: {{ props.review.sourceName }}</p>
-          </div>
-          <p v-if="props.review.canDownloadCurrent" class="m-0 text-sm text-muted">
-            Your current Jump Cluster will become this browser's last valid recovery copy.
+          <p v-if="props.review.canDownloadCurrent" class="m-0 [overflow-wrap:anywhere]">
+            {{ props.review.activeName }} will be replaced by {{ props.review.incomingName }}.
           </p>
+          <p v-else class="m-0 [overflow-wrap:anywhere]">Jump Cluster: {{ props.review.incomingName }}</p>
+          <p class="m-0 [overflow-wrap:anywhere] text-sm text-muted">Source file: {{ props.review.sourceName }}</p>
           <div v-if="props.review.canDownloadCurrent" class="flex flex-wrap gap-2">
             <UButton color="neutral" variant="outline" @click="emit('download-current')">
               Download current Jump Cluster JSON

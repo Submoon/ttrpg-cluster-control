@@ -171,9 +171,7 @@
             <p v-else>The system type is shared without its internal map.</p>
           </section>
           <section v-else class="player-workspace-inspector-empty" aria-label="Jump Cluster details">
-            <span class="section-kicker">PLAYER INFORMATION</span>
-            <h2>Jump Cluster</h2>
-            <p>Select a Revealed star system to inspect its shared map.</p>
+            <p>Select a Revealed system to inspect its shared map.</p>
           </section>
         </div>
       </template>
@@ -181,7 +179,6 @@
 
     <template v-else>
       <header class="player-embedded-heading">
-        <span v-if="props.eyebrow" class="section-kicker">{{ props.eyebrow }}</span>
         <component :is="headingTag" class="mb-1 mt-2 break-words text-2xl">
           {{ props.document.title }}
         </component>
@@ -322,9 +319,7 @@
               <p v-else>The system type is shared without its internal map.</p>
             </template>
             <template v-else>
-              <span class="section-kicker">PLAYER INFORMATION</span>
-              <h2>Jump Cluster</h2>
-              <p>Select a Revealed star system to inspect its shared map.</p>
+              <p>Select a Revealed system to inspect its shared map.</p>
             </template>
           </section>
         </aside>
@@ -363,7 +358,6 @@ const props = withDefaults(defineProps<{
   document: PlayerClusterDocument
   active?: boolean
   ariaLabel?: string
-  eyebrow?: string
   headingLevel?: 'h1' | 'h2'
   workspacePresentation?: boolean
 }>(), {
