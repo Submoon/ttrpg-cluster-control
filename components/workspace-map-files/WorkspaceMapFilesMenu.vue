@@ -58,7 +58,7 @@
   <UModal
     v-model:open="linkDialogOpen"
     title="Player snapshot link"
-    description="A snapshot of the published Jump Cluster. Anyone with the link can read and copy it."
+    description="Anyone with this link can read and copy the published Jump Cluster snapshot."
     :transition="false"
     :content="{ onCloseAutoFocus: returnToSharing }"
   >
@@ -332,12 +332,12 @@ const items = computed<MenuItem[][]>(() => {
       imageAction('Player', 'svg'),
     ],
     share: [
-      { type: 'label', label: 'Published Jump Cluster' },
+      { type: 'label', label: 'Published Jump Cluster · anyone with a link can read and copy it.' },
       {
         menuValue: 'preview-player-view',
         label: 'Preview player view',
         icon: 'i-lucide-eye',
-        hint: 'Preview the public view of the active Jump Cluster or revealed Star System.',
+        hint: 'Preview published locations and Revealed system maps.',
         onSelect: event => { event.preventDefault(); void openPreview() },
       },
       {
@@ -359,7 +359,7 @@ const items = computed<MenuItem[][]>(() => {
         menuValue: 'generate',
         label: 'Generate player link',
         icon: 'i-lucide-link',
-        hint: 'Create a shareable link containing one published Jump Cluster snapshot.',
+        hint: 'Create a link to one published Jump Cluster snapshot.',
         disabled: props.playerLinkBusy,
         onSelect: event => { event.preventDefault(); void generateLink() },
       },

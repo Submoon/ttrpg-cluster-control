@@ -97,6 +97,21 @@ test('a collapsed system cannot attach Add to a hidden Orbit but keeps occupied 
     .toMatchObject({ target: { kind: 'host', objectId: star.id }, error: expect.any(String) })
 })
 
+test('object Add can place beside a mark when the visible hit radius is smaller than the legacy clearance @pure', () => {
+  const system = createLocalWorkspace('Kestrel Reach', 'Vesper').cluster.systems[0]!
+  const star = system.objects[0]!
+  const geometry = { objectAngles: {}, orbitRadii: {}, orbitRotations: {} }
+  const center = objectPositions(system, geometry).get(star.id)!
+  const type = { kind: 'object', subtype: 'planet' } as const
+  const hitRadius = 12
+
+  const clear = { x: center.x + 30, y: center.y }
+  expect(creationCandidatesAtPoint(system, clear, type, geometry, true, hitRadius))
+    .toMatchObject([{ target: { kind: 'free' }, error: null }])
+  expect(creationCandidatesAtPoint(system, { x: center.x + 8, y: center.y }, type, geometry, true, hitRadius))
+    .toMatchObject([{ target: { kind: 'host', objectId: star.id }, error: expect.any(String) }])
+})
+
 test('an overview Orbit Add offers a free center near a hidden host and checks detached Orbit spacing @pure', () => {
   const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
   const system = workspace.cluster.systems[0]!

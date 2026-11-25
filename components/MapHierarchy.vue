@@ -28,7 +28,7 @@
           type="button"
           :aria-label="props.continuousMap ? `Inspect ${system.name}` : `Open ${system.name} system map`"
           :aria-current="system.id === activeSystemId ? 'page' : undefined"
-          :aria-description="publicationStatus(system.publication).description"
+          :aria-description="publicationStatus(system.publication, undefined, 'system').description"
           :data-system-id="system.id"
           @keydown.capture="openSystemContextMenuFromKeyboard($event, system)"
           @click="commands.navigation.selectSystem(system.id)"
@@ -37,7 +37,7 @@
           <span class="min-w-0 [overflow-wrap:anywhere]">
             <span class="flex min-w-0 items-center gap-1">
               <span class="min-w-0 [overflow-wrap:anywhere]">{{ system.name }}</span>
-              <UTooltip :text="publicationStatus(system.publication).description">
+              <UTooltip :text="publicationStatus(system.publication, undefined, 'system').description">
                 <UIcon :name="publicationPresentation(system.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
               </UTooltip>
             </span>
@@ -146,17 +146,15 @@
                 </span>
                 <span class="tree-object-name flex min-w-0 flex-1 items-start gap-1">
                   <span class="min-w-0 [overflow-wrap:anywhere]">{{ item.label }}</span>
-                  <UTooltip v-if="item.kind === 'system'" :text="publicationStatus(item.system.publication).description">
+                  <UTooltip v-if="item.kind === 'system'" :text="publicationStatus(item.system.publication, undefined, 'system').description">
                     <UIcon :name="publicationPresentation(item.system.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
                   </UTooltip>
-                  <template v-if="item.kind === 'object'">
-                    <UTooltip :text="hierarchyObjectPublicationStatus(item).description">
+                  <UTooltip v-if="item.kind === 'object'" :text="hierarchyObjectPublicationStatus(item).description">
+                    <span class="inline-flex shrink-0 gap-1" aria-hidden="true">
                       <UIcon :name="publicationPresentation(item.row.object.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
-                    </UTooltip>
-                    <UTooltip v-if="hierarchyObjectPublicationStatus(item).parentBlocked" text="System map unavailable to players until this system is Revealed.">
-                      <UIcon name="i-lucide-lock-keyhole" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
-                    </UTooltip>
-                  </template>
+                      <UIcon v-if="hierarchyObjectPublicationStatus(item).parentBlocked" name="i-lucide-lock-keyhole" class="shrink-0 text-[var(--text-muted)]" />
+                    </span>
+                  </UTooltip>
                 </span>
               </span>
               <small v-if="item.kind === 'system'" class="mt-[0.18rem] block">
@@ -323,10 +321,10 @@
                 <span class="tree-object-name flex min-w-0 items-center gap-1 [overflow-wrap:anywhere]">
                   <span class="min-w-0 [overflow-wrap:anywhere]">{{ item.row.object.name }}</span>
                   <UTooltip :text="publicationStatus(item.row.object.publication, selectedSystem?.publication).description">
-                    <UIcon :name="publicationPresentation(item.row.object.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
-                  </UTooltip>
-                  <UTooltip v-if="publicationStatus(item.row.object.publication, selectedSystem?.publication).parentBlocked" :text="'System map unavailable to players until this system is Revealed.'">
-                    <UIcon name="i-lucide-lock-keyhole" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
+                    <span class="inline-flex shrink-0 gap-1" aria-hidden="true">
+                      <UIcon :name="publicationPresentation(item.row.object.publication).icon" class="shrink-0 text-[var(--text-muted)]" />
+                      <UIcon v-if="publicationStatus(item.row.object.publication, selectedSystem?.publication).parentBlocked" name="i-lucide-lock-keyhole" class="shrink-0 text-[var(--text-muted)]" />
+                    </span>
                   </UTooltip>
                 </span>
               </span>
@@ -357,7 +355,7 @@
             <span class="tree-copy col-start-1 row-span-2 block min-w-0 [overflow-wrap:anywhere]">
               <span class="tree-object-title flex min-w-0 items-start gap-1">
                 <span class="tree-object-name min-w-0 [overflow-wrap:anywhere]">{{ item.system.name }}</span>
-                <UTooltip :text="publicationStatus(item.system.publication).description">
+                <UTooltip :text="publicationStatus(item.system.publication, undefined, 'system').description">
                   <UIcon :name="publicationPresentation(item.system.publication).icon" aria-hidden="true" class="shrink-0 text-[var(--text-muted)]" />
                 </UTooltip>
               </span>
@@ -408,7 +406,6 @@
         </div>
       </template>
     </UTree>
-    <p class="hierarchy-note mt-4 mb-0 border-t border-[var(--line-soft)] pt-[0.8rem]">Choose Add Orbit from Add, then click the map to place it, or drag Orbit onto a map object to host it. Empty Orbits stay on the chart.</p>
   </template>
 </template>
 

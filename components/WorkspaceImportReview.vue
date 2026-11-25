@@ -2,7 +2,7 @@
   <UModal
     v-model:open="dialogOpen"
     title="Review Star System Restore"
-    description="Review the validated independent copy before adding it to this workspace."
+    description="Adds an independent copy to the active Jump Cluster."
     :dismissible="!props.confirming"
     :content="{ onOpenAutoFocus: captureOpener, onCloseAutoFocus: restoreFocus }"
     :ui="{
@@ -14,13 +14,6 @@
     <template #body>
       <div v-if="props.summary" class="grid gap-4">
         <section class="grid gap-3" aria-label="Import effects">
-          <div>
-            <span class="section-kicker">RESTORE A STAR SYSTEM</span>
-            <h2 class="mb-1 mt-2 break-words text-xl">
-              Add this star system to the active Jump Cluster?
-            </h2>
-          </div>
-
           <ul class="m-0 grid gap-1 pl-5" aria-label="Import counts">
             <li>Star systems: {{ props.summary.systems }}</li>
             <li>Map objects: {{ props.summary.objects }}</li>
@@ -56,7 +49,7 @@
           </div>
 
           <p class="inspector-intro m-0">
-            The system and its entities receive new IDs. Compatible custom field definitions are reused and their applicability targets are combined.
+            The system and its entities get new IDs. Compatible custom field definitions are reused, and their applicability targets are combined.
           </p>
         </section>
 

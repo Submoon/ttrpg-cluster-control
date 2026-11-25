@@ -27,7 +27,7 @@
     :dismissible="true"
     :unmount-on-hide="false"
     title="Field definitions"
-    description="Inspect, edit, and create reusable field definitions for this map."
+    description="Manage native and custom Field definitions for this map."
     :content="modalContentProps"
     :ui="{ content: `field-definitions-modal ${isCompact ? 'field-definitions-modal--compact' : ''}` }"
     @update:open="onOpenChange"
@@ -51,7 +51,6 @@
             </UButton>
             <span class="section-kicker">MAP DATA / REUSABLE DEFINITIONS</span>
             <h2 id="field-definitions-title">Field definitions</h2>
-            <p>Inspect saved values and manage definitions shared across this map.</p>
           </div>
           <UButton
             class="field-definitions-close"

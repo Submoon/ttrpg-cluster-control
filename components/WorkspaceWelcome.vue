@@ -1,15 +1,12 @@
 <template>
   <section v-if="hydrationState === 'loading'" class="workspace-message mx-auto w-full max-w-[44rem]">
     <UCard class="message-panel workspace-message-card" variant="outline" :ui="messageCardUi" role="status" aria-live="polite">
-      <span class="section-kicker">LOCAL ARCHIVE</span>
       <h1 class="workspace-message-title my-2">Opening this browser's workspace...</h1>
-      <p class="workspace-message-copy m-0 max-w-[38rem]">Your campaign data is read after the app loads.</p>
     </UCard>
   </section>
 
   <section v-else-if="hydrationState === 'error'" class="workspace-message mx-auto w-full max-w-[44rem]">
     <UCard class="message-panel error-panel workspace-message-card" variant="outline" :ui="messageCardUi">
-      <span class="section-kicker">LOCAL ARCHIVE UNAVAILABLE</span>
       <h1 class="workspace-message-title my-2">Your workspace could not be opened.</h1>
       <UAlert
         class="workspace-recovery-alert my-3"
@@ -20,7 +17,7 @@
         :ui="{ root: 'rounded-[2px] p-3 text-[0.875rem] leading-[1.5]' }"
       />
       <p class="workspace-recovery-copy my-3 max-w-[38rem]">
-        This browser keeps the last valid workspace snapshot as a backup when one is available.
+        This browser may have a last valid workspace backup.
       </p>
       <div class="workspace-recovery-actions flex flex-wrap items-start gap-2">
         <UButton
@@ -67,8 +64,7 @@
       <span class="section-kicker">A PRIVATE CHART FOR YOUR CAMPAIGN</span>
       <h1 class="workspace-welcome-title my-3 max-w-[14ch] leading-[1.02] tracking-[-0.04em]">Give the unknown a name.</h1>
       <p class="mb-0 max-w-[34rem] text-[0.92rem] leading-[1.65]">
-        Start with a Jump Cluster and its first star system. This workspace stays in this browser.
-        You can choose to back up to Google Drive or Dropbox.
+        Create a Jump Cluster and its first star system. This workspace is saved in your browser; you can back it up to Google Drive or Dropbox.
       </p>
     </div>
 
@@ -86,7 +82,6 @@
         <template #header>
           <div class="flex items-center justify-between gap-3">
             <span id="workspace-form-title" class="section-kicker">NEW LOCAL WORKSPACE</span>
-            <span class="step-marker">01 / 01</span>
           </div>
         </template>
 
@@ -166,23 +161,14 @@
           </div>
         </div>
 
-        <template #footer>
+        <template v-if="saveState === 'error'" #footer>
           <UAlert
-            v-if="saveState === 'error'"
             color="error"
             variant="subtle"
             :description="`Not saved. ${saveError ?? ''}`"
             role="alert"
             :ui="{ root: 'rounded-[2px] p-3 text-sm' }"
           />
-          <p v-else class="workspace-launch-save-feedback m-0 flex items-center gap-2 text-[0.72rem]" role="status" aria-live="polite">
-            <span
-              class="inline-block size-[0.45rem] shrink-0 rounded-full"
-              :class="saveState === 'saved' ? 'bg-[var(--status-good)]' : 'bg-[var(--text-muted)]'"
-              aria-hidden="true"
-            ></span>
-            Your archive remains on this device.
-          </p>
         </template>
       </UCard>
     </form>
@@ -273,11 +259,6 @@ function openLocalBackupPicker(event: MouseEvent): void {
 
 .workspace-recovery-actions > :deep(button) {
   min-height: 2.65rem;
-}
-
-.workspace-launch-save-feedback {
-  color: var(--text-muted);
-  line-height: 1.45;
 }
 
 @media (max-width: 760px) {

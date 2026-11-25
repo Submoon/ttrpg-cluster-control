@@ -2,7 +2,7 @@
   <UModal
     :open="props.open"
     title="Player view preview"
-    description="A Warden-side preview of committed player-visible locations and Revealed system maps."
+    description="Preview committed player-visible locations and Revealed system maps."
     :content="{ onOpenAutoFocus: captureOpener, onCloseAutoFocus: restoreFocus }"
     :ui="{
       content: 'player-view-preview-content w-[min(96vw,72rem)] max-w-none max-h-[calc(100dvh-2rem)] overflow-hidden max-[760px]:h-[calc(100dvh-1rem)] max-[760px]:max-h-none max-[760px]:w-[calc(100vw-1rem)]',
@@ -16,7 +16,6 @@
         :document="props.document"
         :active="props.open"
         aria-label="Warden-side player preview"
-        eyebrow="WARDEN-SIDE PREVIEW"
         :heading-level="'h2'"
       />
     </template>

@@ -66,7 +66,7 @@
               </li>
               <li>Click again to add another object of the same type. Choose <strong>Quit Add</strong> when you’re done.</li>
             </ol>
-            <p>To create a ring, choose <strong>Add Orbit</strong> in <strong>Add</strong>. Click an object to center the ring on it, or click empty space to set its center there.</p>
+            <p>To create an Orbit, choose <strong>Add Orbit</strong> under <strong>Add</strong>. Click an object to host it, or click empty space for an unoccupied center. Empty Orbits remain on the chart.</p>
           </section>
 
           <section class="grid gap-2" aria-labelledby="map-help-edit-heading">
@@ -74,11 +74,21 @@
             <ul class="m-0 grid list-disc gap-1.5 pl-5">
               <li>To change an object's details, open it in <strong>Inspect</strong>, choose <strong>Edit</strong>, and finish with <strong>Apply changes</strong>.</li>
               <li>Choose <strong>Move</strong> and drag an object. If a placement preview opens, choose the target and confirm the new position.</li>
+              <li>In <strong>Move</strong>, drag an unoccupied Orbit center or use its map placement controls. Drag the center onto an object to attach the Orbit to it.</li>
               <li>
                 On the Jump Cluster map, choose <strong>Move</strong> and click a system.
                 Choose <strong>Move selected system on map</strong>, click a new spot, then choose <strong>Confirm move</strong>.
               </li>
               <li>Choose <strong>Undo</strong> to take back your last change. Choose <strong>Redo</strong> to bring it back.</li>
+            </ul>
+          </section>
+
+          <section class="grid gap-2" aria-labelledby="map-help-publication-heading">
+            <h3 id="map-help-publication-heading" class="m-0 text-base font-semibold">Player visibility</h3>
+            <ul class="m-0 grid list-disc gap-1.5 pl-5">
+              <li><strong>Hidden</strong> hides a location. An object needed as an Orbit host can still appear as an unknown presence. <strong>Unknown presence</strong> shows a marker without its name or type. <strong>Known type</strong> also shows the type. <strong>Revealed</strong> shows the name.</li>
+              <li>Players can open a <strong>Revealed</strong> star system. Objects inside follow their own visibility settings.</li>
+              <li>A <strong>Shared</strong> Jump Route appears when at least one endpoint system is visible. Hidden systems are anonymized and Jump Point names stay private.</li>
             </ul>
           </section>
 

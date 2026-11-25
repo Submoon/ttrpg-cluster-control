@@ -558,6 +558,7 @@ export function orbitPlacementHitsAtPoint(
  * The click point is raw SVG scene geometry; the returned free point uses the saved normalized map frame.
  * Collapsed interiors offer neither Orbit paths for objects nor hosts for new Orbits. Existing objects
  * still block overlapping free object placement, and existing detached centers retain their spacing.
+ * The continuous renderer supplies its current object hit radius in local units at detail zoom.
  */
 export function creationCandidatesAtPoint(
   system: StarSystem,
@@ -565,6 +566,7 @@ export function creationCandidatesAtPoint(
   type: SystemCreationType,
   geometry: SystemMapGeometry,
   detailTargetsVisible = true,
+  objectHitRadius = 52,
 ): SystemCreationCandidate[] {
   if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return []
 
@@ -573,7 +575,7 @@ export function creationCandidatesAtPoint(
     .map(object => ({ object, position: positions.get(object.id)! }))
     // Glyph, key and name labels all belong to the same non-empty object mark.
     .map(entry => ({ ...entry, distance: Math.hypot(point.x - entry.position.x, point.y - entry.position.y) }))
-    .filter(entry => entry.distance <= 52)
+    .filter(entry => entry.distance <= (type.kind === 'object' ? objectHitRadius : 52))
     .sort((left, right) => left.distance - right.distance)
 
   if (type.kind === 'object') {

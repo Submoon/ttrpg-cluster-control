@@ -10,6 +10,7 @@ import {
   saveMapObject,
   selectDraftPublication,
   waitForWorkspaceSaved,
+  wardenMap,
 } from './helpers'
 import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 
@@ -29,12 +30,31 @@ test('published player content opens in a separate browser context and survives 
   await chart.getByRole('button', { name: 'Apply details', exact: true }).click()
 
   await hierarchy.getByRole('treeitem', { name: /Select PL-01, Iria in Vesper Prime/ }).click()
+  await page.getByRole('button', { name: 'Center selected target', exact: true }).click()
+  const map = wardenMap(page)
+  const objectMark = map.getByRole('button', { name: 'Select PL-01, Iria', exact: true })
+  await expect(objectMark).toBeVisible()
+  const badgeIdentity = `object-${await objectMark.getAttribute('data-system-id')}-${await objectMark.getAttribute('data-object-id')}`
+  const badge = map.locator(`[data-publication-identity="${badgeIdentity}"]`)
+  await expect(badge).toBeInViewport()
+  await expect(badge).toHaveCSS('pointer-events', 'none')
+  const previousGlyph = await badge.locator('.gm-publication-badge-icon').innerHTML()
   await editMapObject(page)
   const inspector = page.getByRole('region', { name: 'Object inspector', exact: true })
   await inspector.getByLabel('Player text', { exact: true }).fill(publicText)
   await inspector.getByLabel('GM notes', { exact: true }).fill(privateNotes)
+  const visibility = inspector.getByRole('group', { name: 'Draft visibility', exact: true })
+  const knownType = visibility.getByRole('button', { name: 'Set visibility to Known type', exact: true })
+  await expect(visibility.locator('button[title]')).toHaveCount(0)
+  await knownType.hover()
+  const tooltip = page.getByRole('tooltip')
+  await expect(tooltip).toHaveText('Known type')
   await selectDraftPublication(inspector, 'Revealed')
+  await expect(visibility).toHaveAccessibleDescription('Revealed. Players see its name and type.')
+  await expect(inspector.getByText('Revealed. Players see its name and type.', { exact: true })).toBeVisible()
   await saveMapObject(page)
+  await expect(badge).toBeVisible()
+  await expect(badge.locator('.gm-publication-badge-icon')).not.toHaveJSProperty('innerHTML', previousGlyph)
 
   await hierarchy.getByRole('button', { name: /^Select Jump Level 1:/ }).click()
   await page.getByRole('button', { name: 'Set Jump Route visibility to Shared', exact: true }).click()
@@ -42,6 +62,7 @@ test('published player content opens in a separate browser context and survives 
 
   const preview = await openPlayerPreview(page)
   const previewMap = preview.getByRole('region', { name: 'Player-visible continuous map', exact: true })
+  await expect(previewMap.locator('[data-gm-publication-admin]')).toHaveCount(0)
   await expect(previewMap.getByRole('button', { name: /Jump Level 1 from/ })).toBeVisible()
   await previewMap.locator('.player-continuous-name-target')
     .and(previewMap.getByRole('button', { name: 'Inspect Vesper Prime', exact: true })).press('Enter')

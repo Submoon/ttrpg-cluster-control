@@ -20,48 +20,43 @@
           <div class="route-sharing-control-heading">
             <span class="section-kicker">CONFIGURED VISIBILITY</span>
             <div role="group" aria-label="Jump Route visibility" class="route-sharing-buttons">
-              <UTooltip text="Keep this Jump Route private from players.">
-                <UButton
-                  aria-label="Set Jump Route visibility to Private"
-                  :aria-pressed="!selectedRoute.playerShared"
-                  :disabled="props.saving || props.publicationBusy"
-                  :color="selectedRoute.playerShared ? 'neutral' : 'primary'"
-                  :variant="selectedRoute.playerShared ? 'ghost' : 'soft'"
-                  class="min-h-9 min-w-[4.5rem] justify-center gap-1 px-2 text-xs"
-                  size="sm"
-                  type="button"
-                  @click="emit('set-route-sharing', selectedRoute.id, false)"
-                >
-                  <UIcon name="i-lucide-eye-off" class="size-4" aria-hidden="true" />
-                  <span>Private</span>
-                </UButton>
-              </UTooltip>
-              <UTooltip text="Include this Jump Route in player publication when an endpoint system is visible.">
-                <UButton
-                  aria-label="Set Jump Route visibility to Shared"
-                  :aria-pressed="selectedRoute.playerShared"
-                  :disabled="props.saving || props.publicationBusy"
-                  :color="selectedRoute.playerShared ? 'primary' : 'neutral'"
-                  :variant="selectedRoute.playerShared ? 'soft' : 'ghost'"
-                  class="min-h-9 min-w-[4.5rem] justify-center gap-1 px-2 text-xs"
-                  size="sm"
-                  type="button"
-                  @click="emit('set-route-sharing', selectedRoute.id, true)"
-                >
-                  <UIcon name="i-lucide-eye" class="size-4" aria-hidden="true" />
-                  <span>Shared</span>
-                </UButton>
-              </UTooltip>
+              <UButton
+                aria-label="Set Jump Route visibility to Private"
+                :aria-pressed="!selectedRoute.playerShared"
+                :disabled="props.saving || props.publicationBusy"
+                :color="selectedRoute.playerShared ? 'neutral' : 'primary'"
+                :variant="selectedRoute.playerShared ? 'ghost' : 'soft'"
+                class="min-h-9 min-w-[4.5rem] justify-center gap-1 px-2 text-xs"
+                size="sm"
+                type="button"
+                @click="emit('set-route-sharing', selectedRoute.id, false)"
+              >
+                <UIcon name="i-lucide-eye-off" class="size-4" aria-hidden="true" />
+                <span>Private</span>
+              </UButton>
+              <UButton
+                aria-label="Set Jump Route visibility to Shared"
+                :aria-pressed="selectedRoute.playerShared"
+                :disabled="props.saving || props.publicationBusy"
+                :color="selectedRoute.playerShared ? 'primary' : 'neutral'"
+                :variant="selectedRoute.playerShared ? 'soft' : 'ghost'"
+                class="min-h-9 min-w-[4.5rem] justify-center gap-1 px-2 text-xs"
+                size="sm"
+                type="button"
+                @click="emit('set-route-sharing', selectedRoute.id, true)"
+              >
+                <UIcon name="i-lucide-eye" class="size-4" aria-hidden="true" />
+                <span>Shared</span>
+              </UButton>
             </div>
           </div>
-          <p class="inspector-intro m-0" role="status" aria-live="polite">
-            Configured visibility: {{ selectedRouteSharingStatus.visibilityLabel }}.
-          </p>
-          <p v-if="selectedRouteSharingStatus.noVisibleEndpointMessage" class="route-sharing-blocked" role="status">
-            {{ selectedRouteSharingStatus.noVisibleEndpointMessage }}
-          </p>
-          <p v-else-if="selectedRoute.playerShared" class="inspector-intro m-0">
-            Hidden systems are anonymized in the player view; logical Jump Point names remain private.
+          <p
+            v-if="selectedRoute.playerShared"
+            class="inspector-intro m-0"
+            :class="{ 'route-sharing-blocked': selectedRouteSharingStatus.isBlocked }"
+            role="status"
+          >
+            {{ selectedRouteSharingStatus.noVisibleEndpointMessage ?? 'Hidden systems are anonymized, and Jump Point names stay private.' }}
           </p>
         </section>
         <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">

@@ -31,10 +31,6 @@
       <dl class="m-0 mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2">
         <dt>Player-facing title</dt>
         <dd class="m-0 text-right font-medium [overflow-wrap:anywhere]">{{ props.workspace.cluster.playerTitle }}</dd>
-        <template v-if="props.selectedSystem">
-          <dt>System visibility</dt>
-          <dd class="m-0 text-right font-medium [overflow-wrap:anywhere]">{{ publicationLabel }}</dd>
-        </template>
       </dl>
       <PublicationModeControl
         v-if="props.selectedSystem"
@@ -44,9 +40,6 @@
         :disabled="props.saving || props.publicationBusy"
         @select="setSystemPublication"
       />
-      <p v-if="props.selectedSystem" class="inspector-intro mt-3 mb-0">
-        Players can open this system only when its visibility is Revealed. Each object inside still follows its own publication setting.
-      </p>
     </section>
 
     <template v-if="chartEditSystemId || props.hasChartNameDraft" #footer>
@@ -129,13 +122,6 @@ const chartEditSystemId = computed(() => props.chartEditSystemId
   ?? props.workspace.cluster.systems[0]?.id)
 const starCount = computed(() => props.selectedSystem?.objects.filter(object => object.subtype === 'star').length ?? 0)
 const statisticsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cluster statistics' : 'Star System statistics')
-const publicationLabels: Record<PublicationMode, string> = {
-  hidden: 'Hidden',
-  unknown: 'Unknown presence',
-  'known-type': 'Known type: Star system',
-  revealed: 'Revealed: system name visible',
-}
-const publicationLabel = computed(() => props.selectedSystem ? publicationLabels[props.selectedSystem.publication] : '')
 
 function setSystemPublication(mode: PublicationMode): void {
   const system = props.selectedSystem

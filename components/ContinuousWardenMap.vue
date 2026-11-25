@@ -231,7 +231,10 @@
                   :aria-label="`Select ${object.locationKey}, ${object.name}`"
                   :aria-pressed="isSelectedObject(projection.id, object.id)"
                 >
-                  <circle class="continuous-warden-object-hit-target" :r="18 * detailPaintScale(projection)" />
+                  <circle
+                    class="continuous-warden-object-hit-target"
+                    :r="objectHitRadius(projection) * detailPaintScale(projection)"
+                  />
                   <circle
                     v-if="localObject(projection.id, object.id)?.markerColor !== undefined"
                     class="continuous-warden-object-marker-outline"
@@ -277,6 +280,17 @@
                     </text>
                   </g>
                 </g>
+              </g>
+              <g aria-hidden="true" pointer-events="none">
+                <WardenObjectPublicationBadge
+                  v-for="object in projection.objects"
+                  :key="object.id"
+                  :identity="`object-${projection.id}-${object.id}`"
+                  :mode="localObject(projection.id, object.id)?.publication"
+                  :parent-publication="sceneSystems.get(projection.id)?.publication"
+                  :transform="`${objectTransform(projection, object)} ${publicationBadgeTransform}`"
+                  :opacity="dimmedObjectIds.has(object.id) ? .14 : undefined"
+                />
               </g>
             </g>
             <g
@@ -559,6 +573,7 @@ import type { SelectedObjectDrag, SelectedObjectDragPreview } from '../composabl
 import { useContinuousMapDetailMotion } from '../composables/useContinuousMapDetailMotion'
 import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
 import ContinuousWardenOrbitLayer from './maps/ContinuousWardenOrbitLayer.vue'
+import WardenObjectPublicationBadge from './maps/WardenObjectPublicationBadge.vue'
 
 const EMPTY_ORBIT_PAINT_MARKS = [] as const
 const SEARCH_LOCATOR_LOCAL_RADIUS = 25
@@ -1467,6 +1482,17 @@ function detailObjectPaintStyle(projection: ContinuousWardenSystemProjection) {
   }
 }
 
+/** Keep both the badge's size and its offset from the object fixed in screen pixels. */
+const publicationBadgeTransform = computed(() => {
+  const screenUnit = 1 / svgPixelScale.value
+  return `translate(${24 * screenUnit} ${-13 * screenUnit}) scale(${1.5 * screenUnit})`
+})
+
+/** Cap Add's hit area around the visible glyph, independently of the selection hit area. */
+function objectHitRadius(projection: ContinuousWardenSystemProjection): number {
+  return props.creationType?.kind === 'object' ? Math.min(18, 22 / systemScreenScale(projection)) : 18
+}
+
 function orbitPaintTransform(
   projection: ContinuousWardenSystemProjection,
   localCenter: Point,
@@ -1556,6 +1582,7 @@ const nameLabels = computed(() => nameLabelLayout.value.map(label =>
   positionNameLabel(label, detailMotion.progressFor(label.id)),
 ))
 
+const sceneSystems = computed(() => new Map(sceneCluster.value.systems.map(system => [system.id, system])))
 const sceneObjects = computed(() => new Map(sceneCluster.value.systems.map(system =>
   [system.id, new Map(system.objects.map(object => [object.id, object]))],
 )))
@@ -2523,12 +2550,14 @@ function addOwnersAtPoint(
     if (!projection || !system) return []
     const delta = anchorDelta(projection)
     const localPoint = projection.unprojectLocalPoint({ x: point.x - delta.x, y: point.y - delta.y })
+    const detailTargetsVisible = detailSystemIds.value.has(systemId)
     const candidates = creationCandidatesAtPoint(
       system,
       localPoint,
       { kind: 'object', subtype },
       geometry,
-      detailSystemIds.value.has(systemId),
+      detailTargetsVisible,
+      detailTargetsVisible ? objectHitRadius(projection) : undefined,
     )
       .map(candidate => candidate.target.kind === 'orbit'
         && props.isEntityCommandBlocked?.({ kind: 'object-create', orbitId: candidate.target.orbitId })
