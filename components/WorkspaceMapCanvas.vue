@@ -854,9 +854,7 @@ function isSelectedContinuousEditPress(event: PointerEvent): boolean {
   const systemControl = event.target.closest('.continuous-warden-name-target, [data-system-resize-handle]')
   const systemId = systemControl?.getAttribute('data-system-id')
   if (systemId && isInspectedSystem(systemId)) return true
-  const orbitHandle = event.target.closest('.continuous-warden-orbit-edit-handle')
-  const orbitId = orbitHandle?.getAttribute('data-orbit-id')
-  return !!orbitId && canEditMapOrbit(orbitHandle?.getAttribute('data-system-id') ?? undefined, orbitId)
+  return continuousWardenMapRef.value?.hasSelectedOrbitOrExitMoveTarget(event) ?? false
 }
 
 function inspectLongPress(target: EventTarget | null): void {

@@ -43,6 +43,7 @@
         :svg-pixel-scale="svgPixelScale"
         :label-obstacles="routeLabelObstacles"
         :move-enabled="mode === 'move' && !moveTargeting && !clusterMoveTargeting && !creationType && clusterAddType === null"
+        :move-selected-exit="mode === 'select' && !moveTargeting && !clusterMoveTargeting && !creationType && clusterAddType === null"
       />
       <!-- Keep the system-detail layer free of a camera-scale ancestor so live wheel zoom repaints its geometry at the final viewport scale. -->
       <g
@@ -2416,6 +2417,14 @@ function moveTargetAtPoint(event: PointerEvent, element: SVGSVGElement | null): 
   return { target: null, blockedCommand }
 }
 
+function selectedOrbitOrExitMoveTarget(event: PointerEvent): Extract<WardenMovePointerTarget, { kind: 'orbit' | 'exit' }> | null {
+  if (props.inspectedTarget?.kind !== 'orbit' && props.selectedRouteId === null) return null
+  const target = moveTargetAtPoint(event, svgElement.value).target
+  if (target?.kind === 'orbit' && isSelectedOrbit(target.target.systemId, target.target.orbitId)) return target
+  if (target?.kind === 'exit' && target.routeId === props.selectedRouteId) return target
+  return null
+}
+
 function systemMapGeometry(workspace: LocalWorkspace | DeepReadonly<LocalWorkspace>): SystemMapGeometry {
   return {
     objectAngles: workspace.layout.objectAngles,
@@ -2605,11 +2614,11 @@ function onOrbitAdjustmentKeydown(event: KeyboardEvent): boolean {
 
 function onWheelCapture(event: WheelEvent): void {
   touchCameraNavigation.clearDoubleTap()
-  if (!props.standaloneImportPlacementEnabled && event.ctrlKey && event.deltaY !== 0 && props.mode === 'move'
+  if (!props.standaloneImportPlacementEnabled && event.ctrlKey && event.deltaY !== 0
     && props.creationType == null && props.clusterAddType == null && !props.clusterChooserOpen
     && !props.moveTargeting && !props.clusterMoveTargeting) {
     const hit = orbitTargetAtTarget(event.target)
-    if (hit) {
+    if (hit && canEditOrbit(hit.systemId, hit.orbitId)) {
       cancelWheelZoom()
       emitOrbitAdjustment(event, {
         systemId: hit.systemId,
@@ -3447,8 +3456,12 @@ function onPointerDownCapture(event: PointerEvent): void {
       startSystemNameDrag(event, element, systemId)
       return
     }
-    const orbitHandle = orbitEditTargetAtTarget(event.target)
-    if (orbitHandle && startOrbitGesture(event, element, orbitHandle)) return
+    const moveTarget = selectedOrbitOrExitMoveTarget(event)
+    if (moveTarget?.kind === 'orbit' && startOrbitGesture(event, element, moveTarget.target)) return
+    if (moveTarget?.kind === 'exit') {
+      startExitDrag(event, element, moveTarget.routeId)
+      return
+    }
     const objectTarget = objectTargetAtTarget(event.target)
     const canSelectDrag = canStartSelectedObjectDrag(
       event,
@@ -4311,6 +4324,9 @@ watch(() => props.inspectedTarget, () => {
     cancelActiveGesture()
   }
 }, { flush: 'sync' })
+watch(() => props.selectedRouteId, (routeId) => {
+  if (props.mode === 'select' && activeExitDrag && activeExitDrag.routeId !== routeId) cancelActiveGesture()
+}, { flush: 'sync' })
 watch(() => props.selectedObjectIds.join('\u0000'), (ids, previousIds) => {
   if (ids === previousIds) return
   selectObjectDragGeneration += 1
@@ -4353,6 +4369,7 @@ defineExpose({
   focusMap,
   cancelActiveGesture,
   ownsPointerClick: () => suppressNextMapClick || pendingMapClickTarget !== null,
+  hasSelectedOrbitOrExitMoveTarget: (event: PointerEvent) => selectedOrbitOrExitMoveTarget(event) !== null,
   startViewPan,
   moveViewPan,
   endViewPan,
