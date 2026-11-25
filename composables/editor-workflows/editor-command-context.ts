@@ -1,6 +1,6 @@
 import { inject, provide, type InjectionKey } from 'vue'
 import type { JumpRoute, Point } from '../../domain/workspace'
-import type { OrbitDragOwner, SystemCreationCandidate } from './types'
+import type { MapInteractionMode, OrbitDragOwner, SystemCreationCandidate } from './types'
 import type { PublicationMenuLease, PublicationMenuOptions, PublicationMenuRequest, PublicationRequest } from './publication-types'
 import type { WorkspaceMutationResult } from './workspace-mutations'
 import type { SelectedObjectDrag } from './selected-object-drag'
@@ -51,7 +51,11 @@ export interface EditorCommandContext {
     changeMode(mode: 'select' | 'move', isCurrent?: () => boolean): void
   }
   move: {
-    beginSelectedObjectDrag(anchorId: string, continuousSystemScales?: ReadonlyMap<string, number>): SelectedObjectDrag | null
+    beginSelectedObjectDrag(
+      anchorId: string,
+      continuousSystemScales?: ReadonlyMap<string, number>,
+      expectedMode?: Extract<MapInteractionMode, 'select' | 'move'>,
+    ): SelectedObjectDrag | null
   }
   publication: {
     set(request: PublicationRequest): Promise<WorkspaceMutationResult>

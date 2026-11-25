@@ -203,6 +203,7 @@ import type {
   OrbitCenterMoveCandidate,
   OrbitCreationMapPreview,
   OrbitPlacementPreview,
+  SelectMapObjectDragContext,
   SystemCreationCandidate,
   SystemCreationPreview,
   SystemCreationType,
@@ -236,6 +237,7 @@ import { MAP_TOUCH_PAN_THRESHOLD_PX } from './maps/map-touch-navigation'
 import { largestUnobstructedClientRect, type ClientRectBounds } from '../utils/map-usable-area'
 import { createOwnedTouchReleaseGuard } from './maps/owned-touch-release'
 import { useOrbitPlacementInput } from './maps/useOrbitPlacementInput'
+import { canStartSelectedObjectDrag } from './maps/select-object-drag-input'
 import ClusterMap from './ClusterMap.vue'
 import ContinuousWardenMap from './ContinuousWardenMap.vue'
 import SystemMap from './SystemMap.vue'
@@ -333,9 +335,9 @@ const emit = defineEmits<{
   'cluster-target': [point: Point, systemIds: string[]]
   'continuous-object-add-target': [request: ContinuousObjectAddTarget]
   'continuous-orbit-add-target': [owners: readonly { systemId: string; candidates: SystemCreationCandidate[] }[], requiresChoice: boolean, workspace: LocalWorkspace]
-  'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace, frameInsets?: SystemFrameInsets]
+  'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace, frameInsets?: SystemFrameInsets, selectDrag?: SelectMapObjectDragContext]
   'resize-system-frame': [systemId: string, insets: SystemFrameInsets, workspaceSnapshot: LocalWorkspace]
-  'transfer-object-on-drop': [drop: SystemObjectTransferDrop]
+  'transfer-object-on-drop': [drop: SystemObjectTransferDrop, selectDrag?: SelectMapObjectDragContext]
   'standalone-import-placement-anchor': [anchor: Point]
   'cancel-standalone-import-placement': []
   'cancel-cluster-preview': []
@@ -750,9 +752,11 @@ function forwardMoveObjectInSystem(
   position: Point,
   workspaceSnapshot: LocalWorkspace,
   frameInsets?: SystemFrameInsets,
+  selectDrag?: SelectMapObjectDragContext,
 ): void {
+  if (selectDrag && (props.mode !== 'select' || !selectDrag.isCurrent())) return
   holdClickSuppression()
-  emit('move-object-in-system', systemId, objectId, position, workspaceSnapshot, frameInsets)
+  emit('move-object-in-system', systemId, objectId, position, workspaceSnapshot, frameInsets, selectDrag)
 }
 
 function forwardResizeSystemFrame(systemId: string, insets: SystemFrameInsets, workspaceSnapshot: LocalWorkspace): void {
@@ -761,10 +765,10 @@ function forwardResizeSystemFrame(systemId: string, insets: SystemFrameInsets, w
   emit('resize-system-frame', systemId, insets, workspaceSnapshot)
 }
 
-function forwardObjectDropTransfer(drop: SystemObjectTransferDrop): void {
-  if (props.mode !== 'move') return
+function forwardObjectDropTransfer(drop: SystemObjectTransferDrop, selectDrag?: SelectMapObjectDragContext): void {
+  if (props.mode !== 'move' && (props.mode !== 'select' || !selectDrag?.isCurrent())) return
   holdClickSuppression()
-  emit('transfer-object-on-drop', drop)
+  emit('transfer-object-on-drop', drop, selectDrag)
 }
 
 function hasOrbitAddIntent(): boolean {
@@ -816,8 +820,18 @@ function longPressInspection(target: EventTarget | null): (() => void) | null {
 
 function continuousObjectSelectionTarget(target: EventTarget | null): string | null {
   if (!(target instanceof Element) || props.activeView !== 'cluster' || !props.continuousMap
-    || props.mode !== 'select' || hasMapAddIntent() || props.moveTargeting || props.clusterMoveTargeting) return null
+    || props.mode !== 'select' || hasMapAddIntent() || props.moveTargeting || props.clusterMoveTargeting
+    || props.standaloneImportPlacementEnabled) return null
   return target.closest<SVGGElement>('.continuous-warden-object[data-object-id]')?.getAttribute('data-object-id') ?? null
+}
+
+function isSelectedContinuousObjectDrag(event: PointerEvent): boolean {
+  return canStartSelectedObjectDrag(
+    event,
+    continuousObjectSelectionTarget(event.target),
+    props.selectedObjectIds,
+    props.activeView === 'cluster' && props.continuousMap === true,
+  )
 }
 
 function inspectLongPress(target: EventTarget | null): void {
@@ -907,6 +921,7 @@ function onPointerDownCapture(event: PointerEvent): void {
   const isBackgroundPan = props.mode === 'move' && !hasContinuousObjectAddIntent() && !props.moveTargeting
     && event.button === 0 && !isMapEntityTarget(event.target)
   const isNavigationPan = props.mode !== 'move' && !hasContinuousObjectAddIntent() && event.button === 0
+    && !isSelectedContinuousObjectDrag(event)
   if (!isRightPan && !isBackgroundPan && !isNavigationPan) return
 
   if (isRightPan && props.moveTargeting) emit('cancel-map-move')
@@ -1611,7 +1626,8 @@ function onClickCapture(event: MouseEvent): void {
     void commands.navigation.toggleObjectSelection(modifiedContinuousObjectId)
     return
   }
-  if (event.detail > 0 && isSelectableMapEmptySpace(event.target)) {
+  // Pointer capture can retarget an owned click to the SVG rather than the original object.
+  if (event.detail > 0 && !continuousWardenMapRef.value?.ownsPointerClick() && isSelectableMapEmptySpace(event.target)) {
     void commands.navigation.replaceObjectSelection([])
   }
 }

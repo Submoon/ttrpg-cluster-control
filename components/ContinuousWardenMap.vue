@@ -491,7 +491,7 @@ import { getDetachedOrbitCenter, objectPositions, objectsMovedWithOrbit, orbitCe
 import { orbitGeometrySource } from '../utils/orbit-geometry-source'
 import { measureSystemObjectBranchBounds, resolveSystemObjectBranch } from '../utils/system-object-branch'
 import { continuousOrbitKeyboardChange } from '../utils/continuous-orbit-interaction'
-import type { EntityCommand, MapHistoryTarget, MapInteractionMode, OrbitCenterMoveCandidate, OrbitCreationMapPreview, SystemCreationCandidate, SystemCreationType, SystemObjectMoveTarget } from '../composables/editor-workflows/types'
+import type { EntityCommand, MapHistoryTarget, MapInteractionMode, OrbitCenterMoveCandidate, OrbitCreationMapPreview, SelectMapObjectDragContext, SystemCreationCandidate, SystemCreationType, SystemObjectMoveTarget } from '../composables/editor-workflows/types'
 import type { OrbitAdjustmentInput, OrbitAdjustmentPreview } from '../composables/editor-workflows/continuous-orbit-adjustments'
 import type { StandaloneImportPlacementView } from '../composables/useWorkspaceFiles'
 import type { InspectedMapTarget } from '../stores/editor-ui'
@@ -566,6 +566,7 @@ import {
 } from '../utils/continuous-map-elastic-placement'
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
 import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
+import { canStartSelectedObjectDrag } from './maps/select-object-drag-input'
 import type { SelectedObjectDrag, SelectedObjectDragPreview } from '../composables/editor-workflows/selected-object-drag'
 import { useContinuousMapDetailMotion } from '../composables/useContinuousMapDetailMotion'
 import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
@@ -622,7 +623,11 @@ const props = defineProps<{
   initialViewport: MapViewport | null
   getUsableClientRect?: () => ClientRectBounds | undefined
   orbitAdjustmentPreview?: OrbitAdjustmentPreview | null
-  beginSelectedObjectDrag?: (anchorId: string, continuousSystemScales: ReadonlyMap<string, number>) => SelectedObjectDrag | null
+  beginSelectedObjectDrag?: (
+    anchorId: string,
+    continuousSystemScales: ReadonlyMap<string, number>,
+    expectedMode?: Extract<MapInteractionMode, 'select' | 'move'>,
+  ) => SelectedObjectDrag | null
 }>()
 
 const emit = defineEmits<{
@@ -633,9 +638,9 @@ const emit = defineEmits<{
   'cluster-target': [point: Point, systemIds: string[]]
   'continuous-object-add-target': [request: ContinuousObjectAddTarget]
   'continuous-orbit-add-target': [owners: readonly OrbitAddOwner[], requiresOwnerChoice: boolean, workspace: LocalWorkspace]
-  'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace, frameInsets?: SystemFrameInsets]
+  'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace, frameInsets?: SystemFrameInsets, selectDrag?: SelectMapObjectDragContext]
   'resize-system-frame': [systemId: string, insets: SystemFrameInsets, workspaceSnapshot: LocalWorkspace]
-  'transfer-object-on-drop': [drop: SystemObjectTransferDrop]
+  'transfer-object-on-drop': [drop: SystemObjectTransferDrop, selectDrag?: SelectMapObjectDragContext]
   'orbit-adjustment': [input: OrbitAdjustmentInput]
   'entity-command-blocked': [command: EntityCommand]
   'move-orbit-center': [orbitId: string, center: Point, hostId: string | null, systemId: string, sourceGeometry: string]
@@ -725,6 +730,7 @@ interface ActiveObjectDrag {
   preferredFrame: SvgViewportRect
   fixedFrames: readonly ContinuousSystemFrameInput[]
   startFrames: readonly ContinuousSystemFrameInput[]
+  selectDrag?: SelectMapObjectDragContext
   moved: boolean
   targetPosition: Point
   targetScenePoint: Point
@@ -744,6 +750,7 @@ interface PendingElasticFrameGrowth extends ElasticFrameGrowthAnimation {
 }
 
 let activeObjectDrag: ActiveObjectDrag | null = null
+let selectObjectDragGeneration = 0
 let activeSelectedObjectDrag: {
   drag: SelectedObjectDrag | null
   systemId: string
@@ -2322,6 +2329,10 @@ function startViewPan(event: MouseEvent): void {
   const element = svgElement.value
   if (!element || !zoomBehavior) return
   cancelActiveGesture()
+  // The canvas consumed this new press before it could reach the renderer's pointer handler.
+  selectObjectDragGeneration += 1
+  clearOwnedGestureClickSuppression()
+  takePendingMapClickTarget()
   viewPan = { transform: getViewport(), start: pointer(event, element) as [number, number] }
 }
 
@@ -3119,6 +3130,7 @@ function finishObjectDrag(cancelled: boolean): void {
   const drag = activeObjectDrag
   if (!drag) return
   activeObjectDrag = null
+  if (cancelled && drag.selectDrag) selectObjectDragGeneration += 1
   const element = svgElement.value
   if (element?.hasPointerCapture(drag.pointerId)) {
     try { element.releasePointerCapture(drag.pointerId) } catch { /* Capture may already have been released. */ }
@@ -3133,7 +3145,7 @@ function finishObjectDrag(cancelled: boolean): void {
     const transfer = transferDropForObjectDrag(drag)
     if (transfer) {
       clearObjectMovePreview()
-      emit('transfer-object-on-drop', transfer)
+      emit('transfer-object-on-drop', transfer, drag.selectDrag)
       return
     }
     const position = drag.targetPosition
@@ -3156,7 +3168,7 @@ function finishObjectDrag(cancelled: boolean): void {
       ? acceptedFrameInsets
       : legacyFrameInsets(drag.workspaceSnapshot, drag.systemId, drag.anchor, drag.preferredFrame)
     clearObjectMovePreview()
-    emit('move-object-in-system', drag.systemId, drag.objectId, position, drag.workspaceSnapshot, frameInsets)
+    emit('move-object-in-system', drag.systemId, drag.objectId, position, drag.workspaceSnapshot, frameInsets, drag.selectDrag)
     return
   }
   clearObjectMovePreview()
@@ -3321,7 +3333,100 @@ function editingPointerId(): number | undefined {
     ?? activeExitDrag?.pointerId
 }
 
+function createSelectObjectDragContext(): SelectMapObjectDragContext {
+  const generation = ++selectObjectDragGeneration
+  const selectedObjectIds = [...props.selectedObjectIds]
+  return {
+    selectedObjectIds,
+    isCurrent: () => generation === selectObjectDragGeneration
+      && props.mode === 'select'
+      && props.selectedObjectIds.length === selectedObjectIds.length
+      && props.selectedObjectIds.every((objectId, index) => objectId === selectedObjectIds[index]),
+  }
+}
+
+function beginSelectedGroupDrag(
+  event: PointerEvent,
+  element: SVGSVGElement,
+  objectTarget: Extract<WardenMovePointerTarget, { kind: 'object' }>,
+  expectedMode: Extract<MapInteractionMode, 'select' | 'move'>,
+): boolean {
+  const scene = cameraPoint(event)
+  if (!scene) return false
+  const camera = getViewport()
+  const systemScales = new Map(projections.value.map(projection => [projection.id, projection.scale] as const))
+  const drag = props.beginSelectedObjectDrag?.(objectTarget.objectId, systemScales, expectedMode) ?? null
+  if (expectedMode === 'select' && !drag) return false
+  activeSelectedObjectDrag = {
+    drag,
+    systemId: objectTarget.systemId,
+    objectId: objectTarget.objectId,
+    pointerId: event.pointerId,
+    startClient: { x: event.clientX, y: event.clientY },
+    startScene: scene,
+    camera,
+    workspaceSnapshot: props.workspace,
+    delta: { x: 0, y: 0 },
+    moved: false,
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  try { element.setPointerCapture(event.pointerId) } catch { /* Pointer capture is best effort for synthetic input. */ }
+  emit('editing-gesture-change', true)
+  return true
+}
+
+function beginSingleObjectDrag(
+  event: PointerEvent,
+  element: SVGSVGElement,
+  objectTarget: Extract<WardenMovePointerTarget, { kind: 'object' }>,
+  selectDrag?: SelectMapObjectDragContext,
+): boolean {
+  const projection = projections.value.find(candidate => candidate.id === objectTarget.systemId)
+  const localObject = projection?.objects.find(candidate => candidate.id === objectTarget.objectId)
+  const system = props.cluster.systems.find(candidate => candidate.id === objectTarget.systemId)
+  const legacyAnchor = props.systemPositions[objectTarget.systemId]
+  const scene = cameraPoint(event)
+  if (!projection || !localObject || !system || !legacyAnchor || !scene) return false
+  const camera = getViewport()
+  const delta = anchorDelta(projection)
+  const baselineFrames = baselineDisplayedFrameInputs()
+  const displayedFrame = baselineFrames.find(candidate => candidate.id === objectTarget.systemId)?.envelope
+  const authored = projection.preferredFrame ?? projection.envelope
+  const preferredFrame = { ...authored, x: authored.x + delta.x, y: authored.y + delta.y }
+  activeObjectDrag = {
+    systemId: objectTarget.systemId,
+    objectId: objectTarget.objectId,
+    pointerId: event.pointerId,
+    startClient: { x: event.clientX, y: event.clientY },
+    startScene: scene,
+    originLocal: localObject.position,
+    anchorDelta: delta,
+    camera,
+    legacyAnchor: { ...legacyAnchor },
+    projection,
+    workspaceSnapshot: props.workspace,
+    anchor: { x: projection.anchor.x + delta.x, y: projection.anchor.y + delta.y },
+    startDisplayedFrame: hasPositiveFrame(displayedFrame) ? { ...displayedFrame } : null,
+    preferredFrame,
+    fixedFrames: baselineFrames.filter(candidate => candidate.id !== objectTarget.systemId),
+    startFrames: baselineFrames.map(candidate => ({ ...candidate, envelope: { ...candidate.envelope } })),
+    ...(selectDrag ? { selectDrag } : {}),
+    moved: false,
+    targetPosition: toNormalizedMapPoint(localObject.position),
+    targetScenePoint: { x: localObject.scenePosition.x + delta.x, y: localObject.scenePosition.y + delta.y },
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  try { element.setPointerCapture(event.pointerId) } catch { /* Pointer capture is best effort for synthetic input. */ }
+  emit('editing-gesture-change', true)
+  return true
+}
+
 function onPointerDownCapture(event: PointerEvent): void {
+  selectObjectDragGeneration += 1
   clearElasticFrameGrowthAnimation()
   cancelWheelZoom()
   if (event.pointerType !== 'touch') touchCameraNavigation.clearDoubleTap()
@@ -3337,6 +3442,28 @@ function onPointerDownCapture(event: PointerEvent): void {
   if (resizeTarget && element) {
     startSystemFrameResize(event, element, resizeTarget)
     if (activeSystemFrameResize?.pointerId === event.pointerId) return
+  }
+  if (props.mode === 'select') {
+    const objectTarget = objectTargetAtTarget(event.target)
+    const canSelectDrag = canStartSelectedObjectDrag(
+      event,
+      objectTarget?.objectId ?? null,
+      props.selectedObjectIds,
+      !props.standaloneImportPlacementEnabled
+        && !props.moveTargeting
+        && !props.clusterMoveTargeting
+        && props.clusterAddType == null
+        && props.creationType == null
+        && !props.clusterChooserOpen,
+    )
+    if (!canSelectDrag || !objectTarget || !canMoveObjectInSystem(objectTarget) || !element) return
+    const target = { kind: 'object', ...objectTarget } as const
+    if (props.selectedObjectIds.length > 1) {
+      beginSelectedGroupDrag(event, element, target, 'select')
+    } else {
+      beginSingleObjectDrag(event, element, target, createSelectObjectDragContext())
+    }
+    return
   }
   if (props.standaloneImportPlacementEnabled || event.button !== 0 || props.mode !== 'move' || props.moveTargeting || props.clusterMoveTargeting
     || props.clusterAddType != null || props.creationType != null) return
@@ -3360,67 +3487,10 @@ function onPointerDownCapture(event: PointerEvent): void {
   const objectTarget = moveTarget?.kind === 'object' ? moveTarget : null
   if (objectTarget && element) {
     if (props.selectedObjectIds.length > 1 && props.selectedObjectIds.includes(objectTarget.objectId)) {
-      const scene = cameraPoint(event)
-      if (!scene) return
-      const camera = getViewport()
-      const systemScales = new Map(projections.value.map(projection => [projection.id, projection.scale] as const))
-      activeSelectedObjectDrag = {
-        drag: props.beginSelectedObjectDrag?.(objectTarget.objectId, systemScales) ?? null,
-        systemId: objectTarget.systemId,
-        objectId: objectTarget.objectId,
-        pointerId: event.pointerId,
-        startClient: { x: event.clientX, y: event.clientY },
-        startScene: scene,
-        camera,
-        workspaceSnapshot: props.workspace,
-        delta: { x: 0, y: 0 },
-        moved: false,
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      event.stopImmediatePropagation()
-      try { element.setPointerCapture(event.pointerId) } catch { /* Pointer capture is best effort for synthetic input. */ }
-      emit('editing-gesture-change', true)
+      beginSelectedGroupDrag(event, element, objectTarget, 'move')
       return
     }
-    const projection = projections.value.find(candidate => candidate.id === objectTarget.systemId)
-    const localObject = projection?.objects.find(candidate => candidate.id === objectTarget.objectId)
-    const system = props.cluster.systems.find(candidate => candidate.id === objectTarget.systemId)
-    const legacyAnchor = props.systemPositions[objectTarget.systemId]
-    const scene = cameraPoint(event)
-    if (!projection || !localObject || !system || !legacyAnchor || !scene) return
-    const camera = getViewport()
-    const delta = anchorDelta(projection)
-    const baselineFrames = baselineDisplayedFrameInputs()
-    const displayedFrame = baselineFrames.find(candidate => candidate.id === objectTarget.systemId)?.envelope
-    const authored = projection.preferredFrame ?? projection.envelope
-    const preferredFrame = { ...authored, x: authored.x + delta.x, y: authored.y + delta.y }
-    activeObjectDrag = {
-      systemId: objectTarget.systemId,
-      objectId: objectTarget.objectId,
-      pointerId: event.pointerId,
-      startClient: { x: event.clientX, y: event.clientY },
-      startScene: scene,
-      originLocal: localObject.position,
-      anchorDelta: delta,
-      camera,
-      legacyAnchor: { ...legacyAnchor },
-      projection,
-      workspaceSnapshot: props.workspace,
-      anchor: { x: projection.anchor.x + delta.x, y: projection.anchor.y + delta.y },
-      startDisplayedFrame: hasPositiveFrame(displayedFrame) ? { ...displayedFrame } : null,
-      preferredFrame,
-      fixedFrames: baselineFrames.filter(candidate => candidate.id !== objectTarget.systemId),
-      startFrames: baselineFrames.map(candidate => ({ ...candidate, envelope: { ...candidate.envelope } })),
-      moved: false,
-      targetPosition: toNormalizedMapPoint(localObject.position),
-      targetScenePoint: { x: localObject.scenePosition.x + delta.x, y: localObject.scenePosition.y + delta.y },
-    }
-    event.preventDefault()
-    event.stopPropagation()
-    event.stopImmediatePropagation()
-    try { element.setPointerCapture(event.pointerId) } catch { /* Pointer capture is best effort for synthetic input. */ }
-    emit('editing-gesture-change', true)
+    beginSingleObjectDrag(event, element, objectTarget)
     return
   }
   const systemId = moveTarget?.kind === 'anchor' ? moveTarget.systemId : null
@@ -4209,7 +4279,10 @@ onBeforeUnmount(() => {
   if (!ready.value) resolveReady(false)
 })
 
-watch(() => props.mode, () => cancelActiveGesture(), { flush: 'sync' })
+watch(() => props.mode, () => {
+  selectObjectDragGeneration += 1
+  cancelActiveGesture()
+}, { flush: 'sync' })
 watch(() => props.workspace, workspace => {
   showAcceptedElasticFrameGrowth(workspace)
   transferPreviewOverride.value = undefined
@@ -4231,7 +4304,9 @@ watch(() => props.cluster.systems.map(system => system.id).join('\u0000'), ids =
 })
 watch(presentationProjections, () => updateDetailReveal(viewport.value.k))
 watch(() => props.selectedObjectIds.join('\u0000'), (ids, previousIds) => {
-  if (ids !== previousIds && activeSelectedObjectDrag) cancelActiveGesture()
+  if (ids === previousIds) return
+  selectObjectDragGeneration += 1
+  if (activeSelectedObjectDrag || activeObjectDrag?.selectDrag) cancelActiveGesture()
 })
 watch(projections, () => {
   const existingIds = new Set(projections.value.map(projection => projection.id))
@@ -4269,6 +4344,7 @@ defineExpose({
   revealHistoryCluster,
   focusMap,
   cancelActiveGesture,
+  ownsPointerClick: () => suppressNextMapClick || pendingMapClickTarget !== null,
   startViewPan,
   moveViewPan,
   endViewPan,

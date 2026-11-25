@@ -397,6 +397,11 @@ export interface MapNavigationHandle extends MapImageExporter {
 
 /** Session-only selection saved for one map visit. */
 export type MapInteractionMode = 'navigate' | 'select' | 'move'
+/** Ownership of the pointer gesture that admitted an object drop in Select mode. */
+export interface SelectMapObjectDragContext {
+  readonly selectedObjectIds: readonly string[]
+  readonly isCurrent: () => boolean
+}
 export type ClusterAddType = 'system' | 'route'
 export interface ClusterSystemMovePreview {
   token: number

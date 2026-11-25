@@ -32,6 +32,7 @@ import type {
   CommittedObjectPosition,
   EntityCommand,
   MapNavigationHandle,
+  SelectMapObjectDragContext,
   TransitionOptions,
   SystemCreationTarget,
 } from './types'
@@ -460,8 +461,16 @@ export function useMapWorkflows({
     position: Point,
     expectedWorkspace?: LocalWorkspace,
     frameInsets?: SystemFrameInsets,
+    selectDrag?: SelectMapObjectDragContext,
   ): Promise<void> {
-    if (!await beforeWorkspaceOperation()) return
+    const ownsMove = (): boolean => store.activeView === 'cluster' && (selectDrag
+      ? store.mapMode === 'select' && selectDrag.isCurrent()
+        && selectDrag.selectedObjectIds.includes(objectId)
+        && store.selectedObjectIds.length === selectDrag.selectedObjectIds.length
+        && store.selectedObjectIds.every((id, index) => id === selectDrag.selectedObjectIds[index])
+      : store.mapMode === 'move')
+    if (selectDrag && !ownsMove()) return
+    if (!await beforeWorkspaceOperation() || (selectDrag && !ownsMove())) return
     const currentWorkspace = workspace.value
     if (expectedWorkspace && toRaw(currentWorkspace) !== toRaw(expectedWorkspace)) {
       editorError.value = 'The workspace changed before this object move could be applied.'
@@ -522,7 +531,7 @@ export function useMapWorkflows({
         return latest !== null && latest === currentWorkspace && latest.id === currentWorkspace.id && latest.cluster.id === clusterId
           && latestObject !== undefined
           && JSON.stringify(latestObject.placement) === JSON.stringify(sourcePlacement)
-          && store.activeView === 'cluster' && store.mapMode === 'move'
+          && ownsMove()
       }
       const result = await mutations.execute({
         action: {

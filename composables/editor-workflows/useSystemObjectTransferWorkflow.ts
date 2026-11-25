@@ -11,6 +11,7 @@ import {
 } from '../../domain/workspace'
 import { useSystemObjectTransferDraft } from '../useSystemObjectTransferDraft'
 import type { SystemObjectTransferAcceptance } from '../useSystemObjectTransferDraft'
+import type { SelectMapObjectDragContext } from './types'
 import type {
   SystemObjectTransferDrop,
   SystemObjectTransferIntent,
@@ -42,6 +43,7 @@ interface ActiveTransferSession {
   error: Ref<string | null>
   mapPlacementOwner: TransferMapPlacementOwner | null
   drop?: SystemObjectTransferDrop
+  selectDrag?: SelectMapObjectDragContext
 }
 
 export interface SystemObjectTransferWorkflowOptions {
@@ -212,13 +214,15 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     }
   }
 
-  async function dropObject(drop: SystemObjectTransferDrop): Promise<void> {
+  async function dropObject(drop: SystemObjectTransferDrop, selectDrag?: SelectMapObjectDragContext): Promise<void> {
     const workspaceSnapshot = options.workspace.value
-    if (activeSession.value || !workspaceSnapshot || toRaw(workspaceSnapshot) !== toRaw(drop.workspaceSnapshot)) return
+    if (activeSession.value || !workspaceSnapshot || selectDrag?.isCurrent() === false
+      || toRaw(workspaceSnapshot) !== toRaw(drop.workspaceSnapshot)) return
     const epoch = ++openGeneration
     const { sourceSystemId, rootObjectId, destinationSystemId, placement } = drop
     const request = { sourceSystemId, rootObjectId, destinationSystemId, placement }
     const ownsContext = (): boolean => epoch === openGeneration && activeSession.value === null
+      && selectDrag?.isCurrent() !== false
       && options.workspace.value?.id === workspaceSnapshot.id
       && options.workspace.value.cluster.id === workspaceSnapshot.cluster.id
     let admittedWorkspace = workspaceSnapshot
@@ -250,6 +254,8 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       if (review.keyConflicts.length || review.detachedRouteAttachments.length || review.clearedStationLinks.length) {
         next.open.value = true
       } else {
+        // An explicit review owns subsequent placement. An immediate drop still belongs to the gesture.
+        next.selectDrag = selectDrag
         const result = await apply(next.id)
         if (activeSession.value === next && result.status !== 'applied') {
           cancel(next.id)
@@ -490,6 +496,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     const restoreDropInspection = dropReview ? options.captureDropInspection?.(dropReview) : undefined
     const isCurrent = (): boolean => activeSession.value === current
       && current.draft.isAcceptanceCurrent(acceptance)
+      && current.selectDrag?.isCurrent() !== false
       && options.workspace.value === acceptance.workspaceReference
       && options.appliedRevision.value === revision
       && canApplyToDestination()
