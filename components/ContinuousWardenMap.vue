@@ -216,7 +216,6 @@
                     'is-selected': isSelectedObject(projection.id, object.id),
                     'is-search-result': isSearchLocatorFor(projection.id, object.id),
                     'is-dimmed': dimmedObjectIds.has(object.id),
-                    'has-custom-marker-color': localObject(projection.id, object.id)?.markerColor !== undefined,
                     'is-move-preview': isObjectMovePreview(projection.id, object.id)
                       || isGroupObjectMovePreview(projection.id, object.id),
                     'is-group-move-preview': isGroupObjectMovePreview(projection.id, object.id),
@@ -236,9 +235,8 @@
                     :r="objectHitRadius(projection) * detailPaintScale(projection)"
                   />
                   <circle
-                    v-if="localObject(projection.id, object.id)?.markerColor !== undefined"
                     class="continuous-warden-object-marker-outline"
-                    :r="18 * detailPaintScale(projection)"
+                    :r="18 * detailTextPaintScale(projection)"
                     aria-hidden="true"
                   />
                   <g
@@ -248,8 +246,8 @@
                     aria-hidden="true"
                     pointer-events="none"
                   >
-                    <circle class="system-object-selection-outline" :r="15.5 * detailPaintScale(projection)" />
-                    <circle class="system-object-selection-dashes" :r="19.5 * detailPaintScale(projection)" pathLength="100" stroke-dasharray="6 4" />
+                    <circle class="system-object-selection-outline" :r="15.5 * detailTextPaintScale(projection)" />
+                    <circle class="system-object-selection-dashes" :r="19.5 * detailTextPaintScale(projection)" pathLength="100" stroke-dasharray="6 4" />
                   </g>
                   <circle
                     v-if="isSearchLocatorFor(projection.id, object.id)"
@@ -1475,10 +1473,10 @@ function detailPaintPoint(projection: ContinuousWardenSystemProjection, localPoi
 }
 
 function detailObjectPaintStyle(projection: ContinuousWardenSystemProjection) {
-  const scale = detailPaintScale(projection)
+  const scale = detailTextPaintScale(projection)
   return {
     '--warden-detail-selection-stroke-width': `${1.35 * scale}px`,
-    '--map-object-text-scale': detailTextPaintScale(projection),
+    '--map-object-text-scale': scale,
   }
 }
 
@@ -4748,33 +4746,29 @@ defineExpose({
   fill: none;
   stroke: transparent;
   pointer-events: none;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
 }
 
-.continuous-warden-object.is-selected:not(.has-custom-marker-color) .continuous-warden-object-hit-target,
-.continuous-warden-object:focus:not(.has-custom-marker-color) .continuous-warden-object-hit-target,
 .continuous-warden-object.is-selected .continuous-warden-object-marker-outline,
 .continuous-warden-object:focus .continuous-warden-object-marker-outline {
   stroke: var(--map-selected);
-  stroke-width: 2;
-  vector-effect: non-scaling-stroke;
 }
 
 .continuous-warden-object.is-move-preview {
   cursor: grabbing;
 }
 
-.continuous-warden-object.is-move-preview .continuous-warden-object-hit-target {
+.continuous-warden-object.is-move-preview .continuous-warden-object-marker-outline {
   stroke: var(--focus);
-  stroke-width: 2;
   stroke-dasharray: 3 3;
-  vector-effect: non-scaling-stroke;
 }
 
-.continuous-warden-object.is-group-arriving .continuous-warden-object-hit-target {
+.continuous-warden-object.is-group-arriving .continuous-warden-object-marker-outline {
   stroke: var(--feedback-success, #16814a);
 }
 
-.continuous-warden-object.is-group-departing .continuous-warden-object-hit-target {
+.continuous-warden-object.is-group-departing .continuous-warden-object-marker-outline {
   stroke: var(--map-unresolved);
 }
 
