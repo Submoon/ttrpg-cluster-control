@@ -30,6 +30,7 @@ Keep labels, map and entity identity, current state, validation, recovery, and a
 | Dropbox backup and restore | Keep the existing retention, replacement, deletion and error messages; they explain an active operation and its consequences. |
 | Player preview and reader | Remove the repeated preview kicker and duplicate idle Inspector headings. Keep the chart title, publication/disclosure distinctions, conditional selection guidance, empty states and navigation controls. |
 | Map files and player links | Retain the grouped actions from #59, formats, private/public labels, image scope, and all progress/errors. Shorten supplemental hints. Make the whole-Jump-Cluster sharing scope and anyone-with-link access warning visible in the Share submenu as well as the generated-link dialog. |
+| Publication controls, follow-up after preview review | Icon buttons use one Nuxt UI tooltip with the mode name. The Inspector shows the current effect once, including any parent system restriction. System details no longer print the selected mode twice. Route buttons already show their names and need no tooltip. Hierarchy visibility and lock badges share a single tooltip. Help explains all modes and route sharing. |
 
 ## Verification
 

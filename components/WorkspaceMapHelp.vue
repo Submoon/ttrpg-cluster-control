@@ -83,6 +83,15 @@
             </ul>
           </section>
 
+          <section class="grid gap-2" aria-labelledby="map-help-publication-heading">
+            <h3 id="map-help-publication-heading" class="m-0 text-base font-semibold">Player visibility</h3>
+            <ul class="m-0 grid list-disc gap-1.5 pl-5">
+              <li><strong>Hidden</strong> hides a location. An object needed as an Orbit host can still appear as an unknown presence. <strong>Unknown presence</strong> shows a marker without its name or type. <strong>Known type</strong> also shows the type. <strong>Revealed</strong> shows the name.</li>
+              <li>Players can open a <strong>Revealed</strong> star system. Objects inside follow their own visibility settings.</li>
+              <li>A <strong>Shared</strong> Jump Route appears when at least one endpoint system is visible. Hidden systems are anonymized and Jump Point names stay private.</li>
+            </ul>
+          </section>
+
           <section class="grid gap-2" aria-labelledby="map-help-shortcuts-heading">
             <h3 id="map-help-shortcuts-heading" class="m-0 text-base font-semibold">Keyboard shortcuts</h3>
             <ul class="m-0 grid list-disc gap-1.5 pl-5">

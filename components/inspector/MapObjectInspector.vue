@@ -69,7 +69,6 @@
         <p v-if="fieldError('publication')" class="feedback m-0 error-text" role="alert">
           {{ fieldError('publication') }}
         </p>
-        <p class="inspector-intro m-0 text-sm">The parent system must be Revealed before players can open its map.</p>
         <fieldset class="entity-inspector-fields" :disabled="!objectSession || props.saving">
           <UFormField label="Marker color" :error="fieldError('markerColor')">
             <MarkerColorField

@@ -60,9 +60,6 @@
               :invalid="Boolean(publicationError)"
               @select="publication = $event"
             />
-            <p id="chart-dialog-publication-guidance" class="m-0 text-sm text-[var(--text-muted)]">
-              Only Revealed systems can be opened by players. Publishing an object does not reveal its parent system.
-            </p>
             <p
               v-if="publicationError"
               id="chart-dialog-publication-error"
@@ -118,8 +115,8 @@ const systemError = computed(() => props.formError.startsWith('Star system name'
 const playerTitleError = computed(() => props.formError.startsWith('Player-facing title') ? props.formError : '')
 const publicationError = computed(() => props.formError.startsWith('Choose a supported publication mode') ? props.formError : '')
 const publicationDescribedBy = computed(() => publicationError.value
-  ? 'chart-dialog-publication-guidance chart-dialog-publication-error'
-  : 'chart-dialog-publication-guidance')
+  ? 'chart-dialog-publication-error'
+  : undefined)
 
 function fieldToFocus(): string {
   return props.formError.startsWith('Star system name')
