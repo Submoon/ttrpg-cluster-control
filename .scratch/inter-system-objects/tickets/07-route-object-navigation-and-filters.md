@@ -34,12 +34,20 @@ Implementation started from integrated prerequisite revision `3470aa42c496c67d1f
 
 ## Acceptance criteria
 
-- [ ] Nest route branches under their route and local branches under their Zone. Expansion is consultation; selection and editing use the existing guarded commands and explicit context.
-- [ ] Search names and Location keys in both contexts with useful result context. Extend current Type/Field/publication inventories without adding route or Orbit search result kinds.
-- [ ] Preserve independent map/Search criteria lifetimes, dimming and Hierarchy reachability. Route objects retain normal applicable Fields and catalogue inspection.
-- [ ] Root markers remain visible at distant zoom, hosted detail appears progressively, and selection survives collapse and context changes without a synthetic owner Zone.
-- [ ] Maintain usable focus and depth in compact/deep Hierarchy and respect existing touch, keyboard and panel lifetimes.
-- [ ] Cover stationary obstacles, anomalies, derelicts and other non-vessel catalogue objects as well as ships. A route object need not be travelling; no automatic movement or vessel-only query/filter path is introduced.
+- [x] Nest route branches under their route and local branches under their Zone. Expansion is consultation; selection and editing use the existing guarded commands and explicit context.
+- [x] Search names and Location keys in both contexts with useful result context. Extend current Type/Field/publication inventories without adding route or Orbit search result kinds.
+- [x] Preserve independent map/Search criteria lifetimes, dimming and Hierarchy reachability. Route objects retain normal applicable Fields and catalogue inspection.
+- [x] Root markers remain visible at distant zoom, hosted detail appears progressively, and selection survives collapse and context changes without a synthetic owner Zone.
+- [x] Maintain usable focus and depth in compact/deep Hierarchy and respect existing touch, keyboard and panel lifetimes.
+- [x] Cover stationary obstacles, anomalies, derelicts and other non-vessel catalogue objects as well as ships. A route object need not be travelling; no automatic movement or vessel-only query/filter path is introduced.
+
+## Candidate verification
+
+The runtime at `387a7f45d71d7c3cb74ca039a4d6756a19a277cc` adds route-owned records to the existing Hierarchy and Search. Search reveals a route occupant in the same continuous map and preserves its actual owner. The map keeps a selected or keyboard-focused occupant visible when its branch detail collapses.
+
+- Vue typechecking passed with `node node_modules/vue-tsc/bin/vue-tsc.js --noEmit -p tsconfig.json` after `nuxt prepare`. ESLint passed on the changed Vue and TypeScript files with `--max-warnings 0`.
+- The 59 focused tests passed on `38694058` with `PLAYWRIGHT_SUITE=pure` and the files `workspace-search-model`, `workspace-search-command`, `warden-map-filters`, `warden-map-filter-session` and `workspace-hierarchy-tree`. The report is in the ticket worktree at `test-results/playwright-1795690676616-42476-e7365e58/results.json`. The first failing Search and Hierarchy cases are retained in `test-results/playwright-1795690022682-39308-2775fcaa/` and `test-results/playwright-1795690295274-15340-d88f5347/`.
+- Browser qualification remains on the integration branch. The maintained Search journey in `tests/workspace-global-search.spec.ts` covers a seeded anomaly, its dimmed map marker and locator, routed Hierarchy depth and selection after zooming out. The existing publication journey in `tests/workspace-player-content.spec.ts` uses the Hierarchy's route treeitem.
 
 ## Verification
 
