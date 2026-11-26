@@ -13,6 +13,7 @@ import {
   type StarSystem,
   type SystemObject,
 } from '../domain/workspace'
+import { captureEffectiveObjectAngles } from '../domain/workspace-placement'
 import { objectPositions } from '../utils/system-map-geometry'
 import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 
@@ -417,4 +418,31 @@ test('a Zone Orbit occupant carries its complete branch across Jump Routes and b
   expect(landed.layout.orbitRadii['moon-ring']).toEqual({ horizontal: 37, vertical: 33 })
   expect(after.get('nested')!.x - after.get('root')!.x).toBeCloseTo(before.get('nested')!.x - before.get('root')!.x, 8)
   expect(after.get('nested')!.y - after.get('root')!.y).toBeCloseTo(before.get('nested')!.y - before.get('root')!.y, 8)
+})
+
+test('a hosted route object can land as a root on its own Jump Route @pure', () => {
+  const { workspace, route, root, orbit, occupant, branch } = workspaceWithRouteObjects()
+  const sibling = { ...occupant, id: 'sibling', locationKey: 'VE-77' }
+  const carriedOrbit = { id: 'carried-orbit', hostId: occupant.id, order: 1 }
+  const carried = {
+    ...occupant, id: 'carried-object', locationKey: 'VE-78',
+    placement: { kind: 'orbit' as const, orbitId: carriedOrbit.id },
+  }
+  branch.objects.push(sibling, carried)
+  branch.orbits.push(carriedOrbit)
+  const beforeAngle = captureEffectiveObjectAngles(workspace, branch, [orbit.id])[sibling.id]
+  const proposal = prepareCatalogueObjectTransfer(workspace, {
+    source: { kind: 'route', routeId: route.id },
+    rootObjectId: occupant.id,
+    landing: { kind: 'route', routeId: route.id, progression: 0.7 },
+  })
+  const next = proposal.previewWorkspace
+  expect(routeContentsFor(next.cluster, route.id)).toEqual({
+    objects: [root, { ...occupant, placement: { kind: 'route', progression: 0.7 } }, sibling, carried],
+    orbits: [orbit, carriedOrbit],
+  })
+  expect(next.layout.objectAngles[sibling.id]).toBe(beforeAngle)
+  expect(next.layout.objectAngles[occupant.id]).toBeUndefined()
+  expect(proposal.clearedStationLinks).toEqual([])
+  expect(restoreJumpClusterBackup(exportJumpCluster(next)).cluster.routeContents).toEqual(next.cluster.routeContents)
 })

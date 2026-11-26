@@ -731,6 +731,29 @@ test('transfer Undo and Redo reveal the stable root in its actual owner @pure', 
   }
 })
 
+test('history reveals the retained route object through the map target contract @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const { workspace, route, occupant } = workspaceWithRouteObjects()
+    harness.workspace.value = workspace
+    await nextTick()
+    const revealed: Parameters<NonNullable<MapNavigationHandle['revealHistoryTarget']>>[0][] = []
+    harness.workflows.mapControls.clusterMapRef.value = {
+      ...createMapHandle({ whenReady: async () => true, frameSearchTarget: () => true, focusMap: () => undefined }),
+      revealHistoryTarget: target => { revealed.push(target); return true },
+    }
+    const target = { kind: 'route-object' as const, routeId: route.id, id: occupant.id }
+    await harness.workflows.navigation.revealHistoryContext({
+      direction: 'undo',
+      action: { workspaceId: workspace.id, clusterId: workspace.cluster.id, contextLabel: 'Jump Route', kind: 'move', label: 'Move route object', target },
+    })
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'route-object', routeId: route.id, objectId: occupant.id })
+    expect(revealed).toEqual([target])
+  } finally {
+    harness.dispose()
+  }
+})
+
 test('editing the destination Orbit resumes transfer review and preserves the draft and previous placement @pure', async () => {
   const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), 'Harrow', undefined, false, true)
   try {
