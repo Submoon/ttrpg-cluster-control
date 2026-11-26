@@ -674,6 +674,7 @@ const props = defineProps<{
     anchorId: string,
     continuousSystemScales: ReadonlyMap<string, number>,
     expectedMode?: Extract<MapInteractionMode, 'select' | 'move'>,
+    pixelsPerSceneUnit?: number,
   ) => SelectedObjectDrag | null
 }>()
 
@@ -1027,9 +1028,9 @@ const systemFrameInputs = computed(() => presentationProjections.value.map(proje
 const displayFrames = computed(() => {
   const resize = frameResizePreview.value
   const baseline = baselineDisplayedFrameInputs()
-  if (!resize) return new Map(baseline.map(frame => [frame.id, frame.envelope] as const))
   const preview = new Map(baseline.map(frame => [frame.id, frame.envelope] as const))
-  preview.set(resize.systemId, resize.frame)
+  if (resize) preview.set(resize.systemId, resize.frame)
+  for (const [id, frame] of selectedObjectDragPreview.value?.frames ?? []) preview.set(id, frame)
   return preview
 })
 
@@ -3639,7 +3640,9 @@ function beginSelectedGroupDrag(
   if (!scene) return false
   const camera = getViewport()
   const systemScales = new Map(projections.value.map(projection => [projection.id, projection.scale] as const))
-  const drag = props.beginSelectedObjectDrag?.(objectTarget.objectId, systemScales, expectedMode) ?? null
+  const drag = props.beginSelectedObjectDrag?.(
+    objectTarget.objectId, systemScales, expectedMode, camera.k * svgPixelScale.value,
+  ) ?? null
   if (expectedMode === 'select' && !drag) return false
   activeSelectedObjectDrag = {
     drag,

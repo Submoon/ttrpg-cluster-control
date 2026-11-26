@@ -206,6 +206,59 @@ test('previews without publishing, then commits the collective translation as on
   })
 })
 
+test('a collective move grows the Zone for every member but rejects targets beyond the root reach @pure', async () => {
+  await withHarness(async harness => {
+    const initial = harness.workspace.value
+    const outside = { x: 2000, y: 0 }
+    const invalidDrag = harness.begin()
+    expect(invalidDrag?.preview(outside)).toBeNull()
+    await invalidDrag?.complete(outside)
+    expect(harness.workspace.value).toBe(initial)
+    expect(harness.publications).toBe(0)
+
+    const delta = { x: 110, y: 0 }
+    const drag = harness.begin()
+    const preview = drag?.preview(delta)
+    expect(preview?.positions.get(harness.first.id)).toEqual({ x: 590, y: 280 })
+    expect(preview?.positions.get(harness.second.id)).toEqual({ x: 798, y: 280 })
+    expect(preview?.frames?.get(harness.systemId)).toBeDefined()
+    await drag?.complete(delta)
+    expect(harness.publications).toBe(1)
+    expect(harness.workspace.value?.layout.systemFrames?.[harness.systemId]).toBeDefined()
+    expect(harness.workspace.value?.cluster.systems[0]?.objects.map(object => object.placement)).toEqual([
+      { kind: 'system', x: 0.5 + 110 / 832, y: 0.5 },
+      { kind: 'system', x: 0.75 + 110 / 832, y: 0.5 },
+    ])
+  })
+})
+
+test('a neighboring Zone can block the whole preview when only the other selected member cannot fit @pure', async () => {
+  await withHarness(async harness => {
+    const { workspace, system: neighbor } = addStarSystem(harness.workspace.value!, 'Neighbor')
+    const anchor = workspace.layout.systemPositions[harness.systemId]!
+    const initial = createWorkspaceSnapshot({
+      ...workspace,
+      layout: {
+        ...workspace.layout,
+        systemPositions: { ...workspace.layout.systemPositions, [neighbor.id]: { x: anchor.x + 100 / 736, y: anchor.y } },
+        systemFrames: {
+          [harness.systemId]: { left: 55, right: 55, top: 40, bottom: 40 },
+          [neighbor.id]: { left: 45, right: 45, top: 40, bottom: 40 },
+        },
+      },
+    })
+    harness.workspace.value = initial
+    // The grabbed object stays near its anchor. The second object's 41.6-unit offset carries it
+    // into the neighbor's frame when both members translate by 20 scene units.
+    const drag = harness.begin()
+    expect(drag).not.toBeNull()
+    expect(drag?.preview({ x: 100, y: 0 })).toBeNull()
+    await drag?.complete({ x: 100, y: 0 })
+    expect(harness.workspace.value).toEqual(initial)
+    expect(harness.publications).toBe(0)
+  })
+})
+
 test('a zero-delta release leaves workspace identity and history unchanged @pure', async () => {
   await withHarness(async harness => {
     const before = harness.workspace.value
