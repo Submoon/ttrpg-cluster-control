@@ -4,6 +4,7 @@
 import { replaceWorkspaceSystem } from './workspace-cluster'
 import type { LocalWorkspace, StarSystem, SystemObject, SystemObjectChanges } from './workspace-model'
 import { updateSystemObject } from './workspace-system-objects'
+import { clusterObjects } from './workspace-location-keys'
 
 /** Default Orbit angle for one object in its current sibling ordering. */
 export function defaultObjectOrbitAngle(index: number, siblingCount: number): number {
@@ -64,7 +65,7 @@ export function updateWorkspaceObject(
   const original = system.objects.find(candidate => candidate.id === objectId)
   if (!original) throw new Error('The selected map object no longer exists.')
 
-  const updatedSystem = updateSystemObject(system, objectId, changes, workspace.objectFieldSettings)
+  const updatedSystem = updateSystemObject(system, objectId, changes, workspace.objectFieldSettings, clusterObjects(workspace.cluster))
   const updated = updatedSystem.objects.find(candidate => candidate.id === objectId)
   if (!updated) throw new Error('The selected map object could not be updated.')
 

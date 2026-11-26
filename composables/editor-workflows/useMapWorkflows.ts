@@ -23,6 +23,7 @@ import {
   type Point,
   type SystemFrameInsets,
 } from '../../domain/workspace'
+import { clusterObjects } from '../../domain/workspace-location-keys'
 import type {
   OrbitAdjustmentGeometry,
   OrbitAdjustmentIntent,
@@ -640,7 +641,7 @@ export function useMapWorkflows({
       }
       const otherTypeLabel = subtype === 'other' ? validName(otherType ?? '', 'Object type') : undefined
       const orbitId = target.kind === 'orbit' ? target.orbitId : undefined
-      const identity = createSystemObject(system, subtype, orbitId)
+      const identity = createSystemObject(system, subtype, orbitId, clusterObjects(currentWorkspace.cluster))
       const command: EntityCommand = { kind: 'object-create', orbitId: orbitId ?? null }
       if (rejectBlockedEntityCommand(command)) return false
 
@@ -668,7 +669,7 @@ export function useMapWorkflows({
           if (isEntityCommandBlocked(command)) {
             throw new Error('Resolve the Inspector draft before adding an object to this Orbit.')
           }
-          const latestGenerated = createSystemObject(latestSystem, subtype, orbitId)
+          const latestGenerated = createSystemObject(latestSystem, subtype, orbitId, clusterObjects(latest.cluster))
           const object = {
             ...latestGenerated,
             id: identity.id,

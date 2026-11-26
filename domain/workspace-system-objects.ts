@@ -13,22 +13,7 @@ import type {
 import { canPlaceObjectInOrbit } from './workspace-orbits'
 import { isPublicationMode, objectFieldValidationError, validName, validText } from './workspace-validation'
 import { isMarkerColor } from './marker-color'
-
-/**
- * Allocates the first unused prefixed numeric location key within one system.
- * @param system System whose current keys are reserved.
- * @param prefix Catalogue prefix, such as PL or JP.
- * @returns A key in the form PREFIX-NN, with at least two digits.
- */
-function nextLocationKey(system: StarSystem, prefix: string): string {
-  let index = 1
-  let key = `${prefix}-${String(index).padStart(2, '0')}`
-  while (system.objects.some(object => object.locationKey === key)) {
-    index += 1
-    key = `${prefix}-${String(index).padStart(2, '0')}`
-  }
-  return key
-}
+import { locationKeyConflict, nextLocationKey } from './workspace-location-keys'
 
 /**
  * Chooses the next slot on the 20-point initial placement grid for a system-level object.
@@ -47,10 +32,11 @@ export function initialSystemPlacement(system: StarSystem): Extract<ObjectPlacem
 }
 
 /**
- * Creates a catalogue object with a unique system-local location key and initial placement.
- * @param system System used for the name count, key allocation, and optional Orbit validation.
+ * Creates a catalogue object with a unique Location key and initial placement.
+ * @param system System used for the name count and optional Orbit validation.
  * @param subtype Existing catalogue subtype to create.
  * @param orbitId Optional Orbit that must accept this object without creating a host cycle.
+ * @param keyOwners Objects sharing the Location key namespace.
  * @returns New object data with generated identity and empty description.
  * @throws If the subtype is unsupported or a supplied Orbit does not exist or would create a host cycle.
  */
@@ -58,6 +44,7 @@ export function createSystemObject(
   system: StarSystem,
   subtype: CatalogueSubtype,
   orbitId?: string,
+  keyOwners: readonly SystemObject[] = system.objects,
 ): SystemObject {
   const catalogueType = catalogueTypes.find(type => type.value === subtype)
   if (!catalogueType) {
@@ -84,7 +71,7 @@ export function createSystemObject(
     publication: 'known-type',
     family: catalogueType.family,
     subtype,
-    locationKey: nextLocationKey(system, catalogueType.keyPrefix),
+    locationKey: nextLocationKey(catalogueType.keyPrefix, new Set(keyOwners.map(object => object.locationKey))),
     name,
     description: '',
     playerText: '',
@@ -94,12 +81,13 @@ export function createSystemObject(
 }
 
 /**
- * Applies a partial object edit and validates identity-local keys, fields, station links, and placement.
+ * Applies a partial object edit and validates Location keys, fields, station links, and placement.
  * Custom-field values are validated even when their definitions are currently inapplicable.
  * @param system System containing the object.
  * @param objectId ID of the object to edit.
  * @param changes Fields to replace; omitted properties retain their existing values.
  * @param objectFieldSettings Current definitions and allowed values used for validation.
+ * @param keyOwners Objects sharing the Location key namespace.
  * @returns A new system with only the selected object replaced.
  * @throws If the object is missing or any proposed value or placement violates domain rules.
  */
@@ -108,6 +96,7 @@ export function updateSystemObject(
   objectId: string,
   changes: SystemObjectChanges,
   objectFieldSettings: ObjectFieldSettings,
+  keyOwners: readonly SystemObject[] = system.objects,
 ): StarSystem {
   const object = system.objects.find(candidate => candidate.id === objectId)
   if (!object) {
@@ -167,9 +156,9 @@ export function updateSystemObject(
     throw new Error('A Station linked to a Jump Point cannot change type.')
   }
 
-  if (system.objects.some(candidate => candidate.id !== objectId && candidate.locationKey === updated.locationKey)) {
-    throw new Error(`Location key "${updated.locationKey}" is already used in this star system.`)
-  }
+  const keyError = locationKeyConflict(keyOwners, updated.locationKey, object.locationKey)
+  if (keyError) throw new Error(keyError)
+  if (updated.locationKey !== object.locationKey) delete updated.legacyLocationKey
 
   if (updated.placement.kind === 'system') {
     if (!Number.isFinite(updated.placement.x) || !Number.isFinite(updated.placement.y)) {

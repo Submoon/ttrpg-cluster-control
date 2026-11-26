@@ -130,8 +130,6 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       previewWorkspace: currentReview?.previewWorkspace ?? null,
       movedObjectIds: currentReview?.branch.objectIds ?? [],
       movedOrbitIds: currentReview?.branch.orbitIds ?? [],
-      locationKeys: draft.locationKeys.value,
-      validationErrors: draft.validationErrors.value,
       canAccept: draft.canAccept.value && !stale && !geometryError,
       stale,
     }
@@ -286,7 +284,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       const review = next.draft.review.value
       if (!review) throw new Error(next.draft.error.value ?? 'The dropped position is no longer available.')
       activeSession.value = next
-      if (review.keyConflicts.length || review.detachedRouteAttachments.length || review.clearedStationLinks.length) {
+      if (review.detachedRouteAttachments.length || review.clearedStationLinks.length) {
         next.open.value = true
       } else {
         // An explicit review owns subsequent placement. An immediate drop still belongs to the gesture.
@@ -561,7 +559,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
         // The shared history pipeline prepares against a detached snapshot. `isCurrent` binds
         // that snapshot to the exact reviewed owner, revision, and input generation.
         if (!isCurrent()) throw new Error('The transfer review changed before it could be applied.')
-        const next = applySystemObjectTransfer(latest, acceptance.request, acceptance.locationKeys)
+        const next = applySystemObjectTransfer(latest, acceptance.request)
         return fitTransfer(current, latest, next, acceptance.request)
       },
     }
@@ -642,10 +640,6 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
           current.mapPlacementOwner = null
           mapPointerPreview.value = null
           current.error.value = current.draft.error.value
-          break
-        case 'set-location-key':
-          current.draft.setLocationKey(intent.objectId, intent.value)
-          current.error.value = null
           break
         case 'place-on-map':
           await beginMapPlacement(current)

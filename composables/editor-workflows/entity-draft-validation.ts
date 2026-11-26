@@ -13,6 +13,7 @@ import {
   type SystemObject,
   type SystemObjectChanges,
 } from '../../domain/workspace'
+import { clusterObjects, locationKeyConflict } from '../../domain/workspace-location-keys'
 import type { ObjectDraft } from './types'
 
 interface ParsedObjectDraft {
@@ -85,11 +86,9 @@ function parseObjectDraft(
   const locationKey = draft.locationKey.trim()
   const name = draft.name.trim()
   const subtype = draft.subtype.trim()
-  const duplicateLocationKey = system.objects.some(candidate => candidate.id !== object.id && candidate.locationKey === locationKey)
+  const keyConflict = locationKeyConflict(clusterObjects(workspace.cluster), locationKey, object.locationKey)
   if (!locationKey) errors.locationKey = 'Location key is required.'
-  else if (duplicateLocationKey) {
-    errors.locationKey = `Location key "${locationKey}" is already used in this star system.`
-  }
+  else if (keyConflict) errors.locationKey = keyConflict
   else if (locationKey !== initial.locationKey) changes.locationKey = locationKey
   if (!name) errors.name = 'Object name is required.'
   else if (name.length > 80) errors.name = 'Object name must be 80 characters or fewer.'

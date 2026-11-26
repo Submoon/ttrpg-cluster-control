@@ -17,6 +17,7 @@ import {
   type Point,
   type StarSystem,
 } from '../../domain/workspace'
+import { clusterObjects } from '../../domain/workspace-location-keys'
 import { validName } from '../../domain/workspace-validation'
 import {
   objectPositions,
@@ -1156,7 +1157,7 @@ export function useSystemCreationWorkflows({
       let identityName = ''
       let identityOrder = 0
       if (session.type.kind === 'object') {
-        const identity = createSystemObject(system, session.type.subtype)
+        const identity = createSystemObject(system, session.type.subtype, undefined, clusterObjects(currentWorkspace.cluster))
         identityId = identity.id
         identityName = identity.name
       } else {
@@ -1207,7 +1208,7 @@ export function useSystemCreationWorkflows({
             if (target.kind !== 'free' && target.kind !== 'orbit') {
               throw new Error('Choose a clear map position or an existing Orbit for this object.')
             }
-            const generated = createSystemObject(latestSystem, session.type.subtype)
+            const generated = createSystemObject(latestSystem, session.type.subtype, undefined, clusterObjects(latestWorkspace.cluster))
             const object = {
               ...generated,
               id: identityId,

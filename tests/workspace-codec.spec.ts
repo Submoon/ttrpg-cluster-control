@@ -1,10 +1,13 @@
 import { expect, test } from './fixtures'
 import {
   createLocalWorkspace,
+  createSystemObject,
   exportJumpCluster,
   exportStarSystem,
   prepareJsonImport,
   restoreJumpClusterBackup,
+  restoreLocalWorkspace,
+  updateWorkspaceObject,
   type CustomFieldDefinition,
   type LocalWorkspace,
   type StarSystem,
@@ -76,7 +79,7 @@ function workspaceForPortableExports(): LocalWorkspace {
     id: 'portable-beta-star',
     family: 'CelestialBody',
     subtype: 'star',
-    locationKey: 'A',
+    locationKey: 'STAR-02',
     name: 'Beta Star',
     description: '',
     publication: 'known-type',
@@ -101,7 +104,7 @@ function workspaceForPortableExports(): LocalWorkspace {
     id: 'portable-beta-planet',
     family: 'CelestialBody',
     subtype: 'planet',
-    locationKey: 'PL-01',
+    locationKey: 'PL-02',
     name: 'Harrow',
     description: '',
     publication: 'known-type',
@@ -181,7 +184,7 @@ test('Cluster JSON export contains the complete portable campaign projection @pu
 
   expect(exported).toEqual({
     format: 'ttrpg-cluster-control-map',
-    version: 5,
+    version: 6,
     type: 'cluster',
     cluster: workspace.cluster,
     objectFieldSettings: workspace.objectFieldSettings,
@@ -321,7 +324,7 @@ test('standalone JSON export carries shared definitions and only its system layo
 
   expect(exported).toEqual({
     format: 'ttrpg-cluster-control-map',
-    version: 4,
+    version: 5,
     type: 'system',
     system,
     objectFieldSettings: workspace.objectFieldSettings,
@@ -348,4 +351,43 @@ test('standalone JSON export carries shared definitions and only its system layo
   expect(exported.layout).not.toHaveProperty('unresolvedExitPositions')
   expect(() => exportStarSystem(workspace, 'missing-system'))
     .toThrow('The selected star system no longer exists.')
+})
+
+test('legacy Zone positions survive hydration, a complete backup, and an independent Cluster copy @pure', () => {
+  const initial = createLocalWorkspace('Legacy layout', 'Remote relay')
+  const zone = initial.cluster.systems[0]!
+  const vessel = {
+    ...createSystemObject(zone, 'vessel', undefined, zone.objects),
+    placement: { kind: 'system' as const, x: 1.35, y: 0.5 },
+  }
+  const legacy = {
+    ...initial,
+    version: 5,
+    cluster: { ...initial.cluster, systems: [{ ...zone, objects: [...zone.objects, vessel] }] },
+    layout: { ...initial.layout, systemFrames: { [zone.id]: { left: 60, right: 60, top: 44, bottom: 44 } } },
+  }
+  const hydrated = restoreLocalWorkspace(legacy)
+  if (!hydrated) throw new Error('A supported older workspace must hydrate.')
+  const restoredVessel = hydrated.cluster.systems[0]?.objects.find(object => object.id === vessel.id)
+  expect(restoredVessel?.placement).toEqual(vessel.placement)
+  expect(restoredVessel?.legacyZonePlacement).toMatchObject({ systemId: zone.id, orbitId: null })
+
+  const olderBackup = { ...exportJumpCluster(hydrated), version: 5, cluster: legacy.cluster }
+  expect(restoreJumpClusterBackup(olderBackup).cluster).toEqual(hydrated.cluster)
+  const backup = JSON.parse(JSON.stringify(exportJumpCluster(hydrated))) as unknown
+  const restored = restoreJumpClusterBackup(backup)
+  expect(restored.cluster).toEqual(hydrated.cluster)
+  const copy = prepareJsonImport(initial, backup)
+  const copiedZone = copy.workspace.cluster.systems.find(system => system.id === copy.addedSystemIds[0])
+  const copiedVessel = copiedZone?.objects.find(object => object.family === 'Vessel')
+  expect(copiedVessel?.placement).toEqual(vessel.placement)
+  expect(copiedVessel?.legacyZonePlacement).toMatchObject({ systemId: copiedZone?.id, orbitId: null })
+  expect(exportStarSystem(hydrated, zone.id).system.objects.find(object => object.id === vessel.id))
+    .not.toHaveProperty('legacyZonePlacement')
+
+  const malformed = updateWorkspaceObject(hydrated, zone.id, vessel.id, {
+    placement: { kind: 'system', x: 1.55, y: 0.5 },
+  })
+  expect(restoreLocalWorkspace(malformed)).toBeNull()
+  expect(() => restoreJumpClusterBackup(exportJumpCluster(malformed))).toThrow(/valid/)
 })
