@@ -86,7 +86,7 @@ test('legacy player links drop resolved same-system loops while retaining anonym
         position: { x: 360, y: 280 },
         disclosure: 'known-type' as const,
         type: 'star-system' as const,
-        label: 'Star system' as const,
+        label: 'Zone' as const,
       },
     ],
     routes: [

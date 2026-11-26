@@ -1,7 +1,7 @@
 <template>
   <UModal
     v-model:open="dialogOpen"
-    title="Change system"
+    title="Change Zone"
     description="Choose the destination, placement, keys, and relationship changes for this hosted branch."
     :dismissible="!props.session?.confirming && !props.session?.placingOnMap"
     :content="{ onOpenAutoFocus: focusFirstControl, onCloseAutoFocus: restoreFocus }"
@@ -23,7 +23,7 @@
           </div>
 
           <label class="grid gap-1 text-sm font-medium">
-            Destination star system
+            Destination Zone
             <select
               class="workspace-control min-h-10 w-full rounded-md px-3"
               data-transfer-destination
@@ -58,7 +58,7 @@
                 Local Y
                 <input class="workspace-control min-h-10 rounded-md px-3" type="number" step="any" :value="props.session.placement.y" @input="updateFreeY">
               </label>
-              <p class="inspector-intro col-span-2 m-0">Coordinates are normalized to the destination system map. Positions beyond the visible envelope are allowed.</p>
+              <p class="inspector-intro col-span-2 m-0">Coordinates are normalized to the destination Zone map. Positions beyond the visible envelope are allowed.</p>
             </div>
 
             <label class="flex items-start gap-2 text-sm">
@@ -255,7 +255,7 @@ function objectReference(objectId: string): string {
 
 function ownerName(systemId: string | null): string {
   if (systemId === null) return 'unresolved exit'
-  return props.session?.sourceWorkspace?.cluster.systems.find(system => system.id === systemId)?.name ?? 'unknown system'
+  return props.session?.sourceWorkspace?.cluster.systems.find(system => system.id === systemId)?.name ?? 'unknown Zone'
 }
 
 function routeEndpointDescription(systemId: string | null, pointId: string | null, unresolvedExit?: string): string {
@@ -314,7 +314,7 @@ function restoreFocus(event: Event): void {
   event.preventDefault()
   const target = opener?.isConnected && !opener.matches(':disabled')
     ? opener
-    : document.querySelector<HTMLElement>('#workspace-main [role="group"][aria-label$="star system map"]')
+    : document.querySelector<HTMLElement>('#workspace-main [role="group"][aria-label$="Zone map"]')
       ?? document.getElementById('workspace-main')
   target?.focus({ preventScroll: true })
   opener = null

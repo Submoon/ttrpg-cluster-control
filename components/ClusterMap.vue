@@ -276,10 +276,10 @@ function prepareExportClone(clone: SVGSVGElement): void {
     const position = clusterSystemPosition(props.systemPositions, systemId)
     mark.setAttribute('transform', `translate(${position.x} ${position.y})`)
     mark.setAttribute('aria-label', props.systemActivation === 'inspect'
-      ? `Inspect ${system.name} system details`
+      ? `Inspect ${system.name} Zone details`
       : props.systemActivation === 'select'
         ? `Select ${system.name} system`
-        : `Open ${system.name} system map`)
+        : `Open ${system.name} Zone map`)
     const name = mark.querySelector<SVGTextElement>('.cluster-system-name')
     if (name) name.textContent = system.name
     const stars = system.objects.filter(object => object.subtype === 'star').length
@@ -1013,10 +1013,10 @@ function render(): void {
     .attr('role', 'button')
     .attr('tabindex', 0)
     .attr('aria-label', system => props.systemActivation === 'inspect'
-      ? `Inspect ${system.name} system details`
+      ? `Inspect ${system.name} Zone details`
       : props.systemActivation === 'select'
         ? `Select ${system.name} system`
-        : `Open ${system.name} system map`)
+        : `Open ${system.name} Zone map`)
 
   systemMarks.each(function (system) {
     describeMapPublication(this, `system-${system.id}`, system.publication)
@@ -1192,7 +1192,7 @@ function render(): void {
       .attr('x', 480)
       .attr('y', 268)
       .attr('text-anchor', 'middle')
-      .text('No systems on this chart yet.')
+      .text('No Zones on this chart yet.')
   }
 
   zoomBehavior = zoom<SVGSVGElement, unknown>()

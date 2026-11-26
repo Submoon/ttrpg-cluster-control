@@ -33,7 +33,7 @@ export function exportJumpCluster(workspace: LocalWorkspace): JumpClusterExport 
 export function exportStarSystem(workspace: LocalWorkspace, systemId: string): StarSystemExport {
   const system = workspace.cluster.systems.find(candidate => candidate.id === systemId)
   if (!system) {
-    throw new Error('The selected star system no longer exists.')
+    throw new Error('The selected Zone no longer exists.')
   }
 
   const orbitIds = new Set(system.orbits.map(orbit => orbit.id))

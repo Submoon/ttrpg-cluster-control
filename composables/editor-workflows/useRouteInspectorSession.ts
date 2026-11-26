@@ -214,7 +214,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
       candidateId !== otherSystemId && current.cluster.systems.some(system => system.id === candidateId),
     )
     if (!eligibleSystemIds.length) {
-      active.error = 'Choose a different known system for this route endpoint.'
+      active.error = 'Choose a different known Zone for this route endpoint.'
       return
     }
 
@@ -240,7 +240,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     const choosing = active.endpointToChoose
     const offered = choosing === 'from' ? active.sourceSystemIds : active.destinationSystemIds
     if (!offered?.includes(systemId)) {
-      active.error = 'Choose one of the known systems offered for this endpoint.'
+      active.error = 'Choose one of the known Zones offered for this endpoint.'
       return
     }
     if (choosing === 'from') active.sourceSystemIds = null
@@ -257,7 +257,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     const point = jumpPointsInCluster(current.cluster).find(reference => reference.point.id === pointId)
     if (!point || !systemId || point.system.id !== systemId
       || (!isFrom && point.point.id === active.draft.fromPointId)) {
-      active.error = 'Choose a Jump Point from the selected endpoint system.'
+      active.error = 'Choose a Jump Point from the selected endpoint Zone.'
       return
     }
     updateRouteInput(id, isFrom ? 'fromPointId' : 'toPointId', pointId)
@@ -352,20 +352,20 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     const errors: RouteInspectorSession['errors'] = {}
     if (!isJumpLevel(jumpLevel)) errors.jumpLevel = 'Jump level must be a positive integer.'
     if (!fromSystem) {
-      errors.fromSystemId = 'Choose an existing system as the route origin.'
+      errors.fromSystemId = 'Choose an existing Zone as the route origin.'
     }
     if (fromPointId && !points.some(reference =>
       reference.point.id === fromPointId && reference.system.id === active.draft.fromSystemId)) {
-      errors.fromPointId = 'Choose a Jump Point in the selected origin system.'
+      errors.fromPointId = 'Choose a Jump Point in the selected origin Zone.'
     }
     if (active.draft.destination === 'system') {
-      if (!toSystem) errors.toSystemId = 'Choose an existing system as the route destination.'
+      if (!toSystem) errors.toSystemId = 'Choose an existing Zone as the route destination.'
       else if (toSystem.id === active.draft.fromSystemId) {
-        errors.toSystemId = 'Choose a different system as the route destination.'
+        errors.toSystemId = 'Choose a different Zone as the route destination.'
       }
       if (active.draft.toPointId && !points.some(reference =>
         reference.point.id === active.draft.toPointId && reference.system.id === active.draft.toSystemId)) {
-        errors.toPointId = 'Choose a Jump Point in the selected destination system.'
+        errors.toPointId = 'Choose a Jump Point in the selected destination Zone.'
       }
     }
     if (active.draft.destination === 'external') {
@@ -448,7 +448,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
       if (/jump level/i.test(message)) active.errors.jumpLevel = message
       else if (/route origin/i.test(message)) active.errors.fromSystemId = message
       else if (/route destination/i.test(message)) active.errors.toSystemId = message
-      else if (/origin system/i.test(message)) active.errors.fromSystemId = message
+      else if (/origin Zone/i.test(message)) active.errors.fromSystemId = message
       else if (/origin Jump Point/i.test(message)) active.errors.fromPointId = message
       else if (/destination Jump Point/i.test(message)) active.errors.toPointId = message
       else if (/unresolved exit/i.test(message)) active.errors.unresolvedExit = message

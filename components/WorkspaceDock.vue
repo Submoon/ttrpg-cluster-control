@@ -92,8 +92,8 @@
         @choose-candidate="emit('choose-creation-candidate', $event)"
       />
       <ClusterSystemPlacementControls
-        v-if="props.clusterAddLabel === 'System' || props.clusterMoveTargeting"
-        :purpose="props.clusterAddLabel === 'System' ? 'add' : 'move'"
+        v-if="props.clusterAddLabel === 'Zone' || props.clusterMoveTargeting"
+        :purpose="props.clusterAddLabel === 'Zone' ? 'add' : 'move'"
         @begin-map-move="emit('begin-cluster-system-map-move')"
       />
       <SystemObjectPlacementControls

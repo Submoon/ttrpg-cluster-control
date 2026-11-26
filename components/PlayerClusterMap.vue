@@ -1,7 +1,7 @@
 <template>
   <section class="player-cluster-map" aria-label="Player-visible Jump Cluster map">
     <p v-if="props.document.systems.length === 0" class="player-cluster-map-empty" role="status">
-      No star systems are visible to players.
+      No Zones are visible to players.
     </p>
     <div v-if="props.document.systems.length" class="player-cluster-map-navigation" role="group" aria-label="Player cluster map navigation" data-player-map-obstruction>
       <UButton color="neutral" variant="outline" size="xs" icon="i-lucide-arrow-left" aria-label="Pan left" :disabled="!canPan" @click="panView(-1, 0)" />
@@ -45,7 +45,7 @@
         :transform="`translate(${system.position.x} ${system.position.y})`"
         :data-player-system-id="system.id"
         :role="system.disclosure === 'revealed' ? 'button' : 'group'"
-        :aria-label="system.disclosure === 'revealed' ? `Open ${system.label} system preview` : system.label"
+        :aria-label="system.disclosure === 'revealed' ? `Open ${system.label} Zone preview` : system.label"
         :tabindex="system.disclosure === 'revealed' ? 0 : undefined"
         @click="openSystem($event, system)"
         @keydown="event => openSystemFromKeyboard(event, system)"

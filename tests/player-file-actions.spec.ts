@@ -6,7 +6,7 @@ import { usePlayerFileExports } from '../composables/usePlayerFileExports'
 
 const genericExportError = 'The player export could not be completed.'
 const emptyImageError = 'This player map has no public features to export as an image.'
-const hiddenSystemError = 'The current system is not revealed for player image export.'
+const hiddenSystemError = 'The current Zone is not revealed for player image export.'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -203,7 +203,7 @@ test('empty and ineligible image scenes are refused while an empty Revealed syst
     position: { x: 0, y: 0 },
     disclosure: 'known-type',
     type: 'star-system',
-    label: 'Star system',
+    label: 'Zone',
   })
   const partialSystemExport = usePlayerFileExports({
     prepare: async () => ({ document: partialDocument, scene: null, isCurrent: () => true }),

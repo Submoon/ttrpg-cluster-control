@@ -9,7 +9,7 @@ import {
 test('selected-system export fits the supplied label metrics independently of the editor camera @pure', () => {
   const selected: StarSystem = {
     id: 'selected',
-    name: 'Selected system',
+    name: 'Selected Zone',
     publication: 'hidden',
     objects: [],
     orbits: [],

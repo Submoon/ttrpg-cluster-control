@@ -563,7 +563,7 @@ test('second import creates a disjoint entity copy while reusing a compatible fi
 
   expect(new Set([...firstIds, ...secondIds]).size).toBe(firstIds.length + secondIds.length)
   expect(second.summary.possibleMatches).toContainEqual(expect.objectContaining({
-    entity: 'Star system',
+    entity: 'Zone',
     name: 'Imported Alpha',
     existingSystem: 'Imported Alpha',
     reason: 'same name',
@@ -649,10 +649,10 @@ test('invalid version and foreign layout reject without changing the destination
   }
 
   expect(() => prepareJsonImport(destination, invalidVersion))
-    .toThrow('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
+    .toThrow('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 Zone JSON export.')
   expect(destination).toEqual(before)
   expect(() => prepareJsonImport(destination, foreignSystemLayout))
-    .toThrow('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
+    .toThrow('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 Zone JSON export.')
   expect(destination).toEqual(before)
 })
 

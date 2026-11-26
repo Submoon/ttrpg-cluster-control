@@ -226,7 +226,7 @@ export function clusterSystemPosition(
   if (override) return override
   const position = systemPositions[systemId]
   if (!position) {
-    throw new Error(`No cluster-map position exists for star system "${systemId}".`)
+    throw new Error(`No cluster-map position exists for Zone "${systemId}".`)
   }
 
   return { x: 112 + position.x * 736, y: 96 + position.y * 368 }
@@ -278,21 +278,21 @@ export function clusterRouteGeometry(
   }
 
   const from = cluster.systems.find(system => system.id === route.fromSystemId)
-  if (!from) throw new Error(`Jump Route "${route.id}" references a missing origin system.`)
+  if (!from) throw new Error(`Jump Route "${route.id}" references a missing origin Zone.`)
   const fromPoint = route.fromPointId === null ? undefined : requiredJumpPoint(jumpPoints, route.fromPointId)
   if (fromPoint && fromPoint.system.id !== from.id) {
-    throw new Error(`Jump Route "${route.id}" references an origin Jump Point in another system.`)
+    throw new Error(`Jump Route "${route.id}" references an origin Jump Point in another Zone.`)
   }
   const start = clusterSystemPosition(systemPositions, route.fromSystemId, positionOverrides)
   const to = route.toSystemId === null
     ? undefined
     : cluster.systems.find(system => system.id === route.toSystemId)
   if (route.toSystemId !== null && !to) {
-    throw new Error(`Jump Route "${route.id}" references a missing destination system.`)
+    throw new Error(`Jump Route "${route.id}" references a missing destination Zone.`)
   }
   const toPoint = route.toPointId === null ? undefined : requiredJumpPoint(jumpPoints, route.toPointId)
   if (toPoint && toPoint.system.id !== to?.id) {
-    throw new Error(`Jump Route "${route.id}" references a destination Jump Point in another system.`)
+    throw new Error(`Jump Route "${route.id}" references a destination Jump Point in another Zone.`)
   }
 
   const savedExitPoint = route.toSystemId === null
@@ -377,6 +377,6 @@ export function clusterRouteLabel(
 
 function routeSystem(cluster: JumpCluster, systemId: string) {
   const system = cluster.systems.find(candidate => candidate.id === systemId)
-  if (!system) throw new Error(`Jump Route references a missing system "${systemId}".`)
+  if (!system) throw new Error(`Jump Route references a missing Zone "${systemId}".`)
   return system
 }

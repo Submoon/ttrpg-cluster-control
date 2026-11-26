@@ -1,13 +1,12 @@
 import type { Locator } from '@playwright/test'
 import {
   addStarSystem,
-  createLocalWorkspace,
   createOrbit,
   createSystemObject,
   exportJumpCluster,
 } from '../domain/workspace'
-import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from './fixtures'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import {
   addClusterSystem,
   captureMapExportBlobs,
@@ -55,7 +54,7 @@ test('create, name, move, resize, and reload a Warden system', async ({ page }) 
   const menu = page.getByRole('menu', { name: 'Map item actions', exact: true })
   await menu.getByRole('menuitem', { name: 'Edit', exact: true }).click()
   const inspector = page.locator('#workspace-inspector-panel')
-  const systemName = inspector.getByLabel('Star system', { exact: true })
+  const systemName = inspector.getByLabel('Zone', { exact: true })
   await expect(systemName).toBeEditable()
   await systemName.fill('Helion')
   await inspector.getByRole('button', { name: 'Apply details', exact: true }).click()
@@ -192,9 +191,9 @@ test('transferring a hosted branch reviews and resolves a destination Location k
   )
   await page.mouse.up()
 
-  const review = page.getByRole('dialog', { name: 'Change system', exact: true })
+  const review = page.getByRole('dialog', { name: 'Change Zone', exact: true })
   await expect(review).toBeVisible()
-  await expect(review.getByLabel('Destination star system')).toHaveValue(fixture.destination.id)
+  await expect(review.getByLabel('Destination Zone')).toHaveValue(fixture.destination.id)
   await expect(review).toContainText('2 objects and 1 hosted Orbits will move together.')
   await expect(review).toContainText('Herma')
   await expect(review).toContainText('Nix')

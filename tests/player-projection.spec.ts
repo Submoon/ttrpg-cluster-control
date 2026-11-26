@@ -43,7 +43,7 @@ test('player projection emits only the marker information allowed by each public
     title: 'Player Jump Cluster',
     systems: [
       { id: 'system-1', disclosure: 'unknown', label: 'Unknown presence' },
-      { id: 'system-2', disclosure: 'known-type', type: 'star-system', label: 'Star system' },
+      { id: 'system-2', disclosure: 'known-type', type: 'star-system', label: 'Zone' },
       { id: 'system-3', disclosure: 'revealed', type: 'star-system', label: 'Revealed Name' },
     ],
   })

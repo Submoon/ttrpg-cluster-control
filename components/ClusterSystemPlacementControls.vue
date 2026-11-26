@@ -4,7 +4,7 @@
     class="cluster-system-placement-guidance"
     role="status"
   >
-    Click a clear point on the Cluster map to add a system.
+    Click a clear point on the Cluster map to add a Zone.
   </p>
   <UButton
     v-else
@@ -12,11 +12,11 @@
     color="neutral"
     variant="outline"
     size="sm"
-    aria-label="Move selected system on map"
+    aria-label="Move selected Zone on map"
     @click="emit('begin-map-move')"
   >
     <UIcon name="i-lucide-move" aria-hidden="true" />
-    Move selected system on map
+    Move selected Zone on map
   </UButton>
 </template>
 

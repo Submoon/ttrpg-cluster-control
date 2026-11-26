@@ -36,14 +36,14 @@ export function routeSharingStatus(
   const noVisibleEndpointMessage = !isBlocked
     ? null
     : route.toSystemId === null
-      ? 'This shared route has no visible endpoint because its origin system is Hidden.'
+      ? 'This shared route has no visible endpoint because its origin Zone is Hidden.'
       : origin && destination
-        ? 'This shared route has no visible endpoint because both endpoint systems are Hidden.'
+        ? 'This shared route has no visible endpoint because both endpoint Zones are Hidden.'
         : 'This shared route has no visible endpoint in the current player view.'
   const description = route.playerShared
     ? isBlocked
       ? `Configured visibility: ${visibilityLabel}. ${noVisibleEndpointMessage}`
-      : `Configured visibility: ${visibilityLabel}. The route appears when at least one endpoint system is visible; Hidden systems are anonymized.`
+      : `Configured visibility: ${visibilityLabel}. The route appears when at least one endpoint Zone is visible; Hidden Zones are anonymized.`
     : `Configured visibility: ${visibilityLabel}. This route is omitted from player publication.`
 
   return { visibilityLabel, hasVisibleEndpoint, isBlocked, noVisibleEndpointMessage, description }

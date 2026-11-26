@@ -16,7 +16,7 @@ function playerDocument(): PlayerClusterDocument {
         position: { x: 1, y: 1 },
         disclosure: 'known-type',
         type: 'star-system',
-        label: 'Star system',
+        label: 'Zone',
       },
       {
         id: 'system-public',

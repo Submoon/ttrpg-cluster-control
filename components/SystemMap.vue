@@ -21,7 +21,7 @@
       :class="{ 'map-touch-surface': touchNavigation }"
       viewBox="0 0 960 560"
       role="group"
-      :aria-label="`${props.presentation?.system.name ?? system.name} star system map`"
+      :aria-label="`${props.presentation?.system.name ?? system.name} Zone map`"
       aria-describedby="workspace-map-tool-shortcut-help system-map-keyboard-help"
       :data-system-id="system.id"
       :data-system-object-move-targeting="props.moveTargeting ? 'true' : undefined"
@@ -544,7 +544,7 @@ function cancelActiveMapGestureOnEscape(event: KeyboardEvent): void {
  */
 async function exportImage(format: MapImageFormat, palette: MapImagePalette = 'active'): Promise<Blob> {
   const element = svgElement.value
-  if (!element) throw new Error('The star system map is not ready to export.')
+  if (!element) throw new Error('The Zone map is not ready to export.')
   return exportMapImage(
     element,
     format,
@@ -556,7 +556,7 @@ async function exportImage(format: MapImageFormat, palette: MapImagePalette = 'a
 
 /** Rebuilds the isolated export copy from applied data to keep every export path visually identical. */
 function renderAppliedExportScene(clone: SVGSVGElement): void {
-  clone.setAttribute('aria-label', `${props.system.name} star system map`)
+  clone.setAttribute('aria-label', `${props.system.name} Zone map`)
   clone.removeAttribute('data-system-object-move-targeting')
   const renderer = renderSystemMap({
     element: clone,

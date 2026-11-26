@@ -9,10 +9,10 @@ export function setWorkspaceSystemFrame(
   insets: SystemFrameInsets,
 ): LocalWorkspace {
   if (!workspace.cluster.systems.some(system => system.id === systemId)) {
-    throw new Error('The selected star system no longer exists.')
+    throw new Error('The selected Zone no longer exists.')
   }
   if (!isSystemFrameInsets(insets)) {
-    throw new Error('A system frame needs finite, nonnegative insets.')
+    throw new Error('A Zone frame needs finite, nonnegative insets.')
   }
 
   return {

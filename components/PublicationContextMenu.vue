@@ -135,7 +135,7 @@ const items = computed(() => [
   },
   {
     label: 'Delete',
-    description: props.lastSystem ? 'A Jump Cluster must keep at least one star system.' : undefined,
+    description: props.lastSystem ? 'A Jump Cluster must keep at least one Zone.' : undefined,
     icon: 'i-lucide-trash-2',
     color: 'error' as const,
     disabled: props.busy || props.lastSystem || props.saving,

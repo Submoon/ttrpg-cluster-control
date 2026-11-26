@@ -69,7 +69,7 @@ export function serializeContinuousPlayerMapImage(
   const { systems } = projectPlayerContinuousMap(document)
   const selected = image.scope === 'system' ? systems.find(system => system.id === image.systemId) : undefined
   if (image.scope === 'system' && (selected?.disclosure !== 'revealed' || !selected.geometry)) {
-    throw new Error('Select a Revealed public system before exporting that image scope.')
+    throw new Error('Select a Revealed public Zone before exporting that image scope.')
   }
   const snapshot = image.scope === 'viewport' ? image.snapshot : undefined
   const camera = snapshot?.camera ?? identityCamera

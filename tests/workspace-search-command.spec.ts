@@ -669,7 +669,7 @@ test('transfer Undo and Redo reveal the stable root in its actual owner @pure', 
       clusterId: before.cluster.id,
       contextLabel: source.name,
       kind: 'transfer' as const,
-      label: `Change system for ${root.name}`,
+      label: `Change Zone for ${root.name}`,
       target: { kind: 'object' as const, id: root.id, systemId: source.id },
       parent: { kind: 'system' as const, id: destination.id },
     }
@@ -736,7 +736,7 @@ test('editing the destination Orbit resumes transfer review and preserves the dr
     expect(transfer.completeMapPlacement(lease, { kind: 'orbit', orbitId: orbit.id, angle: 1.5 })).toBe(false)
     expect(inspector.systemTransferSession.value).toMatchObject({
       sessionId, open: true, placingOnMap: false, placement: previousPlacement,
-      error: 'Finish editing the destination system before continuing the transfer.',
+      error: 'Finish editing the destination Zone before continuing the transfer.',
     })
     await transfer.handleIntent({ kind: 'place-on-map', sessionId })
     expect(transfer.pendingMapPlacement.value).toBeNull()
@@ -838,9 +838,9 @@ test('continuous history refits the surviving Cluster after its inspected system
     const action = {
       workspaceId: harness.workspace.value.id,
       clusterId,
-      contextLabel: 'Star System',
+      contextLabel: 'Zone',
       kind: 'delete' as const,
-      label: 'Delete Star System',
+      label: 'Delete Zone',
       target: { kind: 'system' as const, id: removedSystem.id },
       parent: { kind: 'cluster' as const, id: clusterId },
     }

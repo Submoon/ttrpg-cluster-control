@@ -101,7 +101,7 @@ function validPlayerDocument(): PlayerClusterDocument {
         position: { x: 240, y: 180 },
         disclosure: 'known-type',
         type: 'star-system',
-        label: 'Star system',
+        label: 'Zone',
       },
       {
         id: 'system-3',
@@ -329,6 +329,21 @@ test('player JSON v2 rejects route attachments outside their own Revealed Jump P
   }
 })
 
+test('player JSON displays a generic Zone while admitting the legacy Known type label @pure', () => {
+  const document = validPlayerDocument()
+  const legacy = {
+    ...document,
+    systems: document.systems.map(system => system.disclosure === 'known-type'
+      ? { ...system, label: 'Star system' }
+      : system),
+  }
+
+  const restored = parsePlayerJson(JSON.stringify(legacy))
+  expect(restored.systems[1]).toMatchObject({ disclosure: 'known-type', label: 'Zone' })
+  expect(restored.systems[2]).toEqual(document.systems[2])
+  expect(parsePlayerJson(serializePlayerJson(restored))).toEqual(restored)
+})
+
 test('player JSON admits all disclosure modes, permitted values, and public relationship graphs @pure', () => {
   const document = validPlayerDocument()
   const serialized = serializePlayerJson(document)
@@ -340,7 +355,7 @@ test('player JSON admits all disclosure modes, permitted values, and public rela
   expect(restored).not.toBe(document)
   expect(restored.systems[0]).toMatchObject({ disclosure: 'unknown', label: 'Unknown presence' })
   expect(restored.systems[0]).not.toHaveProperty('map')
-  expect(restored.systems[1]).toMatchObject({ disclosure: 'known-type', label: 'Star system' })
+  expect(restored.systems[1]).toMatchObject({ disclosure: 'known-type', label: 'Zone' })
   expect(restored.systems[1]).not.toHaveProperty('map')
 
   const revealed = restored.systems[2]

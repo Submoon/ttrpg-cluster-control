@@ -22,7 +22,7 @@
     >
       <title>{{ sceneCluster.name }} continuous Warden map</title>
       <desc id="continuous-warden-map-keyboard-help">
-        Zoom continuously to reveal each system interior independently. In Move, drag an object to move it within its owning system or drop it inside another system’s frame to transfer it. Select a system, then drag its name to move it. Select a system or Orbit to reveal its editing handles.
+        Zoom continuously to reveal each Zone independently. In Move, drag an object to move it within its owning Zone or drop it inside another Zone’s frame to transfer it. Select a Zone, then drag its name to move it. Select a Zone or Orbit to reveal its editing handles.
       </desc>
       <defs>
         <radialGradient :id="`${haloGradientId}-fill`" cx="50%" cy="50%" r="55%">

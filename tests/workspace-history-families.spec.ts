@@ -804,7 +804,7 @@ test('focused map deletion reviews a seeded system cascade and Undo restores the
   await expect(deletion).toBeFocused()
   await page.keyboard.press('Space')
   await expect(review).toBeVisible()
-  await expect(review).toContainText('A star system')
+  await expect(review).toContainText('A Zone')
   await expect(review).toContainText('Herma')
   await expect(review).toContainText('Iria')
   await expect(review).toContainText('Lost Gate')

@@ -312,7 +312,7 @@ export function objectPositions(
       return override
     }
     if (visiting.has(object.id)) {
-      throw new Error('The system map contains a circular Orbit relationship.')
+      throw new Error('The Zone map contains a circular Orbit relationship.')
     }
     visiting.add(object.id)
 
@@ -323,7 +323,7 @@ export function objectPositions(
       const placement = object.placement
       const orbit = system.orbits.find(candidate => candidate.id === placement.orbitId)
       if (!orbit) {
-        throw new Error('The system map contains an object with an invalid Orbit host.')
+        throw new Error('The Zone map contains an object with an invalid Orbit host.')
       }
 
       let center: Point
@@ -332,7 +332,7 @@ export function objectPositions(
       } else {
         const host = objectsById.get(orbit.hostId)
         if (!host) {
-          throw new Error('The system map contains an object with an invalid Orbit host.')
+          throw new Error('The Zone map contains an object with an invalid Orbit host.')
         }
         center = locate(host)
       }

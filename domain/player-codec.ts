@@ -442,15 +442,15 @@ function restoreSystemMarker(
     return { id, position, disclosure: 'unknown', label: 'Unknown presence' }
   }
   if (value.disclosure === 'known-type') {
-    if (value.type !== 'star-system' || value.label !== 'Star system') return invalidDocument()
+    if (value.type !== 'star-system' || (value.label !== 'Zone' && value.label !== 'Star system')) return invalidDocument()
     budget.addKey('disclosure')
     budget.addString('known-type')
     budget.addKey('type')
     budget.addString('star-system')
     budget.addKey('label')
-    budget.addString('Star system')
+    budget.addString('Zone')
     budget.endObject()
-    return { id, position, disclosure: 'known-type', type: 'star-system', label: 'Star system' }
+    return { id, position, disclosure: 'known-type', type: 'star-system', label: 'Zone' }
   }
   if (value.disclosure !== 'revealed' || value.type !== 'star-system') return invalidDocument()
 

@@ -369,5 +369,5 @@ test('standalone JSON export carries shared definitions and only its system layo
   expect(exported.layout).not.toHaveProperty('systemPositions')
   expect(exported.layout).not.toHaveProperty('unresolvedExitPositions')
   expect(() => exportStarSystem(workspace, 'missing-system'))
-    .toThrow('The selected star system no longer exists.')
+    .toThrow('The selected Zone no longer exists.')
 })

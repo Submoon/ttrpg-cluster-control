@@ -11,7 +11,7 @@ import {
 test('a retained chart draft becomes one action that can be undone and redone', async ({ page }) => {
   const { systemId } = await createSingleSystemWorkspace(page)
   const editor = await openChartDetailsEditor(page)
-  const name = editor.getByLabel('Star system', { exact: true })
+  const name = editor.getByLabel('Zone', { exact: true })
   await name.fill('Vesper Prime')
   await hideWorkspaceInspector(page)
   await openChartDetailsEditor(page)

@@ -1,6 +1,6 @@
 ---
 title: Create empty generic Zones
-status: open
+status: in-progress
 type: implementation
 specification: ../spec.md
 baseline: c649b576f1636c8ffec57da6b6112b6316bee882
@@ -29,7 +29,7 @@ Use origin/main at c649b576f1636c8ffec57da6b6112b6316bee882, verified on 2026-11
 
 Use the accepted specification's whole-Cluster key policy and explicit legacy exceptions. Route objects include stationary obstacles, anomalies, derelicts and ships; position is manual. Keep one guarded mutation/writer/history path and exclude unapplied previews from saved or public data.
 
-This ticket is planned and unclaimed. Its ready-for-agent role means the brief is specified; unresolved blockers still prevent execution. Intermediate consumers must preserve admitted data or explicitly reject an unsupported operation, never silently drop records.
+Claimed on 2026-11-26 on codex/issue-60-ticket-01 from integration revision c925e1a1, which adds the approved planning artifacts to the original baseline. Intermediate consumers must preserve admitted data or explicitly reject an unsupported operation, never silently drop records.
 
 ## Acceptance criteria
 

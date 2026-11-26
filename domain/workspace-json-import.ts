@@ -228,7 +228,7 @@ function workspaceEntityNames(workspace: LocalWorkspace): Map<string, string> {
     [workspace.cluster.id, `Jump Cluster "${workspace.cluster.name}"`],
   ])
   for (const system of workspace.cluster.systems) {
-    entities.set(system.id, `Star system "${system.name}"`)
+    entities.set(system.id, `Zone "${system.name}"`)
     for (const object of system.objects) {
       entities.set(object.id, `${object.subtype} "${object.name}" in "${system.name}"`)
     }
@@ -395,7 +395,7 @@ export function prepareJsonImport(
 ): PreparedJsonImport {
   const map = prepareImportedMap(value)
   if (!isImportedMap(map)) {
-    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
+    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 Zone JSON export.')
   }
 
   const sourceSystems = map.type === 'cluster' ? map.cluster.systems : [map.system]
@@ -410,7 +410,7 @@ export function prepareJsonImport(
   const existingNames = workspaceEntityNames(workspace)
   const sourceEntities = [
     ...sourceSystems.flatMap(system => [
-      { id: system.id, entity: 'Star system', name: system.name },
+      { id: system.id, entity: 'Zone', name: system.name },
       ...system.objects.map(object => ({ id: object.id, entity: object.subtype, name: object.name })),
       ...system.orbits.map(orbit => ({ id: orbit.id, entity: 'Orbit', name: `Orbit ${orbit.order}` })),
     ]),
@@ -430,7 +430,7 @@ export function prepareJsonImport(
     )
     for (const existingSystem of existingSystems) {
       possibleMatches.push({
-        entity: 'Star system',
+        entity: 'Zone',
         name: sourceSystem.name,
         existingSystem: existingSystem.name,
         reason: 'same name',
@@ -567,10 +567,10 @@ export function prepareJsonImport(
   } else {
     const addedSystemId = addedSystemIds[0]
     if (!addedSystemId) {
-      throw new Error('The imported star system is missing.')
+      throw new Error('The imported Zone is missing.')
     }
     const anchor = standaloneAnchor ?? initialClusterSystemPosition(workspace.cluster.systems.length)
-    if (!isPoint(anchor)) throw new Error('Choose a finite Cluster position for the imported star system.')
+    if (!isPoint(anchor)) throw new Error('Choose a finite Cluster position for the imported Zone.')
     layout.systemPositions[addedSystemId] = { x: anchor.x, y: anchor.y }
   }
   const importedOrbitRadii = normalizeOrbitRadii(
@@ -578,14 +578,14 @@ export function prepareJsonImport(
     map.layout.orbitEllipseRadii ?? {},
   )
   if (!importedOrbitRadii) {
-    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
+    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 Zone JSON export.')
   }
   for (const [sourceId, radii] of Object.entries(importedOrbitRadii)) {
     layout.orbitRadii[ids.get(sourceId)!] = radii
   }
   const importedOrbitRotations = normalizeOrbitRotations(map.layout.orbitRotations ?? {})
   if (!importedOrbitRotations) {
-    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
+    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 Zone JSON export.')
   }
   for (const [sourceId, rotation] of Object.entries(importedOrbitRotations)) {
     layout.orbitRotations[ids.get(sourceId)!] = rotation
@@ -636,7 +636,7 @@ export function jsonImportReviewEffects(
 ): { signature: string; existingFieldIds: string[] } {
   const map = prepareImportedMap(value)
   if (!isImportedMap(map)) {
-    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
+    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 Zone JSON export.')
   }
 
   const fieldState = (field: CustomFieldDefinition, includeId: boolean): object => ({

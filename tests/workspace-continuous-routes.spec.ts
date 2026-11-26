@@ -141,7 +141,7 @@ test('continuous routes support clipped selection, guarded inspection and author
   await expect(first).toHaveAccessibleName(/Select Jump Level 1 route/)
 
   await clickDockAction(page, 'Add Jump Route')
-  await selectInspectorOption(inspector.getByLabel('From system'), 'Vesper Prime')
+  await selectInspectorOption(inspector.getByLabel('From Zone'), 'Vesper Prime')
   await selectInspectorOption(inspector.getByLabel('Route destination'), 'Unresolved external exit')
   await inspector.getByLabel('Unknown destination label').fill('Far survey')
   await inspector.getByRole('button', { name: 'Create Jump Route' }).click()

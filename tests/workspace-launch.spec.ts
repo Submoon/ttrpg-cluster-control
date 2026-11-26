@@ -22,7 +22,7 @@ test('the product root creates and resumes a saved local workspace @preview-smok
   await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible()
   await expect(page.getByRole('banner').getByRole('link', { name: 'Privacy policy' })).toBeVisible()
   await page.getByLabel('Jump Cluster').fill('Halcyon Spur')
-  await page.getByLabel('First star system').fill('Lark')
+  await page.getByLabel('First Zone').fill('Lark')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   await expectOpenedWorkspace(page, 'Halcyon Spur', 'Lark')

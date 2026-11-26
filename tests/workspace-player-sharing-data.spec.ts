@@ -400,7 +400,7 @@ test('route endpoints require distinct known systems and local Jump Point owners
     fromPointId: null,
     toSystemId: originSystem.id,
     toPointId: null,
-  })).toThrow(/different system/)
+  })).toThrow(/different Zone/)
 })
 
 test('version 5 backup restore and independent import preserve private notes and remap Field masks @pure', () => {

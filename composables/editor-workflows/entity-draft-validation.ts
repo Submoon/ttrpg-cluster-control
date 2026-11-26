@@ -87,7 +87,7 @@ function parseObjectDraft(
   const duplicateLocationKey = system.objects.some(candidate => candidate.id !== object.id && candidate.locationKey === locationKey)
   if (!locationKey) errors.locationKey = 'Location key is required.'
   else if (duplicateLocationKey) {
-    errors.locationKey = `Location key "${locationKey}" is already used in this star system.`
+    errors.locationKey = `Location key "${locationKey}" is already used in this Zone.`
   }
   else if (locationKey !== initial.locationKey) changes.locationKey = locationKey
   if (!name) errors.name = 'Object name is required.'

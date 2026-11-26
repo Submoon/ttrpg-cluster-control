@@ -53,10 +53,10 @@ test('global Search reveals an exact Location key independently of the map filte
   const query = searchDialog.getByRole('combobox', { name: 'Search workspace', exact: true })
   await query.fill('A')
   const harrowResult = searchDialog.getByRole('option', {
-    name: /Primary Star.*Star System: Harrow.*Location key: A/,
+    name: /Primary Star.*Zone: Harrow.*Location key: A/,
   })
   await expect(harrowResult).toBeVisible()
-  await expect(harrowResult).toContainText('Star System: Harrow')
+  await expect(harrowResult).toContainText('Zone: Harrow')
   await searchDialog.getByRole('button', { name: 'Search filters', exact: true }).click()
   await searchDialog.getByRole('checkbox', { name: 'Star', exact: true }).check()
   await searchDialog.getByRole('button', { name: 'Close filters', exact: true }).click()

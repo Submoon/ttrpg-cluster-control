@@ -86,7 +86,7 @@ test('workspace search finds objects by name and Location key in unopened system
     objectId: remoteObject.id,
   }])
   expect(keyResult.map(result => result.target)).toEqual(nameResult.map(result => result.target))
-  expect(nameResult[0]).toMatchObject({ name: 'Distant Beacon', contextLabel: 'Star System: Harrow' })
+  expect(nameResult[0]).toMatchObject({ name: 'Distant Beacon', contextLabel: 'Zone: Harrow' })
 })
 
 
@@ -137,10 +137,10 @@ test('criteria-only workspace search returns matching objects grouped by system 
   })
 
   expect(results.map(result => [result.contextLabel, result.name, result.target.kind === 'object' ? result.target.objectId : null])).toEqual([
-    ['Star System: Altair', 'Beacon', 'relay-a'],
-    ['Star System: Altair', 'Beacon', 'relay-z'],
-    ['Star System: Altair', 'Signal', 'relay-signal'],
-    ['Star System: Vesper', 'Beacon', 'vesper-relay'],
+    ['Zone: Altair', 'Beacon', 'relay-a'],
+    ['Zone: Altair', 'Beacon', 'relay-z'],
+    ['Zone: Altair', 'Signal', 'relay-signal'],
+    ['Zone: Vesper', 'Beacon', 'vesper-relay'],
   ])
 })
 

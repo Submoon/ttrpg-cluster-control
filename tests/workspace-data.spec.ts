@@ -366,7 +366,7 @@ test('the default Warden map restores a legacy backup with retained layout and v
   await captureMapExportBlobs(page)
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByLabel('First Zone').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await fitWorkspaceMap(page)
 
@@ -404,7 +404,7 @@ test('the default Warden map restores a legacy backup with retained layout and v
   expect(await downloadJson(page, 'Export Jump Cluster JSON')).toEqual(initialExport)
 
   const hierarchyBeforeRestore = await openWorkspaceHierarchy(page, 'Jump Cluster contents')
-  await expect(hierarchyBeforeRestore.getByRole('navigation', { name: 'Star systems', exact: true })).toHaveCount(0)
+  await expect(hierarchyBeforeRestore.getByRole('navigation', { name: 'Zones', exact: true })).toHaveCount(0)
   await expect(hierarchyBeforeRestore.getByRole('treeitem', { name: 'Vesper', exact: true })).toHaveCount(1)
 
   const canceledPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', legacyBackupText)
@@ -417,7 +417,7 @@ test('the default Warden map restores a legacy backup with retained layout and v
   await expect(undo).toHaveAttribute('aria-description', /1 action available to undo/)
 
   const draftEditor = await openChartDetailsEditor(page)
-  await draftEditor.getByLabel('Star system', { exact: true }).fill('Unapplied Vesper')
+  await draftEditor.getByLabel('Zone', { exact: true }).fill('Unapplied Vesper')
   await hideWorkspaceInspector(page)
   const recordsBeforeReplacement = await readWorkspaceRecoveryRecords(page)
   const oldWorkspaceId = (recordsBeforeReplacement.current as { id: string }).id
@@ -437,7 +437,7 @@ test('the default Warden map restores a legacy backup with retained layout and v
     expect(await readReviewedDownload(page, draftReview)).toEqual(initialExport)
     await resolveJumpClusterRestoreReview(draftReview, 'cancel')
     const resumedDraftEditor = await openChartDetailsEditor(page)
-    await expect(resumedDraftEditor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
+    await expect(resumedDraftEditor.getByLabel('Zone', { exact: true })).toHaveValue('Unapplied Vesper')
     await hideWorkspaceInspector(page)
 
     const acceptedPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', legacyBackupText)
@@ -456,7 +456,7 @@ test('the default Warden map restores a legacy backup with retained layout and v
 
     await resolveJumpClusterRestoreReview(acceptedPreview, 'cancel')
     const draftAfterFailedReplacement = await openChartDetailsEditor(page)
-    await expect(draftAfterFailedReplacement.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
+    await expect(draftAfterFailedReplacement.getByLabel('Zone', { exact: true })).toHaveValue('Unapplied Vesper')
     await hideWorkspaceInspector(page)
 
     const retryPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', legacyBackupText)

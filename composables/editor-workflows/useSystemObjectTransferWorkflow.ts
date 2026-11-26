@@ -84,7 +84,7 @@ function currentSystem(workspace: LocalWorkspace, systemId: string) {
   return workspace.cluster.systems.find(system => system.id === systemId)
 }
 
-const destinationDraftMessage = 'Finish editing the destination system before continuing the transfer.'
+const destinationDraftMessage = 'Finish editing the destination Zone before continuing the transfer.'
 
 /**
  * Owns the editor-side transfer lifetime while sharing the normal history and writer path.
@@ -179,7 +179,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       const source = currentSystem(current, sourceSystemId)
       const root = source?.objects.find(object => object.id === rootObjectId)
       if (!source || !root || !resolveSystemObjectBranch(source, rootObjectId)) {
-        throw new Error('The selected map object no longer exists in its source system.')
+        throw new Error('The selected map object no longer exists in its source Zone.')
       }
       activeSession.value = createSession(current, sourceSystemId, rootObjectId)
     } catch (error) {
@@ -275,7 +275,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
   async function beginMapPlacement(current: ActiveTransferSession): Promise<void> {
     const destinationSystemId = current.draft.destinationSystemId.value
     if (!destinationSystemId) {
-      current.error.value = 'Choose a destination star system before placing the object.'
+      current.error.value = 'Choose a destination Zone before placing the object.'
       return
     }
     const workspace = options.workspace.value
@@ -507,7 +507,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     const request = {
       action: {
         kind: 'transfer' as const,
-        label: `Change system for ${root?.name ?? 'map object'}`,
+        label: `Change Zone for ${root?.name ?? 'map object'}`,
         target: { kind: 'object' as const, id: current.rootObjectId, systemId: current.sourceSystemId },
         parent: { kind: 'system' as const, id: acceptance.request.destinationSystemId },
       },

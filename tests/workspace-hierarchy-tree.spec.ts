@@ -29,11 +29,11 @@ async function renderedObjectPosition(mark: Locator): Promise<{ x: number; y: nu
 
 async function downloadJsonFromFile(
   page: import('@playwright/test').Page,
-  buttonName: 'Export Jump Cluster JSON' | 'Export star system JSON',
+  buttonName: 'Export Jump Cluster JSON' | 'Export Zone JSON',
 ): Promise<ExportedMap> {
   const itemName = buttonName === 'Export Jump Cluster JSON'
     ? 'Download private Jump Cluster JSON'
-    : 'Download private Star System JSON'
+    : 'Download private Zone JSON'
   const downloads = await openMapFilesSection(page, 'Download or back up')
   try {
     const downloadPromise = page.waitForEvent('download')

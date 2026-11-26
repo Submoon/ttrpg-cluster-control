@@ -2,7 +2,7 @@
   <section v-if="selectedOrbit && presentedOrbit" class="entity-inspector" aria-label="Orbit inspector">
     <header class="entity-inspector-header">
       <div class="min-w-0">
-        <p class="section-kicker">SYSTEM STRUCTURE</p>
+        <p class="section-kicker">ZONE STRUCTURE</p>
         <h2 class="orbit-title mt-2 mb-1">Orbit {{ presentedOrbit.order }}</h2>
         <p class="entity-inspector-subtitle m-0">
           <template v-if="isAttachmentDraft">Proposed host · {{ proposedHostLabel }}</template>

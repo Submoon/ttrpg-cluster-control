@@ -167,7 +167,7 @@ function rotatedEllipseExtents(radii: OrbitRadii, degrees: number): Point {
 
 function safeBounds(bounds: Bounds): Bounds {
   if (![bounds.left, bounds.top, bounds.right, bounds.bottom].every(Number.isFinite)) {
-    throw new Error('The continuous map could not calculate finite system bounds.')
+    throw new Error('The continuous map could not calculate finite Zone bounds.')
   }
   return bounds
 }
@@ -216,7 +216,7 @@ export function projectWardenSystem(
 /** Converts anchor-relative saved distances into a Cluster-space rectangular frame. */
 export function systemFrameFromInsets(anchor: Point, insets: SystemFrameInsets): SvgViewportRect {
   if (![anchor.x, anchor.y].every(Number.isFinite) || !isSystemFrameInsets(insets)) {
-    throw new Error('A system frame needs a finite anchor and finite, nonnegative insets.')
+    throw new Error('A Zone frame needs a finite anchor and finite, nonnegative insets.')
   }
   const frame = {
     x: anchor.x - insets.left,
@@ -225,7 +225,7 @@ export function systemFrameFromInsets(anchor: Point, insets: SystemFrameInsets):
     height: insets.top + insets.bottom,
   }
   if (![frame.x, frame.y, frame.width, frame.height].every(Number.isFinite)) {
-    throw new Error('A system frame must have finite coordinates and dimensions.')
+    throw new Error('A Zone frame must have finite coordinates and dimensions.')
   }
   return frame
 }
@@ -238,7 +238,7 @@ export function systemFrameInsetsFromRect(anchor: Point, frame: SvgViewportRect)
     || frame.width <= 0 || frame.height <= 0
     || anchor.x < frame.x || anchor.x > right
     || anchor.y < frame.y || anchor.y > bottom) {
-    throw new Error('A system frame must be finite and contain its anchor.')
+    throw new Error('A Zone frame must be finite and contain its anchor.')
   }
   return {
     left: anchor.x - frame.x,

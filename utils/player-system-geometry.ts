@@ -43,7 +43,7 @@ export function playerSystemGeometry(document: PlayerSystemDocument): PlayerSyst
   for (const object of document.objects) {
     const { x, y } = object.position
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
-      throw new Error('A public Star System has invalid rendered geometry.')
+      throw new Error('A public Zone has invalid rendered geometry.')
     }
     const label = playerObjectPresentation(object).label
     if (object.disclosure === 'unknown') {
@@ -77,7 +77,7 @@ export function playerSystemGeometry(document: PlayerSystemDocument): PlayerSyst
     const { horizontal, vertical } = orbit.radii
     if (![x, y, horizontal, vertical, orbit.rotation].every(Number.isFinite)
       || horizontal <= 0 || vertical <= 0) {
-      throw new Error('A public Star System has invalid rendered geometry.')
+      throw new Error('A public Zone has invalid rendered geometry.')
     }
     const radians = orbit.rotation * Math.PI / 180
     const cosine = Math.cos(radians)
@@ -110,7 +110,7 @@ export function playerSystemGeometry(document: PlayerSystemDocument): PlayerSyst
   const height = bounds.bottom - bounds.top
   if (![bounds.left, bounds.top, bounds.right, bounds.bottom, width, height].every(Number.isFinite)
     || width < 0 || height < 0) {
-    throw new Error('A public Star System has invalid rendered geometry.')
+    throw new Error('A public Zone has invalid rendered geometry.')
   }
 
   const padding = Math.max(width * 0.08, height * 0.12, 48)
@@ -120,7 +120,7 @@ export function playerSystemGeometry(document: PlayerSystemDocument): PlayerSyst
   const paddedHeight = Math.max(height, 1) + padding * 2
   if (![left, top, paddedWidth, paddedHeight].every(Number.isFinite)
     || paddedWidth <= 0 || paddedHeight <= 0) {
-    throw new Error('A public Star System has invalid rendered geometry.')
+    throw new Error('A public Zone has invalid rendered geometry.')
   }
   return { bounds: { left, top, width: paddedWidth, height: paddedHeight } }
 }

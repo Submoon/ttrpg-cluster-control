@@ -27,7 +27,7 @@ export async function importCampaignWorkspace(
   await page.goto('/')
   await waitForWorkspaceStartup(page)
   await page.getByLabel('Jump Cluster').fill('Campaign staging')
-  await page.getByLabel('First star system').fill('Campaign staging')
+  await page.getByLabel('First Zone').fill('Campaign staging')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
 
   await setJsonFile(

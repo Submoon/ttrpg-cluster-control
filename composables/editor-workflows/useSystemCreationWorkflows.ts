@@ -901,7 +901,7 @@ export function useSystemCreationWorkflows({
     clearErrors()
     const system = currentSystemForSession(session)
     if (!system) {
-      setError('target', 'The star system for this Add session is no longer available.')
+      setError('target', 'The Zone for this Add session is no longer available.')
       return false
     }
 
@@ -1009,12 +1009,12 @@ export function useSystemCreationWorkflows({
     invalidatePreview(session)
     clearErrors()
     if (!sessionMatchesCurrentContext(session)) {
-      setError('target', 'The star system for this Add session is no longer available.')
+      setError('target', 'The Zone for this Add session is no longer available.')
       return false
     }
     const system = currentSystemForSession(session)
     if (!system) {
-      setError('target', 'The star system for this Add session is no longer available.')
+      setError('target', 'The Zone for this Add session is no longer available.')
       return false
     }
 
@@ -1085,7 +1085,7 @@ export function useSystemCreationWorkflows({
     let system = currentSystemForSession(session)
     if (!currentWorkspace || !system) {
       invalidatePreview(session)
-      if (session === creationSession.value) setError('target', 'The star system for this Add session is no longer available.')
+      if (session === creationSession.value) setError('target', 'The Zone for this Add session is no longer available.')
       return false
     }
 
@@ -1134,7 +1134,7 @@ export function useSystemCreationWorkflows({
         system = currentSystemForSession(session)
         if (!currentWorkspace || !system) {
           invalidatePreview(session)
-          setError('target', 'The star system for this Add session is no longer available.')
+          setError('target', 'The Zone for this Add session is no longer available.')
           return false
         }
         const latestPreview = session.preview
@@ -1186,7 +1186,7 @@ export function useSystemCreationWorkflows({
           if (latestWorkspace.cluster.id !== session.clusterId || !latestSystem
             || !ownsSession() || session.preview?.id !== previewId
             || JSON.stringify(session.preview) !== previewSignature) {
-            throw new Error('The star system or Add preview changed before this item could be added.')
+            throw new Error('The Zone or Add preview changed before this item could be added.')
           }
           const latestError = validateTarget(session, latestSystem, target)
           if (latestError) throw new Error(latestError)
@@ -1304,7 +1304,7 @@ export function useSystemCreationWorkflows({
     const system = currentSystemForSession(session)
     const error = candidate.error ?? (system
       ? validateTarget(session, system, candidate.target)
-      : 'The star system for this Add session is no longer available.')
+      : 'The Zone for this Add session is no longer available.')
     if (error) {
       invalidatePreview(session)
       setTargetError(candidate.target, error)

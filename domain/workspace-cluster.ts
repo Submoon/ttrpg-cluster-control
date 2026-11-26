@@ -32,7 +32,7 @@ type JumpRouteDetails = DistributiveOmit<JumpRoute, 'id' | 'name' | 'playerShare
 function initialZone(name: string): StarSystem {
   return {
     id: crypto.randomUUID(),
-    name: validName(name, 'Star system name'),
+    name: validName(name, 'Zone name'),
     publication: 'known-type',
     objects: [],
     orbits: [],
@@ -240,10 +240,10 @@ function jumpRouteDetails(cluster: JumpCluster, input: JumpRouteInput): JumpRout
   if (!isJumpLevel(input.jumpLevel)) throw new Error('Jump level must be a positive integer.')
 
   const fromSystem = cluster.systems.find(system => system.id === input.fromSystemId)
-  if (!fromSystem) throw new Error('Choose an existing system as the route origin.')
+  if (!fromSystem) throw new Error('Choose an existing Zone as the route origin.')
   if (input.fromPointId !== null && !fromSystem.objects.some(object =>
     object.id === input.fromPointId && object.family === 'JumpPoint')) {
-    throw new Error('Choose a Jump Point in the selected origin system.')
+    throw new Error('Choose a Jump Point in the selected origin Zone.')
   }
 
   if (input.toSystemId === null) {
@@ -259,14 +259,14 @@ function jumpRouteDetails(cluster: JumpCluster, input: JumpRouteInput): JumpRout
   }
 
   const toSystem = cluster.systems.find(system => system.id === input.toSystemId)
-  if (!toSystem) throw new Error('Choose an existing system as the route destination.')
-  if (toSystem.id === fromSystem.id) throw new Error('Choose a different system as the route destination.')
+  if (!toSystem) throw new Error('Choose an existing Zone as the route destination.')
+  if (toSystem.id === fromSystem.id) throw new Error('Choose a different Zone as the route destination.')
   if (input.toPointId !== null && !toSystem.objects.some(object =>
     object.id === input.toPointId && object.family === 'JumpPoint')) {
-    throw new Error('Choose a Jump Point in the selected destination system.')
+    throw new Error('Choose a Jump Point in the selected destination Zone.')
   }
   if (input.unresolvedExit !== undefined) {
-    throw new Error('A known-system destination cannot include an unresolved-exit label.')
+    throw new Error('A destination Zone cannot include an unresolved-exit label.')
   }
   return {
     jumpLevel: input.jumpLevel,
@@ -327,7 +327,7 @@ export function renameLocalWorkspace(
   systemId = workspace.cluster.systems[0]?.id,
 ): LocalWorkspace {
   if (!systemId || !workspace.cluster.systems.some(system => system.id === systemId)) {
-    throw new Error('The local workspace has no matching star system.')
+    throw new Error('The local workspace has no matching Zone.')
   }
 
   return {
@@ -337,7 +337,7 @@ export function renameLocalWorkspace(
       name: validName(clusterName, 'Jump Cluster name'),
       systems: workspace.cluster.systems.map(system =>
         system.id === systemId
-          ? { ...system, name: validName(systemName, 'Star system name') }
+          ? { ...system, name: validName(systemName, 'Zone name') }
           : system,
       ),
     },
@@ -358,14 +358,14 @@ export function updateChartDetails(
   changes: ChartDetailsChanges,
 ): LocalWorkspace {
   if (!workspace.cluster.systems.some(system => system.id === systemId)) {
-    throw new Error('The local workspace has no matching star system.')
+    throw new Error('The local workspace has no matching Zone.')
   }
   if (!isPublicationMode(changes.publication)) {
     throw new Error('Choose a supported publication mode.')
   }
 
   const clusterName = validName(changes.clusterName, 'Jump Cluster name')
-  const systemName = validName(changes.systemName, 'Star system name')
+  const systemName = validName(changes.systemName, 'Zone name')
   const playerTitle = validText(changes.playerTitle, 'Player-facing title', maxNameLength)
 
   return {

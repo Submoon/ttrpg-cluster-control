@@ -140,7 +140,7 @@ export function planMapEntityDeletion(
     ? undefined
     : workspace.cluster.systems.find(candidate => candidate.id === target.systemId)
   if (target.kind !== 'route' && !system) {
-    throw new Error('The selected star system no longer exists.')
+    throw new Error('The selected Zone no longer exists.')
   }
 
   const removedSystemIds = new Set<string>()
@@ -163,7 +163,7 @@ export function planMapEntityDeletion(
   }
 
   const requireSystem = (): StarSystem => {
-    if (!system) throw new Error('The selected star system no longer exists.')
+    if (!system) throw new Error('The selected Zone no longer exists.')
     return system
   }
   const objectsById = new Map<string, SystemObject>()
@@ -212,10 +212,10 @@ export function planMapEntityDeletion(
   let entityLabel: string
   if (target.kind === 'system') {
     if (workspace.cluster.systems.length === 1) {
-      throw new Error('At least one star system must remain in the Jump Cluster.')
+      throw new Error('At least one Zone must remain in the Jump Cluster.')
     }
     const selectedSystem = requireSystem()
-    entityLabel = `${selectedSystem.name} star system`
+    entityLabel = `${selectedSystem.name} Zone`
     removedSystemIds.add(selectedSystem.id)
     for (const object of selectedSystem.objects) {
       removedObjectIds.add(object.id)

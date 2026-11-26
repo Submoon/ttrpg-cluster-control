@@ -168,7 +168,7 @@ export function updateSystemObject(
   }
 
   if (system.objects.some(candidate => candidate.id !== objectId && candidate.locationKey === updated.locationKey)) {
-    throw new Error(`Location key "${updated.locationKey}" is already used in this star system.`)
+    throw new Error(`Location key "${updated.locationKey}" is already used in this Zone.`)
   }
 
   if (updated.placement.kind === 'system') {

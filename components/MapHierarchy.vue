@@ -5,7 +5,7 @@
         <span class="section-kicker">LOCAL ARCHIVE</span>
         <h2 class="mt-[0.28rem] mb-0 text-2xl">Cluster</h2>
       </div>
-      <span class="tree-count whitespace-nowrap">{{ props.workspace.cluster.systems.length }} systems</span>
+      <span class="tree-count whitespace-nowrap">{{ props.workspace.cluster.systems.length }} {{ props.workspace.cluster.systems.length === 1 ? 'Zone' : 'Zones' }}</span>
     </div>
     <div class="mt-3 flex flex-wrap items-center gap-2">
       <UButton color="primary" variant="outline" @click="commands.navigation.showChartDetails()">
@@ -14,9 +14,9 @@
       <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Jump Cluster details editing session</span>
     </div>
 
-    <nav v-if="!props.continuousMap" class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
-      <span class="subsection-label">STAR SYSTEMS</span>
-      <p v-if="!props.workspace.cluster.systems.length" class="empty-copy my-[0.65rem]">No star systems yet.</p>
+    <nav v-if="!props.continuousMap" class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Zones">
+      <span class="subsection-label">ZONES</span>
+      <p v-if="!props.workspace.cluster.systems.length" class="empty-copy my-[0.65rem]">No Zones yet.</p>
       <div
         v-for="system in props.workspace.cluster.systems"
         :key="system.id"
@@ -26,14 +26,14 @@
         <button
           class="system-link flex min-h-[2.7rem] min-w-0 flex-1 cursor-pointer items-center gap-[0.6rem] border border-transparent bg-transparent px-2 py-[0.42rem] text-left"
           type="button"
-          :aria-label="props.continuousMap ? `Inspect ${system.name}` : `Open ${system.name} system map`"
+          :aria-label="props.continuousMap ? `Inspect ${system.name}` : `Open ${system.name} Zone map`"
           :aria-current="system.id === activeSystemId ? 'page' : undefined"
           :aria-description="publicationStatus(system.publication, undefined, 'system').description"
           :data-system-id="system.id"
           @keydown.capture="openSystemContextMenuFromKeyboard($event, system)"
           @click="commands.navigation.selectSystem(system.id)"
         >
-          <span class="system-seal grid size-[1.65rem] shrink-0 place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
+          <span class="system-seal grid size-[1.65rem] shrink-0 place-items-center rounded-full border border-[var(--line-strong)]">ZN</span>
           <span class="min-w-0 [overflow-wrap:anywhere]">
             <span class="flex min-w-0 items-center gap-1">
               <span class="min-w-0 [overflow-wrap:anywhere]">{{ system.name }}</span>
@@ -90,10 +90,10 @@
       @focusout="releaseHierarchyFocus"
     >
       <div class="tree-heading flex justify-between gap-[0.4rem] pb-[0.45rem]">
-        <span class="subsection-label">OBJECTS / ORBITS · ALL SYSTEMS</span>
+        <span class="subsection-label">OBJECTS / ORBITS · ALL ZONES</span>
         <span class="tree-count whitespace-nowrap">{{ continuousHierarchyRecordCount }} records</span>
       </div>
-      <p v-if="props.workspace.cluster.systems.length === 0" class="empty-copy my-[0.65rem]">No systems charted yet.</p>
+      <p v-if="props.workspace.cluster.systems.length === 0" class="empty-copy my-[0.65rem]">No Zones charted yet.</p>
       <!-- @vue-generic {HierarchyTreeItem[], true} -->
       <UTree
         v-else
@@ -140,7 +140,7 @@
             <span class="tree-copy col-start-1 row-start-1 block min-w-0 whitespace-normal [overflow-wrap:anywhere]">
               <span class="tree-object-title flex min-w-0 items-start gap-1">
                 <span class="tree-leading shrink-0" aria-hidden="true">
-                  <span v-if="item.kind === 'system'" class="system-seal grid size-[1.5rem] place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
+                  <span v-if="item.kind === 'system'" class="system-seal grid size-[1.5rem] place-items-center rounded-full border border-[var(--line-strong)]">ZN</span>
                   <span v-else-if="item.kind === 'object'" class="object-mark">{{ objectMark(item.row.object) }}</span>
                   <span v-else class="orbit-mark">R</span>
                 </span>
@@ -246,8 +246,8 @@
       <span v-if="props.hasChartNameDraft" class="save-feedback text-sm" role="status">Jump Cluster details editing session</span>
     </div>
 
-    <nav v-if="!props.continuousMap" class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Star systems">
-      <span class="subsection-label">STAR SYSTEMS</span>
+    <nav v-if="!props.continuousMap" class="system-list mt-[0.8rem] mb-5 grid gap-[0.35rem]" aria-label="Zones">
+      <span class="subsection-label">ZONES</span>
       <button
         v-for="system in props.workspace.cluster.systems"
         :key="system.id"
@@ -260,7 +260,7 @@
         @keydown.capture="openSystemContextMenuFromKeyboard($event, system)"
         @click="commands.navigation.selectSystem(system.id)"
       >
-        <span class="system-seal grid size-[1.65rem] shrink-0 place-items-center rounded-full border border-[var(--line-strong)]">SY</span>
+        <span class="system-seal grid size-[1.65rem] shrink-0 place-items-center rounded-full border border-[var(--line-strong)]">ZN</span>
         <span>{{ system.name }}<small class="mt-[0.18rem] block">{{ system.objects.length }} map objects</small></span>
       </button>
     </nav>
@@ -826,7 +826,7 @@ function buildHierarchyTreeItems(
 }
 
 function hierarchyParentContext(parent: HierarchyTreeItem | undefined): string {
-  if (parent?.kind !== 'orbit') return 'System map'
+  if (parent?.kind !== 'orbit') return 'Zone map'
   return `Orbit ${parent.row.orbit.order} around ${parent.row.host?.name ?? 'unoccupied center'}`
 }
 
