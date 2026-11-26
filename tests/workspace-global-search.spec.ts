@@ -92,7 +92,8 @@ test('global Search reveals an exact Location key independently of the map filte
 
   await page.getByRole('button', { name: 'Search', exact: true }).press('Enter')
   await query.fill(routeObject.locationKey)
-  await searchDialog.getByRole('button', { name: 'Search filters', exact: true }).click()
+  await searchDialog.getByRole('button', { name: 'Search filters (1 active criterion)', exact: true }).click()
+  await searchDialog.getByRole('checkbox', { name: 'Star', exact: true }).uncheck()
   await searchDialog.getByRole('checkbox', { name: 'Anomaly', exact: true }).check()
   await searchDialog.getByRole('button', { name: 'Close filters', exact: true }).click()
   await searchDialog.getByRole('option', { name: /Captured echo.*Jump Route.*TRANSIT-HAZARD/ }).click()
