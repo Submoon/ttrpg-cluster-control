@@ -254,6 +254,17 @@
         </g>
       </g>
       </g>
+      <PlayerRouteBranchLayer
+        v-if="props.document.routeBranches.length"
+        :branches="props.document.routeBranches"
+        :curves="displayedRouteCurves"
+        :scene-transform="sceneTransform"
+        :scene-pixel-scale="scenePixelScale"
+        :selected-branch-id="props.selectedBranchId"
+        :selection="branchSelection"
+        :dimmed-objects="props.dimmedBranchObjects"
+        @inspect="(branchId, target) => emit('inspect-branch', branchId, target)"
+      />
     </svg>
   </section>
 </template>
@@ -288,12 +299,16 @@ import { PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS } from '../utils/cluster-system-pr
 import { centerContinuousMapRouteViewport } from '../utils/continuous-map-route-viewport'
 import { projectPlayerContinuousRouteEndpoints } from '../utils/player-continuous-route-projection'
 import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
+import PlayerRouteBranchLayer from './maps/PlayerRouteBranchLayer.vue'
+import { playerRouteBranchBounds, projectPlayerRouteBranch } from '../utils/player-route-branch-geometry'
 
 const props = withDefaults(defineProps<{
   document: PlayerClusterDocument
   active?: boolean
   selectedSystemId: string | null
   selectedRouteId?: string | null
+  selectedBranchId?: string | null
+  dimmedBranchObjects: ReadonlyMap<string, ReadonlySet<string>>
   selectedObjectId?: string | null
   selectedOrbitId?: string | null
   searchLocatorObjectId?: string | null
@@ -307,6 +322,7 @@ const emit = defineEmits<{
   'inspect-object': [publicSystemId: string, publicObjectId: string]
   'inspect-orbit': [publicSystemId: string, publicOrbitId: string]
   'inspect-route': [publicRouteId: string]
+  'inspect-branch': [branchId: string, target: PlayerInspectionTarget]
   'map-interaction': []
 }>()
 
@@ -384,13 +400,22 @@ const routeGeometries = computed(() => buildContinuousMapRouteGeometries(
     fanOutLimitPixels: routeFanOutLimitPixels.value,
   },
 ))
+const displayedRouteCurves = computed(() => {
+  const displayed = routeLayer.value?.displayedMarks
+  return displayed ? new Map(displayed.map(({ id, geometry }) => [id, geometry])) : routeGeometries.value
+})
+const branchSelection = computed<PlayerInspectionTarget | null>(() => {
+  if (props.selectedObjectId) return { kind: 'object', id: props.selectedObjectId }
+  if (props.selectedOrbitId) return { kind: 'orbit', id: props.selectedOrbitId }
+  return null
+})
 const routeLabelObstacles = computed(() => systemNameLabels.value.map(label => ({
   x: label.x - label.width / 2,
   y: label.y,
   width: label.width,
   height: label.height,
 })))
-const hasSelection = computed(() => props.selectedSystemId !== null || props.selectedRouteId != null)
+const hasSelection = computed(() => props.selectedSystemId !== null || props.selectedRouteId != null || props.selectedBranchId != null)
 const overviewNameLabels = computed(() => layoutPlayerContinuousNameLabels(
   nameSystems.value,
   camera.value,
@@ -636,11 +661,20 @@ function centerSystem(systemId: string): boolean {
 
 function centerSelection(): boolean {
   if (props.selectedRouteId) return centerRoute(props.selectedRouteId)
+  if (props.selectedBranchId) return centerBranch(props.selectedBranchId, props.document)
   const systemId = props.selectedSystemId
   if (!systemId) return false
   if (props.selectedObjectId) return centerTarget({ kind: 'object', id: props.selectedObjectId }, systemId)
   if (props.selectedOrbitId) return centerTarget({ kind: 'orbit', id: props.selectedOrbitId }, systemId)
   return centerSystem(systemId)
+}
+
+function centerBranch(branchId: string, expectedDocument: PlayerClusterDocument): boolean {
+  if (!props.active || props.document !== expectedDocument) return false
+  const branch = props.document.routeBranches.find(branch => branch.id === branchId)
+  if (!branch) return false
+  const geometry = projectPlayerRouteBranch(branch, displayedRouteCurves.value)
+  return geometry ? frameBounds(playerRouteBranchBounds(geometry), camera.value.k) : false
 }
 
 function routeGeometryAt(routeId: string, scale: number): ContinuousMapRouteGeometry | undefined {
@@ -751,7 +785,7 @@ function captureImageViewport(expectedDocument: PlayerClusterDocument): PlayerIm
   }
 }
 
-defineExpose({ captureImageViewport, centerRoute: centerRouteForDocument, centerSystem: centerSystemForDocument, fitPlayerMap, revealTarget })
+defineExpose({ captureImageViewport, centerBranch, centerRoute: centerRouteForDocument, centerSystem: centerSystemForDocument, fitPlayerMap, revealTarget })
 </script>
 
 <style scoped>

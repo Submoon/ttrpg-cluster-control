@@ -1,6 +1,9 @@
 /** Allowlisted Warden-side player projection with no dependency on editor or persistence state. */
 import type {
+  CatalogueObject,
   CustomFieldType,
+  JumpRoute,
+  RouteObject,
   CustomFieldValue,
   LocalWorkspace,
   ObjectFamily,
@@ -20,8 +23,13 @@ import {
 } from '../utils/system-map-geometry'
 import { captureEffectiveObjectAngles } from './workspace-placement'
 import { isCustomFieldApplicableToObject } from './workspace-fields'
-import { jumpPointsInCluster } from './workspace-cluster'
+import { initialClusterSystemPosition, jumpPointsInCluster } from './workspace-cluster'
 import { isMarkerColor } from './marker-color'
+import { routeContentsFor } from './workspace-route-objects'
+import { workspaceSystemFrame } from './workspace-system-frames'
+import { projectWardenSystem } from '../utils/continuous-map-projection'
+import { buildContinuousWardenRouteGeometries } from '../utils/continuous-warden-routes'
+import { pointOnRoute, projectRouteObjects } from '../utils/route-object-geometry'
 
 export type PlayerSystemMarker = {
   id: string
@@ -44,6 +52,7 @@ export type PlayerObjectMarker = {
   position: Point
   placement:
     | { kind: 'system' }
+    | { kind: 'branch-root' }
     | { kind: 'orbit'; orbitId: string; angle: number }
 } & (
   | { disclosure: 'unknown'; label: 'Unknown presence' }
@@ -85,22 +94,38 @@ export interface PlayerOrbit {
 /** Public Cluster document. Its shape is intentionally independent from the full source workspace. */
 export interface PlayerClusterDocument {
   format: 'ttrpg-cluster-control-player'
-  version: 2
+  version: 3
   title: string
   systems: PlayerSystemMarker[]
   routes: PlayerRoute[]
+  routeBranches: PlayerRouteBranch[]
+}
+
+/** One allowed branch, with geometry relative to its own anchor and identities local to the branch. */
+export interface PlayerRouteBranch {
+  id: string
+  anchor: { kind: 'detached'; position: Point } | { kind: 'route'; routeId: string; progression: number }
+  map: PlayerSystemDocument
+}
+
+/** Object maps available for consultation and filter inventory. */
+export function playerObjectMaps(document: PlayerClusterDocument): PlayerSystemDocument[] {
+  return [
+    ...document.systems.flatMap(system => system.disclosure === 'revealed' ? [system.map] : []),
+    ...document.routeBranches.map(branch => branch.map),
+  ]
 }
 
 /** Public route structure; source Jump Point IDs, route names, and exit labels are omitted. */
-export type PlayerRoute = {
+export interface PlayerRoute {
   id: string
   jumpLevel: number
   fromSystemId: string
   fromPointId?: string
-} & (
-  | { destination: { kind: 'system'; systemId: string; pointId?: string } }
-  | { destination: { kind: 'unknown'; position: Point; label: 'Unknown destination' } }
-)
+  destination:
+    | { kind: 'system'; systemId: string; pointId?: string }
+    | { kind: 'unknown'; position: Point; label: 'Unknown destination' }
+}
 
 /**
  * Builds the public marker document from committed Cluster data using an explicit field allowlist.
@@ -142,24 +167,34 @@ export function projectPlayerCluster(workspace: LocalWorkspace): PlayerClusterDo
     }
   }
 
+  const publicRoutes = projectPlayerRoutes(workspace, publicSystemIds, revealedJumpPointIdsBySystem)
   return {
     format: 'ttrpg-cluster-control-player',
-    version: 2,
+    version: 3,
     title: workspace.cluster.playerTitle,
     systems,
-    routes: projectPlayerRoutes(workspace, publicSystemIds, revealedJumpPointIdsBySystem),
+    routes: [...publicRoutes.values()].map(({ route }) => route),
+    routeBranches: projectRouteBranches(workspace, publicRoutes),
   }
+}
+
+interface RoutePublication {
+  route: PlayerRoute
+  reversed: boolean
 }
 
 function projectPlayerRoutes(
   workspace: LocalWorkspace,
   publicSystemIds: ReadonlyMap<string, string>,
   revealedJumpPointIdsBySystem: ReadonlyMap<string, ReadonlyMap<string, string>>,
-): PlayerRoute[] {
+): Map<string, RoutePublication> {
   const jumpPoints = new Map(jumpPointsInCluster(workspace.cluster)
     .map(reference => [reference.point.id, reference]))
 
-  const routes: PlayerRoute[] = []
+  const routes = new Map<string, RoutePublication>()
+  function addRoute(source: JumpRoute, route: Omit<PlayerRoute, 'id'>, reversed = false): void {
+    routes.set(source.id, { route: { ...route, id: `route-${routes.size + 1}` }, reversed })
+  }
   for (const route of workspace.cluster.routes) {
     if (!route.playerShared) continue
     const from = workspace.cluster.systems.find(system => system.id === route.fromSystemId)
@@ -178,8 +213,7 @@ function projectPlayerRoutes(
         workspace.layout.unresolvedExitPositions,
       ).exitPoint
       if (!exitPoint) throw new Error('A shared unresolved Jump Route has no applied destination position.')
-      routes.push({
-        id: `route-${routes.length + 1}`,
+      addRoute(route, {
         jumpLevel: route.jumpLevel,
         fromSystemId,
         ...(fromPointId === undefined ? {} : { fromPointId }),
@@ -198,8 +232,7 @@ function projectPlayerRoutes(
 
     if (fromSystemId && toSystemId) {
       const toPointId = publicRoutePointId(to, route.toPointId, revealedJumpPointIdsBySystem)
-      routes.push({
-        id: `route-${routes.length + 1}`,
+      addRoute(route, {
         jumpLevel: route.jumpLevel,
         fromSystemId,
         ...(fromPointId === undefined ? {} : { fromPointId }),
@@ -211,8 +244,7 @@ function projectPlayerRoutes(
       })
     } else if (fromSystemId) {
       const position = clusterSystemPosition(workspace.layout.systemPositions, to.id)
-      routes.push({
-        id: `route-${routes.length + 1}`,
+      addRoute(route, {
         jumpLevel: route.jumpLevel,
         fromSystemId,
         ...(fromPointId === undefined ? {} : { fromPointId }),
@@ -225,8 +257,7 @@ function projectPlayerRoutes(
     } else if (toSystemId) {
       const position = clusterSystemPosition(workspace.layout.systemPositions, from.id)
       const visibleFromPointId = publicRoutePointId(to, route.toPointId, revealedJumpPointIdsBySystem)
-      routes.push({
-        id: `route-${routes.length + 1}`,
+      addRoute(route, {
         jumpLevel: route.jumpLevel,
         fromSystemId: toSystemId,
         ...(visibleFromPointId === undefined ? {} : { fromPointId: visibleFromPointId }),
@@ -235,7 +266,7 @@ function projectPlayerRoutes(
           position: { x: position.x, y: position.y },
           label: 'Unknown destination',
         },
-      })
+      }, true)
     }
   }
 
@@ -315,22 +346,6 @@ function projectPlayerSystem(
         }
     const markerId = publicObjectIds.get(object.id)!
 
-    if (disclosure === 'unknown') {
-      return { id: markerId, position, placement, disclosure, label: 'Unknown presence' }
-    }
-
-    if (disclosure === 'known-type') {
-      return {
-        id: markerId,
-        position,
-        placement,
-        disclosure,
-        family: object.family,
-        subtype: object.subtype,
-        label: catalogueSubtypeLabel(object),
-        ...(isMarkerColor(object.markerColor) ? { markerColor: object.markerColor } : {}),
-      }
-    }
 
     const station = disclosure === 'revealed' && object.family === 'JumpPoint' && object.jumpStationId
       ? objectsById.get(object.jumpStationId)
@@ -339,19 +354,7 @@ function projectPlayerSystem(
       ? publicObjectIds.get(station.id)
       : undefined
 
-    return {
-      id: markerId,
-      position,
-      placement,
-      disclosure: 'revealed',
-      family: object.family,
-      subtype: object.subtype,
-      label: object.name,
-      ...(isMarkerColor(object.markerColor) ? { markerColor: object.markerColor } : {}),
-      playerText: object.playerText,
-      fields: projectPlayerFields(workspace, object),
-      ...(stationId === undefined ? {} : { stationId }),
-    }
+    return projectPlayerObject(workspace, object, { id: markerId, position, placement }, disclosure, stationId)
   })
 
   const orbits = retainedOrbits.map((orbit): PlayerOrbit => {
@@ -374,9 +377,158 @@ function projectPlayerSystem(
   }
 }
 
+function projectPlayerObject(
+  workspace: LocalWorkspace,
+  object: CatalogueObject,
+  geometry: Pick<PlayerObjectMarker, 'id' | 'position' | 'placement'>,
+  disclosure: Exclude<PublicationMode, 'hidden'>,
+  stationId?: string,
+): PlayerObjectMarker {
+  if (disclosure === 'unknown') return { ...geometry, disclosure, label: 'Unknown presence' }
+  const type = {
+    family: object.family,
+    subtype: object.subtype,
+    ...(isMarkerColor(object.markerColor) ? { markerColor: object.markerColor } : {}),
+  }
+  if (disclosure === 'known-type') {
+    return { ...geometry, ...type, disclosure, label: catalogueSubtypeLabel(object) }
+  }
+  return {
+    ...geometry,
+    ...type,
+    disclosure,
+    label: object.name,
+    playerText: object.playerText,
+    fields: projectPlayerFields(workspace, object),
+    ...(stationId === undefined ? {} : { stationId }),
+  }
+}
+
+const branchOrigin: Point = { x: 0, y: 0 }
+const branchLocalCurve = {
+  start: branchOrigin,
+  control1: branchOrigin,
+  control2: branchOrigin,
+  end: branchOrigin,
+}
+
+function projectRouteBranches(
+  workspace: LocalWorkspace,
+  publicRoutes: ReadonlyMap<string, RoutePublication>,
+): PlayerRouteBranch[] {
+  const result: PlayerRouteBranch[] = []
+  let detachedCurves: ReturnType<typeof buildContinuousWardenRouteGeometries> | undefined
+  for (const route of workspace.cluster.routes) {
+    const contents = routeContentsFor(workspace.cluster, route.id)
+    if (!contents?.objects.some(object => object.publication !== 'hidden')) continue
+    const association = publicRoutes.get(route.id)
+    if (!association) detachedCurves ??= committedRouteCurves(workspace)
+    const angles = captureEffectiveObjectAngles(workspace, contents, contents.orbits.map(orbit => orbit.id))
+    // Each root is projected at the same local origin. Its branch offset and effective angle
+    // are resolved against the complete inventory before Hidden siblings are removed.
+    const geometry = projectRouteObjects(contents, branchLocalCurve, workspace.layout)
+    const objectById = new Map(contents.objects.map(object => [object.id, object]))
+    const hostByOrbitId = new Map(contents.orbits.map(orbit => [orbit.id, orbit.hostId]))
+    const rootByObjectId = new Map<string, RouteObject>()
+    const retainedOrbits = new Set<string>()
+
+    for (const object of contents.objects) {
+      if (object.publication === 'hidden' || rootByObjectId.has(object.id)) continue
+      const ancestors: string[] = []
+      let current = object
+      while (!rootByObjectId.has(current.id) && current.placement.kind === 'orbit') {
+        ancestors.push(current.id)
+        retainedOrbits.add(current.placement.orbitId)
+        current = objectById.get(hostByOrbitId.get(current.placement.orbitId)!)!
+      }
+      const root = rootByObjectId.get(current.id) ?? current
+      rootByObjectId.set(root.id, root)
+      for (const id of ancestors) rootByObjectId.set(id, root)
+    }
+
+    const membersByRoot = new Map<RouteObject, RouteObject[]>()
+    for (const object of contents.objects) {
+      const root = rootByObjectId.get(object.id)
+      if (!root) continue
+      const members = membersByRoot.get(root) ?? []
+      members.push(object)
+      membersByRoot.set(root, members)
+    }
+    const orbitsByRoot = new Map<RouteObject, typeof contents.orbits>()
+    for (const orbit of contents.orbits) {
+      if (!retainedOrbits.has(orbit.id)) continue
+      const root = rootByObjectId.get(orbit.hostId)!
+      const orbits = orbitsByRoot.get(root) ?? []
+      orbits.push(orbit)
+      orbitsByRoot.set(root, orbits)
+    }
+    const geometryByOrbitId = new Map(geometry.orbits.map(orbit => [orbit.id, orbit]))
+
+    for (const [root, members] of membersByRoot) {
+      if (root.placement.kind !== 'route') throw new Error('A route branch has no root.')
+      const progression = root.placement.progression
+      const anchor: PlayerRouteBranch['anchor'] = association
+        ? { kind: 'route', routeId: association.route.id, progression: association.reversed ? 1 - progression : progression }
+        : { kind: 'detached', position: pointOnRoute(detachedCurves!.get(route.id)!, progression) }
+      const orbits = orbitsByRoot.get(root) ?? []
+      const objectIds = new Map(members.map((object, index) => [object.id, `object-${index + 1}`]))
+      const orbitIds = new Map(orbits.map((orbit, index) => [orbit.id, `orbit-${index + 1}`]))
+
+      result.push({
+        id: `branch-${result.length + 1}`,
+        anchor,
+        map: {
+          objects: members.map((object) => {
+            const station = object.family === 'JumpPoint' && object.jumpStationId
+              ? objectById.get(object.jumpStationId)
+              : undefined
+            return projectPlayerObject(workspace, object, {
+              id: objectIds.get(object.id)!,
+              position: geometry.positions.get(object.id)!,
+              placement: object.placement.kind === 'route'
+                ? { kind: 'branch-root' }
+                : { kind: 'orbit', orbitId: orbitIds.get(object.placement.orbitId)!, angle: angles[object.id]! },
+            }, object.publication === 'hidden' ? 'unknown' : object.publication,
+            station?.publication === 'revealed' ? objectIds.get(station.id) : undefined)
+          }),
+          orbits: orbits.map((orbit) => {
+            const resolved = geometryByOrbitId.get(orbit.id)!
+            return {
+              id: orbitIds.get(orbit.id)!,
+              hostId: objectIds.get(orbit.hostId)!,
+              center: resolved.center,
+              radii: { horizontal: resolved.horizontal, vertical: resolved.vertical },
+              rotation: resolved.rotation,
+            }
+          }),
+        },
+      })
+    }
+  }
+  return result
+}
+
+function committedRouteCurves(workspace: LocalWorkspace) {
+  const { cluster, layout } = workspace
+  return buildContinuousWardenRouteGeometries({
+    routes: cluster.routes,
+    projections: cluster.systems.map((system, index) => projectWardenSystem(
+      system,
+      Object.hasOwn(layout.systemPositions, system.id)
+        ? layout.systemPositions[system.id]!
+        : initialClusterSystemPosition(index),
+      layout,
+      undefined,
+      workspaceSystemFrame(workspace, system.id),
+    )),
+    detailSystemIds: new Set(),
+    unresolvedExitPositions: layout.unresolvedExitPositions,
+  })
+}
+
 function projectPlayerFields(
   workspace: LocalWorkspace,
-  object: StarSystem['objects'][number],
+  object: CatalogueObject,
 ): PlayerFieldValue[] {
   const settings = workspace.objectFieldSettings
   const masks = new Set(object.playerFieldMasks)

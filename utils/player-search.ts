@@ -1,4 +1,4 @@
-import type { PlayerClusterDocument } from '../domain/player-projection'
+import type { PlayerClusterDocument, PlayerObjectMarker } from '../domain/player-projection'
 import { playerObjectPresentation } from './player-object-presentation'
 import { rankSearchCandidates, type SearchCandidate, type SearchResult } from './workspace-search'
 
@@ -8,6 +8,7 @@ export type PlayerSearchTarget = { document: PlayerClusterDocument }
     | { kind: 'cluster' }
     | { kind: 'system'; systemId: string }
     | { kind: 'object'; systemId: string; objectId: string }
+    | { kind: 'branch-object'; branchId: string; objectId: string }
   )
 
 export type PlayerSearchResult = SearchResult<PlayerSearchTarget>
@@ -56,31 +57,50 @@ export function searchPlayerDocument(document: PlayerClusterDocument, rawQuery: 
     })
 
     system.map.objects.forEach((object, objectIndex) => {
-      const presentation = playerObjectPresentation(object)
-      const typeLabel = presentation.typeLabel ?? presentation.label
-      const target: PlayerSearchTarget = {
-        kind: 'object',
-        document,
-        systemId: system.id,
-        objectId: object.id,
-      }
-      candidates.push({
-        result: {
-          key: `player-object-${systemIndex}-${objectIndex}`,
-          target,
-          name: presentation.label,
-          typeLabel,
-          contextLabel: `Zone: ${system.label}`,
-          leadingMark: presentation.glyph === null
-            ? { kind: 'none' }
-            : { kind: 'glyph', value: presentation.glyph },
-          occurrence: null,
-        },
-        identityOrder: `object:${String(systemIndex).padStart(8, '0')}:${String(objectIndex).padStart(8, '0')}`,
-        searchTerms: [presentation.label, presentation.typeLabel ?? ''],
-      })
+      const key = `player-object-${systemIndex}-${objectIndex}`
+      candidates.push(objectCandidate(
+        object, key, `Zone: ${system.label}`, { kind: 'object', document, systemId: system.id, objectId: object.id },
+        `object:${String(systemIndex).padStart(8, '0')}:${String(objectIndex).padStart(8, '0')}`,
+      ))
     })
   })
 
+  const routes = new Map(document.routes.map(route => [route.id, route]))
+  for (const branch of document.routeBranches) {
+    const route = branch.anchor.kind === 'route' ? routes.get(branch.anchor.routeId) : undefined
+    const contextLabel = route ? `Jump Level ${route.jumpLevel}` : 'Jump Cluster'
+    for (const object of branch.map.objects) {
+      const key = `player-${branch.id}-${object.id}`
+      candidates.push(objectCandidate(
+        object, key, contextLabel, { kind: 'branch-object', document, branchId: branch.id, objectId: object.id }, key,
+      ))
+    }
+  }
+
   return rankSearchCandidates(candidates, rawQuery)
+}
+
+function objectCandidate(
+  object: PlayerObjectMarker,
+  key: string,
+  contextLabel: string,
+  target: PlayerSearchTarget,
+  identityOrder: string,
+): SearchCandidate<PlayerSearchTarget> {
+  const presentation = playerObjectPresentation(object)
+  return {
+    result: {
+      key,
+      target,
+      name: presentation.label,
+      typeLabel: presentation.typeLabel ?? presentation.label,
+      contextLabel,
+      leadingMark: presentation.glyph === null
+        ? { kind: 'none' }
+        : { kind: 'glyph', value: presentation.glyph },
+      occurrence: null,
+    },
+    identityOrder,
+    searchTerms: [presentation.label, presentation.typeLabel ?? ''],
+  }
 }

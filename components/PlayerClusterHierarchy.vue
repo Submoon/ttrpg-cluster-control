@@ -27,16 +27,72 @@
         </div>
       </li>
     </ul>
-    <p v-else class="empty-copy">No locations are visible to players.</p>
+    <ul v-if="branchGroups.length" class="player-public-list">
+      <li v-for="{ route, branches } in branchGroups" :key="route?.id ?? 'detached'">
+        <button v-if="route" type="button" class="player-public-list-item player-public-list-item--revealed" @click="emit('inspect-route', route.id)">
+          {{ routeLabel(route) }}
+        </button>
+        <PlayerSystemHierarchy
+          v-for="branch in branches"
+          :key="branch.id"
+          :document="branch.map"
+          :selected-object-id="props.selectedBranchId === branch.id && props.branchSelection?.kind === 'object' ? props.branchSelection.id : null"
+          :selected-orbit-id="props.selectedBranchId === branch.id && props.branchSelection?.kind === 'orbit' ? props.branchSelection.id : null"
+          :dimmed-object-ids="props.dimmedBranchObjects.get(branch.id) ?? emptyIds"
+          branch
+          @inspect-object="id => emit('inspect-branch', branch.id, { kind: 'object', id })"
+          @inspect-orbit="id => emit('inspect-branch', branch.id, { kind: 'orbit', id })"
+        />
+      </li>
+    </ul>
+    <p v-if="!props.document.systems.length && !branchGroups.length" class="empty-copy">No locations are visible to players.</p>
   </section>
 </template>
 
 <script setup lang="ts">
-import type { PlayerClusterDocument } from '../domain/workspace'
+import { computed } from 'vue'
+import type { PlayerClusterDocument, PlayerRoute, PlayerRouteBranch } from '../domain/player-projection'
+import type { PlayerInspectionTarget } from '../utils/player-inspection'
+import PlayerSystemHierarchy from './PlayerSystemHierarchy.vue'
 import { PLAYER_CLUSTER_HIERARCHY_DISCLOSURE_COPY } from '../utils/cluster-system-presentation'
 
-const props = defineProps<{ document: PlayerClusterDocument; selectedSystemId: string | null }>()
-const emit = defineEmits<{ 'open-system': [publicSystemId: string] }>()
+const props = defineProps<{
+  document: PlayerClusterDocument
+  selectedSystemId: string | null
+  selectedBranchId: string | null
+  branchSelection: PlayerInspectionTarget | null
+  dimmedBranchObjects: ReadonlyMap<string, ReadonlySet<string>>
+}>()
+const emit = defineEmits<{
+  'open-system': [publicSystemId: string]
+  'inspect-route': [routeId: string]
+  'inspect-branch': [branchId: string, target: PlayerInspectionTarget]
+}>()
+const emptyIds = new Set<string>()
+const branchGroups = computed(() => {
+  const byAnchor = new Map<string | null, PlayerRouteBranch[]>()
+  for (const branch of props.document.routeBranches) {
+    const key = branch.anchor.kind === 'route' ? branch.anchor.routeId : null
+    const branches = byAnchor.get(key) ?? []
+    branches.push(branch)
+    byAnchor.set(key, branches)
+  }
+  const groups = props.document.routes.flatMap(route => {
+    const branches = byAnchor.get(route.id)
+    return branches ? [{ route, branches }] : []
+  })
+  const detached = byAnchor.get(null)
+  return [...groups, ...(detached ? [{ route: null, branches: detached }] : [])]
+})
+const systemLabels = computed(() => new Map(props.document.systems.map(zone => [zone.id, zone.label])))
+
+function routeLabel(route: PlayerRoute): string {
+  const origin = systemLabels.value.get(route.fromSystemId)
+  const destination = route.destination.kind === 'system'
+    ? systemLabels.value.get(route.destination.systemId)
+    : route.destination.label
+  return `Jump Level ${route.jumpLevel} from ${origin} to ${destination}`
+}
 </script>
 
 <style scoped>

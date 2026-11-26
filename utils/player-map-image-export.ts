@@ -1,3 +1,4 @@
+import { PLAYER_ROUTE_BRANCH_IMAGES_UNAVAILABLE } from '../domain/player-scene'
 /** Builds standalone map images from detached player documents, never from Warden map DOM or source records. */
 import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { PlayerClusterDocument, PlayerObjectMarker, PlayerSystemDocument, PlayerSystemMarker } from '../domain/player-projection'
@@ -100,6 +101,9 @@ const darkFallbackPaint: PlayerMapPaint = {
 /** Serializes a safe public SVG scene and optionally rasterizes that same SVG within the GM PNG budget. */
 export async function exportPlayerMapImage(request: PlayerMapImageRequest): Promise<Blob | null> {
   if (!request.isCurrent()) return null
+  if (request.scene.kind === 'jump-cluster' && request.scene.document.routeBranches.length) {
+    throw new Error(PLAYER_ROUTE_BRANCH_IMAGES_UNAVAILABLE)
+  }
   if (isFeatureless(request.scene)) {
     throw new Error('There are no player-visible map features to export.')
   }

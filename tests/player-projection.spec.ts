@@ -1,11 +1,17 @@
 import { expect, test } from './fixtures'
+import { parsePlayerJson, serializePlayerJson } from '../domain/player-codec'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 import { addZoneWithPrimaryStar } from './support/primary-star-fixture'
 import {
+  addCustomFieldDefinition,
   addStarSystem,
   createLocalWorkspace,
   replaceWorkspaceSystem,
   updateChartDetails,
 } from '../domain/workspace'
+import { projectPlayerContinuousMap } from '../utils/player-continuous-map-projection'
+import { projectPlayerRouteBranch } from '../utils/player-route-branch-geometry'
+import { continuousMapRouteCurve } from '../utils/continuous-map-route-geometry'
 import { projectPlayerCluster } from '../domain/player-projection'
 
 function setPublication(
@@ -39,7 +45,7 @@ test('player projection emits only the marker information allowed by each public
 
   expect(document).toMatchObject({
     format: 'ttrpg-cluster-control-player',
-    version: 2,
+    version: 3,
     title: 'Player Jump Cluster',
     systems: [
       { id: 'system-1', disclosure: 'unknown', label: 'Unknown presence' },
@@ -135,4 +141,107 @@ test('hidden distant systems and private source extensions do not affect the pub
   expect(projected.systems[0]?.id).toBe('system-1')
   expect(JSON.stringify(projected)).not.toMatch(/SECRET|UNKNOWN|Far Hidden System|Secret Internal Name/)
   expect(hidden).toEqual(before)
+})
+
+test('a visible route descendant publishes as an independent branch with only its required host @pure', () => {
+  const { workspace, route, root, occupant, orbit } = workspaceWithRouteObjects()
+  for (const system of workspace.cluster.systems) system.publication = 'hidden'
+  workspace.layout.systemFrames = Object.fromEntries(workspace.cluster.systems.map(system => [
+    system.id, { left: 20, right: 20, top: 20, bottom: 20 },
+  ]))
+  const withSharedField = addCustomFieldDefinition(workspace, 'Reading', 'text', [], true)
+  const campaign = addCustomFieldDefinition(withSharedField, 'Origin', 'text', [], true)
+  const [shared, masked] = campaign.objectFieldSettings.customFields
+  campaign.cluster.routeContents[route.id]!.objects = [
+    { ...root, publication: 'hidden' },
+    {
+      ...occupant, publication: 'revealed', playerText: 'An echo aboard', playerFieldMasks: [masked!.id],
+      customFieldValues: { [shared!.id]: 'Low', [masked!.id]: 'Secret origin' },
+    },
+  ]
+  const document = projectPlayerCluster(campaign)
+  expect(document.systems).toEqual([])
+  expect(document.routes).toEqual([])
+  expect(document.routeBranches).toEqual([
+    {
+      id: 'branch-1',
+      anchor: { kind: 'detached', position: { x: expect.closeTo(313.36), y: expect.any(Number) } },
+      map: {
+        objects: [
+          { id: 'object-1', position: { x: 0, y: 0 }, placement: { kind: 'branch-root' }, disclosure: 'unknown', label: 'Unknown presence' },
+          {
+            id: 'object-2', position: { x: expect.closeTo(0), y: expect.closeTo(18.4) },
+            placement: { kind: 'orbit', orbitId: 'orbit-1', angle: 0 },
+            disclosure: 'revealed', family: occupant.family, subtype: 'anomaly', label: 'Captured echo',
+            playerText: 'An echo aboard', fields: [{ name: 'Reading', type: 'text', value: 'Low' }],
+          },
+        ],
+        orbits: [{ id: 'orbit-1', hostId: 'object-1', center: { x: 0, y: 0 }, radii: { horizontal: expect.closeTo(18.4), vertical: 9 }, rotation: 90 }],
+      },
+    },
+  ])
+  const anchor = document.routeBranches[0]!.anchor
+  if (anchor.kind !== 'detached') throw new Error('Expected detached branch geometry.')
+  // A single lane's 32-unit control-point offset contributes 18 units at quarter progression.
+  expect(Math.abs(anchor.position.y - 224.8)).toBeCloseTo(18)
+  const text = serializePlayerJson(document)
+  expect(parsePlayerJson(text)).toEqual(document)
+  for (const secret of [route.id, root.id, orbit.id, occupant.id, root.name, root.description, root.playerText, 'Vesper', 'Aster', 'progression', 'Secret origin', shared!.id, masked!.id]) {
+    expect(text).not.toContain(secret)
+  }
+  const withPrivateMetadata = structuredClone(campaign)
+  withPrivateMetadata.cluster.routes[0]!.name = 'Secret detour'
+  withPrivateMetadata.cluster.routes[0]!.jumpLevel = 6
+  withPrivateMetadata.cluster.routes[0]!.playerShared = true
+  withPrivateMetadata.cluster.routeContents[route.id]!.objects[0]!.playerText = 'Private note'
+  expect(serializePlayerJson(projectPlayerCluster(withPrivateMetadata))).toBe(text)
+})
+
+test('a shared route publishes only admitted branch content and reorients progression for its public origin @pure', () => {
+  const { workspace, route, root, occupant } = workspaceWithRouteObjects()
+  workspace.cluster.routes[0]!.playerShared = true
+  workspace.cluster.systems[0]!.publication = 'hidden'
+  workspace.cluster.systems[1]!.publication = 'revealed'
+  const branch = workspace.cluster.routeContents[route.id]!
+  const atRoute = { kind: 'route', progression: 0.75 } as const
+  branch.objects = [
+    { ...root, publication: 'known-type' },
+    { ...occupant, publication: 'unknown' },
+    { ...root, id: 'private-cargo', name: 'Secret cargo', placement: atRoute, publication: 'hidden' },
+  ]
+  const document = projectPlayerCluster(workspace)
+  expect(document.routes).toMatchObject([{
+    id: 'route-1',
+    fromSystemId: 'system-1',
+    destination: { kind: 'unknown', label: 'Unknown destination' },
+  }])
+  expect(document.routeBranches.map(branch => branch.anchor)).toEqual([{ kind: 'route', routeId: 'route-1', progression: 0.75 }])
+  expect(document.routeBranches[0]!.map.objects).toMatchObject([
+    { label: 'Vessel', disclosure: 'known-type', subtype: 'vessel', markerColor: '#2299ff' },
+    { label: 'Unknown presence', disclosure: 'unknown' },
+  ])
+  const json = serializePlayerJson(document)
+  for (const secret of [root.name, root.playerText, occupant.name, 'Secret cargo', 'Vesper']) {
+    expect(json).not.toContain(secret)
+  }
+
+  const publicCurve = continuousMapRouteCurve(
+    { x: 100, y: 200 }, { x: 120, y: 200 }, { x: 140, y: 200 }, { x: 160, y: 200 },
+  )
+  const displayed = projectPlayerRouteBranch(document.routeBranches[0]!, new Map([['route-1', publicCurve]]))
+  expect(displayed?.anchor).toEqual({ x: 145, y: 200 })
+  expect(displayed?.orbits[0]?.center).toEqual(displayed?.anchor)
+  expect(displayed?.objects[1]?.point.y).toBeCloseTo(218.4)
+
+  const privateVariant = structuredClone(workspace)
+  const variant = privateVariant.cluster.routeContents[route.id]!
+  variant.orbits.push({ id: 'hidden-orbit', order: 1, hostId: 'private-cargo' })
+  variant.objects.push({
+    ...occupant, id: 'hidden-occupant', placement: { kind: 'orbit', orbitId: 'hidden-orbit' }, publication: 'hidden',
+  })
+  privateVariant.layout.orbitRadii['hidden-orbit'] = { horizontal: 80_000, vertical: 50_000 }
+  privateVariant.layout.systemFrames = { [workspace.cluster.systems[0]!.id]: { left: 1024, right: 1024, top: 1024, bottom: 1024 } }
+  const projectedVariant = projectPlayerCluster(privateVariant)
+  expect(serializePlayerJson(projectedVariant)).toBe(json)
+  expect(projectPlayerContinuousMap(projectedVariant).bounds).toEqual(projectPlayerContinuousMap(document).bounds)
 })

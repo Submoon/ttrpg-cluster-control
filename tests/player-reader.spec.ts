@@ -1,8 +1,9 @@
 import { gzipSync } from 'node:zlib'
 import { readFile } from 'node:fs/promises'
-import { serializePlayerJson } from '../domain/workspace'
+import { projectPlayerCluster, serializePlayerJson } from '../domain/workspace'
 import { createPlayerShareUrl } from '../utils/player-share-link'
 import { expect, test, type Locator } from './fixtures'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 import { createPlayerInterfaceFixture } from './fixtures/player-interface-fixture'
 import { parseMapCameraTransform } from './helpers'
 import { largestUnobstructedClientRect } from '../utils/map-usable-area'
@@ -694,4 +695,18 @@ test('the default player reader opens shared links and files with one camera and
   await expect(anonymousRoute).toBeFocused()
   await expect(anonymousRoute).toHaveAttribute('aria-pressed', 'true')
   await expect(routeDetails).toContainText('Unknown destination')
+
+  const { workspace, route, root } = workspaceWithRouteObjects()
+  for (const zone of workspace.cluster.systems) zone.publication = 'hidden'
+  workspace.cluster.routeContents[route.id]!.objects[0]!.publication = 'revealed'
+  await page.goto(readerUrl)
+  await uploadPlayerJson(page.getByLabel('Open player JSON', { exact: true }), 'route-object-only.json',
+    serializePlayerJson(projectPlayerCluster(workspace)))
+  const detached = page.getByRole('region', { name: 'Player-visible continuous map', exact: true })
+  const detachedMarker = detached.getByRole('button', { name: `Inspect ${root.name}`, exact: true })
+  await expect(detachedMarker).toBeInViewport()
+  await detachedMarker.press('Enter')
+  await expect(page.getByRole('region', { name: 'Player object details', exact: true })).toContainText(root.playerText)
+  await expect(page.getByRole('region', { name: 'Public Jump Route association', exact: true })).toHaveCount(0)
+  await expect(detached.getByRole('button', { name: /Jump Level/ })).toHaveCount(0)
 })

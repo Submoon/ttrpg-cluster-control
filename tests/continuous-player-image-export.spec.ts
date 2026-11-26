@@ -30,7 +30,8 @@ function publicJumpPoint(label: string, x: number, y: number): PlayerObjectMarke
 function publicDocument(): PlayerClusterDocument {
   return {
     format: 'ttrpg-cluster-control-player',
-    version: 2,
+    version: 3,
+    routeBranches: [],
     title: 'Public <Reach>',
     systems: [
       {
