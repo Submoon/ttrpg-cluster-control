@@ -1,6 +1,6 @@
 ---
 title: Export player images from permitted route object scenes
-status: in-progress
+status: closed
 assignee: Codex
 type: implementation
 specification: ../spec.md
@@ -41,6 +41,8 @@ Implementation started from integration candidate `14e13d7bee9f0b3704066e90bb568
 - [x] Use the same allowed geometry and disclosure in preview, detached reader and exported scene.
 
 ## Verification
+
+576e21db was integrated in b2b06820. It passed 56 focused image/projection checks after integration with the Warden image changes. Lint and typecheck passed. The maintained player-reader journey passed on a22b4077, including the detached object-only SVG download. The exact browser evidence is retained under the qualification worktree's `test-results/local-test-1795692251299-14188-c87d49e0/playwright-run-1`.
 
 Use public image/codec privacy and operation-controller checks with independent bounds/content assertions. Reuse the maintained player-reader/download journey for actual artifact wiring.
 
