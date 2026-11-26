@@ -1,6 +1,9 @@
 import { clusterRoutePresentationLabel } from './cluster-route-presentation'
 import type { ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
 import type { MapViewport, SvgViewportRect } from './map-zoom'
+import type { Point } from '../domain/workspace'
+import { continuousMapLabelSpace } from './continuous-map-caption-layout'
+import { pointOnRoute } from './route-object-geometry'
 
 interface LabelCandidate {
   id: string
@@ -18,9 +21,10 @@ interface RouteLabelOptions {
   obstacles?: readonly SvgViewportRect[]
 }
 
-interface RouteLabel {
+export interface ContinuousMapRouteLabel {
   text: string
   widthPixels: number
+  position: Point
 }
 
 export const CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS = 19
@@ -34,9 +38,10 @@ export function placeContinuousMapRouteLabels({
   viewportRect,
   svgPixelScale,
   obstacles = [],
-}: RouteLabelOptions): ReadonlyMap<string, RouteLabel> {
-  const labels = new Map<string, RouteLabel>()
-  const occupied = [...obstacles]
+}: RouteLabelOptions): ReadonlyMap<string, ContinuousMapRouteLabel> {
+  const labels = new Map<string, ContinuousMapRouteLabel>()
+  const space = continuousMapLabelSpace(viewportRect, svgPixelScale)
+  for (const obstacle of obstacles) space.reserve(obstacle)
   const selectedRoute = routes.find(route => route.id === selectedRouteId)
   const ordered = selectedRoute ? [selectedRoute, ...routes.filter(route => route !== selectedRoute)] : routes
   const clearance = LABEL_CLEARANCE_PIXELS / svgPixelScale
@@ -48,15 +53,19 @@ export function placeContinuousMapRouteLabels({
 
     const width = widthPixels / svgPixelScale
     const height = CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS / svgPixelScale
-    const x = viewport.x + geometry.midpoint.x * viewport.k - width / 2
-    const y = viewport.y + geometry.midpoint.y * viewport.k - height / 2
-    if (x < viewportRect.x + clearance || x + width > viewportRect.x + viewportRect.width - clearance
-      || y < viewportRect.y + clearance || y + height > viewportRect.y + viewportRect.height - clearance) continue
-    if (occupied.some(rect => x < rect.x + rect.width + clearance && x + width + clearance > rect.x
-      && y < rect.y + rect.height + clearance && y + height + clearance > rect.y)) continue
-
-    occupied.push({ x, y, width, height })
-    labels.set(id, { text, widthPixels })
+    for (const progress of [.5, .32, .68, .18, .82]) {
+      const position = progress === .5 ? geometry.midpoint : pointOnRoute(geometry, progress)
+      const bounds = {
+        x: viewport.x + position.x * viewport.k - width / 2 - clearance,
+        y: viewport.y + position.y * viewport.k - height / 2 - clearance,
+        width: width + 2 * clearance,
+        height: height + 2 * clearance,
+      }
+      if (!space.fits(bounds)) continue
+      space.reserve(bounds)
+      labels.set(id, { text, widthPixels, position })
+      break
+    }
   }
   return labels
 }

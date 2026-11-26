@@ -1,3 +1,4 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { computed, ref } from 'vue'
 import { createLocalWorkspace, type LocalWorkspace } from '../domain/workspace'
@@ -239,7 +240,7 @@ test('an accepted result after transition unmount cannot close a newer chart ses
 })
 
 test('an accepted route result cannot apply an entity session replaced while the transition is pending @pure', async () => {
-  const workspace = ref<LocalWorkspace | null>(createLocalWorkspace('Kestrel Reach', 'Vesper'))
+  const workspace = ref<LocalWorkspace | null>(createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper'))
   let revision = 0
   const mutations = createWorkspaceMutationExecutor({
     getWorkspace: () => workspace.value,

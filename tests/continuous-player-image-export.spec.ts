@@ -11,7 +11,8 @@ import {
   replaceWorkspaceSystem,
   updateChartDetails,
 } from '../domain/workspace'
-import { serializeContinuousPlayerMapImage } from '../utils/continuous-player-image-export'
+import { serializeContinuousPlayerMapImage, type PlayerImageViewportSnapshot } from '../utils/continuous-player-image-export'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 
 function publicJumpPoint(label: string, x: number, y: number): PlayerObjectMarker {
   return {
@@ -30,7 +31,8 @@ function publicJumpPoint(label: string, x: number, y: number): PlayerObjectMarke
 function publicDocument(): PlayerClusterDocument {
   return {
     format: 'ttrpg-cluster-control-player',
-    version: 2,
+    version: 3,
+    routeBranches: [],
     title: 'Public <Reach>',
     systems: [
       {
@@ -204,7 +206,7 @@ test('a selected player route reveals a destination name only for a Revealed opp
     position: { x: 2600, y: 500 },
     disclosure: 'known-type',
     type: 'star-system',
-    label: 'Star system',
+    label: 'Zone',
   }
   const image = serializeContinuousPlayerMapImage(
     document,
@@ -214,7 +216,7 @@ test('a selected player route reveals a destination name only for a Revealed opp
 
   expect(image.svg).toContain('Jump-2')
   expect(image.svg).toContain('Jump-3')
-  expect(image.svg).not.toContain('Star system')
+  expect(image.svg).not.toContain('Zone')
   expect(image.svg).not.toContain('Remote Reach')
   expect(image.svg).not.toContain('Remote Gate')
   expect(image.svg).not.toContain('Unknown destination')
@@ -254,14 +256,14 @@ test('Selected system rejects marker-only disclosure instead of exporting a name
     position: { x: 1800, y: 460 },
     disclosure: 'known-type',
     type: 'star-system',
-    label: 'Star system',
+    label: 'Zone',
   }
 
   expect(() => serializeContinuousPlayerMapImage(
     document,
     { scope: 'system', systemId: 'system-3' },
     'print-light',
-  )).toThrow('Select a Revealed public system')
+  )).toThrow('Select a Revealed public Zone')
 })
 
 test('a Revealed empty system frames its published name without the cluster anchor @pure', () => {
@@ -281,6 +283,7 @@ test('a legacy share exports only the retained route and never infers an attachm
   const current = publicDocument()
   const restored = parsePlayerJson(JSON.stringify({
     ...current,
+    routeBranches: undefined,
     version: 1,
     routes: [
       current.routes[0],
@@ -351,4 +354,122 @@ test('moving unrelated private extents leaves all three public images unchanged 
     expect(serializeContinuousPlayerMapImage(second, scope, 'print-light')).toEqual(firstImage)
     expect(firstImage.svg).not.toMatch(/PRIVATE|private cluster name/)
   }
+})
+
+
+test('a detached player branch supplies Cluster bounds at overview detail without private route context @pure', () => {
+  const { workspace, route, root, occupant, orbit } = workspaceWithRouteObjects()
+  workspace.cluster.systems.forEach(zone => { zone.publication = 'hidden' })
+  root.publication = 'revealed'
+  occupant.publication = 'revealed'
+  const document = projectPlayerCluster(workspace)
+  const branch = document.routeBranches[0]!
+  if (branch.anchor.kind !== 'detached') throw new Error('Expected a detached public branch.')
+
+  const image = serializeContinuousPlayerMapImage(document, { scope: 'cluster' }, 'print-light')
+  const { x, y } = branch.anchor.position
+  expect(image.svg).toContain(`translate(${x} ${y}) scale(1)`)
+  expect(image.svg).toContain(root.name)
+  expect(image.svg).not.toContain(root.playerText)
+  expect(image.svg).not.toContain(root.description)
+  expect(image.svg).not.toContain(occupant.name)
+  expect(image.svg).not.toContain(route.id)
+  expect(image.svg).not.toContain(orbit.id)
+  expect(image.svg).not.toMatch(/Vesper|Aster|Jump-3|Unknown destination/)
+  expect(image.width).toBeLessThan(100)
+  expect(image.height).toBeLessThan(100)
+
+  occupant.publication = 'hidden'
+  const publicRootOnly = serializeContinuousPlayerMapImage(projectPlayerCluster(workspace), { scope: 'cluster' }, 'print-light')
+  workspace.layout.orbitRadii[orbit.id] = { horizontal: 9000, vertical: 4500 }
+  const distantHiddenBranch = serializeContinuousPlayerMapImage(projectPlayerCluster(workspace), { scope: 'cluster' }, 'print-light')
+  expect(distantHiddenBranch).toEqual(publicRootOnly)
+})
+
+
+test('an attached route object follows the exported public curve and stays outside a selected Zone image @pure', () => {
+  const { workspace, root } = workspaceWithRouteObjects()
+  root.publication = 'revealed'
+  const branch = projectPlayerCluster(workspace).routeBranches[0]!
+  const document = publicDocument()
+  document.routes = [document.routes[0]!]
+  const systemScope = { scope: 'system', systemId: 'system-1' } as const
+  const selectedZone = serializeContinuousPlayerMapImage(document, systemScope, 'print-light')
+  document.routeBranches = [{
+    ...branch,
+    anchor: { kind: 'route', routeId: document.routes[0]!.id, progression: .25 },
+  }]
+  const drawable = { x: 0, y: 0, width: 3100, height: 900 }
+  const scopes = [
+    { scope: 'cluster' },
+    {
+      scope: 'viewport',
+      snapshot: {
+        camera: { x: 0, y: 0, k: 1 }, drawable, nameViewport: drawable, svgPixelScale: 1,
+        detailSystemIds: ['system-1'], dimmedObjects: null, selectedRouteId: null,
+      },
+    },
+  ] as const
+  const markerPositions = scopes.map((scope) => {
+    const { svg } = serializeContinuousPlayerMapImage(document, scope, 'print-light')
+    const route = svg.match(/class="cluster-route-line" d="M ([^"]+)"/)?.[1]?.replace('C ', '').split(' ').map(Number)
+    const marker = svg.match(/class="player-branch-marker" transform="translate\(([^ ]+) ([^)]+)\)/)
+    if (!route || !marker) throw new Error('The SVG is missing the public route or its attached marker.')
+    const [startX, startY, controlX1, controlY1, controlX2, controlY2, endX, endY] = route as [
+      number, number, number, number, number, number, number, number,
+    ]
+    // The explicit Bernstein weights at one quarter of the SVG cubic.
+    expect(Number(marker[1])).toBeCloseTo((27 * startX + 27 * controlX1 + 9 * controlX2 + endX) / 64, 6)
+    expect(Number(marker[2])).toBeCloseTo((27 * startY + 27 * controlY1 + 9 * controlY2 + endY) / 64, 6)
+    return [Number(marker[1]), Number(marker[2])]
+  })
+  expect(markerPositions[0]).not.toEqual(markerPositions[1])
+  expect(serializeContinuousPlayerMapImage(document, systemScope, 'print-light')).toEqual(selectedZone)
+})
+
+test('a player viewport keeps branch selection and dimming local and renders ordinary Orbit detail at readable zoom @pure', () => {
+  const { workspace, root, occupant } = workspaceWithRouteObjects()
+  workspace.cluster.systems.forEach(zone => { zone.publication = 'hidden' })
+  root.publication = 'revealed'
+  occupant.publication = 'revealed'
+  const document = projectPlayerCluster(workspace)
+  const branch = document.routeBranches[0]!
+  document.routeBranches.push({
+    ...branch,
+    id: 'second-branch',
+    anchor: { kind: 'detached', position: { x: 350, y: 420 } },
+  })
+  const object = branch.map.objects.find(object => object.label === occupant.name)!
+  const drawable = { x: 12, y: -8, width: 640, height: 380 }
+  const snapshot: PlayerImageViewportSnapshot = {
+    camera: { x: -30, y: 20, k: 1 },
+    drawable, nameViewport: drawable, svgPixelScale: 1,
+    detailSystemIds: [], dimmedObjects: null, selectedRouteId: null,
+    selectedBranchTarget: { branchId: branch.id, target: { kind: 'object', id: object.id } },
+    dimmedBranchObjects: [{ branchId: branch.id, ids: [object.id] }],
+  }
+  const overview = serializeContinuousPlayerMapImage(document, { scope: 'viewport', snapshot }, 'print-light')
+
+  expect(overview.svg).toContain('viewBox="12 -8 640 380"')
+  expect(overview.svg).toContain('translate(-30 20) scale(1)')
+  expect(overview.svg.match(/<title>Captured echo<\/title>/g)).toHaveLength(1)
+  expect(overview.svg).toMatch(/opacity="\.4"><title>Captured echo<\/title><circle[^>]+stroke-width="3"/)
+  expect(overview.svg).not.toContain('<ellipse')
+
+  const detail = serializeContinuousPlayerMapImage(document, {
+    scope: 'viewport',
+    snapshot: { ...snapshot, camera: { ...snapshot.camera, k: 4 }, selectedBranchTarget: null },
+  }, 'print-light')
+  expect(detail.svg.match(/<title>Captured echo<\/title>/g)).toHaveLength(2)
+  expect(detail.svg.match(/opacity="\.4"/g)).toHaveLength(1)
+  expect(detail.svg.match(/<ellipse/g)).toHaveLength(2)
+  expect(detail.svg).toContain('translate(350 420) scale(0.25)')
+  expect(detail.svg).not.toContain('route-vessel-orbit')
+
+  const compactDetail = serializeContinuousPlayerMapImage(document, {
+    scope: 'viewport',
+    snapshot: { ...snapshot, camera: { ...snapshot.camera, k: 16 }, svgPixelScale: 0.15, selectedBranchTarget: null },
+  }, 'print-light')
+  expect(compactDetail.svg.match(/<title>Captured echo<\/title>/g)).toHaveLength(2)
+  expect(compactDetail.svg.match(/<ellipse/g)).toHaveLength(2)
 })

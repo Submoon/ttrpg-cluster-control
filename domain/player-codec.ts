@@ -12,6 +12,7 @@ import type {
   PlayerObjectMarker,
   PlayerOrbit,
   PlayerRoute,
+  PlayerRouteBranch,
   PlayerSystemDocument,
   PlayerSystemMarker,
 } from './player-projection'
@@ -30,7 +31,7 @@ const errorMessages: Record<PlayerDocumentErrorCode, string> = {
   'unsupported-version': 'This player document version is not supported.',
   'invalid-document': 'The player document is invalid.',
   'too-large': 'The player document exceeds the supported size or work limit.',
-  'empty-document': 'The player document contains no public systems.',
+  'empty-document': 'The player document contains no public locations.',
 }
 
 /** Safe, stable failure for parsing, validating, or serializing a player document. */
@@ -46,7 +47,8 @@ export class PlayerDocumentError extends Error {
 
 const PLAYER_FORMAT = 'ttrpg-cluster-control-player'
 const LEGACY_PLAYER_VERSION = 1
-const PLAYER_VERSION = 2
+const ROUTE_ATTACHMENT_VERSION = 2
+const PLAYER_VERSION = 3
 export const MAX_PLAYER_JSON_BYTES = 4 * 1024 * 1024
 const MAX_JSON_DEPTH = 64
 const MAX_TEXT_BYTES = 256 * 1024
@@ -139,11 +141,11 @@ function readPoint(value: unknown, budget: SerializedJsonBudget): Point {
   return point
 }
 
-function readPublicId(value: unknown, kind: 'system' | 'route' | 'object' | 'orbit'): string {
+function readPublicId(value: unknown, kind: 'system' | 'route' | 'object' | 'orbit' | 'branch'): string {
   const limit = kind === 'system' ? MAX_SYSTEMS
     : kind === 'route' ? MAX_ROUTES
       : kind === 'object' ? MAX_OBJECTS_PER_SYSTEM
-        : MAX_ORBITS_PER_SYSTEM
+        : kind === 'branch' ? MAX_OBJECTS_TOTAL : MAX_ORBITS_PER_SYSTEM
   if (typeof value !== 'string' || value.length > 20) return invalidDocument()
   const prefix = `${kind}-`
   if (!value.startsWith(prefix)) return invalidDocument()
@@ -357,11 +359,16 @@ export function restorePlayerDocument(input: unknown): PlayerClusterDocument {
 function reconstructPlayerDocument(input: unknown): PlayerClusterDocument {
   if (!isRecord(input)) return invalidDocument()
   if (input.format !== PLAYER_FORMAT) return fail('unsupported-format')
-  if (input.version !== LEGACY_PLAYER_VERSION && input.version !== PLAYER_VERSION) return fail('unsupported-version')
-  const hasRouteAttachments = input.version === PLAYER_VERSION
+  if (input.version !== LEGACY_PLAYER_VERSION && input.version !== ROUTE_ATTACHMENT_VERSION
+    && input.version !== PLAYER_VERSION) return fail('unsupported-version')
+  const hasRouteAttachments = input.version >= ROUTE_ATTACHMENT_VERSION
+  const routeBranchInput = input.version === PLAYER_VERSION ? input.routeBranches : []
+  if (!Array.isArray(routeBranchInput)
+    || (input.version !== PLAYER_VERSION && Object.hasOwn(input, 'routeBranches'))) return invalidDocument()
+  if (routeBranchInput.length > MAX_OBJECTS_TOTAL) return tooLarge()
 
   if (!Array.isArray(input.systems)) return invalidDocument()
-  if (input.systems.length === 0) return fail('empty-document')
+  if (!input.systems.length && !routeBranchInput.length) return fail('empty-document')
   if (input.systems.length > MAX_SYSTEMS) return tooLarge()
   if (!Array.isArray(input.routes)) return invalidDocument()
   if (input.routes.length > MAX_ROUTES) return tooLarge()
@@ -390,8 +397,17 @@ function reconstructPlayerDocument(input: unknown): PlayerClusterDocument {
     routes.push(restoreRoute(candidate, outputBudget, hasRouteAttachments))
   }
   outputBudget.endArray()
+  outputBudget.addKey('routeBranches')
+  outputBudget.startArray()
+  const routeBranches: PlayerRouteBranch[] = []
+  const routesById = uniqueById(routes)
+  for (const candidate of routeBranchInput) {
+    routeBranches.push(restoreRouteBranch(candidate, routesById, counts, outputBudget))
+  }
+  outputBudget.endArray()
   outputBudget.endObject()
   outputBudget.finish()
+  uniqueById(routeBranches)
   assertUniqueIds(systems, routes)
   assertClusterReferences(systems, routes)
   if (hasRouteAttachments && routes.some(isResolvedSameSystemLoop)) return invalidDocument()
@@ -402,6 +418,7 @@ function reconstructPlayerDocument(input: unknown): PlayerClusterDocument {
     title,
     systems,
     routes,
+    routeBranches,
   }
 }
 
@@ -442,15 +459,15 @@ function restoreSystemMarker(
     return { id, position, disclosure: 'unknown', label: 'Unknown presence' }
   }
   if (value.disclosure === 'known-type') {
-    if (value.type !== 'star-system' || value.label !== 'Star system') return invalidDocument()
+    if (value.type !== 'star-system' || (value.label !== 'Zone' && value.label !== 'Star system')) return invalidDocument()
     budget.addKey('disclosure')
     budget.addString('known-type')
     budget.addKey('type')
     budget.addString('star-system')
     budget.addKey('label')
-    budget.addString('Star system')
+    budget.addString('Zone')
     budget.endObject()
-    return { id, position, disclosure: 'known-type', type: 'star-system', label: 'Star system' }
+    return { id, position, disclosure: 'known-type', type: 'star-system', label: 'Zone' }
   }
   if (value.disclosure !== 'revealed' || value.type !== 'star-system') return invalidDocument()
 
@@ -474,10 +491,56 @@ function restoreSystemMarker(
   }
 }
 
+function restoreRouteBranch(
+  value: unknown,
+  routesById: ReadonlyMap<string, PlayerRoute>,
+  counts: WorkCounts,
+  budget: SerializedJsonBudget,
+): PlayerRouteBranch {
+  if (!isRecord(value) || !isRecord(value.anchor) || Object.keys(value).length !== 3) return invalidDocument()
+  const id = readPublicId(value.id, 'branch')
+  budget.startObject()
+  budget.addKey('id')
+  budget.addString(id)
+  budget.addKey('anchor')
+  budget.startObject()
+  const input = value.anchor
+  let anchor: PlayerRouteBranch['anchor']
+  if (input.kind === 'detached' && Object.keys(input).length === 2) {
+    budget.addKey('kind')
+    budget.addString('detached')
+    budget.addKey('position')
+    anchor = { kind: 'detached', position: readPoint(input.position, budget) }
+  } else if (input.kind === 'route' && Object.keys(input).length === 3) {
+    const routeId = readPublicId(input.routeId, 'route')
+    const progression = readFiniteGeometry(input.progression)
+    if (!routesById.has(routeId) || progression < 0 || progression > 1) return invalidDocument()
+    budget.addKey('kind')
+    budget.addString('route')
+    budget.addKey('routeId')
+    budget.addString(routeId)
+    budget.addKey('progression')
+    budget.addNumber(progression)
+    anchor = { kind: 'route', routeId, progression }
+  } else {
+    return invalidDocument()
+  }
+  budget.endObject()
+  budget.addKey('map')
+  const map = restoreSystemDocument(value.map, counts, budget, 'branch-root')
+  budget.endObject()
+
+  const roots = map.objects.filter(object => object.placement.kind === 'branch-root')
+  if (roots.length !== 1 || roots[0]!.position.x !== 0 || roots[0]!.position.y !== 0
+    || map.orbits.some(orbit => orbit.hostId === null)) return invalidDocument()
+  return { id, anchor, map }
+}
+
 function restoreSystemDocument(
   value: unknown,
   counts: WorkCounts,
   budget: SerializedJsonBudget,
+  rootKind: 'system' | 'branch-root' = 'system',
 ): PlayerSystemDocument {
   if (!isRecord(value) || !Array.isArray(value.objects) || !Array.isArray(value.orbits)) {
     return invalidDocument()
@@ -500,7 +563,7 @@ function restoreSystemDocument(
   budget.startArray()
   const objects: PlayerObjectMarker[] = []
   for (const candidate of value.objects) {
-    objects.push(restoreObject(candidate, orbitById, counts, budget))
+    objects.push(restoreObject(candidate, orbitById, counts, budget, rootKind))
   }
   budget.endArray()
   budget.endObject()
@@ -564,6 +627,7 @@ function restoreObject(
   orbitById: Map<string, PlayerOrbit>,
   counts: WorkCounts,
   budget: SerializedJsonBudget,
+  rootKind: 'system' | 'branch-root',
 ): PlayerObjectMarker {
   if (!isRecord(value)) return invalidDocument()
   const id = readPublicId(value.id, 'object')
@@ -573,7 +637,7 @@ function restoreObject(
   budget.addKey('position')
   const position = readPoint(value.position, budget)
   budget.addKey('placement')
-  const placement = restorePlacement(value.placement, orbitById, budget)
+  const placement = restorePlacement(value.placement, orbitById, budget, rootKind)
 
   if (value.disclosure === 'unknown') {
     if (value.label !== 'Unknown presence') return invalidDocument()
@@ -674,14 +738,16 @@ function restorePlacement(
   value: unknown,
   orbitById: Map<string, PlayerOrbit>,
   budget: SerializedJsonBudget,
+  rootKind: 'system' | 'branch-root',
 ): PlayerObjectMarker['placement'] {
   if (!isRecord(value)) return invalidDocument()
-  if (value.kind === 'system') {
+  if (value.kind === rootKind) {
+    if (rootKind === 'branch-root' && Object.keys(value).length !== 1) return invalidDocument()
     budget.startObject()
     budget.addKey('kind')
-    budget.addString('system')
+    budget.addString(rootKind)
     budget.endObject()
-    return { kind: 'system' }
+    return { kind: rootKind }
   }
   if (value.kind !== 'orbit') return invalidDocument()
   const orbitId = readPublicId(value.orbitId, 'orbit')
@@ -873,7 +939,7 @@ function assertAcyclicObjectHosts(
       if (!current) return invalidDocument()
       stateByObjectId.set(currentId, 1)
       path.push(currentId)
-      if (current.placement.kind === 'system') {
+      if (current.placement.kind !== 'orbit') {
         currentId = null
         continue
       }

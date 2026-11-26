@@ -1,7 +1,8 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { computed, createRenderer, ref, type Ref } from 'vue'
-import { createJumpRoute, createLocalWorkspace, createSystemObject, type LocalWorkspace } from '../domain/workspace'
+import { createJumpRoute, createSystemObject, type LocalWorkspace } from '../domain/workspace'
 import type { SaveState } from '../composables/editor-workflows/types'
 import type { EntityInspectorSession } from '../composables/editor-workflows/types'
 import { useRouteInspectorSession } from '../composables/editor-workflows/useRouteInspectorSession'
@@ -64,7 +65,7 @@ function createHarness(options: {
   confirmCapacity?: (signal: AbortSignal) => Promise<boolean>
 } = {}) {
   setActivePinia(createPinia())
-  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   if (options.secondSystem) addSecondSystem(initial)
   const first = initial.cluster.systems[0]
   const object = first?.objects[0]
@@ -75,7 +76,7 @@ function createHarness(options: {
         const destination = initial.cluster.systems[1]
         if (!destination) throw new Error('The route workflow needs a second system.')
         const point = createSystemObject(first, 'jump-point')
-        const destinationPoint = createSystemObject(destination, 'jump-point')
+        const destinationPoint = { ...createSystemObject(destination, 'jump-point'), locationKey: 'JP-02' }
         first.objects.push(point)
         destination.objects.push(destinationPoint)
         const created = createJumpRoute(initial.cluster, {

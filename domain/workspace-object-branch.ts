@@ -1,4 +1,4 @@
-import type { StarSystem } from './workspace-model'
+import type { CatalogueObject, Orbit } from './workspace-model'
 
 export interface SystemObjectBranch {
   objectIds: string[]
@@ -9,12 +9,12 @@ export interface SystemObjectBranch {
  * Resolves one object's complete hosted Orbit branch, including empty hosted Orbits.
  * Parent placements, siblings, Station links, and Jump Route references are outside this branch.
  *
- * @param system System containing the target object and hosted relationships.
+ * @param system Owning Zone or route contents with the target and hosted relationships.
  * @param targetObjectId Root object whose hosted branch is resolved.
  * @returns IDs in traversal order, or undefined when the target is absent.
  */
 export function resolveSystemObjectBranch(
-  system: StarSystem,
+  system: { objects: readonly CatalogueObject[]; orbits: readonly Orbit[] },
   targetObjectId: string,
 ): SystemObjectBranch | undefined {
   const objectsById = new Map(system.objects.map(object => [object.id, object]))

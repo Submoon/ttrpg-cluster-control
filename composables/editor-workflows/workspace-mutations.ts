@@ -1,4 +1,5 @@
-import type { LocalWorkspace } from '../../domain/workspace'
+import { routeContentsFor, type LocalWorkspace } from '../../domain/workspace'
+import { withoutChangedLegacyZonePlacements } from '../../domain/workspace-zone-placement-compatibility'
 import { createWorkspaceSnapshot } from '../../utils/workspace-storage'
 import {
   createEmptyWorkspaceHistory,
@@ -26,6 +27,7 @@ export type WorkspaceMutationKind =
 export type WorkspaceMutationTarget =
   | { kind: 'cluster' | 'system' | 'route' | 'field'; id: string }
   | { kind: 'object' | 'orbit'; id: string; systemId: string }
+  | { kind: 'route-object'; id: string; routeId: string }
 
 export interface WorkspaceMutationAction {
   kind: WorkspaceMutationKind
@@ -91,6 +93,9 @@ function normalizedTarget(target: WorkspaceMutationTarget): WorkspaceMutationTar
   if ((target.kind === 'object' || target.kind === 'orbit')
     && typeof target.systemId === 'string' && target.systemId) {
     return { kind: target.kind, id: target.id, systemId: target.systemId }
+  }
+  if (target.kind === 'route-object' && typeof target.routeId === 'string' && target.routeId) {
+    return { kind: target.kind, id: target.id, routeId: target.routeId }
   }
   return null
 }
@@ -177,7 +182,7 @@ function createWorkspaceMutationPipeline({
         let after: LocalWorkspace
         try {
           before = createWorkspaceSnapshot(current)
-          after = createWorkspaceSnapshot(request.prepare(before))
+          after = createWorkspaceSnapshot(withoutChangedLegacyZonePlacements(request.prepare(before)))
         } catch (error) {
           return rejected('invalid', errorText(error))
         }
@@ -383,6 +388,11 @@ function targetContextLabel(target: WorkspaceMutationTarget | undefined, workspa
       ? 'unoccupied center'
       : system.objects.find(object => object.id === orbit.hostId)?.name ?? 'missing host'
     return `Orbit ${orbit.order} around ${host} · ${system.name}`
+  }
+  if (target.kind === 'route-object') {
+    const object = routeContentsFor(cluster, target.routeId)?.objects.find(candidate => candidate.id === target.id)
+    const routeContext = targetContextLabel({ kind: 'route', id: target.routeId }, workspace)
+    return object && routeContext ? `${object.name} · ${routeContext}` : null
   }
   if (target.kind === 'route') {
     const route = cluster.routes.find(candidate => candidate.id === target.id)

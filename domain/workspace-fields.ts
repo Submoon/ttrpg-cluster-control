@@ -7,8 +7,10 @@ import type {
   CustomFieldType,
   LocalWorkspace,
   CustomFieldValue,
-  SystemObject,
+  CatalogueObject,
 } from './workspace-model'
+import { clusterObjects } from './workspace-location-keys'
+import { mapCatalogueObjects } from './workspace-route-objects'
 import { nativePlayerFieldIds } from './workspace-model'
 import { isCustomFieldApplicability, validFieldOptions, validName } from './workspace-validation'
 
@@ -30,35 +32,29 @@ export function updateNativeFieldOptions(
   const normalized = validFieldOptions(options, `${field === 'atmosphere' ? 'Atmosphere' : 'Port class'} option`)
   const property = field === 'atmosphere' ? 'atmosphereOptions' : 'portClassOptions'
   let hasInvalidValues = false
-
-  for (const system of workspace.cluster.systems) {
-    for (const object of system.objects) {
-      const value = object[field]
-      if (value !== undefined && !normalized.includes(value)) {
-        hasInvalidValues = true
-        if (!clearInvalidValues) {
-          throw new Error(`Cannot remove "${value}" while it is assigned to ${object.name}.`)
-        }
+  for (const object of clusterObjects(workspace.cluster)) {
+    const value = object[field]
+    if (value !== undefined && !normalized.includes(value)) {
+      hasInvalidValues = true
+      if (!clearInvalidValues) {
+        throw new Error(`Cannot remove "${value}" while it is assigned to ${object.name}.`)
       }
     }
   }
 
-  const systems = hasInvalidValues
-    ? workspace.cluster.systems.map(system => ({
-        ...system,
-        objects: system.objects.map(object => {
-          const value = object[field]
-          if (value === undefined || normalized.includes(value)) return object
-          const updatedObject = { ...object }
-          delete updatedObject[field]
-          return updatedObject
-        }),
-      }))
-    : workspace.cluster.systems
+  const cluster = hasInvalidValues
+    ? mapCatalogueObjects(workspace.cluster, object => {
+        const value = object[field]
+        if (value === undefined || normalized.includes(value)) return object
+        const updatedObject = { ...object }
+        delete updatedObject[field]
+        return updatedObject
+      })
+    : workspace.cluster
 
   return {
     ...workspace,
-    ...(hasInvalidValues ? { cluster: { ...workspace.cluster, systems } } : {}),
+    cluster,
     objectFieldSettings: {
       ...workspace.objectFieldSettings,
       [property]: normalized,
@@ -162,7 +158,7 @@ export function updateFieldPlayerSharing(
  */
 export function isCustomFieldApplicableToObject(
   definition: CustomFieldDefinition,
-  object: SystemObject,
+  object: Pick<CatalogueObject, 'family' | 'subtype'>,
 ): boolean {
   return definition.applicability === undefined
     || definition.applicability.some(target =>
@@ -264,34 +260,29 @@ export function updateCustomFieldOptions(
 
   const normalized = validFieldOptions(options, `${definition.name} option`)
   let hasInvalidValues = false
-  for (const system of workspace.cluster.systems) {
-    for (const object of system.objects) {
-      const value = object.customFieldValues?.[fieldId]
-      if (typeof value === 'string' && !normalized.includes(value)) {
-        hasInvalidValues = true
-        if (!clearInvalidValues) {
-          throw new Error(`Cannot remove "${value}" while it is assigned to ${object.name}.`)
-        }
+  for (const object of clusterObjects(workspace.cluster)) {
+    const value = object.customFieldValues?.[fieldId]
+    if (typeof value === 'string' && !normalized.includes(value)) {
+      hasInvalidValues = true
+      if (!clearInvalidValues) {
+        throw new Error(`Cannot remove "${value}" while it is assigned to ${object.name}.`)
       }
     }
   }
 
-  const systems = hasInvalidValues
-    ? workspace.cluster.systems.map(system => ({
-        ...system,
-        objects: system.objects.map(object => {
-          const value = object.customFieldValues?.[fieldId]
-          if (typeof value !== 'string' || normalized.includes(value)) return object
-          const customFieldValues = { ...object.customFieldValues }
-          delete customFieldValues[fieldId]
-          return { ...object, customFieldValues }
-        }),
-      }))
-    : workspace.cluster.systems
+  const cluster = hasInvalidValues
+    ? mapCatalogueObjects(workspace.cluster, object => {
+        const value = object.customFieldValues?.[fieldId]
+        if (typeof value !== 'string' || normalized.includes(value)) return object
+        const customFieldValues = { ...object.customFieldValues }
+        delete customFieldValues[fieldId]
+        return { ...object, customFieldValues }
+      })
+    : workspace.cluster
 
   return {
     ...workspace,
-    ...(hasInvalidValues ? { cluster: { ...workspace.cluster, systems } } : {}),
+    cluster,
     objectFieldSettings: {
       ...workspace.objectFieldSettings,
       customFields: workspace.objectFieldSettings.customFields.map(field =>
@@ -352,29 +343,24 @@ export function updateCustomFieldType(
     ? validFieldOptions(options, `${definition.name} option`)
     : []
   let hasInvalidValues = false
-  for (const system of workspace.cluster.systems) {
-    for (const object of system.objects) {
-      const value = object.customFieldValues?.[fieldId]
-      if (value === undefined || isCustomFieldValueCompatible(value, type, normalizedOptions)) continue
-      hasInvalidValues = true
-      if (!clearInvalidValues) {
-        throw new Error(`Cannot change the field type while an assigned value on ${object.name} is incompatible.`)
-      }
+  for (const object of clusterObjects(workspace.cluster)) {
+    const value = object.customFieldValues?.[fieldId]
+    if (value === undefined || isCustomFieldValueCompatible(value, type, normalizedOptions)) continue
+    hasInvalidValues = true
+    if (!clearInvalidValues) {
+      throw new Error(`Cannot change the field type while an assigned value on ${object.name} is incompatible.`)
     }
   }
 
-  const systems = hasInvalidValues
-    ? workspace.cluster.systems.map(system => ({
-        ...system,
-        objects: system.objects.map(object => {
-          const value = object.customFieldValues?.[fieldId]
-          if (value === undefined || isCustomFieldValueCompatible(value, type, normalizedOptions)) return object
-          const customFieldValues = { ...object.customFieldValues }
-          delete customFieldValues[fieldId]
-          return { ...object, customFieldValues }
-        }),
-      }))
-    : workspace.cluster.systems
+  const cluster = hasInvalidValues
+    ? mapCatalogueObjects(workspace.cluster, object => {
+        const value = object.customFieldValues?.[fieldId]
+        if (value === undefined || isCustomFieldValueCompatible(value, type, normalizedOptions)) return object
+        const customFieldValues = { ...object.customFieldValues }
+        delete customFieldValues[fieldId]
+        return { ...object, customFieldValues }
+      })
+    : workspace.cluster
 
   const updatedDefinition: CustomFieldDefinition = type === 'single-select'
     ? {
@@ -395,7 +381,7 @@ export function updateCustomFieldType(
 
   return {
     ...workspace,
-    ...(hasInvalidValues ? { cluster: { ...workspace.cluster, systems } } : {}),
+    cluster,
     objectFieldSettings: {
       ...workspace.objectFieldSettings,
       customFields: workspace.objectFieldSettings.customFields.map(field =>
@@ -420,26 +406,19 @@ export function removeCustomFieldDefinition(workspace: LocalWorkspace, fieldId: 
 
   return {
     ...workspace,
-    cluster: {
-      ...workspace.cluster,
-      systems: workspace.cluster.systems.map(system => ({
-        ...system,
-        objects: system.objects.map(object => {
-          const customFieldValues = object.customFieldValues
-          const hasValue = customFieldValues !== undefined && fieldId in customFieldValues
-          const playerFieldMasks = object.playerFieldMasks.filter(maskedFieldId => maskedFieldId !== fieldId)
-          if (!hasValue && playerFieldMasks.length === object.playerFieldMasks.length) return object
-
-          const updated: SystemObject = { ...object, playerFieldMasks }
-          if (customFieldValues !== undefined && hasValue) {
-            const updatedValues = { ...customFieldValues }
-            delete updatedValues[fieldId]
-            updated.customFieldValues = updatedValues
-          }
-          return updated
-        }),
-      })),
-    },
+    cluster: mapCatalogueObjects(workspace.cluster, object => {
+      const customFieldValues = object.customFieldValues
+      const hasValue = customFieldValues !== undefined && Object.hasOwn(customFieldValues, fieldId)
+      const playerFieldMasks = object.playerFieldMasks.filter(maskedFieldId => maskedFieldId !== fieldId)
+      if (!hasValue && playerFieldMasks.length === object.playerFieldMasks.length) return object
+      const updated = { ...object, playerFieldMasks }
+      if (customFieldValues !== undefined && hasValue) {
+        const updatedValues = { ...customFieldValues }
+        delete updatedValues[fieldId]
+        updated.customFieldValues = updatedValues
+      }
+      return updated
+    }),
     objectFieldSettings: {
       ...workspace.objectFieldSettings,
       customFields: workspace.objectFieldSettings.customFields.filter(field => field.id !== fieldId),

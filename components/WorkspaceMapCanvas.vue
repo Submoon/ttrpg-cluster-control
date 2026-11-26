@@ -35,6 +35,9 @@
       ref="continuousWardenMapRef"
       :cluster="props.workspace.cluster"
       :workspace="props.workspace"
+      :detail-zoom-percent="props.detailZoomPercent"
+      :compact-labels="props.compactLabels"
+      :map-motion="props.mapMotion"
       :system-positions="props.workspace.layout.systemPositions"
       :unresolved-exit-positions="props.workspace.layout.unresolvedExitPositions"
       :dimmed-object-ids="props.dimmedObjectIds ?? []"
@@ -50,6 +53,7 @@
       :begin-selected-object-drag="commands.move.beginSelectedObjectDrag"
       :inspected-target="props.inspectedTarget ?? null"
       :selected-route-id="props.selectedRouteId"
+      :route-object-editing-id="props.routeObjectEditingId"
       :mode="props.mode"
       :creation-type="props.creationType ?? null"
       :orbit-creation-preview="props.orbitCreationPreview"
@@ -70,6 +74,7 @@
       touch-navigation
       @activate-system="handleSystemActivation"
       @select-object="(systemId, objectId) => emit('select-continuous-object', systemId, objectId, props.mode !== 'move')"
+      @select-route-object="(routeId, objectId) => emit('select-route-object', routeId, objectId)"
       @select-orbit="(systemId, orbitId) => emit('select-continuous-orbit', systemId, orbitId, props.mode !== 'move')"
       @select-route="handleRouteSelection"
       @cluster-target="forwardClusterTarget"
@@ -78,6 +83,7 @@
       @orbit-adjustment="forwardOrbitAdjustment"
       @entity-command-blocked="emit('entity-command-blocked', $event)"
       @move-object-in-system="forwardMoveObjectInSystem"
+      @move-route-object="forwardRouteObjectMove"
       @resize-system-frame="forwardResizeSystemFrame"
       @transfer-object-on-drop="forwardObjectDropTransfer"
       @move-orbit-center="forwardMoveOrbitCenter"
@@ -186,6 +192,8 @@
 </template>
 
 <script setup lang="ts">
+import { routeObjectTargetAt } from './maps/route-object-target'
+import type { RouteObjectPlacementRequest } from '../composables/editor-workflows/useRouteObjectPlacement'
 /** Owns pointer arbitration around one stable map surface and forwards validated renderer commands. */
 import { computed, onBeforeUnmount, onMounted, nextTick, shallowRef, watch } from 'vue'
 import type {
@@ -222,6 +230,7 @@ import type { MapImageScope } from '../utils/map-image-scope'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import type { EntityContextTarget, PublicationMenuLease } from '../composables/editor-workflows/publication-types'
 import type { MapViewport } from '../utils/map-zoom'
+import type { WardenMapMotion } from '../composables/useWardenDisplayPreferences'
 import type { SearchTarget } from '../utils/workspace-search'
 import type { InspectedMapTarget } from '../stores/editor-ui'
 import type { ContinuousObjectAddTarget } from '../utils/continuous-map-editing'
@@ -251,6 +260,9 @@ const props = defineProps<{
   workspace: LocalWorkspace
   /** Validated Warden edit projection used only to paint the visible map scene. */
   draftWorkspace?: LocalWorkspace | null
+  detailZoomPercent?: number
+  compactLabels?: boolean
+  mapMotion?: WardenMapMotion
   system: StarSystem | undefined
   selectedSystemId: string | null
   selectedObjectId: string | null
@@ -259,6 +271,7 @@ const props = defineProps<{
   dimmedObjectIds?: readonly string[]
   appliedDimmedObjectIds?: readonly string[]
   selectedRouteId: string | null
+  routeObjectEditingId?: string
   mode: MapInteractionMode
   isObjectMoveBlocked?: (objectId: string) => boolean
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
@@ -317,6 +330,7 @@ const emit = defineEmits<{
   'select-cluster-system': [id: string]
   'move-select-cluster-system': [id: string]
   'select-route': [id: string]
+  'select-route-object': [routeId: string, objectId: string]
   'move-select-route': [id: string]
   'select-object': [id: string]
   'move-select-object': [id: string]
@@ -335,6 +349,7 @@ const emit = defineEmits<{
   'cluster-target': [point: Point, systemIds: string[]]
   'continuous-object-add-target': [request: ContinuousObjectAddTarget]
   'continuous-orbit-add-target': [owners: readonly { systemId: string; candidates: SystemCreationCandidate[] }[], requiresChoice: boolean, workspace: LocalWorkspace]
+  'move-route-object': [request: RouteObjectPlacementRequest, ownsRequest: () => boolean]
   'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace, frameInsets?: SystemFrameInsets, selectDrag?: SelectMapObjectDragContext]
   'resize-system-frame': [systemId: string, insets: SystemFrameInsets, workspaceSnapshot: LocalWorkspace]
   'transfer-object-on-drop': [drop: SystemObjectTransferDrop, selectDrag?: SelectMapObjectDragContext]
@@ -759,6 +774,12 @@ function forwardMoveObjectInSystem(
   emit('move-object-in-system', systemId, objectId, position, workspaceSnapshot, frameInsets, selectDrag)
 }
 
+function forwardRouteObjectMove(request: RouteObjectPlacementRequest, ownsRequest: () => boolean): void {
+  if (!ownsRequest()) return
+  holdClickSuppression()
+  emit('move-route-object', request, ownsRequest)
+}
+
 function forwardResizeSystemFrame(systemId: string, insets: SystemFrameInsets, workspaceSnapshot: LocalWorkspace): void {
   if (props.mode !== 'move' && !(props.mode === 'select' && isInspectedSystem(systemId))) return
   holdClickSuppression()
@@ -785,12 +806,14 @@ function isMapEntityTarget(target: EventTarget | null): boolean {
       '.cluster-system-node, .cluster-route, .system-object, .orbit-mark, .orbit-hit-target, .orbit-edit-control, '
       + '.continuous-warden-object, .continuous-warden-orbit-target, .continuous-warden-orbit-hit-target, '
       + '.continuous-warden-orbit-visible-arc, .continuous-warden-orbit-edit-handle, '
-      + '[data-system-resize-handle]',
+      + '.warden-route-object, [data-system-resize-handle]',
     )
 }
 
 function longPressInspection(target: EventTarget | null): (() => void) | null {
   if (!(target instanceof Element)) return null
+  const routeObject = routeObjectTargetAt(target)
+  if (routeObject) return () => emit('select-route-object', routeObject.routeId, routeObject.objectId)
   const objectTarget = target.closest<SVGGElement>('.continuous-warden-object[data-system-id][data-object-id]')
   const objectSystemId = objectTarget?.getAttribute('data-system-id')
   const continuousObjectId = objectTarget?.getAttribute('data-object-id')
@@ -854,7 +877,10 @@ function isSelectedContinuousEditPress(event: PointerEvent): boolean {
   const systemControl = event.target.closest('.continuous-warden-name-target, [data-system-resize-handle]')
   const systemId = systemControl?.getAttribute('data-system-id')
   if (systemId && isInspectedSystem(systemId)) return true
-  return continuousWardenMapRef.value?.hasSelectedOrbitOrExitMoveTarget(event) ?? false
+  const routeObject = routeObjectTargetAt(event.target)
+  const map = continuousWardenMapRef.value
+  if (routeObject && map?.canDragRouteObject(routeObject)) return true
+  return map?.hasSelectedOrbitOrExitMoveTarget(event) ?? false
 }
 
 function inspectLongPress(target: EventTarget | null): void {

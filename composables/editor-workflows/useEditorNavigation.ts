@@ -1,6 +1,6 @@
 import { computed, nextTick, watch, type Ref } from 'vue'
-import {
-  resolveSystemObjectHistoryTarget,
+import { routeContentsFor,
+  resolveCatalogueObjectHistoryTarget,
   type JumpCluster,
   type JumpRoute,
   type LocalWorkspace,
@@ -64,6 +64,7 @@ export function useEditorNavigation(options: {
     resolveTransition: transitions.resolveTransition,
     getChartSession: () => chart.session.value,
     getEntitySession: () => entity.entitySession.value,
+    selectRouteObjectInCluster,
     compactViewport: viewport.isCompactViewport,
     editorError,
     setSelection,
@@ -198,7 +199,8 @@ export function useEditorNavigation(options: {
             && system.orbits.some(orbit => orbit.id === inspectedTarget.orbitId))
           : inspectedTarget?.kind === 'route'
             ? !currentWorkspace.cluster.routes.some(routeValue => routeValue.id === inspectedTarget.routeId)
-            : false) next.inspectedTarget = null
+            : inspectedTarget?.kind === 'route-object'
+              && !routeObjectTargetExists(currentWorkspace, inspectedTarget.routeId, inspectedTarget.objectId)) next.inspectedTarget = null
     if (continuousMap.value && store.activeView === 'cluster') {
       const systems = currentWorkspace.cluster.systems
       const objectIds = new Set(systems.flatMap(system => system.objects.map(object => object.id)))
@@ -440,6 +442,50 @@ export function useEditorNavigation(options: {
     })
     storeCurrentSelection()
     if (openInspector) viewport.requestPanel('inspector')
+    editorError.value = ''
+    return true
+  }
+
+  function routeObjectTargetExists(current: LocalWorkspace | null, routeId: string, objectId: string): boolean {
+    return current !== null
+      && (routeContentsFor(current.cluster, routeId)?.objects.some(object => object.id === objectId) ?? false)
+  }
+
+  function selectRouteObjectInCluster(routeId: string, objectId: string): void {
+    setSelection({
+      activeView: 'cluster',
+      inspectedTarget: { kind: 'route-object', routeId, objectId },
+      clusterSelectedSystemId: null,
+      inspectedClusterSystemId: null,
+      selectedObjectId: null,
+      selectedObjectIds: [],
+      selectedOrbitId: null,
+      selectedRouteId: null,
+    })
+  }
+
+  async function inspectRouteObject(routeId: string, objectId: string): Promise<boolean> {
+    const startingWorkspace = workspace.value
+    if (!continuousMap.value || !startingWorkspace || !routeObjectTargetExists(startingWorkspace, routeId, objectId)) return false
+    invalidatePendingSearchReveal()
+    const target = store.inspectedTarget
+    if (target?.kind === 'route-object' && target.routeId === routeId && target.objectId === objectId) {
+      if (options.beforeWorkspaceOperation && !await options.beforeWorkspaceOperation()) return false
+      if (store.inspectedTarget !== target) return false
+      viewport.requestPanel('inspector')
+      return true
+    }
+
+    const startingStamp = navigationContextStamp()
+    const isCurrent = () => continuousMap.value
+      && workspace.value?.id === startingWorkspace.id
+      && workspace.value.cluster.id === startingWorkspace.cluster.id
+      && navigationContextStamp() === startingStamp
+      && routeObjectTargetExists(workspace.value, routeId, objectId)
+    if (!await transitions.resolveTransition({}, isCurrent) || !isCurrent()) return false
+    selectRouteObjectInCluster(routeId, objectId)
+    storeCurrentSelection()
+    viewport.requestPanel('inspector')
     editorError.value = ''
     return true
   }
@@ -764,6 +810,11 @@ export function useEditorNavigation(options: {
         ? { kind: 'system', id: target.id }
         : null
     }
+    if (target.kind === 'route-object') {
+      return continuousMap.value && routeObjectTargetExists(current, target.routeId, target.id)
+        ? { kind: 'route-object', routeId: target.routeId, id: target.id }
+        : null
+    }
     if (target.kind === 'route') {
       return current.cluster.routes.some(routeValue => routeValue.id === target.id)
         ? { kind: 'route', id: target.id }
@@ -784,6 +835,10 @@ export function useEditorNavigation(options: {
     const { action } = context
     const workspaceAtSelection = workspace.value
     const initiatingFocus = typeof document === 'undefined' ? null : document.activeElement
+    const actionTarget = action.kind === 'transfer'
+      && (action.target.kind === 'object' || action.target.kind === 'route-object') && workspaceAtSelection
+      ? resolveCatalogueObjectHistoryTarget(workspaceAtSelection, action.target.id) ?? action.target
+      : action.target
     if (action.target.kind === 'field') {
       const acceptedContextStamp = navigationContextStamp()
       await nextTick()
@@ -801,12 +856,7 @@ export function useEditorNavigation(options: {
     }
 
     const currentClusterId = workspace.value?.cluster.id
-    const transferTarget = action.kind === 'transfer'
-      && action.target.kind === 'object'
-      && workspaceAtSelection
-      ? resolveSystemObjectHistoryTarget(workspaceAtSelection, action.target.id) ?? undefined
-      : undefined
-    const target = retainedTargetExists(transferTarget ?? action.target)
+    const target = retainedTargetExists(actionTarget)
       ?? retainedTargetExists(action.parent ?? undefined)
       ?? (continuousMap.value && currentClusterId ? { kind: 'cluster' as const, id: currentClusterId } : null)
     const targetKind = target?.kind ?? action.target.kind
@@ -818,7 +868,9 @@ export function useEditorNavigation(options: {
           ? target.id
           : store.selectedSystemId
 
-    if (continuousMap.value && target
+    if (target?.kind === 'route-object') {
+      selectRouteObjectInCluster(target.routeId, target.id)
+    } else if (continuousMap.value && target
       && (target.kind === 'system' || target.kind === 'object' || target.kind === 'orbit')) {
       const targetSystemId = target.kind === 'system' ? target.id : target.systemId
       setSelection({
@@ -916,6 +968,7 @@ export function useEditorNavigation(options: {
     selectSystem,
     selectClusterSystem,
     inspectContinuousTarget,
+    inspectRouteObject,
     selectObject,
     replaceObjectSelection,
     selectContextObject,

@@ -14,6 +14,8 @@ import {
   type Point,
   type PublicationMode,
   type SystemObject,
+  type CatalogueObject,
+  type RouteObject,
 } from './workspace-model'
 import { isMarkerColor } from './marker-color'
 
@@ -216,7 +218,7 @@ function isObjectFamily(value: unknown): value is ObjectFamily {
  * @param value Unknown object candidate.
  * @returns True when the object is structurally valid.
  */
-export function isSystemObject(value: unknown): value is SystemObject {
+function isCatalogueObject(value: unknown): value is CatalogueObject {
   if (
     !isRecord(value)
     || typeof value.id !== 'string'
@@ -274,11 +276,31 @@ export function isSystemObject(value: unknown): value is SystemObject {
     return false
   }
 
-  return value.placement.kind === 'system'
-    ? isPoint(value.placement)
-    : value.placement.kind === 'orbit'
-      && typeof value.placement.orbitId === 'string'
-      && value.placement.orbitId.length > 0
+  if (value.placement.kind === 'system') {
+    return isPoint(value.placement)
+      && !Object.hasOwn(value.placement, 'progression') && !Object.hasOwn(value.placement, 'routeId')
+  }
+  if (value.placement.kind === 'route') {
+    const progression = value.placement.progression
+    return typeof progression === 'number' && Number.isFinite(progression)
+      && progression >= 0 && progression <= 1
+      && Object.keys(value.placement).length === 2
+  }
+  return value.placement.kind === 'orbit'
+    && typeof value.placement.orbitId === 'string'
+    && value.placement.orbitId.length > 0
+    && !Object.hasOwn(value.placement, 'progression') && !Object.hasOwn(value.placement, 'routeId')
+}
+
+export function isSystemObject(value: unknown): value is SystemObject {
+  return isCatalogueObject(value) && value.placement.kind !== 'route'
+}
+
+export function isRouteObject(value: unknown): value is RouteObject {
+  return isCatalogueObject(value) && isRecord(value.placement)
+    && !Object.hasOwn(value, 'legacyZonePlacement')
+    && (value.placement.kind === 'route'
+      || (value.placement.kind === 'orbit' && Object.keys(value.placement).length === 2))
 }
 
 /**
@@ -358,7 +380,7 @@ export function isJumpLevel(value: unknown): value is number {
  * @param settings Current shared field definitions and allowed options.
  * @returns The first validation message, or null when every saved value remains valid.
  */
-export function objectFieldValidationError(object: SystemObject, settings: ObjectFieldSettings): string | null {
+export function objectFieldValidationError(object: CatalogueObject, settings: ObjectFieldSettings): string | null {
   if (typeof object.playerText !== 'string') {
     return 'Player-facing text must be text.'
   }

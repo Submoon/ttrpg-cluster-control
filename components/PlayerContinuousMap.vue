@@ -50,7 +50,7 @@
         :viewport="camera"
         :viewport-rect="nameViewport"
         :svg-pixel-scale="svgPixelScale"
-        :label-obstacles="routeLabelObstacles"
+        :label-obstacles="objectCaptionLayout.obstacles"
         destinations-in-foreground
       />
       <g :transform="sceneTransform">
@@ -152,7 +152,14 @@
                     text-anchor="middle"
                     aria-hidden="true"
                   >{{ objectPresentation(system, object.id).glyph }}</text>
-                  <text class="player-continuous-object-label" :x="9 * objectTextScale" :y="4 * objectTextScale" aria-hidden="true">
+                  <text
+                    v-if="objectCaptionLayout.offsets.has(continuousMapObjectCaptionId(system.id, object.id))"
+                    class="player-continuous-object-label"
+                    :x="objectCaptionLayout.offsets.get(continuousMapObjectCaptionId(system.id, object.id))!.x / camera.k"
+                    :y="objectCaptionLayout.offsets.get(continuousMapObjectCaptionId(system.id, object.id))!.y / camera.k"
+                    text-anchor="middle"
+                    aria-hidden="true"
+                  >
                     {{ objectPresentation(system, object.id).label }}
                   </text>
                 </g>
@@ -248,12 +255,30 @@
           :class="{ 'is-selected': route.id === props.selectedRouteId }"
           :transform="screenMarkTransform(route.end)"
         >
-          <text class="player-continuous-destination-caption" x="8" y="4">{{ route.destinationCaption }}</text>
+          <text
+            v-if="objectCaptionLayout.offsets.has(continuousMapDestinationCaptionId(route.id))"
+            class="player-continuous-destination-caption"
+            :x="objectCaptionLayout.offsets.get(continuousMapDestinationCaptionId(route.id))!.x * svgPixelScale"
+            :y="objectCaptionLayout.offsets.get(continuousMapDestinationCaptionId(route.id))!.y * svgPixelScale"
+            text-anchor="middle"
+          >{{ route.destinationCaption }}</text>
           <circle class="player-continuous-destination-hit" r="12" fill="transparent" />
           <circle class="cluster-exit-mark" r="7" />
         </g>
       </g>
       </g>
+      <PlayerRouteBranchLayer
+        v-if="props.document.routeBranches.length"
+        :layers="routeBranchLayers"
+        :caption-offsets="objectCaptionLayout.offsets"
+        :scene-transform="sceneTransform"
+        :camera-scale="camera.k"
+        :svg-pixel-scale="svgPixelScale"
+        :selected-branch-id="props.selectedBranchId"
+        :selection="branchSelection"
+        :dimmed-objects="props.dimmedBranchObjects"
+        @inspect="(branchId, target) => emit('inspect-branch', branchId, target)"
+      />
     </svg>
   </section>
 </template>
@@ -265,6 +290,8 @@ import { usePlayerContinuousMapViewport } from '../composables/usePlayerContinuo
 import { useContinuousMapDetailMotion } from '../composables/useContinuousMapDetailMotion'
 import type { PlayerClusterDocument, PlayerObjectMarker, PlayerOrbit, PlayerSystemDocument } from '../domain/player-projection'
 import type { PlayerUsableRectReader, PlayerInspectionTarget } from '../utils/player-inspection'
+import type { Point } from '../domain/workspace'
+import { continuousMapDestinationCaptionId, continuousMapObjectCaptionId, layoutContinuousMapObjectCaptions, type ContinuousMapObjectCaption } from '../utils/continuous-map-caption-layout'
 import { getSvgViewportRect, type SvgViewportRect } from '../utils/map-zoom'
 import type { PlayerImageViewportSnapshot } from '../utils/continuous-player-image-export'
 import type { ContinuousMapRouteGeometry } from '../utils/continuous-map-route-geometry'
@@ -288,12 +315,17 @@ import { PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS } from '../utils/cluster-system-pr
 import { centerContinuousMapRouteViewport } from '../utils/continuous-map-route-viewport'
 import { projectPlayerContinuousRouteEndpoints } from '../utils/player-continuous-route-projection'
 import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
+import PlayerRouteBranchLayer from './maps/PlayerRouteBranchLayer.vue'
+import { playerRouteBranchBounds, projectPlayerRouteBranch } from '../utils/player-route-branch-geometry'
+import { routeBranchShowsDetail } from '../utils/route-object-geometry'
 
 const props = withDefaults(defineProps<{
   document: PlayerClusterDocument
   active?: boolean
   selectedSystemId: string | null
   selectedRouteId?: string | null
+  selectedBranchId?: string | null
+  dimmedBranchObjects: ReadonlyMap<string, ReadonlySet<string>>
   selectedObjectId?: string | null
   selectedOrbitId?: string | null
   searchLocatorObjectId?: string | null
@@ -307,6 +339,7 @@ const emit = defineEmits<{
   'inspect-object': [publicSystemId: string, publicObjectId: string]
   'inspect-orbit': [publicSystemId: string, publicOrbitId: string]
   'inspect-route': [publicRouteId: string]
+  'inspect-branch': [branchId: string, target: PlayerInspectionTarget]
   'map-interaction': []
 }>()
 
@@ -384,13 +417,20 @@ const routeGeometries = computed(() => buildContinuousMapRouteGeometries(
     fanOutLimitPixels: routeFanOutLimitPixels.value,
   },
 ))
-const routeLabelObstacles = computed(() => systemNameLabels.value.map(label => ({
-  x: label.x - label.width / 2,
-  y: label.y,
-  width: label.width,
-  height: label.height,
-})))
-const hasSelection = computed(() => props.selectedSystemId !== null || props.selectedRouteId != null)
+const displayedRouteCurves = computed(() => {
+  const displayed = routeLayer.value?.displayedMarks
+  return displayed ? new Map(displayed.map(({ id, geometry }) => [id, geometry])) : routeGeometries.value
+})
+const branchSelection = computed<PlayerInspectionTarget | null>(() => {
+  if (props.selectedObjectId) return { kind: 'object', id: props.selectedObjectId }
+  if (props.selectedOrbitId) return { kind: 'orbit', id: props.selectedOrbitId }
+  return null
+})
+const routeBranchLayers = computed(() => props.document.routeBranches.flatMap(branch => {
+  const geometry = projectPlayerRouteBranch(branch, displayedRouteCurves.value)
+  return geometry ? [{ branchId: branch.id, geometry }] : []
+}))
+const hasSelection = computed(() => props.selectedSystemId !== null || props.selectedRouteId != null || props.selectedBranchId != null)
 const overviewNameLabels = computed(() => layoutPlayerContinuousNameLabels(
   nameSystems.value,
   camera.value,
@@ -410,6 +450,46 @@ const systemNameLabels = computed<PlayerContinuousNameLabel[]>(() => overviewNam
     hasLeader: label.hasLeader && progress < .12,
   }
 }))
+
+const objectCaptionLayout = computed(() => {
+  const obstacles = systemNameLabels.value.map(label => ({
+    x: label.x - label.width / 2, y: label.y, width: label.width, height: label.height,
+  }))
+  const objects: ContinuousMapObjectCaption[] = []
+  const { x, y, k } = camera.value
+  const toViewport = (point: Point) => ({ x: x + point.x * k, y: y + point.y * k })
+  const systemUnit = objectTextScale.value * k
+  const routeUnit = 1 / svgPixelScale.value
+  for (const system of projection.value.systems) {
+    if (!system.geometry || !detailSystemIds.value.has(system.id)) continue
+    for (const object of system.geometry.objects) {
+      objects.push({
+        id: continuousMapObjectCaptionId(system.id, object.id),
+        point: toViewport(object.scenePosition), radius: Math.max(8 * k, 8 * systemUnit),
+        unit: systemUnit, name: objectPresentation(system, object.id).label,
+        selected: isObjectSelected(system.id, object.id), preferRight: true,
+      })
+    }
+  }
+  const showBranchDetail = routeBranchShowsDetail(k, svgPixelScale.value)
+  for (const { branchId, geometry } of routeBranchLayers.value) {
+    for (const { object, point } of geometry.objects) {
+      const selected = props.selectedBranchId === branchId && props.selectedObjectId === object.id
+      if (object.placement.kind !== 'branch-root' && !showBranchDetail && !selected) continue
+      objects.push({
+        id: continuousMapObjectCaptionId(branchId, object.id), point: toViewport(point), radius: 13 * routeUnit, unit: routeUnit,
+        name: showBranchDetail ? object.label : undefined, selected,
+      })
+    }
+  }
+  for (const route of anonymousRoutes.value) {
+    objects.push({
+      id: continuousMapDestinationCaptionId(route.id), point: toViewport(route.end), radius: 8 * routeUnit,
+      unit: routeUnit, name: route.destinationCaption, selected: route.id === props.selectedRouteId, preferRight: true,
+    })
+  }
+  return layoutContinuousMapObjectCaptions(objects, obstacles, nameViewport.value, svgPixelScale.value)
+})
 
 let resizeObserver: ResizeObserver | undefined
 let suppressDetailFocusHandoff = false
@@ -506,10 +586,14 @@ function isDimmed(systemId: string, objectId: string): boolean {
   return props.selectedSystemId === systemId && props.dimmedObjectIds.has(objectId)
 }
 
+const publicObjectsBySystem = computed(() => new Map(props.document.systems.flatMap(system =>
+  system.disclosure === 'revealed'
+    ? [[system.id, new Map(system.map.objects.map(object => [object.id, object] as const))] as const]
+    : [],
+)))
+
 function objectFromProjection(system: PlayerContinuousSystemProjection, objectId: string): PlayerObjectMarker | undefined {
-  if (system.disclosure !== 'revealed') return undefined
-  const marker = props.document.systems.find(candidate => candidate.id === system.id)
-  return marker?.disclosure === 'revealed' ? marker.map.objects.find(object => object.id === objectId) : undefined
+  return publicObjectsBySystem.value.get(system.id)?.get(objectId)
 }
 
 function objectPresentation(system: PlayerContinuousSystemProjection, objectId: string) {
@@ -636,11 +720,20 @@ function centerSystem(systemId: string): boolean {
 
 function centerSelection(): boolean {
   if (props.selectedRouteId) return centerRoute(props.selectedRouteId)
+  if (props.selectedBranchId) return centerBranch(props.selectedBranchId, props.document)
   const systemId = props.selectedSystemId
   if (!systemId) return false
   if (props.selectedObjectId) return centerTarget({ kind: 'object', id: props.selectedObjectId }, systemId)
   if (props.selectedOrbitId) return centerTarget({ kind: 'orbit', id: props.selectedOrbitId }, systemId)
   return centerSystem(systemId)
+}
+
+function centerBranch(branchId: string, expectedDocument: PlayerClusterDocument): boolean {
+  if (!props.active || props.document !== expectedDocument) return false
+  const branch = props.document.routeBranches.find(branch => branch.id === branchId)
+  if (!branch) return false
+  const geometry = projectPlayerRouteBranch(branch, displayedRouteCurves.value)
+  return geometry ? frameBounds(playerRouteBranchBounds(geometry), camera.value.k) : false
 }
 
 function routeGeometryAt(routeId: string, scale: number): ContinuousMapRouteGeometry | undefined {
@@ -748,10 +841,15 @@ function captureImageViewport(expectedDocument: PlayerClusterDocument): PlayerIm
       ? { systemId: dimmedOwner, ids: [...props.dimmedObjectIds].sort() }
       : null,
     selectedRouteId: props.selectedRouteId ?? null,
+    selectedBranchTarget: props.selectedBranchId && branchSelection.value
+      ? { branchId: props.selectedBranchId, target: branchSelection.value }
+      : null,
+    dimmedBranchObjects: [...props.dimmedBranchObjects].flatMap(([branchId, ids]) =>
+      ids.size ? [{ branchId, ids: [...ids].sort() }] : []),
   }
 }
 
-defineExpose({ captureImageViewport, centerRoute: centerRouteForDocument, centerSystem: centerSystemForDocument, fitPlayerMap, revealTarget })
+defineExpose({ captureImageViewport, centerBranch, centerRoute: centerRouteForDocument, centerSystem: centerSystemForDocument, fitPlayerMap, revealTarget })
 </script>
 
 <style scoped>

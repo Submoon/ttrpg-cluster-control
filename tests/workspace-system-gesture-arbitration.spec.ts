@@ -3,7 +3,7 @@ import {
   waitForWorkspaceSaved,
   captureMapExportBlobs,
   centerWorkspaceSelection,
-  createSingleSystemWorkspace,
+  createSingleSystemWorkspaceWithPrimaryStar,
   dockAction,
   quitSystemAdd,
   selectInspectorOption,
@@ -16,7 +16,7 @@ import {
 type ScreenPoint = { x: number; y: number }
 async function createWorkspace(page: Page) {
   await captureMapExportBlobs(page)
-  const identity = await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 960 } })
+  const identity = await createSingleSystemWorkspaceWithPrimaryStar(page, { viewport: { width: 1440, height: 960 } })
   await waitForWorkspaceSaved(page)
   return identity
 }

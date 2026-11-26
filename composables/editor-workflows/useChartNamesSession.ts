@@ -115,7 +115,7 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
   }
 
   /** Applies a valid rename to memory and only then completes the owning chart-name session. */
-  async function apply(): Promise<boolean> {
+  async function apply(onApplied?: () => void): Promise<boolean> {
     const submittedSession = session.value
     if (!submittedSession) {
       formError.value = 'Start editing Jump Cluster details before applying these values.'
@@ -147,7 +147,7 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
         throw new Error('The Jump Cluster for this draft no longer exists.')
       }
       if (!currentWorkspace.cluster.systems.some(system => system.id === active.systemId)) {
-        throw new Error('The star system for this draft no longer exists.')
+        throw new Error('The Zone for this draft no longer exists.')
       }
       updateChartDetails(currentWorkspace, active.systemId, {
         clusterName: submittedClusterName,
@@ -176,7 +176,7 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
           kind: publicationDetailsChanged ? 'update' : 'rename',
           label: publicationDetailsChanged
             ? 'Update player-facing Jump Cluster details'
-            : 'Rename Jump Cluster and star system',
+            : 'Rename Jump Cluster and Zone',
           target: { kind: 'cluster', id: active.clusterId },
           parent: { kind: 'system', id: active.systemId },
         },
@@ -187,6 +187,7 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
           publication: submittedPublication,
         }),
         isCurrent: isSubmittedSessionCurrent,
+        onApplied,
       })
       if (result.status === 'rejected') {
         if (isSubmittedSessionCurrent()) {
@@ -260,7 +261,7 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
     }
 
     const safeClusterName = safeName(clusterName.value, 'Jump Cluster name', currentWorkspace.cluster.name)
-    const safeSystemName = safeName(systemName.value, 'Star system name', system.name)
+    const safeSystemName = safeName(systemName.value, 'Zone name', system.name)
     const safePublication = isPublicationMode(publication.value) ? publication.value : system.publication
     if (safeClusterName === currentWorkspace.cluster.name
       && safeSystemName === system.name

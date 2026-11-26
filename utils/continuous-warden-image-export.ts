@@ -14,6 +14,9 @@ import {
 import type { MapImageScope } from './map-image-scope'
 import { clusterRoutePresentationLabel } from './cluster-route-presentation'
 import type { ContinuousSystemRouteCaptionLayout } from './continuous-system-route-caption'
+import { catalogueObjectLabel } from './catalogue-labels'
+import { objectMark } from './catalogue-marks'
+import { routeObjectMarkerRadiusPixels } from './route-object-geometry'
 import {
   prepareContinuousWardenImageScene,
   type ContinuousWardenImageSceneLabel,
@@ -45,6 +48,8 @@ export interface ContinuousWardenImageRequest extends ContinuousWardenImageScene
   source: SVGSVGElement
   palette: MapImagePalette
   isCurrent?: () => boolean
+  compactLabels?: boolean
+  selectedObjectIds?: readonly string[]
 }
 
 type ExportRouteGeometry = NonNullable<ContinuousWardenImageSceneRoute['renderGeometry']>
@@ -61,6 +66,9 @@ export async function exportContinuousWardenMapImage(
     textWidth: estimateTextWidth,
   })
   const imageLabels = scene.labels
+  const captionIds = request.scope === 'viewport' && request.compactLabels
+    ? new Set([...(request.selectedObjectIds ?? []), request.selectedRouteObjectId])
+    : undefined
 
   return exportMapImageScene(
     source,
@@ -68,22 +76,12 @@ export async function exportContinuousWardenMapImage(
     palette,
     scene.frame,
     clone => {
-      clone.querySelectorAll(':scope > title').forEach(title => title.remove())
       const title = clone.ownerDocument.createElementNS(clone.namespaceURI, 'title')
       title.textContent = scene.title
-      clone.prepend(title)
-      // Live detail paint is viewport-projected; rebuild it below from committed Cluster geometry.
-      clone.querySelector(':scope > .continuous-warden-fixed-paint')?.remove()
-      const content = clone.querySelector<SVGGElement>('.cluster-map-content')
-      if (!content) throw new Error('The continuous map is not ready to export.')
       const routeStyleSource = clone.querySelector<SVGPathElement>('.continuous-warden-route-layer .cluster-route-line')
-      content.replaceChildren()
-      clone.querySelector(':scope > .continuous-map-route-layer')?.remove()
-      clone.querySelector(':scope > .continuous-warden-name-layer')?.remove()
+      const content = createScopedElement(clone, 'g', 'cluster-map-content')
       if (scene.scope === 'viewport') {
         content.setAttribute('transform', `translate(${scene.sceneViewport.x} ${scene.sceneViewport.y}) scale(${scene.sceneViewport.k})`)
-      } else {
-        content.removeAttribute('transform')
       }
 
       const background = createScopedElement(clone, 'rect', 'continuous-warden-export-background')
@@ -93,7 +91,8 @@ export async function exportContinuousWardenMapImage(
       background.setAttribute('height', String(scene.frame.height))
       background.setAttribute('fill', 'var(--map-bg)')
       background.setAttribute('aria-hidden', 'true')
-      clone.insertBefore(background, content)
+      // Only static paint resources survive the clone. Rebuild every visible layer from the applied scene.
+      clone.replaceChildren(title, ...clone.querySelectorAll(':scope > defs'), background, content)
 
       const routeLayer = createScopedElement(routeStyleSource ?? clone, 'g', 'continuous-warden-route-layer')
       for (const attribute of Array.from(clone.attributes)) {
@@ -107,6 +106,7 @@ export async function exportContinuousWardenMapImage(
           preparedRoute.renderGeometry,
           preparedRoute.incident,
           preparedRoute.routeLabelWidthPixels,
+          preparedRoute.routeLabelPosition,
           scene.sceneViewport,
           scene.routeSvgPixelScale,
           scene.includeUnresolvedCaption,
@@ -128,9 +128,17 @@ export async function exportContinuousWardenMapImage(
           scene.sceneViewport,
           scene.systemSvgPixelScale,
           scene.dimmedObjectIds,
+          captionIds,
         )
       }
       content.append(items)
+
+      const routeObjects = createScopedElement(clone, 'g', 'continuous-warden-route-objects')
+      const routeMarkerScale = 1 / Math.max(Number.EPSILON, scene.sceneViewport.k * scene.routeSvgPixelScale)
+      for (const route of scene.routes) {
+        if (route.branch) appendRouteBranch(routeObjects, route.route.id, route.branch, routeMarkerScale, scene.dimmedObjectIds, captionIds)
+      }
+      content.append(routeObjects)
 
       const nameLayer = createScopedElement(clone, 'g', 'continuous-warden-name-layer')
       for (const label of imageLabels) appendSystemName(nameLayer, label)
@@ -138,6 +146,79 @@ export async function exportContinuousWardenMapImage(
     },
     isCurrent,
   )
+}
+
+function appendRouteBranch(
+  parent: SVGElement,
+  routeId: string,
+  branch: NonNullable<ContinuousWardenImageSceneRoute['branch']>,
+  markerScale: number,
+  dimmedObjectIds: ReadonlySet<string>,
+  captionIds?: ReadonlySet<string | undefined>,
+): void {
+  for (const orbit of branch.orbits) {
+    const ring = createScopedElement(parent, 'ellipse', 'warden-route-object-orbit')
+    ring.setAttribute('cx', String(orbit.center.x))
+    ring.setAttribute('cy', String(orbit.center.y))
+    ring.setAttribute('rx', String(orbit.horizontal))
+    ring.setAttribute('ry', String(orbit.vertical))
+    ring.setAttribute('transform', `rotate(${orbit.rotation} ${orbit.center.x} ${orbit.center.y})`)
+    parent.append(ring)
+  }
+  for (const { object, point, nameBounds } of branch.objects) {
+    const mark = createScopedElement(parent, 'g', 'warden-route-object')
+    mark.setAttribute('data-owner-route-id', routeId)
+    mark.setAttribute('data-route-object-id', object.id)
+    mark.setAttribute('transform', `translate(${point.x} ${point.y}) scale(${markerScale})`)
+    if (dimmedObjectIds.has(object.id)) mark.setAttribute('opacity', '0.35')
+    const marker = createScopedElement(parent, 'circle', 'warden-route-object-marker')
+    marker.setAttribute('r', String(routeObjectMarkerRadiusPixels))
+    const glyph = createScopedElement(parent, 'text', 'warden-route-object-glyph')
+    glyph.setAttribute('fill', object.markerColor ?? 'var(--map-text)')
+    glyph.setAttribute('text-anchor', 'middle')
+    glyph.setAttribute('y', '5')
+    glyph.textContent = objectMark(object)
+    mark.append(marker, glyph)
+    const showDetail = branch.detailed && (!captionIds || captionIds.has(object.id))
+    if (showDetail || nameBounds) {
+      const title = mark.ownerDocument.createElementNS(svgNamespace, 'title')
+      title.textContent = catalogueObjectLabel(object)
+      mark.prepend(title)
+    }
+    if (nameBounds) {
+      const y = (nameBounds.y - point.y) / markerScale
+      const height = nameBounds.height / markerScale
+      const width = nameBounds.width / markerScale
+      const leader = createScopedElement(parent, 'line', 'continuous-warden-name-leader')
+      const below = y > 0
+      leader.setAttribute('x1', '0')
+      leader.setAttribute('x2', '0')
+      leader.setAttribute('y1', String(below ? routeObjectMarkerRadiusPixels : -routeObjectMarkerRadiusPixels))
+      leader.setAttribute('y2', String(below ? y : y + height))
+      const background = createScopedElement(parent, 'rect', 'continuous-warden-name-background')
+      background.setAttribute('x', String(-width / 2))
+      background.setAttribute('y', String(y))
+      background.setAttribute('width', String(width))
+      background.setAttribute('height', String(height))
+      background.setAttribute('rx', '4')
+      const name = createScopedElement(parent, 'text', 'warden-route-object-name')
+      name.setAttribute('text-anchor', 'middle')
+      name.setAttribute('y', String(y + height * .7))
+      name.textContent = object.name
+      mark.append(leader, background, name)
+    } else if (showDetail) {
+      const key = createScopedElement(parent, 'text', 'warden-route-object-key')
+      key.setAttribute('text-anchor', 'middle')
+      key.setAttribute('y', '27')
+      key.textContent = object.locationKey
+      const name = createScopedElement(parent, 'text', 'warden-route-object-name')
+      name.setAttribute('text-anchor', 'middle')
+      name.setAttribute('y', '41')
+      name.textContent = object.name
+      mark.append(key, name)
+    }
+    parent.append(mark)
+  }
 }
 
 function appendSystem(
@@ -150,6 +231,7 @@ function appendSystem(
   viewport: MapViewport,
   svgPixelScale: number,
   dimmedObjectIds: ReadonlySet<string>,
+  captionIds?: ReadonlySet<string | undefined>,
 ): void {
   const group = createScopedElement(parent, 'g', 'continuous-warden-system')
   group.setAttribute('data-system-id', projection.id)
@@ -167,7 +249,7 @@ function appendSystem(
     ? viewport.k * svgPixelScale
     : scope === 'system' ? svgPixelScale : 1
   if (detailed && system) {
-    appendSystemDetail(group, projection, system, dimmedObjectIds, pixelsPerSceneUnit, scope === 'system')
+    appendSystemDetail(group, projection, system, dimmedObjectIds, pixelsPerSceneUnit, scope === 'system', captionIds)
   }
 
   parent.append(group)
@@ -180,6 +262,7 @@ function appendSystemDetail(
   dimmedObjectIds: ReadonlySet<string>,
   pixelsPerSceneUnit: number,
   readableExportText: boolean,
+  captionIds?: ReadonlySet<string | undefined>,
 ): void {
   const detail = createScopedElement(parent, 'g', 'continuous-warden-system-detail')
   detail.setAttribute(
@@ -224,17 +307,20 @@ function appendSystemDetail(
     glyph.setAttribute('text-anchor', 'middle')
     if (sourceObject.markerColor !== undefined) glyph.style.fill = sourceObject.markerColor
     glyph.textContent = objectGlyphs[sourceObject.subtype] ?? '◇'
-    const key = createScopedElement(parent, 'text', 'continuous-warden-object-key')
-    key.setAttribute('y', '31')
-    key.setAttribute('text-anchor', 'middle')
-    key.textContent = object.locationKey
-    const name = createScopedElement(parent, 'text', 'continuous-warden-object-name')
-    name.setAttribute('y', '46')
-    name.setAttribute('text-anchor', 'middle')
-    name.textContent = object.name
     const text = createScopedElement(mark, 'g', 'continuous-warden-object-text')
     text.setAttribute('transform', `scale(${textScale})`)
-    text.append(glyph, key, name)
+    text.append(glyph)
+    if (!captionIds || captionIds.has(object.id)) {
+      const key = createScopedElement(parent, 'text', 'continuous-warden-object-key')
+      key.setAttribute('y', '31')
+      key.setAttribute('text-anchor', 'middle')
+      key.textContent = object.locationKey
+      const name = createScopedElement(parent, 'text', 'continuous-warden-object-name')
+      name.setAttribute('y', '46')
+      name.setAttribute('text-anchor', 'middle')
+      name.textContent = object.name
+      text.append(key, name)
+    }
     mark.append(text)
     items.append(mark)
   }
@@ -248,6 +334,7 @@ function appendRoute(
   geometry: ExportRouteGeometry,
   incident: boolean,
   routeLabelWidthPixels: number | null,
+  routeLabelPosition: { x: number; y: number } | undefined,
   viewport: MapViewport,
   svgPixelScale: number,
   includeUnresolvedCaption: boolean,
@@ -261,13 +348,10 @@ function appendRoute(
   if (incident) path.setAttribute('stroke-dasharray', '8 7')
   routeMark.append(path)
 
-  const midpoint = geometry.midpoint
-    ? geometry.midpoint
-    : { x: (geometry.start.x + geometry.end.x) / 2, y: (geometry.start.y + geometry.end.y) / 2 }
-  if (routeLabelWidthPixels !== null) {
+  if (routeLabelWidthPixels !== null && routeLabelPosition) {
     const sceneScale = viewport.k * svgPixelScale
     const badge = createScopedElement(parent, 'g', 'continuous-warden-route-badge')
-    badge.setAttribute('transform', `translate(${midpoint.x} ${midpoint.y}) scale(${1 / Math.max(0.0001, sceneScale)})`)
+    badge.setAttribute('transform', `translate(${routeLabelPosition.x} ${routeLabelPosition.y}) scale(${1 / Math.max(0.0001, sceneScale)})`)
     const background = createScopedElement(parent, 'rect', 'cluster-route-label-bg')
     background.setAttribute('x', String(-routeLabelWidthPixels / 2))
     background.setAttribute('y', String(-CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS / 2))

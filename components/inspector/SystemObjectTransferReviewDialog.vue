@@ -1,8 +1,8 @@
 <template>
   <UModal
     v-model:open="dialogOpen"
-    title="Change system"
-    description="Choose the destination, placement, keys, and relationship changes for this hosted branch."
+    title="Change Zone"
+    description="Choose the destination and placement, then review relationship changes for this hosted branch."
     :dismissible="!props.session?.confirming && !props.session?.placingOnMap"
     :content="{ onOpenAutoFocus: focusFirstControl, onCloseAutoFocus: restoreFocus }"
     :ui="{
@@ -23,7 +23,7 @@
           </div>
 
           <label class="grid gap-1 text-sm font-medium">
-            Destination star system
+            Destination Zone
             <select
               class="workspace-control min-h-10 w-full rounded-md px-3"
               data-transfer-destination
@@ -58,7 +58,7 @@
                 Local Y
                 <input class="workspace-control min-h-10 rounded-md px-3" type="number" step="any" :value="props.session.placement.y" @input="updateFreeY">
               </label>
-              <p class="inspector-intro col-span-2 m-0">Coordinates are normalized to the destination system map. Positions beyond the visible envelope are allowed.</p>
+              <p class="inspector-intro col-span-2 m-0">Enter normalized coordinates within the destination Zone frame. The hosted branch must fit before you can apply the transfer.</p>
             </div>
 
             <label class="flex items-start gap-2 text-sm">
@@ -108,29 +108,7 @@
           <ul class="m-0 grid gap-2 pl-5">
             <li v-for="objectId in props.session.movedObjectIds" :key="objectId" class="grid gap-1 break-words">
               <template v-if="objectById.get(objectId)">
-                <span>
-                  {{ objectById.get(objectId)?.name }}
-                  <span v-if="!conflictById.has(objectId)"> · {{ props.session.locationKeys.get(objectId) }} (kept)</span>
-                </span>
-                <label v-if="conflictById.has(objectId)" class="grid gap-1 text-sm">
-                  Replacement Location key for {{ objectById.get(objectId)?.name }}
-                  <input
-                    class="workspace-control min-h-10 rounded-md px-3"
-                    :aria-invalid="props.session.validationErrors.has(objectId)"
-                    :value="props.session.locationKeys.get(objectId) ?? ''"
-                    :disabled="props.session.confirming || props.session.stale"
-                    @input="updateLocationKey(objectId, $event)"
-                  >
-                </label>
-                <p v-if="conflictById.has(objectId)" class="inspector-intro m-0">
-                  Current key: {{ conflictById.get(objectId)?.currentKey }}
-                </p>
-                <p v-if="props.session.validationErrors.get(objectId)" class="m-0 text-sm text-[var(--status-error)]" role="alert">
-                  {{ props.session.validationErrors.get(objectId) }}
-                </p>
-                <p v-else-if="conflictById.has(objectId)" class="inspector-intro m-0">
-                  Suggested: {{ conflictById.get(objectId)!.suggestedKey }}
-                </p>
+                <span>{{ objectById.get(objectId)?.name }} · {{ objectById.get(objectId)?.locationKey }}</span>
               </template>
               <span v-else>{{ objectId }} (object no longer available)</span>
             </li>
@@ -168,7 +146,7 @@
           v-else-if="props.session.stale"
           color="warning"
           variant="subtle"
-          description="The workspace changed after this review. Close this review and start again to confirm the current placement, keys, and relationships."
+          description="The workspace changed after this review. Close this review and start again to confirm the current placement and relationships."
           role="status"
         />
         <UAlert
@@ -239,8 +217,6 @@ const eligibleDestinationOrbits = computed(() => {
   if (!system || !rootObjectId) return []
   return system.orbits.filter(orbit => canPlaceObjectInOrbit(system, rootObjectId, orbit.id))
 })
-const conflictById = computed(() => new Map((props.session?.review?.keyConflicts ?? [])
-  .map(conflict => [conflict.objectId, conflict])))
 const objectById = computed(() => new Map((props.session?.previewWorkspace?.cluster.systems
   .find(system => system.id === props.session?.destinationSystemId)?.objects ?? [])
   .map(object => [object.id, object])))
@@ -255,7 +231,7 @@ function objectReference(objectId: string): string {
 
 function ownerName(systemId: string | null): string {
   if (systemId === null) return 'unresolved exit'
-  return props.session?.sourceWorkspace?.cluster.systems.find(system => system.id === systemId)?.name ?? 'unknown system'
+  return props.session?.sourceWorkspace?.cluster.systems.find(system => system.id === systemId)?.name ?? 'unknown Zone'
 }
 
 function routeEndpointDescription(systemId: string | null, pointId: string | null, unresolvedExit?: string): string {
@@ -314,7 +290,7 @@ function restoreFocus(event: Event): void {
   event.preventDefault()
   const target = opener?.isConnected && !opener.matches(':disabled')
     ? opener
-    : document.querySelector<HTMLElement>('#workspace-main [role="group"][aria-label$="star system map"]')
+    : document.querySelector<HTMLElement>('#workspace-main [role="group"][aria-label$="Zone map"]')
       ?? document.getElementById('workspace-main')
   target?.focus({ preventScroll: true })
   opener = null
@@ -380,16 +356,6 @@ function updateOrbitAngle(event: Event): void {
       angle: parseNumberInput(event),
     })
   }
-}
-
-function updateLocationKey(objectId: string, event: Event): void {
-  if (!props.session) return
-  emit('intent', {
-    kind: 'set-location-key',
-    sessionId: props.session.sessionId,
-    objectId,
-    value: (event.target as HTMLInputElement).value,
-  })
 }
 
 function orbitHostName(orbit: Orbit): string {

@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import {
   createLocalWorkspace,
   createOrbit,
@@ -17,7 +18,7 @@ import type { SystemObjectChanges } from '../domain/workspace'
 import { createWorkspaceSnapshot } from '../utils/workspace-storage'
 
 test('new objects start at Known type publication @pure', () => {
-  const system = createLocalWorkspace('Kestrel Reach', 'Vesper').cluster.systems[0]!
+  const system = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper').cluster.systems[0]!
 
   expect(system.objects[0]).toHaveProperty('publication', 'known-type')
   expect(createSystemObject(system, 'planet')).toHaveProperty('publication', 'known-type')
@@ -57,7 +58,7 @@ test('version 2 workspaces reject missing or malformed system publication metada
 })
 
 test('object edits validate and preserve their saved publication mode @pure', () => {
-  const system = createLocalWorkspace('Kestrel Reach', 'Vesper').cluster.systems[0]!
+  const system = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper').cluster.systems[0]!
   const star = system.objects[0]!
   const changed = updateSystemObject(
     system,
@@ -79,8 +80,8 @@ test('object edits validate and preserve their saved publication mode @pure', ()
     .toThrow(/valid object publication mode/)
 })
 
-test('version 5 object publication survives snapshots and full-map imports with remapped Orbit references @pure', () => {
-  const initial = createLocalWorkspace('Source Reach', 'Iria')
+test('version 7 object publication survives snapshots and full-map imports with remapped Orbit references @pure', () => {
+  const initial = createWorkspaceWithPrimaryStar('Source Reach', 'Iria')
   const system = initial.cluster.systems[0]!
   const star = system.objects[0]!
   const orbit = createOrbit(system, star.id)
@@ -106,7 +107,7 @@ test('version 5 object publication survives snapshots and full-map imports with 
 
   const snapshot = createWorkspaceSnapshot(source)
   const restored = restoreLocalWorkspace(snapshot)
-  expect(snapshot.version).toBe(5)
+  expect(snapshot.version).toBe(7)
   expect(restored?.cluster.systems[0]?.objects[1]?.publication).toBe('revealed')
 
   const destinationStart = createLocalWorkspace('Destination Reach', 'Vesper')
@@ -120,7 +121,7 @@ test('version 5 object publication survives snapshots and full-map imports with 
   const importedCurrent = prepareJsonImport(destination, clusterExport)
   const copiedSystem = importedCurrent.workspace.cluster.systems[1]!
   const copiedPlanet = copiedSystem.objects.find(object => object.subtype === 'planet')!
-  expect(clusterExport.version).toBe(5)
+  expect(clusterExport.version).toBe(7)
   expect(copiedSystem.publication).toBe('revealed')
   expect(copiedPlanet.publication).toBe('revealed')
   expect(copiedPlanet.id).not.toBe(planet.id)
@@ -131,7 +132,7 @@ test('version 5 object publication survives snapshots and full-map imports with 
   const systemExport = exportStarSystem(source, system.id)
   const importedStandalone = prepareJsonImport(destination, systemExport)
   const standaloneSystem = importedStandalone.workspace.cluster.systems[1]!
-  expect(systemExport.version).toBe(4)
+  expect(systemExport.version).toBe(5)
   expect(standaloneSystem.objects.find(object => object.subtype === 'planet')?.publication).toBe('revealed')
   expect(standaloneSystem.objects.find(object => object.subtype === 'planet')?.placement)
     .toEqual({ kind: 'orbit', orbitId: standaloneSystem.orbits[0]?.id })

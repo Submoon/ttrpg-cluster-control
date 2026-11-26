@@ -1,7 +1,9 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRenderer, nextTick, ref } from 'vue'
-import { applySystemObjectTransfer, createLocalWorkspace, createOrbit, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
+import { applySystemObjectTransfer, createOrbit, prepareCatalogueObjectTransfer, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
 import type { MapNavigationHandle, SaveState, SearchPresentationSettlement, SystemMapHandle } from '../composables/editor-workflows/types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
@@ -86,7 +88,7 @@ function createSearchHarness(
 ) {
   const restoreBrowserBoundary = installBrowserLifecycleBoundary(compact)
   setActivePinia(createPinia())
-  const initialWorkspace = createLocalWorkspace(clusterName, systemName)
+  const initialWorkspace = createWorkspaceWithPrimaryStar(clusterName, systemName)
   if (additionalSystemName) {
     const firstSystem = initialWorkspace.cluster.systems[0]
     if (!firstSystem) throw new Error('The local workspace did not create its first system.')
@@ -102,13 +104,13 @@ function createSearchHarness(
   }
   const workspace = ref(initialWorkspace)
   const searchFilterInvalidations: number[] = []
-  let revision = 0
+  const revision = ref(0)
   const history = createWorkspaceHistoryCoordinator({
     getWorkspace: () => workspace.value,
-    getRevision: () => revision,
+    getRevision: () => revision.value,
     publishWorkspace: next => {
       workspace.value = next
-      revision += 1
+      revision.value += 1
       return { durable }
     },
     getTraversalBlockReason: () => null,
@@ -119,6 +121,7 @@ function createSearchHarness(
     setup() {
       workflows = useEditorWorkflows({
         workspace,
+        appliedRevision: revision,
         mutations: history,
         initializeWorkspace: async () => undefined,
         saveState: ref<SaveState>('saved'),
@@ -321,6 +324,41 @@ test('continuous Search reveals an object through the existing Cluster map handl
     expect(harness.store.selectedObjectIds).toEqual([object.id])
     expect(framedTargets).toEqual([result.target])
     expect(search.open.value).toBe(false)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('continuous Search frames a route occupant without assigning it a Zone or changing campaign history @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const { workspace, route, occupant } = workspaceWithRouteObjects()
+    harness.workspace.value = workspace
+    await nextTick()
+    const framed: Parameters<NonNullable<MapNavigationHandle['frameSearchTarget']>>[0][] = []
+    const located: string[] = []
+    harness.workflows.mapControls.clusterMapRef.value = {
+      ...createMapHandle({
+        whenReady: async () => true,
+        frameSearchTarget: target => { framed.push(target); return true },
+        focusMap: () => undefined,
+      }),
+      prepareSearchLocator: id => () => { located.push(id) },
+    }
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = occupant.locationKey
+    const result = search.results.value[0]!
+
+    expect(await search.reveal(result.target)).toEqual({ status: 'revealed' })
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'route-object', routeId: route.id, objectId: occupant.id })
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.store.selectedObjectIds).toEqual([])
+    expect(harness.store.clusterSelectedSystemId).toBeNull()
+    expect(framed).toEqual([result.target])
+    expect(located).toEqual([occupant.id])
+    expect(harness.history.getEntries()).toHaveLength(0)
+    expect(harness.workspace.value).toEqual(workspace)
   } finally {
     harness.dispose()
   }
@@ -668,7 +706,7 @@ test('transfer Undo and Redo reveal the stable root in its actual owner @pure', 
       clusterId: before.cluster.id,
       contextLabel: source.name,
       kind: 'transfer' as const,
-      label: `Change system for ${root.name}`,
+      label: `Change Zone for ${root.name}`,
       target: { kind: 'object' as const, id: root.id, systemId: source.id },
       parent: { kind: 'system' as const, id: destination.id },
     }
@@ -689,6 +727,90 @@ test('transfer Undo and Redo reveal the stable root in its actual owner @pure', 
     expect(harness.store.selectedSystemId).toBe(destination.id)
     expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: destination.id, objectId: root.id })
     expect(harness.store.selectedObjectIds).toEqual([root.id])
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('applying a modified route-object Inspector draft continues its exact transfer @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const { workspace, route, root, orbit } = workspaceWithRouteObjects()
+    const destination = workspace.cluster.systems[1]!
+    harness.workspace.value = workspace
+    await nextTick()
+    expect(await harness.workflows.navigation.inspectRouteObject(route.id, root.id)).toBe(true)
+    await harness.workflows.inspector.beginObjectEdit()
+    const session = harness.workflows.inspector.routeObjectSession.value!
+    session.draft.name = 'Updated survey vessel'
+    const landing = { kind: 'system' as const, systemId: destination.id, placement: { kind: 'system' as const, x: 0.53, y: 0.48 } }
+    const proposal = prepareCatalogueObjectTransfer(harness.workspace.value, {
+      source: { kind: 'route', routeId: route.id }, rootObjectId: root.id, landing,
+    })
+    const transfer = harness.workflows.placement.map.placeRouteObject({ kind: 'transfer', proposal }, () => true)
+    await expect.poll(() => harness.workflows.charts.transitionGuard.value).toBe('inspector')
+    await harness.workflows.charts.resolveTransitionChoice('apply')
+    expect(await transfer).toBe(true)
+    const landed = harness.workspace.value.cluster.systems.find(system => system.id === destination.id)!
+    expect(landed.objects.find(object => object.id === root.id)).toMatchObject({
+      name: 'Updated survey vessel', placement: landing.placement,
+    })
+    expect(landed.orbits).toContainEqual(orbit)
+    expect(harness.history.getEntries().map(({ action }) => action.kind)).toEqual(['update', 'transfer'])
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('a separate workspace publication invalidates a transfer waiting for Inspector Apply @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const { workspace, route, root } = workspaceWithRouteObjects()
+    const destination = workspace.cluster.systems[1]!
+    harness.workspace.value = workspace
+    await nextTick()
+    await harness.workflows.navigation.inspectRouteObject(route.id, root.id)
+    await harness.workflows.inspector.beginObjectEdit()
+    harness.workflows.inspector.routeObjectSession.value!.draft.name = 'Pending name'
+    const proposal = prepareCatalogueObjectTransfer(harness.workspace.value, {
+      source: { kind: 'route', routeId: route.id },
+      rootObjectId: root.id,
+      landing: { kind: 'system', systemId: destination.id, placement: { kind: 'system', x: 0.53, y: 0.48 } },
+    })
+    const transfer = harness.workflows.placement.map.placeRouteObject({ kind: 'transfer', proposal }, () => true)
+    await expect.poll(() => harness.workflows.charts.transitionGuard.value).toBe('inspector')
+    expect((await harness.history.execute({
+      action: { kind: 'rename', label: 'Rename Jump Cluster', target: { kind: 'cluster', id: workspace.cluster.id } },
+      prepare: latest => ({ ...latest, cluster: { ...latest.cluster, name: 'Changed in a separate operation' } }),
+    })).status).toBe('applied')
+    await harness.workflows.charts.resolveTransitionChoice('apply')
+    expect(await transfer).toBe(false)
+    expect(harness.workspace.value.cluster.routeContents[route.id]?.objects).toContainEqual(root)
+    expect(harness.workflows.inspector.routeObjectSession.value?.draft.name).toBe('Pending name')
+    expect(harness.history.getEntries().map(({ action }) => action.kind)).toEqual(['rename'])
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('history reveals the retained route object through the map target contract @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const { workspace, route, occupant } = workspaceWithRouteObjects()
+    harness.workspace.value = workspace
+    await nextTick()
+    const revealed: Parameters<NonNullable<MapNavigationHandle['revealHistoryTarget']>>[0][] = []
+    harness.workflows.mapControls.clusterMapRef.value = {
+      ...createMapHandle({ whenReady: async () => true, frameSearchTarget: () => true, focusMap: () => undefined }),
+      revealHistoryTarget: target => { revealed.push(target); return true },
+    }
+    const target = { kind: 'route-object' as const, routeId: route.id, id: occupant.id }
+    await harness.workflows.navigation.revealHistoryContext({
+      direction: 'undo',
+      action: { workspaceId: workspace.id, clusterId: workspace.cluster.id, contextLabel: 'Jump Route', kind: 'move', label: 'Move route object', target },
+    })
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'route-object', routeId: route.id, objectId: occupant.id })
+    expect(revealed).toEqual([target])
   } finally {
     harness.dispose()
   }
@@ -735,7 +857,7 @@ test('editing the destination Orbit resumes transfer review and preserves the dr
     expect(transfer.completeMapPlacement(lease, { kind: 'orbit', orbitId: orbit.id, angle: 1.5 })).toBe(false)
     expect(inspector.systemTransferSession.value).toMatchObject({
       sessionId, open: true, placingOnMap: false, placement: previousPlacement,
-      error: 'Finish editing the destination system before continuing the transfer.',
+      error: 'Finish editing the destination Zone before continuing the transfer.',
     })
     await transfer.handleIntent({ kind: 'place-on-map', sessionId })
     expect(transfer.pendingMapPlacement.value).toBeNull()
@@ -837,9 +959,9 @@ test('continuous history refits the surviving Cluster after its inspected system
     const action = {
       workspaceId: harness.workspace.value.id,
       clusterId,
-      contextLabel: 'Star System',
+      contextLabel: 'Zone',
       kind: 'delete' as const,
-      label: 'Delete Star System',
+      label: 'Delete Zone',
       target: { kind: 'system' as const, id: removedSystem.id },
       parent: { kind: 'cluster' as const, id: clusterId },
     }
@@ -1628,12 +1750,12 @@ test('continuous Search rollback keeps selected members whose original focused o
     const [focusedSystem, memberSystem] = harness.workspace.value.cluster.systems
     const focusedObject = focusedSystem?.objects[0]
     if (!focusedSystem || !memberSystem || !focusedObject) throw new Error('Expected a focused system and a group member owner.')
-    const memberB = { ...focusedObject, id: 'search-rollback-group-b', name: 'Member B' }
+    const memberB = { ...focusedObject, id: 'search-rollback-group-b', name: 'Member B', locationKey: 'GROUP-B' }
     const thirdSystem = {
       ...focusedSystem,
       id: 'search-rollback-third-system',
       name: 'Rigel',
-      objects: [{ ...focusedObject, id: 'search-rollback-group-c', name: 'Member C' }],
+      objects: [{ ...focusedObject, id: 'search-rollback-group-c', name: 'Member C', locationKey: 'GROUP-C' }],
       orbits: [],
     }
     memberSystem.objects = [memberB]
@@ -1693,8 +1815,8 @@ test('continuous membership survives deletion of the focused owner @pure', async
     const [focusedSystem, remainingSystem] = harness.workspace.value.cluster.systems
     const focusedObject = focusedSystem?.objects[0]
     if (!focusedSystem || !remainingSystem || !focusedObject) throw new Error('Expected two systems and a focused object.')
-    const memberB = { ...focusedObject, id: 'deleted-focus-member-b', name: 'Member B' }
-    const memberC = { ...focusedObject, id: 'deleted-focus-member-c', name: 'Member C', locationKey: 'B' }
+    const memberB = { ...focusedObject, id: 'deleted-focus-member-b', name: 'Member B', locationKey: 'GROUP-B' }
+    const memberC = { ...focusedObject, id: 'deleted-focus-member-c', name: 'Member C', locationKey: 'GROUP-C' }
     remainingSystem.objects = [memberB, memberC]
     harness.store.setSelection({ activeView: 'cluster' })
     expect(await harness.workflows.navigation.inspectContinuousTarget({

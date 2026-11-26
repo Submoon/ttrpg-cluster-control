@@ -6,12 +6,14 @@ import {
   rotatedEllipseBounds,
 } from '../utils/continuous-map-history-reveal'
 import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-intent'
-import { continuousMapDetailScale } from '../utils/continuous-map-projection'
+import { wardenMapDetailScale } from '../utils/continuous-map-projection'
 
 test('a feasible Center applies the same camera threshold as map detail @pure', () => {
   const targetBounds = { x: 0, y: 0, width: 183, height: 120 }
   const svgPixelScale = 1280 / 960
-  const threshold = continuousMapDetailScale(targetBounds, svgPixelScale, false)
+  const threshold = wardenMapDetailScale(targetBounds, svgPixelScale, false)
+  expect(threshold).toBe(3.75)
+  expect(wardenMapDetailScale(targetBounds, svgPixelScale, true)).toBe(3.25)
   const center = centerMapTargetViewport({
     current: { x: 0, y: 0, k: .5 },
     targetBounds,

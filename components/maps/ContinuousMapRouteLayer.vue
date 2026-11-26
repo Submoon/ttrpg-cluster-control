@@ -15,7 +15,7 @@
       <path class="cluster-route-hit-target" :d="mark.paintedGeometry.path" aria-hidden="true" />
       <g
         v-if="mark.label"
-        :transform="`translate(${mark.paintedGeometry.midpoint.x} ${mark.paintedGeometry.midpoint.y}) scale(${1 / svgPixelScale})`"
+        :transform="`translate(${mark.label.point.x} ${mark.label.point.y}) scale(${1 / svgPixelScale})`"
         aria-hidden="true"
       >
         <rect
@@ -29,11 +29,12 @@
         <text class="cluster-route-label" dy="0.34em">{{ mark.label.text }}</text>
       </g>
       <text
-        v-if="mark.destinationCaption && !destinationsInForeground"
+        v-if="mark.destinationCaption && !destinationsInForeground && destinationOffset(mark.id)"
         class="cluster-route-destination-caption"
         :transform="`translate(${mark.paintedGeometry.end.x} ${mark.paintedGeometry.end.y}) scale(${1 / svgPixelScale})`"
-        x="8"
-        y="4"
+        :x="destinationOffset(mark.id)!.x * svgPixelScale"
+        :y="destinationOffset(mark.id)!.y * svgPixelScale"
+        text-anchor="middle"
         aria-hidden="true"
       >{{ mark.destinationCaption }}</text>
       <template v-if="mark.unresolved && !destinationsInForeground">
@@ -61,6 +62,7 @@ import { computed, onBeforeUnmount, shallowRef, useTemplateRef, watch } from 'vu
 import type { Point } from '../../domain/workspace'
 import { continuousMapRouteCurve, type ContinuousMapRouteGeometry } from '../../utils/continuous-map-route-geometry'
 import { CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS, placeContinuousMapRouteLabels } from '../../utils/continuous-map-route-labels'
+import { continuousMapDestinationCaptionId } from '../../utils/continuous-map-caption-layout'
 import { nearestContinuousMapRouteHit } from '../../utils/continuous-map-route-hit'
 import { CONTINUOUS_MAP_DETAIL_MOTION_MS, continuousMapDetailMotionEase } from '../../utils/continuous-map-projection'
 import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
@@ -77,11 +79,13 @@ const props = defineProps<{
   routes: readonly RouteMark[]
   geometries: ReadonlyMap<string, ContinuousMapRouteGeometry>
   detailSystemIds?: ReadonlySet<string>
+  reduceMotion?: boolean
   selectedRouteId: string | null
   viewport: MapViewport
   viewportRect: SvgViewportRect
   svgPixelScale: number
   labelObstacles?: readonly SvgViewportRect[]
+  captionOffsets?: ReadonlyMap<string, Point>
   moveEnabled?: boolean
   moveSelectedExit?: boolean
   destinationsInForeground?: boolean
@@ -104,13 +108,20 @@ const paintedMarks = computed(() => {
     svgPixelScale: props.svgPixelScale,
     obstacles: props.labelObstacles,
   })
-  return marks.value.map(mark => ({
-    ...mark,
-    paintedGeometry: projectGeometry(mark.geometry),
-    label: labels.get(mark.id),
-  }))
+  return marks.value.map(mark => {
+    const label = labels.get(mark.id)
+    return {
+      ...mark,
+      paintedGeometry: projectGeometry(mark.geometry),
+      label: label ? { ...label, point: toViewport(label.position) } : undefined,
+    }
+  })
 })
 const svgPixelScale = computed(() => props.svgPixelScale > 0 ? props.svgPixelScale : 1)
+
+function destinationOffset(routeId: string): Point | undefined {
+  return props.captionOffsets?.get(continuousMapDestinationCaptionId(routeId))
+}
 
 function toViewport(point: Point): Point {
   return {
@@ -141,14 +152,18 @@ function stopAnimation(): void {
 function routeIdAtStroke(event: MouseEvent): string | undefined {
   const stroke = event.target
   if (!(stroke instanceof SVGPathElement) || !stroke.matches('.cluster-route-hit-target')) return
-  const layer = stroke.closest('.continuous-map-route-layer')
-  const hits = stroke.ownerDocument.elementsFromPoint(event.clientX, event.clientY)
+  return routeIdAtClient(event)
+}
+
+function routeIdAtClient({ clientX, clientY }: { clientX: number; clientY: number }): string | undefined {
+  const layer = layerElement.value
+  if (!layer) return
+  const hits = layer.ownerDocument.elementsFromPoint(clientX, clientY)
     .filter(element => element.matches('.cluster-route-hit-target') && element.closest('.continuous-map-route-layer') === layer)
-  if (hits.length < 2) return
-  const matrix = stroke.getScreenCTM()
+  const matrix = layer.getScreenCTM()
   if (!matrix) return
-  const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
-  const candidates = hits.flatMap((path) => {
+  const point = new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse())
+  const candidates = hits.flatMap(path => {
     const id = path.closest('.cluster-route')?.getAttribute('data-route-id')
     if (!id) return []
     const geometry = animated.value.get(id) ?? props.geometries.get(id)
@@ -163,8 +178,12 @@ function focusRoute(id: string): void {
 }
 
 watch(
-  [() => props.geometries, () => props.detailSystemIds],
+  [() => props.geometries, () => props.detailSystemIds, () => props.reduceMotion],
   ([next, nextDetail], [previous, previousDetail]) => {
+    if (props.reduceMotion) {
+      stopAnimation()
+      return
+    }
     if (nextDetail === previousDetail) return
     const displayed = animated.value
     stopAnimation()
@@ -180,7 +199,7 @@ watch(
     animated.value = new Map(motions.map(({ id, from }) => [id, from]))
     const started = window.performance.now()
     function step(now: number): void {
-      if (now >= started + CONTINUOUS_MAP_DETAIL_MOTION_MS || motionPreference.matches) {
+      if (now >= started + CONTINUOUS_MAP_DETAIL_MOTION_MS || props.reduceMotion || motionPreference.matches) {
         stopAnimation()
         return
       }
@@ -211,7 +230,7 @@ function getRenderedRouteEnd(id: string): Point | undefined {
   return (animated.value.get(id) ?? props.geometries.get(id))?.end
 }
 
-defineExpose({ routeIdAtStroke, focusRoute, getRenderedRouteEnd })
+defineExpose({ routeIdAtStroke, routeIdAtClient, focusRoute, getRenderedRouteEnd, displayedMarks: marks })
 </script>
 
 <style scoped>

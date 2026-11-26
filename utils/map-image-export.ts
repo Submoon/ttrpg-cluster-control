@@ -297,7 +297,7 @@ function createExportSvg(
     let titleWidth = 0
     if (exportTitle) {
       const context = document.createElement('canvas').getContext('2d')
-      if (!context) throw new Error('Could not create a Canvas context to measure the system title.')
+      if (!context) throw new Error('Could not create a Canvas context to measure the Zone title.')
       context.font = `600 ${exportTitleFontSize}px ${titleFontFamily}`
       titleWidth = context.measureText(exportTitle).width
     }

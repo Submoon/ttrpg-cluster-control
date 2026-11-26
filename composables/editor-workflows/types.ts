@@ -27,6 +27,7 @@ import type { SystemObjectTransferMapPreview } from './system-object-transfer-ty
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type MapHistoryTarget =
+  | { kind: 'route-object'; id: string; routeId: string }
   | { kind: 'system'; id: string }
   | { kind: 'route'; id: string }
   | { kind: 'object'; id: string; systemId: string }
@@ -70,6 +71,7 @@ export interface ObjectDraft {
   markerColor: string | null
   subtype: string
   placement: string
+  routePercentage?: string
   atmosphere: string
   portClass: string
   jumpStationId: string

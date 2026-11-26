@@ -92,7 +92,7 @@ export type ObjectPlacement =
  * Catalogue entity with stable ID/key, domain values, and either system-level or Orbit placement.
  * A Jump Point's optional physical Station link is separate from logical route endpoints.
  */
-export interface SystemObject {
+export interface SystemObject<P extends CataloguePlacement = ObjectPlacement> {
   id: string
   publication: PublicationMode
   /** Optional per-object glyph fill; absence retains the map's current theme and type styling. */
@@ -100,11 +100,15 @@ export interface SystemObject {
   family: ObjectFamily
   subtype: string
   locationKey: string
+  /** Exact assignment kept from a campaign that admitted the same key on several objects. */
+  legacyLocationKey?: { objectId: string; key: string }
   name: string
   description: string
   playerText: string
   playerFieldMasks: string[]
-  placement: ObjectPlacement
+  placement: P
+  /** Exact effective position retained from an older Zone frame. */
+  legacyZonePlacement?: { systemId: string; orbitId: string | null; x: number; y: number }
   atmosphere?: string
   portClass?: string
   customFieldValues?: Record<string, CustomFieldValue>
@@ -179,6 +183,20 @@ export interface ChartDetailsChanges {
   publication: PublicationMode
 }
 
+/** A route root's owner is the route containing this branch; Orbit occupants inherit that owner. */
+export type RouteObjectPlacement =
+  | { kind: 'route'; progression: number }
+  | Extract<ObjectPlacement, { kind: 'orbit' }>
+
+export type CataloguePlacement = ObjectPlacement | RouteObjectPlacement
+export type RouteObject = Omit<SystemObject<RouteObjectPlacement>, 'legacyZonePlacement'>
+export type CatalogueObject = SystemObject<CataloguePlacement>
+
+export interface RouteContents {
+  objects: RouteObject[]
+  orbits: Array<Extract<Orbit, { hostId: string }>>
+}
+
 export interface JumpCluster {
   id: string
   name: string
@@ -186,6 +204,8 @@ export interface JumpCluster {
   playerTitle: string
   systems: StarSystem[]
   routes: JumpRoute[]
+  /** Sparse contents indexed by Jump Route ID. */
+  routeContents: Record<string, RouteContents>
 }
 
 export interface JumpPointReference {
@@ -197,7 +217,7 @@ export interface JumpPointReference {
  * Durable local campaign map; temporary view/zoom state is intentionally kept outside this shape.
  */
 export interface LocalWorkspace {
-  version: 5
+  version: 7
   id: string
   cluster: JumpCluster
   layout: {
@@ -232,7 +252,7 @@ export interface ExportedLayout {
 
 export type JumpClusterExport = {
   format: 'ttrpg-cluster-control-map'
-  version: 5
+  version: 7
   type: 'cluster'
   cluster: JumpCluster
   objectFieldSettings: ObjectFieldSettings
@@ -241,7 +261,7 @@ export type JumpClusterExport = {
 
 export type StarSystemExport = {
   format: 'ttrpg-cluster-control-map'
-  version: 4
+  version: 5
   type: 'system'
   system: StarSystem
   objectFieldSettings: ObjectFieldSettings
@@ -256,6 +276,7 @@ export interface JsonImportSummary {
   orbits: number
   routes: number
   customFields: number
+  locationKeyReplacements: Array<{ name: string; system: string; originalKey: string; replacementKey: string }>
   idCollisions: Array<{ entity: string; name: string; id: string }>
   possibleMatches: Array<{ entity: string; name: string; existingSystem: string; reason: string }>
 }
@@ -289,6 +310,7 @@ export type MapDeletionTarget =
   | { kind: 'system'; systemId: string }
   | { kind: 'object'; systemId: string; objectId: string }
   | { kind: 'orbit'; systemId: string; orbitId: string }
+  | { kind: 'route-object'; routeId: string; objectId: string }
   | { kind: 'route'; routeId: string }
 
 export interface MapDeletionPlan {

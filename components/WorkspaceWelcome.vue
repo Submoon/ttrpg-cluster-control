@@ -64,7 +64,7 @@
       <span class="section-kicker">A PRIVATE CHART FOR YOUR CAMPAIGN</span>
       <h1 class="workspace-welcome-title my-3 max-w-[14ch] leading-[1.02] tracking-[-0.04em]">Give the unknown a name.</h1>
       <p class="mb-0 max-w-[34rem] text-[0.92rem] leading-[1.65]">
-        Create a Jump Cluster and its first star system. This workspace is saved in your browser; you can back it up to Google Drive or Dropbox.
+        Create a Jump Cluster and name its first Zone. This workspace is saved in your browser; you can back it up to Google Drive or Dropbox.
       </p>
     </div>
 
@@ -103,7 +103,7 @@
             />
           </UFormField>
           <UFormField
-            label="First star system"
+            label="First Zone"
             required
             class="grid gap-1.5"
             :ui="{ label: 'text-[0.65rem] font-medium tracking-[0.08em] uppercase text-[var(--text-secondary)]' }"

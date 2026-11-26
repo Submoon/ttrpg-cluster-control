@@ -92,7 +92,8 @@ function validPlayerDocument(): PlayerClusterDocument {
 
   return {
     format: 'ttrpg-cluster-control-player',
-    version: 2,
+    version: 3,
+    routeBranches: [],
     title: 'Pilgrim Reach',
     systems: [
       { id: 'system-1', position: { x: 120, y: 100 }, disclosure: 'unknown', label: 'Unknown presence' },
@@ -101,7 +102,7 @@ function validPlayerDocument(): PlayerClusterDocument {
         position: { x: 240, y: 180 },
         disclosure: 'known-type',
         type: 'star-system',
-        label: 'Star system',
+        label: 'Zone',
       },
       {
         id: 'system-3',
@@ -213,6 +214,7 @@ test('player file admission removes resolved same-system loops after validating 
   }
   const legacyDocument = {
     ...document,
+    routeBranches: undefined,
     version: 1 as const,
     routes: [
       { ...document.routes[0]!, fromPointId: 'ignored-former-extension', destination: { ...document.routes[0]!.destination, pointId: 'ignored-former-extension' } },
@@ -222,7 +224,7 @@ test('player file admission removes resolved same-system loops after validating 
   }
 
   const parsedLegacy = parsePlayerJson(JSON.stringify(legacyDocument))
-  expect(parsedLegacy.version).toBe(2)
+  expect(parsedLegacy.version).toBe(3)
   expect(parsedLegacy.routes).toEqual(document.routes)
   expectPlayerDocumentError(
     () => parsePlayerJson(JSON.stringify({ ...legacyDocument, routes: [...legacyDocument.routes, { ...loop, jumpLevel: 0 }] })),
@@ -269,12 +271,13 @@ function playerDocumentWithPublishedRouteAttachments(): PlayerClusterDocument {
   return { ...document, systems, routes }
 }
 
-test('player JSON v2 round-trips only attached Revealed Jump Points @pure', () => {
+test('player JSON round-trips only attached Revealed Jump Points @pure', () => {
   const document = playerDocumentWithPublishedRouteAttachments()
   const serialized = serializePlayerJson(document)
 
   expect(JSON.parse(serialized)).toMatchObject({
-    version: 2,
+    version: 3,
+    routeBranches: [],
     routes: [
       { fromPointId: 'object-3', destination: { pointId: 'object-1' } },
       { destination: { kind: 'unknown' } },
@@ -282,9 +285,12 @@ test('player JSON v2 round-trips only attached Revealed Jump Points @pure', () =
   })
   expect(parsePlayerJson(serialized)).toEqual(document)
   expect(restorePlayerDocument(document)).toEqual(document)
+  const legacyV2 = { ...document, version: 2 }
+  Reflect.deleteProperty(legacyV2, 'routeBranches')
+  expect(restorePlayerDocument(legacyV2)).toEqual(document)
 })
 
-test('player JSON v2 rejects route attachments outside their own Revealed Jump Point maps @pure', () => {
+test('player JSON rejects route attachments outside their own Revealed Jump Point maps @pure', () => {
   const document = playerDocumentWithPublishedRouteAttachments()
   const invalidOriginOwner = {
     ...document,
@@ -329,6 +335,21 @@ test('player JSON v2 rejects route attachments outside their own Revealed Jump P
   }
 })
 
+test('player JSON displays a generic Zone while admitting the legacy Known type label @pure', () => {
+  const document = validPlayerDocument()
+  const legacy = {
+    ...document,
+    systems: document.systems.map(system => system.disclosure === 'known-type'
+      ? { ...system, label: 'Star system' }
+      : system),
+  }
+
+  const restored = parsePlayerJson(JSON.stringify(legacy))
+  expect(restored.systems[1]).toMatchObject({ disclosure: 'known-type', label: 'Zone' })
+  expect(restored.systems[2]).toEqual(document.systems[2])
+  expect(parsePlayerJson(serializePlayerJson(restored))).toEqual(restored)
+})
+
 test('player JSON admits all disclosure modes, permitted values, and public relationship graphs @pure', () => {
   const document = validPlayerDocument()
   const serialized = serializePlayerJson(document)
@@ -340,7 +361,7 @@ test('player JSON admits all disclosure modes, permitted values, and public rela
   expect(restored).not.toBe(document)
   expect(restored.systems[0]).toMatchObject({ disclosure: 'unknown', label: 'Unknown presence' })
   expect(restored.systems[0]).not.toHaveProperty('map')
-  expect(restored.systems[1]).toMatchObject({ disclosure: 'known-type', label: 'Star system' })
+  expect(restored.systems[1]).toMatchObject({ disclosure: 'known-type', label: 'Zone' })
   expect(restored.systems[1]).not.toHaveProperty('map')
 
   const revealed = restored.systems[2]
@@ -430,7 +451,7 @@ test('player JSON rejects malformed, unsupported, and unsafe data with fixed err
     privateMarker,
   )
   expectPlayerDocumentError(
-    () => restorePlayerDocument({ ...document, version: 3 }),
+    () => restorePlayerDocument({ ...document, version: 4 }),
     'unsupported-version',
   )
   expectPlayerDocumentError(
@@ -448,6 +469,7 @@ test('player JSON rejects malformed, unsupported, and unsafe data with fixed err
   const excessiveSystems = JSON.stringify({
     format: document.format,
     version: document.version,
+    routeBranches: [],
     title: document.title,
     systems: Array.from({ length: 257 }, () => null),
     routes: [],
@@ -690,7 +712,7 @@ test('player JSON byte accounting includes the optional marker color property @p
     playerText: '',
     fields: [],
   }))
-  const legacyDocument: Omit<PlayerClusterDocument, 'version'> & { version: 1 } = {
+  const legacyDocument: Omit<PlayerClusterDocument, 'version' | 'routeBranches'> & { version: 1 } = {
     format: 'ttrpg-cluster-control-player',
     version: 1,
     title: 'Public Reach',
@@ -720,4 +742,32 @@ test('player JSON byte accounting includes the optional marker color property @p
   expect(legacyProjectionBytes()).toBe(MAX_PLAYER_JSON_BYTES)
   Object.assign(objects[0]!, { markerColor: '#123456' })
   expectPlayerDocumentError(() => restorePlayerDocument(legacyDocument), 'too-large')
+})
+
+test('current player files require valid route branch anchors and complete hosted graphs @pure', () => {
+  const document = validPlayerDocument()
+  const sharedBranch = {
+    id: 'branch-1',
+    anchor: { kind: 'route', routeId: 'route-1', progression: 0.35 },
+    map: {
+      objects: [
+        { id: 'object-1', position: { x: 0, y: 0 }, placement: { kind: 'branch-root' }, disclosure: 'unknown', label: 'Unknown presence' },
+      ],
+      orbits: [],
+    },
+  }
+  const current = { ...document, routeBranches: [sharedBranch] }
+  expect(restorePlayerDocument(current)).toEqual(current)
+  for (const malformed of [
+    { ...current, routeBranches: undefined },
+    { ...current, version: 2 },
+    { ...current, routeBranches: [sharedBranch, sharedBranch] },
+    { ...current, routeBranches: [{ ...sharedBranch, anchor: { ...sharedBranch.anchor, routeId: 'route-50' } }] },
+    { ...current, routeBranches: [{ ...sharedBranch, anchor: { ...sharedBranch.anchor, progression: 1.01 } }] },
+    { ...current, routeBranches: [{ ...sharedBranch, anchor: { ...sharedBranch.anchor, progression: undefined } }] },
+    { ...current, routeBranches: [{ ...sharedBranch, anchor: { kind: 'detached', position: { x: 20, y: 30 }, progression: 0.35 } }] },
+    { ...current, routeBranches: [{ ...sharedBranch, map: { ...sharedBranch.map, objects: [] } }] },
+  ]) {
+    expectPlayerDocumentError(() => restorePlayerDocument(malformed), 'invalid-document')
+  }
 })

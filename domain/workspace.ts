@@ -11,6 +11,11 @@ export type {
   Point,
   SystemFrameInsets,
   CatalogueSubtype,
+  CatalogueObject,
+  CataloguePlacement,
+  RouteContents,
+  RouteObject,
+  RouteObjectPlacement,
   ObjectFamily,
   CustomFieldType,
   CustomFieldValue,
@@ -75,14 +80,18 @@ export { fromNormalizedMapPoint, toNormalizedMapPoint } from './workspace-map-co
 export {
   applySystemObjectTransfer,
   prepareSystemObjectTransfer,
+  prepareCatalogueObjectTransfer,
+  resolveCatalogueObjectHistoryTarget,
+  type CatalogueObjectTransferRequest,
+  type CatalogueObjectTransferReview,
+  type CatalogueTransferLanding,
+  type CatalogueTransferSource,
   resolveSystemObjectHistoryTarget,
-  validateSystemObjectTransferKeys,
 } from './workspace-transfer'
 export type {
   SystemObjectTransferPlacement,
   SystemObjectTransferRequest,
   SystemObjectTransferReview,
-  SystemObjectTransferKeyConflict,
   SystemObjectTransferRouteAttachment,
   SystemObjectTransferStationLink,
 } from './workspace-transfer'
@@ -122,3 +131,10 @@ export type {
   PlayerOrbit,
   PlayerRoute,
 } from './player-projection'
+export {
+  routeContentsFor,
+  createWorkspaceRouteObject,
+  updateWorkspaceRouteObject,
+  type RouteLanding,
+  catalogueBranches,
+} from './workspace-route-objects'

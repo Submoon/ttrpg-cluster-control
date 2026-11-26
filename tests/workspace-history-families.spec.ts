@@ -1,4 +1,6 @@
 import { expect, test } from './fixtures'
+import { addZoneWithPrimaryStar, createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 import { computed, ref } from 'vue'
 import {
   addStarSystem,
@@ -19,6 +21,7 @@ import {
   type StarSystem,
 } from '../domain/workspace'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
+import { useRouteInspectorSession } from '../composables/editor-workflows/useRouteInspectorSession'
 import type { WorkspaceHistoryCapacityDetails } from '../composables/editor-workflows/workspace-mutations'
 import { useWorkspaceFiles } from '../composables/useWorkspaceFiles'
 import { createWorkspaceSnapshot } from '../utils/workspace-storage'
@@ -130,7 +133,7 @@ test('standalone import previews a detached placement that can be moved and canc
 
 test('legacy standalone placement reviews and applies the selected anchor with its complete rotated Orbit geometry @pure', async () => {
   const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
-  const source = createLocalWorkspace('Far Reach', 'Iria')
+  const source = createWorkspaceWithPrimaryStar('Far Reach', 'Iria')
   const sourceSystem = source.cluster.systems[0]
   if (!sourceSystem) throw new Error('The legacy import fixture needs a source system.')
   const star = sourceSystem.objects[0]
@@ -264,9 +267,9 @@ test('a workspace replacement while standalone file text is pending prevents pla
 })
 
 function makeCascadeWorkspace(): LocalWorkspace {
-  let workspace = createLocalWorkspace('Kestrel Reach', 'A')
+  let workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'A')
   const systemA = workspace.cluster.systems[0]!
-  const systemBResult = addStarSystem(workspace, 'B')
+  const systemBResult = addZoneWithPrimaryStar(workspace, 'B')
   workspace = systemBResult.workspace
   const systemB = systemBResult.system
 
@@ -293,7 +296,7 @@ function makeCascadeWorkspace(): LocalWorkspace {
   }
   system = { ...system, objects: [...system.objects, survivingPoint] }
 
-  const destination = { ...createSystemObject(systemB, 'jump-point'), name: 'B Gate' }
+  const destination = { ...createSystemObject(systemB, 'jump-point'), name: 'B Gate', locationKey: 'JP-03' }
   systemB.objects.push(destination)
   const systemsWithEntities = workspace.cluster.systems.map(candidate =>
     candidate.id === system.id ? system : candidate.id === systemB.id ? systemB : candidate)
@@ -324,7 +327,7 @@ function makeCascadeWorkspace(): LocalWorkspace {
 }
 
 function makeFieldWorkspace(): LocalWorkspace {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const system = workspace.cluster.systems[0]!
   const object = system.objects[0]!
   const customFields = [
@@ -349,13 +352,13 @@ function makeFieldWorkspace(): LocalWorkspace {
 }
 
 function makeHistory(initial: LocalWorkspace) {
-  let current = createWorkspaceSnapshot(initial)
+  const workspace = ref<LocalWorkspace>(createWorkspaceSnapshot(initial))
   let revision = 0
   const history = createWorkspaceHistoryCoordinator({
-    getWorkspace: () => current,
+    getWorkspace: () => workspace.value,
     getRevision: () => revision,
     publishWorkspace: (next) => {
-      current = createWorkspaceSnapshot(next)
+      workspace.value = createWorkspaceSnapshot(next)
       revision += 1
       return { durable: Promise.resolve() }
     },
@@ -364,9 +367,157 @@ function makeHistory(initial: LocalWorkspace) {
   })
   return {
     history,
-    get current() { return current },
+    workspace,
+    get current() { return workspace.value },
     dispose: () => history.dispose(),
   }
+}
+
+test('a route Inspector reversal complements root progression in the preview and one reversible edit @pure', async () => {
+  const { workspace, route, root, occupant, branch } = workspaceWithRouteObjects()
+  const harness = makeHistory(workspace)
+  const inspector = useRouteInspectorSession({ workspace: harness.workspace, mutations: harness.history })
+  try {
+    const session = inspector.beginRouteSession(route.id)!
+    inspector.reverseRouteEndpoints(session)
+
+    const reversedBranch = {
+      ...branch,
+      objects: [{ ...root, placement: { kind: 'route', progression: 0.75 } }, occupant],
+    }
+    expect(inspector.projectDraft(harness.current)?.cluster.routeContents[route.id]).toEqual(reversedBranch)
+    expect(harness.current).toEqual(workspace)
+    expect(harness.history.getEntries()).toHaveLength(0)
+
+    expect(await inspector.applyRouteSession(session)).toBe(true)
+    const applied = harness.current
+    expect(applied.cluster.routes[0]).toMatchObject({
+      id: route.id, fromSystemId: route.toSystemId, toSystemId: route.fromSystemId,
+    })
+    expect(applied.cluster.routeContents[route.id]).toEqual(reversedBranch)
+    expect(applied.layout).toEqual(workspace.layout)
+    expect(harness.history.getEntries()).toHaveLength(1)
+
+    expect((await harness.history.undo()).status).toBe('applied')
+    expect(harness.current).toEqual(workspace)
+    expect((await harness.history.redo()).status).toBe('applied')
+    expect(harness.current).toEqual(applied)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('route retargeting preserves fixed and moving objects at both progression endpoints @pure', async () => {
+  const { workspace, route, root, occupant, branch } = workspaceWithRouteObjects()
+  const fixed = {
+    ...occupant,
+    id: 'fixed-obstacle',
+    name: 'Fixed obstacle',
+    locationKey: 'AN-02',
+    placement: { kind: 'route', progression: 1 } as const,
+  }
+  const contents = {
+    ...branch,
+    objects: [{ ...root, placement: { kind: 'route', progression: 0 } as const }, fixed, occupant],
+  }
+  const original: LocalWorkspace = {
+    ...workspace,
+    cluster: { ...workspace.cluster, routeContents: { [route.id]: contents } },
+  }
+  const harness = makeHistory(original)
+  const inspector = useRouteInspectorSession({ workspace: harness.workspace, mutations: harness.history })
+  try {
+    const first = inspector.beginRouteSession(route.id)!
+    inspector.updateRouteInput(first, 'destination', 'external')
+    inspector.updateRouteInput(first, 'unresolvedExit', 'Far survey')
+    expect(inspector.projectDraft(harness.current)?.cluster.routeContents[route.id]).toEqual(contents)
+    expect(await inspector.applyRouteSession(first)).toBe(true)
+    const unresolved = harness.current
+    expect(unresolved.cluster.routes[0]).toMatchObject({ id: route.id, toSystemId: null, unresolvedExit: 'Far survey' })
+    expect(unresolved.cluster.routeContents[route.id]).toEqual(contents)
+    expect(unresolved.layout).toEqual(workspace.layout)
+
+    const second = inspector.beginRouteSession(route.id)!
+    inspector.updateRouteInput(second, 'toSystemId', route.fromSystemId)
+    expect(await inspector.applyRouteSession(second)).toBe(false)
+    expect(harness.current).toEqual(unresolved)
+    expect(harness.history.getEntries()).toHaveLength(1)
+    inspector.updateRouteInput(second, 'toSystemId', route.toSystemId!)
+    expect(await inspector.applyRouteSession(second)).toBe(true)
+    expect(harness.current).toEqual(original)
+  } finally {
+    harness.dispose()
+  }
+})
+
+for (const kind of ['route', 'system'] as const) {
+  test(`confirmed ${kind} deletion removes the complete occupied route and restores it through history @pure`, async () => {
+    const { workspace, route, root, orbit, occupant, branch } = workspaceWithRouteObjects()
+    const { workspace: withNeighbor, system: neighbor } = addStarSystem(workspace, 'Harrow')
+    const unaffected = createJumpRoute(withNeighbor.cluster, {
+      jumpLevel: 5,
+      fromSystemId: neighbor.id,
+      fromPointId: null,
+      toSystemId: route.toSystemId!,
+      toPointId: null,
+    })
+    const hazard = {
+      ...root,
+      id: 'frontier-debris',
+      name: 'Frontier debris',
+      locationKey: 'AN-02',
+      family: occupant.family,
+      subtype: occupant.subtype,
+      placement: { kind: 'route', progression: 1 } as const,
+    }
+    withNeighbor.cluster.routes.push(unaffected)
+    withNeighbor.cluster.routeContents[unaffected.id] = { objects: [hazard], orbits: [] }
+    const before = createWorkspaceSnapshot(withNeighbor)
+    const harness = makeHistory(before)
+    const target = kind === 'route'
+      ? { kind, routeId: route.id }
+      : { kind, systemId: route.fromSystemId }
+    const id = kind === 'route' ? route.id : route.fromSystemId
+    try {
+      const plan = planMapEntityDeletion(harness.current, target)
+      expect(plan.affectedEntities).toEqual(expect.arrayContaining([
+        'Survey vessel (Vessel, VES-01)',
+        'Orbit 1 around Survey vessel',
+        'Captured echo (Anomaly, AN-01)',
+      ]))
+      expect(plan.affectedEntities).not.toContain('Frontier debris (Anomaly, AN-02)')
+      expect(plan.removedRouteIds).toEqual([route.id])
+      expect(plan.removedObjectIds).toEqual([root.id, occupant.id])
+      expect(plan.removedOrbitIds).toEqual([orbit.id])
+      expect(harness.current).toEqual(before)
+      expect(harness.history.getEntries()).toHaveLength(0)
+
+      const result = await harness.history.execute({
+        action: { kind: 'delete', label: 'Delete reviewed target', target: { kind, id } },
+        prepare: current => planMapEntityDeletion(current, target).workspace,
+      })
+      expect(result.status).toBe('applied')
+      const deleted = harness.current
+      expect(isLocalWorkspace(deleted)).toBe(true)
+      expect(deleted.cluster.routes).toEqual([unaffected])
+      expect(deleted.cluster.routeContents).toEqual({
+        [unaffected.id]: { objects: [hazard], orbits: [] },
+      })
+      expect({
+        orbitRadii: deleted.layout.orbitRadii,
+        orbitRotations: deleted.layout.orbitRotations,
+        objectAngles: deleted.layout.objectAngles,
+      }).toEqual({ orbitRadii: {}, orbitRotations: {}, objectAngles: {} })
+
+      expect((await harness.history.undo()).status).toBe('applied')
+      expect(harness.current).toEqual(before)
+      expect(harness.current.cluster.routeContents[route.id]).toEqual(branch)
+      expect((await harness.history.redo()).status).toBe('applied')
+      expect(harness.current).toEqual(deleted)
+    } finally {
+      harness.dispose()
+    }
+  })
 }
 
 test('Orbit deletion round-trips its nested cascade, station links, routes, order and geometry through workspace history @pure', async () => {
@@ -493,7 +644,7 @@ test('cluster import keeps its remapped copy and shared options on one exact his
     name: 'Relay Station',
     customFieldValues: { 'incoming-notes': 'Arrived with the copy.' },
   }
-  const sourceJumpPoint = { ...createSystemObject({ ...sourceSystem, objects: [...sourceSystem.objects, sourceStation] }, 'jump-point'), name: 'Beta Gate' }
+  const sourceJumpPoint = { ...createSystemObject({ ...sourceSystem, objects: [...sourceSystem.objects, sourceStation] }, 'jump-point'), name: 'Beta Gate', locationKey: 'JP-02' }
   const sourceCluster = {
     ...source.cluster,
     systems: source.cluster.systems.map(system => system.id === sourceSystem.id
@@ -586,7 +737,7 @@ test('cluster import keeps its remapped copy and shared options on one exact his
 
 test('standalone-system import can be undone and redone without adding its copied data to Cluster routes @pure', async () => {
   const initial = createWorkspaceSnapshot(createLocalWorkspace('Kestrel Reach', 'Vesper'))
-  const source = createWorkspaceSnapshot(addStarSystem(initial, 'Distant Reach').workspace)
+  const source = createWorkspaceSnapshot(addZoneWithPrimaryStar(initial, 'Distant Reach').workspace)
   const standalone = exportStarSystem(source, source.cluster.systems[1]!.id)
   const before = createWorkspaceSnapshot(initial)
   const harness = makeHistory(initial)
@@ -783,6 +934,12 @@ test('focused map deletion reviews a seeded system cascade and Undo restores the
   await captureMapExportBlobs(page)
   await createSingleSystemWorkspace(page)
   const fixture = makeCascadeWorkspace()
+  const { branch, workspace: occupiedRouteFixture } = workspaceWithRouteObjects()
+  const occupiedRoute = fixture.cluster.routes[0]!
+  fixture.cluster.routeContents[occupiedRoute.id] = branch
+  Object.assign(fixture.layout.orbitRadii, occupiedRouteFixture.layout.orbitRadii)
+  Object.assign(fixture.layout.orbitRotations, occupiedRouteFixture.layout.orbitRotations)
+  Object.assign(fixture.layout.objectAngles, occupiedRouteFixture.layout.objectAngles)
   const restore = await reviewJumpClusterBackup(page, 'deletion-cascade.json', JSON.stringify(exportJumpCluster(fixture)))
   await resolveJumpClusterRestoreReview(restore, 'confirm')
   await waitForWorkspaceSaved(page)
@@ -792,18 +949,27 @@ test('focused map deletion reviews a seeded system cascade and Undo restores the
   const target = wardenSystemMark(page, source.id)
   await target.focus()
   await expect(target).toBeFocused()
-  await target.press('Shift+F10')
   const menu = page.getByRole('menu', { name: 'Map item actions', exact: true })
   const deletion = menu.getByRole('menuitem', { name: 'Delete', exact: true })
   const review = page.getByRole('dialog', { name: 'Review deletion', exact: true })
   const confirm = review.getByRole('button', { name: 'Confirm deletion', exact: true })
-  await expect(menu).toBeVisible()
-  await expect(deletion).toBeEnabled()
-  await deletion.focus()
-  await expect(deletion).toBeFocused()
-  await page.keyboard.press('Space')
-  await expect(review).toBeVisible()
-  await expect(review).toContainText('A star system')
+  const openReview = async () => {
+    await target.press('Shift+F10')
+    await expect(menu).toBeVisible()
+    await expect(deletion).toBeEnabled()
+    await deletion.focus()
+    await expect(deletion).toBeFocused()
+    await page.keyboard.press('Space')
+    await expect(review).toBeVisible()
+  }
+  await openReview()
+  await expect(review).toContainText('Survey vessel')
+  await expect(review).toContainText('Orbit 1 around Survey vessel')
+  await expect(review).toContainText('Captured echo')
+  await review.getByRole('button', { name: 'Cancel deletion', exact: true }).click()
+  await expect(review).toBeHidden()
+  await openReview()
+  await expect(review).toContainText('A Zone')
   await expect(review).toContainText('Herma')
   await expect(review).toContainText('Iria')
   await expect(review).toContainText('Lost Gate')
@@ -817,6 +983,7 @@ test('focused map deletion reviews a seeded system cascade and Undo restores the
   }
   expect(after.cluster.systems.map(system => system.name)).toEqual(['B'])
   expect(after.cluster.routes).toEqual([])
+  expect(after.cluster.routeContents).toEqual({})
   expect(after.cluster.systems[0]?.objects.map(object => object.name)).toEqual(['Primary Star', 'B Gate'])
 
   const undo = page.getByRole('button', { name: /^Undo(?:\b|:)/ })

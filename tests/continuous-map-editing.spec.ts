@@ -1,5 +1,6 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
-import { createLocalWorkspace, createOrbit } from '../domain/workspace'
+import { createOrbit } from '../domain/workspace'
 import { creationCandidatesAtPoint, objectPositions, orbitPointAtAngle } from '../utils/system-map-geometry'
 import {
   createContinuousObjectAddRequestLease,
@@ -76,7 +77,7 @@ test('keyboard Add on an Orbit chooses a point on its rotated ring @pure', () =>
 })
 
 test('a collapsed system cannot attach Add to a hidden Orbit but keeps occupied marks blocked @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const source = workspace.cluster.systems[0]!
   const star = source.objects[0]!
   const orbit = createOrbit(source, star.id)
@@ -98,7 +99,7 @@ test('a collapsed system cannot attach Add to a hidden Orbit but keeps occupied 
 })
 
 test('object Add can place beside a mark when the visible hit radius is smaller than the legacy clearance @pure', () => {
-  const system = createLocalWorkspace('Kestrel Reach', 'Vesper').cluster.systems[0]!
+  const system = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper').cluster.systems[0]!
   const star = system.objects[0]!
   const geometry = { objectAngles: {}, orbitRadii: {}, orbitRotations: {} }
   const center = objectPositions(system, geometry).get(star.id)!
@@ -113,7 +114,7 @@ test('object Add can place beside a mark when the visible hit radius is smaller 
 })
 
 test('an overview Orbit Add offers a free center near a hidden host and checks detached Orbit spacing @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const system = workspace.cluster.systems[0]!
   const star = system.objects[0]!
   const anchor = { x: 480, y: 280 }

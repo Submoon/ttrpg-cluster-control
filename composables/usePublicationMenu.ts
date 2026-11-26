@@ -60,7 +60,7 @@ function captureHierarchyOrigin(request: PublicationMenuRequest): OwnedMenu['hie
 
   if (request.target.kind === 'system') {
     const systemRow = request.opener.closest('[data-system-id]')
-    const systemList = systemRow?.closest('nav[aria-label="Star systems"]')
+    const systemList = systemRow?.closest('nav[aria-label="Zones"]')
     if (systemRow?.getAttribute('data-system-id') === request.target.id && systemList) {
       return { container: systemList, keyAttribute: 'data-system-id', key: request.target.id, inTree: false }
     }

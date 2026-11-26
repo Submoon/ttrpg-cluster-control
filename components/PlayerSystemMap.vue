@@ -1,8 +1,8 @@
 <template>
-  <section class="player-system-map" :class="{ 'player-system-map--workspace': props.workspacePresentation }" aria-label="Player-visible system map">
+  <section class="player-system-map" :class="{ 'player-system-map--workspace': props.workspacePresentation }" aria-label="Player-visible Zone map">
     <div class="player-system-map-content grid min-w-0 gap-3" :class="{ 'player-system-map-content--workspace': props.workspacePresentation }">
       <div class="grid min-w-0 content-start gap-2">
-        <div class="player-system-map-navigation" role="group" aria-label="Player system map navigation" data-player-map-obstruction>
+        <div class="player-system-map-navigation" role="group" aria-label="Player Zone map navigation" data-player-map-obstruction>
           <UButton
             color="neutral"
             variant="outline"
@@ -71,7 +71,7 @@
           class="player-system-map-scene"
           :class="{ 'player-system-map-scene--panning': panGesture?.dragging }"
           role="group"
-          :aria-label="`${props.label} player system map`"
+          :aria-label="`${props.label} player Zone map`"
           aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - 0"
           :viewBox="viewBox"
           preserveAspectRatio="xMidYMid meet"

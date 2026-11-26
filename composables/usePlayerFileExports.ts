@@ -1,7 +1,7 @@
 import { getCurrentScope, onScopeDispose, ref } from 'vue'
 import type { PlayerClusterDocument } from '../domain/player-projection'
 import { PlayerDocumentError, serializePlayerJson } from '../domain/player-codec'
-import type { CurrentPlayerMapScene } from '../domain/player-scene'
+import { playerClusterHasPublicFeatures, type CurrentPlayerMapScene } from '../domain/player-scene'
 import { rasterizeMapSvg, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
 import type { MapImageScope } from '../utils/map-image-scope'
 import { downloadBlob, exportFileName } from '../utils/browser-download'
@@ -42,7 +42,7 @@ export type PlayerLinkGenerationResult =
 const GENERIC_EXPORT_ERROR = 'The player export could not be completed.'
 const COPY_PLAYER_LINK_ERROR = 'Copy failed. The link remains available to select and copy manually, or retry.'
 const PLAYER_LINK_JSON_FALLBACK = 'Export player JSON to share this snapshot.'
-const SYSTEM_NOT_REVEALED_ERROR = 'The current system is not revealed for player image export.'
+const SYSTEM_NOT_REVEALED_ERROR = 'The current Zone is not revealed for player image export.'
 const EMPTY_IMAGE_ERROR = 'This player map has no public features to export as an image.'
 
 /**
@@ -86,7 +86,7 @@ export function usePlayerFileExports({ prepare, prepareImage, onPlayerLinkReady,
 
   function sceneHasPublicFeatures(scene: CurrentPlayerMapScene): boolean {
     return scene.kind === 'jump-cluster'
-      ? scene.document.systems.length > 0 || scene.document.routes.length > 0
+      ? playerClusterHasPublicFeatures(scene.document)
       : scene.document.objects.length > 0
   }
 
@@ -174,7 +174,7 @@ export function usePlayerFileExports({ prepare, prepareImage, onPlayerLinkReady,
       prepared = await capture()
       if (!prepared || !isCurrent(activeOperation, prepared)) return
       const { document, image } = prepared
-      if (document.systems.length === 0) {
+      if (!playerClusterHasPublicFeatures(document)) {
         publishFixedError(activeOperation, EMPTY_IMAGE_ERROR, prepared)
         return
       }

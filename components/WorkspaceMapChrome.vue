@@ -38,7 +38,7 @@
             color="primary"
             variant="solid"
             size="xs"
-            aria-label="Confirm system move"
+            aria-label="Confirm Zone move"
             @click="emit('confirm-system-move')"
           >
             Confirm move
@@ -49,7 +49,7 @@
             color="neutral"
             variant="outline"
             size="xs"
-            aria-label="Cancel system move"
+            aria-label="Cancel Zone move"
             @click="emit('cancel-system-move')"
           >
             Cancel
@@ -66,7 +66,7 @@
 
     <template #right>
       <span class="sr-only" data-testid="workspace-map-context-kind">
-        {{ activeView === 'cluster' ? 'Jump Cluster' : 'Star System' }}
+        {{ activeView === 'cluster' ? 'Jump Cluster' : 'Zone' }}
       </span>
       <slot name="history" />
       <MapTypeFilters
@@ -183,7 +183,7 @@
         class="workspace-map-import-input"
         type="file"
         accept="application/json,.json"
-        aria-label="Choose star system JSON"
+        aria-label="Choose Zone JSON"
         tabindex="-1"
         data-testid="map-system-import-input"
         @change="emit('import-file', $event)"
@@ -322,7 +322,7 @@ const creationProgress = computed(() => {
 })
 const mapFileScope = computed(() => activeView.value === 'cluster'
   ? `Jump Cluster ${workspace.value?.cluster.name ?? ''}`
-  : `Star System ${selectedSystem.value?.name ?? ''}`)
+  : `Zone ${selectedSystem.value?.name ?? ''}`)
 const activeMap = computed(() => activeView.value === 'cluster' ? props.clusterMap : props.systemMap)
 
 function whenSearchClosingFocusSettled(): Promise<void> {

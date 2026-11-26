@@ -608,7 +608,7 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
       return 'The Jump Cluster for this draft no longer exists.'
     }
     const system = plannedSystem(currentWorkspace, session.systemId)
-    if (!system) return 'The star system for this draft no longer exists.'
+    if (!system) return 'The Zone for this draft no longer exists.'
 
     if (session.kind === 'object') {
       const currentObject = system.objects.find(object => object.id === session.targetId)
@@ -1187,7 +1187,7 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
    * ordered save; a clean draft finishes after the same target and dependency guards without publishing.
    * A true result means this exact draft was applied or validated unchanged; durability is tracked separately.
    */
-  async function applyEntitySession(expectedId?: number): Promise<boolean> {
+  async function applyEntitySession(expectedId?: number, onApplied?: () => void): Promise<boolean> {
     const session = entitySession.value
     if (!session || (expectedId !== undefined && session.id !== expectedId)) return false
     const currentWorkspace = workspace.value
@@ -1197,7 +1197,7 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
     }
     const system = plannedSystem(currentWorkspace, session.systemId)
     if (!system) {
-      session.error = 'The star system for this draft no longer exists.'
+      session.error = 'The Zone for this draft no longer exists.'
       return false
     }
     const staleError = getEntitySessionStaleError(session)
@@ -1308,6 +1308,7 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
         action: { kind: 'update', label: actionLabel, target },
         prepare: () => nextWorkspace,
         isCurrent: isSubmittedMutationCurrent,
+        onApplied,
       })
       if (result.status === 'rejected') {
         if (isSubmittedDraftCurrent()) session.error = result.message

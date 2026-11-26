@@ -95,6 +95,11 @@ export function useClusterWorkflows({
           target: { kind: 'object', id: target.objectId, systemId: target.systemId },
           parent: { kind: 'system', id: target.systemId },
         }
+      case 'route-object':
+        return {
+          target: { kind: 'route-object', id: target.objectId, routeId: target.routeId },
+          parent: { kind: 'route', id: target.routeId },
+        }
       case 'orbit':
         return {
           target: { kind: 'orbit', id: target.orbitId, systemId: target.systemId },
@@ -214,6 +219,7 @@ export function useClusterWorkflows({
     const active = deletionReview.value
     if (!active || !active.open || active.suspended || active.confirming || active.error) return
     if (!await beforeWorkspaceOperation()) return
+    if (deletionReview.value !== active || active.confirming || saveState.value === 'saving') return
     const reviewId = active.id
     const target = active.target
     active.confirming = true
@@ -335,6 +341,11 @@ export function useClusterWorkflows({
   }
 
   async function deleteSelectedObject(): Promise<void> {
+    const target = store.inspectedTarget
+    if (continuousMap?.value && target?.kind === 'route-object') {
+      await openDeletionReview(target)
+      return
+    }
     const system = selectedSystem.value
     const object = selectedObject.value
     if (system && object) await openDeletionReview({ kind: 'object', systemId: system.id, objectId: object.id })
@@ -354,7 +365,7 @@ export function useClusterWorkflows({
   function deletionShortcutTarget(): MapDeletionTarget | null {
     if (continuousMap?.value) {
       const target = store.inspectedTarget
-      if (target?.kind === 'route' || target?.kind === 'orbit') return target
+      if (target?.kind === 'route' || target?.kind === 'orbit' || target?.kind === 'route-object') return target
       if (target?.kind === 'object' && store.selectedObjectIds.length === 1
         && store.selectedObjectIds[0] === target.objectId) return target
       return null

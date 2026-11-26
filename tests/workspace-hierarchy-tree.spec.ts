@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test as freshTest, type Locator } from './fixtures'
+import { buildMapHierarchy } from '../utils/map-hierarchy'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 import {
-  createSingleSystemWorkspace,
+  createSingleSystemWorkspaceWithPrimaryStar,
   type DownloadWindow,
   editMapObject,
   exposedContinuousObjectHitPoint,
@@ -23,17 +25,27 @@ import {
   workspaceZoomControls,
 } from './helpers'
 
+freshTest('a route branch preserves hierarchy levels from hosted Orbit through its occupant @pure', () => {
+  const { branch, root, orbit, occupant } = workspaceWithRouteObjects()
+  const rows = buildMapHierarchy(branch)
+  expect(rows).toMatchObject([
+    { kind: 'object', object: { id: root.id }, depth: 0 },
+    { kind: 'orbit', orbit: { id: orbit.id }, host: { id: root.id }, childCount: 1, depth: 1 },
+    { kind: 'object', object: { id: occupant.id }, depth: 2 },
+  ])
+})
+
 async function renderedObjectPosition(mark: Locator): Promise<{ x: number; y: number }> {
   return wardenObjectLocalPosition(mark)
 }
 
 async function downloadJsonFromFile(
   page: import('@playwright/test').Page,
-  buttonName: 'Export Jump Cluster JSON' | 'Export star system JSON',
+  buttonName: 'Export Jump Cluster JSON' | 'Export Zone JSON',
 ): Promise<ExportedMap> {
   const itemName = buttonName === 'Export Jump Cluster JSON'
     ? 'Download private Jump Cluster JSON'
-    : 'Download private Star System JSON'
+    : 'Download private Zone JSON'
   const downloads = await openMapFilesSection(page, 'Download or back up')
   try {
     const downloadPromise = page.waitForEvent('download')
@@ -48,7 +60,7 @@ async function downloadJsonFromFile(
 }
 
 freshTest('Select distinguishes a single object drag from a selection click', async ({ page }) => {
-  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspaceWithPrimaryStar(page, {
     viewport: { width: 1440, height: 900 },
   })
   const star = wardenObjectMark(page, systemId, primaryObjectId)
@@ -118,9 +130,10 @@ freshTest('a Warden edits an object and moves a group onto an Orbit in Select', 
   if (!sourceOwner || !sourceObject || !otherOwner || !otherOwnerObject || !fixture.cluster) {
     throw new Error('The continuous group fixture needs an exposed object in each owner.')
   }
+  // Leave room for Iria's hosted Orbit to follow the shared move without crossing the other Zone.
   fixture.layout.systemPositions = {
-    [sourceOwner.id]: { x: .44, y: .5 },
-    [otherOwner.id]: { x: .53, y: .5 },
+    [sourceOwner.id]: { x: .42, y: .5 },
+    [otherOwner.id]: { x: .56, y: .5 },
   }
   otherOwnerObject.placement = { kind: 'system', x: .63, y: .59 }
   const destinationOrbitId = 'group-arrival-destination-orbit'

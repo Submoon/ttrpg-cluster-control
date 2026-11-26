@@ -1,6 +1,8 @@
 /** Pure collective translation for selected system-map objects and their hosted branches. */
 import type { LocalWorkspace, ObjectPlacement, Orbit, OrbitRadii, Point, StarSystem } from '../domain/workspace-model'
 import { canPlaceObjectInOrbit } from '../domain/workspace'
+import type { SvgViewportRect } from './map-zoom'
+import { fitZoneObjectLanding } from './zone-object-branch'
 import { captureEffectiveObjectAngles, updateWorkspaceObject } from '../domain/workspace-placement'
 import {
   objectPositions,
@@ -595,7 +597,7 @@ export function applySelectedObjectTranslation(
 ): LocalWorkspace {
   if (plan.updates.length === 0) return workspace
   const system = workspace.cluster.systems.find(candidate => candidate.id === systemId)
-  if (!system) throw new Error('The star system for this map object no longer exists.')
+  if (!system) throw new Error('The Zone for this map object no longer exists.')
 
   const changedOrbitIds = new Set<string>()
   for (const change of plan.updates) {
@@ -645,4 +647,34 @@ export function applyContinuousSelectedObjectTranslation(
     nextWorkspace = applySelectedObjectTranslation(nextWorkspace, systemId, systemPlan)
   }
   return nextWorkspace
+}
+
+/** Creates the exact immutable workspace and painted frames for a rigid collective translation. */
+export function fitSelectedObjectTranslation(
+  workspace: LocalWorkspace,
+  plan: SelectedObjectTranslationPlan | ContinuousSelectedObjectTranslationPlan,
+  anchorSystemId: string,
+  anchorId: string,
+  pixelsPerSceneUnit?: number,
+): { workspace: LocalWorkspace; frames: ReadonlyMap<string, SvgViewportRect> } {
+  const systemPlans = 'systemPlans' in plan ? plan.systemPlans : new Map([[anchorSystemId, plan]])
+  const frames = new Map<string, SvgViewportRect>()
+  let candidate = 'systemPlans' in plan
+    ? applyContinuousSelectedObjectTranslation(workspace, plan)
+    : applySelectedObjectTranslation(workspace, anchorSystemId, plan)
+  let frameContext = workspace
+  for (const [systemId, systemPlan] of systemPlans) {
+    const firstChange = systemPlan.updates[0]
+    if (!firstChange) continue
+    const rootId = systemId === anchorSystemId ? anchorId : firstChange.objectId
+    const fitted = fitZoneObjectLanding(frameContext, candidate, systemId, rootId, {
+      movedObjectIds: systemPlan.movedObjectIds,
+      pixelsPerSceneUnit,
+    })
+    candidate = fitted.workspace
+    // Subsequent owners fit alongside the frames already accepted for the same translation.
+    frameContext = { ...workspace, layout: { ...workspace.layout, systemFrames: candidate.layout.systemFrames } }
+    if (fitted.frame) frames.set(systemId, fitted.frame)
+  }
+  return { workspace: candidate, frames }
 }

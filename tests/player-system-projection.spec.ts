@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures'
-import { createLocalWorkspace, updateChartDetails } from '../domain/workspace'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
+import { updateChartDetails } from '../domain/workspace'
 import type { LocalWorkspace, Orbit, StarSystem, SystemObject } from '../domain/workspace'
 import { projectPlayerCluster } from '../domain/player-projection'
 
@@ -35,7 +36,7 @@ function withSystem(workspace: LocalWorkspace, system: StarSystem): LocalWorkspa
 }
 
 test('object disclosure modes are allowlisted and remain saved when the system gate changes @pure', () => {
-  const workspace = createLocalWorkspace('PRIVATE CLUSTER NAME', 'Revealed System')
+  const workspace = createWorkspaceWithPrimaryStar('PRIVATE CLUSTER NAME', 'Revealed System')
   const primary = workspace.cluster.systems[0]!.objects[0]!
   const star: SystemObject = { ...primary, publication: 'hidden' }
   const station = object('SECRET-STATION-ID', 'hidden', { kind: 'system', x: 0.9, y: 0.8 }, {
@@ -125,7 +126,7 @@ test('object disclosure modes are allowlisted and remain saved when the system g
 })
 
 test('per-object marker colors project only for Known and Revealed objects @pure', () => {
-  const workspace = createLocalWorkspace('Private Cluster', 'Revealed System')
+  const workspace = createWorkspaceWithPrimaryStar('Private Cluster', 'Revealed System')
   const primary = workspace.cluster.systems[0]!.objects[0]!
   const hiddenHost = Object.assign({ ...primary, publication: 'hidden' as const }, {
     markerColor: '#AABBCC',
@@ -162,7 +163,7 @@ test('per-object marker colors project only for Known and Revealed objects @pure
 })
 
 test('published objects retain full-source default geometry and only their required host chain @pure', () => {
-  const workspace = createLocalWorkspace('Private Cluster', 'Revealed System')
+  const workspace = createWorkspaceWithPrimaryStar('Private Cluster', 'Revealed System')
   const primary = workspace.cluster.systems[0]!.objects[0]!
   const star: SystemObject = {
     ...primary,
@@ -243,7 +244,7 @@ test('published objects retain full-source default geometry and only their requi
 })
 
 test('nested hidden hosts retain rotated parent and default child Orbit geometry @pure', () => {
-  const workspace = createLocalWorkspace('Private Cluster', 'Revealed System')
+  const workspace = createWorkspaceWithPrimaryStar('Private Cluster', 'Revealed System')
   const primary = workspace.cluster.systems[0]!.objects[0]!
   const star: SystemObject = {
     ...primary,
@@ -326,7 +327,7 @@ test('nested hidden hosts retain rotated parent and default child Orbit geometry
 })
 
 test('an unoccupied Orbit center remains geometry without inventing a host @pure', () => {
-  const workspace = createLocalWorkspace('Private Cluster', 'Revealed System')
+  const workspace = createWorkspaceWithPrimaryStar('Private Cluster', 'Revealed System')
   const primary = workspace.cluster.systems[0]!.objects[0]!
   const star: SystemObject = { ...primary, publication: 'hidden' }
   const emptyCenterOrbit: Orbit = {
@@ -381,7 +382,7 @@ test('an unoccupied Orbit center remains geometry without inventing a host @pure
 })
 
 test('shared required hosts appear once and keep their saved disclosure @pure', () => {
-  const workspace = createLocalWorkspace('Private Cluster', 'Revealed System')
+  const workspace = createWorkspaceWithPrimaryStar('Private Cluster', 'Revealed System')
   const primary = workspace.cluster.systems[0]!.objects[0]!
   const star: SystemObject = { ...primary, id: 'SECRET-ROOT-ID', publication: 'hidden' }
   const outer: Orbit = { id: 'SECRET-OUTER-ID', hostId: star.id, order: 1 }

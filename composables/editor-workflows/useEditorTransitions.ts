@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, ref, type Ref } from 'vue'
-import type { EntityInspectorSession, TransitionDecision, TransitionGuard, TransitionOptions } from './types'
+import type { TransitionDecision, TransitionGuard, TransitionOptions } from './types'
 import type { ChartNamesSession } from './useChartNamesSession'
 import type { RouteInspectorSession } from './useRouteInspectorSession'
 
@@ -9,19 +9,19 @@ export function useEditorTransitions(options: {
     session: Ref<ChartNamesSession | null>
     editing: Ref<boolean>
     hasUncommittedNames: Readonly<Ref<boolean>>
-    apply(): Promise<boolean>
+    apply(onApplied?: () => void): Promise<boolean>
     discard(sessionId?: number): void
   }
   entity: {
-    session: Readonly<Ref<EntityInspectorSession | null>>
+    session: Readonly<Ref<{ id: number } | null>>
     hasModified: Readonly<Ref<boolean>>
-    apply(sessionId?: number): Promise<boolean>
+    apply(sessionId?: number, onApplied?: () => void): Promise<boolean>
     discard(sessionId?: number): void
   }
   route: {
     session: Readonly<Ref<RouteInspectorSession | null>>
     hasModified: Readonly<Ref<boolean>>
-    apply(sessionId: number): Promise<boolean>
+    apply(sessionId: number, onApplied?: () => void): Promise<boolean>
     discard(sessionId?: number): void
   }
   clearEditorError(): void
@@ -151,6 +151,9 @@ export function useEditorTransitions(options: {
       return
     }
     pending.choiceInFlight = true
+    const onApplied = () => {
+      if (pendingTransition === pending) pending.onDraftApplied?.()
+    }
     try {
       if (decision === 'stay') {
         if (guard === 'chart' && chart.session.value?.id === pending.chartSessionId) chart.editing.value = true
@@ -169,13 +172,12 @@ export function useEditorTransitions(options: {
           return
         }
         if (decision === 'apply') {
-          if (!await chart.apply()) {
+          if (!await chart.apply(onApplied)) {
             if (pendingTransition !== pending) return
             finishPendingTransition(false)
             return
           }
           if (pendingTransition !== pending) return
-          pending.onDraftApplied?.()
           if (chart.session.value) {
             finishPendingTransition(false)
             return
@@ -197,13 +199,12 @@ export function useEditorTransitions(options: {
       }
       if (pending.leaveRouteSession && routeDraft && route.hasModified.value) {
         if (decision === 'apply') {
-          if (!await route.apply(routeDraft.id)) {
+          if (!await route.apply(routeDraft.id, onApplied)) {
             if (pendingTransition !== pending) return
             finishPendingTransition(false)
             return
           }
           if (pendingTransition !== pending) return
-          pending.onDraftApplied?.()
           if (!pending.isCurrent()) {
             finishPendingTransition(false)
             return
@@ -233,13 +234,12 @@ export function useEditorTransitions(options: {
       }
       if (pending.leaveEntitySession && entityDraft && entity.hasModified.value) {
         if (decision === 'apply') {
-          if (!await entity.apply(entityDraft.id)) {
+          if (!await entity.apply(entityDraft.id, onApplied)) {
             if (pendingTransition !== pending) return
             finishPendingTransition(false)
             return
           }
           if (pendingTransition !== pending) return
-          pending.onDraftApplied?.()
           if (entity.session.value) {
             finishPendingTransition(false)
             return

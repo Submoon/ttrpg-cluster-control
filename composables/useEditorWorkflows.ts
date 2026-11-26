@@ -1,4 +1,4 @@
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import type { EditorWorkflowOptions, EntityCommand, ObjectInspectorFocusRequest } from './editor-workflows/types'
 import { useEditorUiStore } from '../stores/editor-ui'
 import { useClusterSystemPlacement } from './editor-workflows/useClusterSystemPlacement'
@@ -14,6 +14,8 @@ import { useEntityInspectorSession } from './editor-workflows/useEntityInspector
 import { useFieldDefinitionWorkflows } from './editor-workflows/useFieldDefinitionWorkflows'
 import { useMapInteractionCoordinator } from './editor-workflows/useMapInteractionCoordinator'
 import { useMapWorkflows } from './editor-workflows/useMapWorkflows'
+import { useRouteObjectPlacement, type RouteObjectPlacementRequest } from './editor-workflows/useRouteObjectPlacement'
+import { useRouteObjectInspectorSession } from './editor-workflows/useRouteObjectInspectorSession'
 import { useRouteInspectorSession } from './editor-workflows/useRouteInspectorSession'
 import { useSystemCreationWorkflows } from './editor-workflows/useSystemCreationWorkflows'
 import { useSystemObjectPlacement } from './editor-workflows/useSystemObjectPlacement'
@@ -28,7 +30,7 @@ import type { SearchResult } from '../utils/workspace-search'
 import { useWardenFilterCriteria } from './useWardenFilterCriteria'
 import { useSystemObjectTransferWorkflow } from './editor-workflows/useSystemObjectTransferWorkflow'
 import { resolveSystemObjectHistoryTarget } from '../domain/workspace'
-import type { SystemObjectTransferReview } from '../domain/workspace'
+import type { CatalogueObjectTransferReview, SystemObjectTransferReview } from '../domain/workspace'
 import type { SystemObjectTransferIntent } from './editor-workflows/system-object-transfer-types'
 
 type EditorWorkflowsOptions = EditorWorkflowOptions & {
@@ -66,6 +68,15 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   onBeforeUnmount(() => store.reset(null))
 
   const entity = useEntityInspectorSession({ workspace, mutations })
+  const routeObject = useRouteObjectInspectorSession({
+    workspace,
+    mutations,
+    isSelected: (routeId, objectId) => store.activeView === 'cluster'
+      && store.inspectedTarget?.kind === 'route-object'
+      && store.inspectedTarget.routeId === routeId && store.inspectedTarget.objectId === objectId,
+  })
+  const hasModifiedInspector = computed(() => entity.hasModifiedEntitySession.value || routeObject.hasModified.value)
+  const activeInspectorSession = computed(() => routeObject.session.value ?? entity.entitySession.value)
   const collectiveMoveError = ref('')
   const route = useRouteInspectorSession({ workspace, mutations })
   const selectedSystemForChart = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
@@ -126,31 +137,40 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     return entity.isEntityCommandBlocked(command) || (placementGuard.value?.(command) ?? false)
   }
 
-  async function applyEntitySession(sessionId?: number): Promise<boolean> {
+  async function applyEntitySession(sessionId?: number, onApplied?: () => void): Promise<boolean> {
+    const routeDraft = routeObject.session.value
+    if (routeDraft && (sessionId === undefined || sessionId === routeDraft.id)) {
+      return await beforeWorkspaceOperation() && await routeObject.apply(routeDraft.id, onApplied)
+    }
     const submittedSession = entity.entitySession.value
     const expectedId = sessionId ?? submittedSession?.id
     if (!submittedSession || expectedId !== submittedSession.id) return false
     const startingError = editorError.value
     if (!await beforeWorkspaceOperation()) return false
     if (entity.entitySession.value?.id !== expectedId) return false
-    const applied = await entity.applyEntitySession(expectedId)
+    const applied = await entity.applyEntitySession(expectedId, onApplied)
     if (applied && editorError.value === startingError) editorError.value = ''
     return applied
   }
 
   function discardEntitySession(sessionId?: number): void {
+    const routeDraft = routeObject.session.value
+    if (routeDraft && (sessionId === undefined || sessionId === routeDraft.id)) {
+      routeObject.discard(routeDraft.id)
+      return
+    }
     const active = entity.entitySession.value
     if (!active || (sessionId !== undefined && active.id !== sessionId)) return
     entity.discardEntitySession(active.id)
     if (entity.entitySession.value === null) editorError.value = ''
   }
 
-  async function applyRouteSession(sessionId: number): Promise<boolean> {
+  async function applyRouteSession(sessionId: number, onApplied?: () => void): Promise<boolean> {
     if (route.routeSession.value?.id !== sessionId) return false
     const startingError = editorError.value
     if (!await beforeWorkspaceOperation()) return false
     if (route.routeSession.value?.id !== sessionId) return false
-    const applied = await route.applyRouteSession(sessionId)
+    const applied = await route.applyRouteSession(sessionId, onApplied)
     if (applied && editorError.value === startingError) editorError.value = ''
     return applied
   }
@@ -165,8 +185,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const transitions = useEditorTransitions({
     chart: charts,
     entity: {
-      session: entity.entitySession,
-      hasModified: entity.hasModifiedEntitySession,
+      session: activeInspectorSession,
+      hasModified: hasModifiedInspector,
       apply: applyEntitySession,
       discard: discardEntitySession,
     },
@@ -255,6 +275,60 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       affectedObjectIds: review.branch.objectIds,
       affectedRouteIds: review.detachedRouteAttachments.map(attachment => attachment.routeId),
     })
+  }
+
+  const routeTransferReview = shallowRef<CatalogueObjectTransferReview | null>(null)
+  let settleRouteTransferReview: ((accepted: boolean) => void) | undefined
+
+  function resolveRouteTransferReview(accepted: boolean): void {
+    const settle = settleRouteTransferReview
+    settleRouteTransferReview = undefined
+    routeTransferReview.value = null
+    settle?.(accepted)
+  }
+
+  onBeforeUnmount(() => resolveRouteTransferReview(false))
+  watch(workspaceContextId, () => resolveRouteTransferReview(false), { flush: 'sync' })
+
+  const applyRouteLanding = useRouteObjectPlacement({
+    workspace, mutations, getRevision: () => appliedRevision.value,
+    beforeWorkspaceOperation, editorError,
+    resolveBeforeTransfer: (proposal, ownsTransfer, onDraftApplied) => {
+      const affectedRouteIds = proposal.detachedRouteAttachments.map(attachment => attachment.routeId)
+      const source = proposal.request.source
+      const routeDraftBlocks = source.kind === 'system' && route.isRouteCommandBlocked({
+        kind: 'deletion',
+        target: { kind: 'object', systemId: source.systemId, objectId: proposal.request.rootObjectId },
+        affectedObjectIds: proposal.branch.objectIds,
+        affectedRouteIds,
+      })
+      const routeObjectSessionMoves = routeObject.session.value
+        && proposal.branch.objectIds.includes(routeObject.session.value.targetId)
+      return transitions.resolveTransition({
+        leaveChart: false,
+        leaveEntitySession: entity.wouldInvalidateEntitySession(proposal.previewWorkspace) || Boolean(routeObjectSessionMoves),
+        leaveRouteSession: routeDraftBlocks,
+        onDraftApplied,
+      }, ownsTransfer)
+    },
+    reviewTransfer: proposal => {
+      if (routeTransferReview.value) return Promise.resolve(false)
+      routeTransferReview.value = proposal
+      return new Promise(resolve => { settleRouteTransferReview = resolve })
+    },
+    onTransferred: ({ request }) => {
+      const { landing, rootObjectId } = request
+      if (landing.kind === 'route') void navigation.inspectRouteObject(landing.routeId, rootObjectId)
+      else void navigation.inspectContinuousTarget({ kind: 'object', systemId: landing.systemId, objectId: rootObjectId })
+    },
+  })
+
+  function placeRouteObject(request: RouteObjectPlacementRequest, ownsRequest: () => boolean): Promise<boolean> {
+    const navigationStamp = store.inspectedTarget
+    const mode = store.mapMode
+    return applyRouteLanding(request, () => store.activeView === 'cluster' && options.continuousMap?.value === true
+      && ownsRequest() && (request.kind !== 'move' || routeObject.session.value?.targetId !== request.objectId)
+      && (request.kind !== 'transfer' || (store.inspectedTarget === navigationStamp && store.mapMode === mode)))
   }
 
   const systemTransfer = useSystemObjectTransferWorkflow({
@@ -450,7 +524,11 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     routeSession: route.routeSession,
     armRouteAdd: clusterSystemPlacement.armRouteAdd,
     resolveTransition: transitions.resolveTransition,
-    isEntityDraftCommandBlocked: entity.isEntityCommandBlocked,
+    isEntityDraftCommandBlocked: command => {
+      const active = routeObject.session.value
+      return entity.isEntityCommandBlocked(command)
+        || (command.kind === 'deletion' && !!active && !!command.affectedObjectIds?.includes(active.targetId))
+    },
     isRouteCommandBlocked: route.isRouteCommandBlocked,
     isChartDraftTarget: navigation.isChartDraftTarget,
     editorError,
@@ -473,7 +551,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     if (systemTransfer.session.value) return systemTransfer.session.value.placingOnMap
       ? 'Finish or cancel the transfer map placement first.'
       : 'Apply or cancel the open transfer review first.'
-    if (entity.hasModifiedEntitySession.value) return 'Apply or discard the modified Inspector draft first.'
+    if (routeTransferReview.value) return 'Apply or cancel the open transfer review first.'
+    if (hasModifiedInspector.value) return 'Apply or discard the modified Inspector draft first.'
     if (route.hasModifiedRouteSession.value) return 'Apply or discard the modified Jump Route draft first.'
     if (charts.hasChangedNames.value) return 'Apply or discard the modified Jump Cluster details draft first.'
     if (fields.hasModifiedFieldDefinitionsSession.value) return 'Apply or discard the modified Fields draft first.'
@@ -508,6 +587,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   function endCleanHistorySessions(): void {
     charts.endCleanHistorySession()
     entity.endCleanHistorySession()
+    if (!routeObject.hasModified.value) routeObject.discard()
     route.endCleanHistorySession()
     fields.endCleanHistorySession()
   }
@@ -515,11 +595,13 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   /** Ends editor-owned drafts, reviews and targeting only after a complete replacement is durable. */
   function resetForWorkspaceReplacement(): void {
     systemTransfer.dispose()
+    resolveRouteTransferReview(false)
     transitions.cancelPendingTransition()
     const chartSession = charts.session.value
     if (chartSession) charts.discard(chartSession.id)
     const entitySession = entity.entitySession.value
     if (entitySession) entity.discardEntitySession(entitySession.id)
+    routeObject.discard()
     const routeSession = route.routeSession.value
     if (routeSession) route.discardRouteSession(routeSession.id)
     fields.resetForWorkspaceReplacement()
@@ -580,11 +662,18 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       objectInspectorFocusRequest,
       acknowledgeObjectInspectorFocusRequest,
       entitySession: entity.entitySession,
-      hasModifiedEntitySession: entity.hasModifiedEntitySession,
+      routeObjectSession: routeObject.session,
+      hasModifiedEntitySession: hasModifiedInspector,
       orbitPlacementPreview: entity.orbitPlacementPreview,
       isEntityCommandBlocked,
       resumeEntitySession: navigation.resumeEntitySession,
-      beginObjectEdit: map.beginObjectEdit,
+      beginObjectEdit: async () => {
+        const target = store.inspectedTarget
+        if (target?.kind !== 'route-object') return map.beginObjectEdit()
+        if (await beforeWorkspaceOperation() && store.inspectedTarget === target) {
+          routeObject.begin(target.routeId, target.objectId)
+        }
+      },
       beginOrbitEdit: map.beginOrbitEdit,
       updateObjectPlacement: entity.updateObjectPlacement,
       updateOrbitHost: entity.updateOrbitHost,
@@ -598,6 +687,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       chooseRouteSystem: route.chooseRouteSystem,
       chooseRoutePoint: route.chooseRoutePoint,
       updateRouteInput: route.updateRouteInput,
+      reverseRouteEndpoints: route.reverseRouteEndpoints,
       applyRouteSession,
       discardRouteSession,
       cancelRouteCreation: route.cancelRouteCreation,
@@ -656,6 +746,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
         moveMapObjectInSystem: map.moveMapObjectInSystem,
         resizeSystemFrame: map.resizeSystemFrame,
         addMapObjectInSystem: map.addMapObjectInSystem,
+        placeRouteObject,
         placeMapObjectInOrbit: map.placeMapObjectInOrbit,
         rotateMapObject: map.rotateMapObject,
         resizeMapOrbit: map.resizeMapOrbit,
@@ -743,6 +834,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       setMapMode: navigation.setMapMode,
     },
     transfer: {
+      routeReview: routeTransferReview,
+      resolveRouteReview: resolveRouteTransferReview,
       mapPreview: systemTransfer.mapPreview,
       pendingMapPlacement: systemTransfer.pendingMapPlacement,
       ownsMapPlacement: systemTransfer.ownsMapPlacement,
@@ -782,6 +875,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       selectSystem: navigation.selectSystem,
       selectClusterSystem: navigation.selectClusterSystem,
       inspectContinuousTarget: navigation.inspectContinuousTarget,
+      inspectRouteObject: navigation.inspectRouteObject,
       selectObject: navigation.selectObject,
       replaceObjectSelection: navigation.replaceObjectSelection,
       toggleObjectSelection: navigation.toggleObjectSelection,

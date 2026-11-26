@@ -1,15 +1,17 @@
 import type { Locator } from '@playwright/test'
 import {
   addStarSystem,
-  createLocalWorkspace,
   createOrbit,
   createSystemObject,
   exportJumpCluster,
 } from '../domain/workspace'
+import { fromNormalizedMapPoint } from '../domain/workspace-map-coordinates'
 import { expect, test } from './fixtures'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import {
   addClusterSystem,
   captureMapExportBlobs,
+  centerWorkspaceSelection,
   createSingleSystemWorkspace,
   downloadJson,
   exposedContinuousObjectHitPoint,
@@ -17,6 +19,7 @@ import {
   hideWorkspaceInspector,
   resolveJumpClusterRestoreReview,
   reviewJumpClusterBackup,
+  selectInspectorOption,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
@@ -54,7 +57,7 @@ test('create, name, move, resize, and reload a Warden system', async ({ page }) 
   const menu = page.getByRole('menu', { name: 'Map item actions', exact: true })
   await menu.getByRole('menuitem', { name: 'Edit', exact: true }).click()
   const inspector = page.locator('#workspace-inspector-panel')
-  const systemName = inspector.getByLabel('Star system', { exact: true })
+  const systemName = inspector.getByLabel('Zone', { exact: true })
   await expect(systemName).toBeEditable()
   await systemName.fill('Helion')
   await inspector.getByRole('button', { name: 'Apply details', exact: true }).click()
@@ -114,25 +117,43 @@ test('create, name, move, resize, and reload a Warden system', async ({ page }) 
 })
 
 function createTransferWorkspace() {
-  const initial = createLocalWorkspace('Halo Transfer', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Halo Transfer', 'Vesper')
   const source = initial.cluster.systems[0]!
-  const root = { ...createSystemObject(source, 'planet'), name: 'Herma' }
+  const root = {
+    ...createSystemObject(source, 'planet'),
+    name: 'Herma',
+    placement: { kind: 'system' as const, x: .64, y: .48 },
+  }
   const sourceWithRoot = { ...source, objects: [...source.objects, root] }
   const orbit = createOrbit(sourceWithRoot, root.id)
   const sourceWithOrbit = { ...sourceWithRoot, orbits: [...sourceWithRoot.orbits, orbit] }
-  const child = { ...createSystemObject(sourceWithOrbit, 'moon', orbit.id), name: 'Nix' }
-  const sourceWithBranch = { ...sourceWithOrbit, objects: [...sourceWithOrbit.objects, child] }
+  const child = { ...createSystemObject(sourceWithOrbit, 'jump-point', orbit.id), name: 'Nix' }
+  const sourceWithBranch = { ...sourceWithOrbit, objects: sourceWithOrbit.objects.map(object => object.id === root.id
+    ? { ...object, legacyLocationKey: { objectId: root.id, key: root.locationKey } }
+    : object).concat(child) }
   const added = addStarSystem(initial, 'Helion')
   const destination = added.system
   const conflict = { ...createSystemObject(destination, 'planet'), name: 'Existing Planet' }
-  const destinationWithConflict = { ...destination, objects: [...destination.objects, conflict] }
+  const destinationWithConflict = { ...destination, objects: [...destination.objects, { ...conflict, legacyLocationKey: { objectId: conflict.id, key: conflict.locationKey } }] }
   const systems = added.workspace.cluster.systems.map(system => system.id === source.id
     ? sourceWithBranch
     : system.id === destination.id ? destinationWithConflict : system)
   return {
     workspace: {
       ...added.workspace,
-      cluster: { ...added.workspace.cluster, systems },
+      cluster: {
+        ...added.workspace.cluster,
+        systems,
+        routes: [{
+          id: 'halo-transfer-route',
+          jumpLevel: 1,
+          fromSystemId: source.id,
+          fromPointId: child.id,
+          toSystemId: destination.id,
+          toPointId: null,
+          playerShared: false,
+        }],
+      },
       layout: {
         ...added.workspace.layout,
         systemPositions: {
@@ -151,8 +172,8 @@ function createTransferWorkspace() {
   }
 }
 
-test('transferring a hosted branch reviews and resolves a destination Location key conflict', async ({ page }) => {
-  test.setTimeout(60_000)
+test('transferring a hosted branch reviews its route attachment and retains its Location keys', async ({ page }) => {
+  test.setTimeout(120_000)
   await captureMapExportBlobs(page)
   await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 900 } })
   const fixture = createTransferWorkspace()
@@ -169,6 +190,32 @@ test('transferring a hosted branch reviews and resolves a destination Location k
   const sourceMark = wardenObjectMark(page, fixture.source.id, fixture.root.id)
   await setWorkspaceMapMode(page, 'Move')
   const zoomIn = page.getByRole('button', { name: 'Zoom in', exact: true })
+  const branchGhost = map.locator('.continuous-warden-branch-landing')
+  for (let step = 0; step < 5 && !await sourceMark.isVisible(); step += 1) await zoomIn.click()
+  await expect.poll(() => exposedContinuousObjectHitPoint(sourceMark)).not.toBeNull()
+  const beforeZoom = (await exposedContinuousObjectHitPoint(sourceMark))!
+  await page.mouse.move(beforeZoom.x, beforeZoom.y)
+  await page.mouse.wheel(0, -3000)
+  await expect(zoomIn).toBeDisabled()
+  await expect.poll(() => exposedContinuousObjectHitPoint(sourceMark)).not.toBeNull()
+  const zoomedHit = (await exposedContinuousObjectHitPoint(sourceMark))!
+  const markWidth = async (mark: Locator) => {
+    const box = await mark.boundingBox()
+    if (!box) throw new Error('Expected a rendered object mark.')
+    return box.width
+  }
+  const committedWidth = await markWidth(sourceMark.locator('.continuous-warden-object-marker-outline'))
+  await page.mouse.move(zoomedHit.x, zoomedHit.y)
+  await page.mouse.down()
+  await page.mouse.move(zoomedHit.x + 16, zoomedHit.y + 12, { steps: 4 })
+  const ghostWidth = await markWidth(branchGhost.locator('.is-root .continuous-warden-transfer-object-mark'))
+  await page.keyboard.press('Escape')
+  await page.mouse.up()
+  expect(ghostWidth).toBeLessThanOrEqual(committedWidth + 1)
+  expect(ghostWidth).toBeGreaterThan(committedWidth * 0.85)
+  await fitWorkspaceMap(page)
+  await expect(sourceMark).toBeHidden()
+
   for (let step = 0; step < 5 && !await sourceMark.isVisible(); step += 1) await zoomIn.click()
   await expect.poll(() => exposedContinuousObjectHitPoint(sourceMark)).not.toBeNull()
   const destinationFrame = map.locator(`.continuous-warden-system[data-system-id="${fixture.destination.id}"] .continuous-warden-system-envelope`)
@@ -189,17 +236,24 @@ test('transferring a hosted branch reviews and resolves a destination Location k
     bounds.y + bounds.height / 2 + hit.y - origin.y,
     { steps: 14 },
   )
+  await expect(branchGhost).toContainText('Herma')
+  await expect(branchGhost).toContainText('Nix')
+  await expect(branchGhost.locator('ellipse')).toHaveCount(1)
+  const landingRoot = await branchGhost.locator('.continuous-warden-transfer-object.is-root').evaluate(mark => {
+    if (!(mark instanceof SVGGraphicsElement)) throw new Error('Expected an SVG landing mark.')
+    const transform = mark.transform.baseVal.consolidate()?.matrix
+    if (!transform) throw new Error('Expected the landing position in destination-local coordinates.')
+    return { x: transform.e, y: transform.f }
+  })
   await page.mouse.up()
 
-  const review = page.getByRole('dialog', { name: 'Change system', exact: true })
+  const review = page.getByRole('dialog', { name: 'Change Zone', exact: true })
   await expect(review).toBeVisible()
-  await expect(review.getByLabel('Destination star system')).toHaveValue(fixture.destination.id)
+  await expect(review.getByLabel('Destination Zone')).toHaveValue(fixture.destination.id)
   await expect(review).toContainText('2 objects and 1 hosted Orbits will move together.')
   await expect(review).toContainText('Herma')
   await expect(review).toContainText('Nix')
-  const replacementKey = review.getByLabel('Replacement Location key for Herma', { exact: true })
-  await expect(replacementKey).not.toHaveValue(fixture.root.locationKey)
-  const appliedRootKey = await replacementKey.inputValue()
+  await expect(review.getByRole('heading', { name: 'Jump Route attachments that will clear' })).toBeVisible()
   await review.getByRole('button', { name: 'Apply transfer', exact: true }).click()
   await expect(review).toBeHidden()
   await waitForWorkspaceSaved(page)
@@ -213,10 +267,115 @@ test('transferring a hosted branch reviews and resolves a destination Location k
   expect(sourceAfter.orbits).toEqual([])
   const movedRoot = destinationAfter.objects.find(object => object.id === fixture.root.id)
   const movedChild = destinationAfter.objects.find(object => object.id === fixture.child.id)
-  expect(movedRoot?.locationKey).toBe(appliedRootKey)
-  expect(movedRoot?.locationKey).not.toBe(fixture.root.locationKey)
+  if (movedRoot?.placement.kind !== 'system') throw new Error('Expected a free position in the destination Zone.')
+  const appliedRootPosition = fromNormalizedMapPoint(movedRoot.placement)
+  expect(appliedRootPosition.x).toBeCloseTo(landingRoot.x, 2)
+  expect(appliedRootPosition.y).toBeCloseTo(landingRoot.y, 2)
+  expect(movedRoot?.locationKey).toBe(fixture.root.locationKey)
   expect(movedChild?.placement).toEqual({ kind: 'orbit', orbitId: fixture.orbit.id })
   expect(destinationAfter.orbits).toContainEqual({ ...fixture.orbit, hostId: fixture.root.id })
   expect(destinationAfter.objects.find(object => object.id === fixture.conflict.id)?.locationKey)
     .toBe(fixture.conflict.locationKey)
+
+  await setWorkspaceMapMode(page, 'Move')
+  const zoneRoot = wardenObjectMark(page, fixture.destination.id, fixture.root.id)
+  for (let step = 0; step < 5 && !await zoneRoot.isVisible(); step += 1) await zoomIn.click()
+  await expect.poll(() => exposedContinuousObjectHitPoint(zoneRoot)).not.toBeNull()
+  const rootHit = (await exposedContinuousObjectHitPoint(zoneRoot))!
+  const routeHit = await map.locator('.cluster-route[data-route-id="halo-transfer-route"] .cluster-route-hit-target')
+    .evaluate(path => {
+      if (!(path instanceof SVGPathElement)) throw new Error('Expected a route stroke.')
+      const matrix = path.getScreenCTM()!
+      const length = path.getTotalLength()
+      for (const fraction of [0.5, 0.4, 0.6, 0.3, 0.7]) {
+        const distance = fraction * length
+        const point: DOMPoint = path.getPointAtLength(distance).matrixTransform(matrix)
+        if (!document.elementsFromPoint(point.x, point.y).includes(path)) continue
+        const next: DOMPoint = path.getPointAtLength(distance + 1).matrixTransform(matrix)
+        const tangent = { x: next.x - point.x, y: next.y - point.y }
+        const magnitude = Math.hypot(tangent.x, tangent.y)
+        for (const offset of [12, -12]) {
+          const x = point.x - offset * tangent.y / magnitude
+          const y = point.y + offset * tangent.x / magnitude
+          const hits = document.elementsFromPoint(x, y)
+          if (hits.includes(path.ownerSVGElement!) && !hits.includes(path)
+            && !hits.some(hit => hit.closest('.cluster-route, .continuous-warden-system'))) return { x, y }
+        }
+      }
+      return null
+    })
+  if (!routeHit) throw new Error('Expected an exposed route landing target.')
+  await page.mouse.move(rootHit.x, rootHit.y)
+  await page.mouse.down()
+  await page.mouse.move(routeHit.x, routeHit.y, { steps: 12 })
+  const routeGhost = map.locator('.warden-route-object-landing-preview')
+  await expect(routeGhost.locator('.warden-route-object')).toHaveCount(2)
+  await expect(routeGhost.locator('ellipse')).toHaveCount(1)
+  const markCenter = (locator: Locator) => locator.evaluate(mark => {
+    if (!(mark instanceof SVGGraphicsElement)) throw new Error('Expected a route object mark.')
+    const { x, y } = new DOMPoint().matrixTransform(mark.getScreenCTM()!)
+    return { x, y }
+  })
+  const routeLanding = await markCenter(routeGhost.locator('.warden-route-object').filter({ hasText: 'Herma' }))
+  await test.info().attach('zone-to-route-branch-landing', { body: await map.screenshot(), contentType: 'image/png' })
+  await page.mouse.up()
+  const routeRoot = map.locator(`.warden-route-object[data-route-object-id="${fixture.root.id}"]`)
+  await expect(routeRoot).toBeVisible()
+  await expect.poll(async () => {
+    const accepted = await markCenter(routeRoot)
+    return Math.hypot(accepted.x - routeLanding.x, accepted.y - routeLanding.y)
+  }).toBeLessThan(1)
+  await fitWorkspaceMap(page)
+  await expect(routeRoot.locator('.warden-route-object-key')).toBeHidden()
+  await expect(routeRoot.locator('.warden-route-object-name')).toBeHidden()
+  await expect(routeRoot.locator('.gm-publication-badge')).toBeHidden()
+  await routeRoot.press('Enter')
+  await page.setViewportSize({ width: 390, height: 700 })
+  await hideWorkspaceInspector(page)
+  const navigation = page.getByRole('button', { name: 'Open map navigation controls' })
+  await navigation.click()
+  await page.getByRole('slider', { name: 'Map zoom level' }).press('End')
+  await expect(zoomIn).toBeDisabled()
+  await navigation.click()
+  await centerWorkspaceSelection(page)
+  await expect(routeRoot.locator('.warden-route-object-key')).toHaveText(fixture.root.locationKey)
+  await expect(routeRoot.locator('.warden-route-object-name')).toHaveText('Herma')
+  await expect(routeRoot.locator('.gm-publication-badge')).toBeVisible()
+  const routeChild = map.locator(`[data-route-object-id="${fixture.child.id}"]`)
+  await routeChild.press('Enter')
+  await hideWorkspaceInspector(page)
+  await centerWorkspaceSelection(page)
+  await expect(routeChild.locator('.warden-route-object-name')).toHaveText('Nix')
+  await expect(map.locator('.warden-route-object-orbit')).toHaveCount(1)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await waitForWorkspaceSaved(page)
+  await routeRoot.press('Enter')
+  const routeObjectInspector = page.getByRole('complementary', { name: 'Object inspector' })
+  const detachTrigger = routeObjectInspector.getByRole('button', { name: 'Detach…' })
+  await routeObjectInspector.getByRole('button', { name: 'Edit map object' }).click()
+  await routeObjectInspector.getByLabel('Name', { exact: true }).fill('Unapplied route object name')
+  await detachTrigger.press('Enter')
+  const detach = page.getByRole('dialog', { name: 'Detach from Jump Route' })
+  await expect(detach.getByRole('button', { name: 'Detach to Zone' })).toBeDisabled()
+  await selectInspectorOption(detach.getByLabel('Destination Zone'), 'Helion')
+  await detach.getByLabel('Local X').fill('0.53')
+  await detach.getByLabel('Local Y').fill('')
+  await expect(detach.getByRole('button', { name: 'Detach to Zone' })).toBeDisabled()
+  await detach.getByLabel('Local Y').fill('0.48')
+  await detach.getByRole('button', { name: 'Detach to Zone' }).click()
+  const guard = page.getByRole('dialog', { name: 'Edit Jump Cluster details' })
+  await guard.getByRole('button', { name: 'Stay here' }).click()
+  await expect(detach.locator(':focus')).toHaveCount(1)
+  await expect(detach.getByLabel('Local X')).toHaveValue('0.53')
+  await expect(detach.getByLabel('Local Y')).toHaveValue('0.48')
+  await detach.getByRole('button', { name: 'Detach to Zone' }).click()
+  await guard.getByRole('button', { name: 'Discard edits and continue' }).click()
+  await expect(detach).toBeHidden()
+  await waitForWorkspaceSaved(page)
+  await expect(routeRoot).toHaveCount(0)
+  const detached = await downloadJson(page, 'Export Jump Cluster JSON')
+  const landed = detached.cluster?.systems.find(system => system.id === fixture.destination.id)
+  expect(landed?.orbits).toContainEqual({ ...fixture.orbit, hostId: fixture.root.id })
+  expect(landed?.objects.find(object => object.id === fixture.root.id)?.placement)
+    .toEqual({ kind: 'system', x: 0.53, y: 0.48 })
 })

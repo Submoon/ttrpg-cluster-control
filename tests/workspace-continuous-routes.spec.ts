@@ -6,6 +6,8 @@ import {
   clusterCircleScenePosition,
   clickDockAction,
   hideWorkspaceInspector,
+  quitSystemAdd,
+  selectCatalogueObjectButton,
   selectInspectorOption,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
@@ -79,7 +81,8 @@ async function usesIndependentlyRevealedEnds(mark: Locator): Promise<boolean> {
 }
 
 test('continuous routes support clipped selection, guarded inspection and authored exits', async ({ page }) => {
-  test.setTimeout(60_000)
+  // Cold fixture import can use 40 seconds before route editing starts.
+  test.setTimeout(90_000)
   const fixture = structuredClone(campaignFixture)
   const original = fixture.cluster.routes[0]!
   const departure = fixture.cluster.systems[0]!.objects.find(object => object.id === original.fromPointId)!
@@ -140,8 +143,17 @@ test('continuous routes support clipped selection, guarded inspection and author
   await inspector.getByRole('button', { name: 'Discard changes', exact: true }).click()
   await expect(first).toHaveAccessibleName(/Select Jump Level 1 route/)
 
+  await inspector.getByRole('button', { name: 'Edit Jump Route' }).click()
+  await inspector.getByRole('button', { name: 'Reverse endpoints', exact: true }).click()
+  await inspector.getByRole('button', { name: 'Apply Jump Route', exact: true }).click()
+  await waitForWorkspaceSaved(page)
+  await expect(first).toHaveAccessibleName(/from Arrival \(Harrow\) to Vesper Departure \(Vesper Prime\)/)
+  await page.getByRole('button', { name: /^Undo(?:\b|:)/ }).click()
+  await waitForWorkspaceSaved(page)
+  await expect(first).toHaveAccessibleName(/from Vesper Departure \(Vesper Prime\) to Arrival \(Harrow\)/)
+
   await clickDockAction(page, 'Add Jump Route')
-  await selectInspectorOption(inspector.getByLabel('From system'), 'Vesper Prime')
+  await selectInspectorOption(inspector.getByLabel('From Zone'), 'Vesper Prime')
   await selectInspectorOption(inspector.getByLabel('Route destination'), 'Unresolved external exit')
   await inspector.getByLabel('Unknown destination label').fill('Far survey')
   await inspector.getByRole('button', { name: 'Create Jump Route' }).click()
@@ -175,4 +187,55 @@ test('continuous routes support clipped selection, guarded inspection and author
   await waitForWorkspaceSaved(page)
   await expect.poll(async () => (await clusterCircleScenePosition(marker)).x).toBeGreaterThan(originalX + 10)
   await expect(exit).toHaveAttribute('aria-pressed', 'true')
+
+  await (await selectCatalogueObjectButton(page, 'hazard')).click()
+  await exit.press('Enter')
+  const hazard = map.getByRole('button', { name: /Select .*New hazard 1/ })
+  await expect(hazard).toBeVisible()
+  await waitForWorkspaceSaved(page)
+  await quitSystemAdd(page)
+  await hazard.press('Enter')
+  const objectInspector = page.getByRole('complementary', { name: 'Object inspector' })
+  await expect(objectInspector.getByText(/50%/)).toBeVisible()
+  await objectInspector.getByRole('button', { name: 'Edit map object' }).click()
+  await objectInspector.getByLabel('Route position (%)').fill('25.125')
+  await objectInspector.getByRole('button', { name: /Apply changes/ }).click()
+  await waitForWorkspaceSaved(page)
+  await expect(objectInspector.getByText(/25\.125%/)).toBeVisible()
+
+  await hideWorkspaceInspector(page)
+  const arrivalAim = await exit.locator('.cluster-route-line').evaluate(path => {
+    if (!(path instanceof SVGPathElement)) throw new Error('The route needs a painted cubic.')
+    const transform = path.getScreenCTM()!
+    const length = path.getTotalLength()
+    const near = path.getPointAtLength(0.7 * length).matrixTransform(transform)
+    const next = path.getPointAtLength(0.71 * length).matrixTransform(transform)
+    const delta = { x: next.x - near.x, y: next.y - near.y }
+    const offset = 24 / Math.hypot(delta.x, delta.y)
+    return { x: near.x - delta.y * offset, y: near.y + delta.x * offset }
+  })
+  const existing = hazard.locator('.warden-route-object-marker')
+  const origin = await existing.boundingBox()
+  if (!origin) throw new Error('The route object needs a visible mark.')
+  await page.mouse.move(origin.x + origin.width / 2, origin.y + origin.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(arrivalAim.x, arrivalAim.y, { steps: 6 })
+  const ghost = map.locator('.warden-route-object-landing-preview .warden-route-object-marker')
+  await expect(ghost).toBeVisible()
+  const markerCenter = (locator: Locator) => locator.evaluate(circle => {
+    if (!(circle instanceof SVGCircleElement)) throw new Error('Expected a route-object marker circle.')
+    const { x, y } = new DOMPoint(circle.cx.baseVal.value, circle.cy.baseVal.value).matrixTransform(circle.getScreenCTM()!)
+    return { x, y }
+  })
+  const proposed = await markerCenter(ghost)
+  expect(Math.hypot(proposed.x - origin.x - origin.width / 2, proposed.y - origin.y - origin.height / 2)).toBeGreaterThan(4)
+  await test.info().attach('route-object-landing', { body: await map.screenshot(), contentType: 'image/png' })
+  await page.mouse.up()
+  await expect(ghost).toHaveCount(0)
+  // Compare centers within a CSS pixel because a selected marker has a wider stroke than its ghost.
+  await expect.poll(async () => {
+    const accepted = await markerCenter(existing)
+    return Math.hypot(accepted.x - proposed.x, accepted.y - proposed.y)
+  }).toBeLessThan(1)
+  await waitForWorkspaceSaved(page)
 })

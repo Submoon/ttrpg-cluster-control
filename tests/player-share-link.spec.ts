@@ -10,7 +10,8 @@ import {
 
 const publicDocument: PlayerClusterDocument = {
   format: 'ttrpg-cluster-control-player',
-  version: 2,
+  version: 3,
+  routeBranches: [],
   title: 'Pilgrim Reach',
   systems: [
     {
@@ -78,6 +79,7 @@ test('compressed player links round-trip canonical public data without extension
 test('legacy player links drop resolved same-system loops while retaining anonymous routes @pure', async () => {
   const legacyDocument = {
     ...publicDocument,
+    routeBranches: undefined,
     version: 1,
     systems: [
       ...publicDocument.systems,
@@ -86,7 +88,7 @@ test('legacy player links drop resolved same-system loops while retaining anonym
         position: { x: 360, y: 280 },
         disclosure: 'known-type' as const,
         type: 'star-system' as const,
-        label: 'Star system' as const,
+        label: 'Zone' as const,
       },
     ],
     routes: [
@@ -108,7 +110,7 @@ test('legacy player links drop resolved same-system loops while retaining anonym
 
   const decoded = await decodePlayerShareFragment(originalFragment)
 
-  expect(decoded.version).toBe(2)
+  expect(decoded.version).toBe(3)
   expect(decoded.routes).toEqual([legacyDocument.routes[1]])
   expect(originalFragment).toContain('player=1.gzip.')
   expect(decoded.systems).toEqual(legacyDocument.systems)
@@ -117,7 +119,8 @@ test('legacy player links drop resolved same-system loops while retaining anonym
 test('compressed player links preserve per-object marker colors through the JSON codec @pure', async () => {
   const document: PlayerClusterDocument = {
     format: 'ttrpg-cluster-control-player',
-    version: 2,
+    version: 3,
+    routeBranches: [],
     title: 'Pilgrim Reach',
     systems: [{
       id: 'system-1',

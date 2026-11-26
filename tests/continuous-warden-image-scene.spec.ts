@@ -5,11 +5,134 @@ import {
   prepareContinuousWardenImageScene,
   type ContinuousWardenImageSceneRequest,
 } from '../utils/continuous-warden-image-scene'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
+
+const measurements = {
+  systemNameWidthPixels: (name: string) => name.length * 8,
+  textWidth: (text: string, size: number) => text.length * size * .6,
+}
+
+test('entire-Cluster export fits readable route object names independently of camera and raster density @pure', () => {
+  const { workspace, root } = workspaceWithRouteObjects()
+  const request: ContinuousWardenImageSceneRequest = {
+    cluster: workspace.cluster,
+    layout: workspace.layout,
+    projections: [
+      projectWardenSystem(workspace.cluster.systems[0]!, { x: .2, y: .5 }, workspace.layout),
+      projectWardenSystem(workspace.cluster.systems[1]!, { x: .8, y: .5 }, workspace.layout),
+    ],
+    scope: 'cluster',
+    format: 'svg',
+    viewport: { x: -500, y: 10, k: 30 },
+    viewportRect: { x: 0, y: 0, width: 800, height: 600 },
+    svgPixelScale: 1,
+    detailSystemIds: new Set(workspace.cluster.systems.map(system => system.id)),
+    dimmedObjectIds: [root.id],
+  }
+  const scene = prepareContinuousWardenImageScene(request, measurements)
+  const branch = scene.routes[0]?.branch
+  expect(branch?.detailed).toBe(false)
+  expect(branch?.objects.map(({ object }) => object.id)).toEqual([root.id])
+  expect(branch?.orbits).toEqual([])
+  expect(scene.dimmedObjectIds.has(root.id)).toBe(false)
+  const mark = branch!.objects[0]!.point
+  expect(Math.abs(mark.y - 280)).toBeCloseTo(18)
+  expect(mark.x).toBeGreaterThan(259)
+  expect(mark.x).toBeLessThan(480)
+  expect(mark.y - 14).toBeGreaterThan(scene.frame.y)
+  expect(mark.x - 14).toBeGreaterThan(scene.frame.x)
+  const name = branch!.objects[0]!.nameBounds!
+  const longestEdge = Math.max(scene.frame.outputWidth, scene.frame.outputHeight)
+  expect(longestEdge).toBeGreaterThanOrEqual(1200)
+  expect(name.height * scene.routeSvgPixelScale).toBeCloseTo(20)
+  expect(name.x).toBeGreaterThan(scene.frame.x)
+  expect(name.x + name.width).toBeLessThan(scene.frame.x + scene.frame.width)
+  expect(name.y).toBeGreaterThan(scene.frame.y)
+  expect(name.y + name.height).toBeLessThan(scene.frame.y + scene.frame.height)
+  for (const label of scene.labels) {
+    const overlaps = name.x < label.centerX + label.width / 2 && name.x + name.width > label.centerX - label.width / 2
+      && name.y < label.top + label.height && name.y + name.height > label.top
+    expect(overlaps).toBe(false)
+  }
+  const png = prepareContinuousWardenImageScene({
+    ...request, format: 'png', viewport: { x: 0, y: 0, k: .2 }, svgPixelScale: .35,
+  }, measurements)
+  expect(png.routes).toEqual(scene.routes)
+  expect(png.labels).toEqual(scene.labels)
+  expect(png.frame.outputWidth).toBeGreaterThanOrEqual(scene.frame.outputWidth * 2 - 1)
+  expect(png.frame.outputHeight).toBeGreaterThanOrEqual(scene.frame.outputHeight * 2 - 1)
+
+  const route = workspace.cluster.routes[0]!
+  const obstruction = { ...root, placement: { kind: 'route', progression: .5 } as const }
+  const nearby = prepareContinuousWardenImageScene({
+    ...request,
+    cluster: {
+      ...workspace.cluster,
+      routeContents: {
+        [route.id]: {
+          objects: [obstruction, { ...obstruction, id: 'other-obstacle', name: 'Debris field' }],
+          orbits: [],
+        },
+      },
+    },
+    projections: workspace.cluster.systems.map((system, index) =>
+      projectWardenSystem(system, { x: .43 + .14 * index, y: .5 }, workspace.layout)),
+  }, measurements)
+  const crowdedRoute = nearby.routes[0]!
+  expect(crowdedRoute.routeLabelWidthPixels).toBeNull()
+  const [first, second] = crowdedRoute.branch!.objects.map(object => object.nameBounds!)
+  expect(Math.abs(first!.y - second!.y)).toBeGreaterThan(first!.height)
+})
+
+test('viewport export follows route detail, selected-object reveal and applied filtering @pure', () => {
+  const { workspace, root, orbit, occupant } = workspaceWithRouteObjects()
+  const request: ContinuousWardenImageSceneRequest = {
+    cluster: workspace.cluster,
+    layout: workspace.layout,
+    projections: workspace.cluster.systems.map((system, index) =>
+      projectWardenSystem(system, { x: .2 + .6 * index, y: .5 }, workspace.layout)),
+    scope: 'viewport',
+    format: 'svg',
+    viewport: { x: -480, y: -520, k: 4 },
+    viewportRect: { x: 20, y: 35, width: 780, height: 550 },
+    svgPixelScale: 1,
+    detailSystemIds: new Set(),
+    dimmedObjectIds: [occupant.id],
+  }
+  const detail = prepareContinuousWardenImageScene(request, measurements)
+  expect(detail.frame).toMatchObject({ ...request.viewportRect })
+  expect(detail.sceneViewport).toEqual(request.viewport)
+  expect(detail.dimmedObjectIds).toEqual(new Set([occupant.id]))
+  const branch = detail.routes[0]?.branch
+  expect(branch?.detailed).toBe(true)
+  expect(branch?.objects.map(({ object }) => object.id)).toEqual([root.id, occupant.id])
+  expect(branch?.orbits[0]).toMatchObject({ id: orbit.id, rotation: 90, vertical: 9 })
+  expect(branch?.orbits[0]?.horizontal).toBeCloseTo(18.4)
+  expect(branch?.objects[1]?.point.y).toBeCloseTo(branch!.objects[0]!.point.y + 18.4)
+
+  const beforeReveal = prepareContinuousWardenImageScene({
+    ...request, viewport: { ...request.viewport, k: 3 }, svgPixelScale: 1.5,
+  }, measurements)
+  expect(beforeReveal.routes[0]?.branch?.detailed).toBe(false)
+  expect(beforeReveal.routes[0]?.branch?.objects.map(({ object }) => object.id)).toEqual([root.id])
+  const loweredThreshold = prepareContinuousWardenImageScene({
+    ...request, viewport: { ...request.viewport, k: 3 }, svgPixelScale: 1.5, detailZoomPercent: 55,
+  }, measurements)
+  expect(loweredThreshold.routes[0]?.branch?.detailed).toBe(true)
+
+  const overview = { ...request, svgPixelScale: .5 }
+  const overviewScene = prepareContinuousWardenImageScene(overview, measurements)
+  expect(overviewScene.routes[0]?.branch?.detailed).toBe(false)
+  expect(overviewScene.routes[0]?.branch?.objects.map(({ object }) => object.id)).toEqual([root.id])
+  const selectedScene = prepareContinuousWardenImageScene({ ...overview, selectedRouteObjectId: occupant.id }, measurements)
+  expect(selectedScene.routes[0]?.branch?.objects.map(({ object }) => object.id)).toEqual([root.id, occupant.id])
+  expect(selectedScene.routes[0]?.branch?.orbits).toEqual([])
+})
 
 test('selected-system export fits the supplied label metrics independently of the editor camera @pure', () => {
   const selected: StarSystem = {
     id: 'selected',
-    name: 'Selected system',
+    name: 'Selected Zone',
     publication: 'hidden',
     objects: [],
     orbits: [],
@@ -20,6 +143,7 @@ test('selected-system export fits the supplied label metrics independently of th
     name: 'Cluster',
     playerTitle: '',
     systems: [selected, neighbor],
+    routeContents: {},
     routes: [{
       id: 'incoming',
       jumpLevel: 2,
@@ -33,6 +157,7 @@ test('selected-system export fits the supplied label metrics independently of th
   const geometry = { objectAngles: {}, orbitRadii: {}, orbitRotations: {} }
   const request: ContinuousWardenImageSceneRequest = {
     cluster,
+    layout: geometry,
     projections: [
       projectWardenSystem(selected, { x: .3, y: .3 }, geometry),
       projectWardenSystem(neighbor, { x: .7, y: .7 }, geometry),
@@ -63,6 +188,14 @@ test('selected-system export fits the supplied label metrics independently of th
   })
 
   expect(alternateCamera.frame).toEqual(scene.frame)
+  const { branch, workspace } = workspaceWithRouteObjects()
+  const sceneWithDistantBranch = prepareContinuousWardenImageScene({
+    ...request,
+    cluster: { ...cluster, routeContents: { incoming: branch } },
+    layout: workspace.layout,
+  }, measurements)
+  expect(sceneWithDistantBranch.frame).toEqual(scene.frame)
+  expect(sceneWithDistantBranch.routes[0]?.branch).toBeUndefined()
   const title = scene.labels[0]
   expect(title?.width).toBeGreaterThan(narrowerTitle.labels[0]?.width ?? 0)
   if (!title) throw new Error('Expected a fitted title for the selected system.')

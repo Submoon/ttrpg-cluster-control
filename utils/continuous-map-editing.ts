@@ -1,4 +1,4 @@
-import type { CatalogueSubtype, LocalWorkspace, OrbitRadii, Point } from '../domain/workspace'
+import type { CatalogueSubtype, LocalWorkspace, OrbitRadii, Point, RouteLanding } from '../domain/workspace'
 import type { SystemCreationCandidate } from '../composables/editor-workflows/types'
 import { orbitPointAtAngle } from './system-map-geometry'
 
@@ -12,6 +12,7 @@ export interface ContinuousObjectAddTarget {
   subtype: CatalogueSubtype
   otherType?: string
   workspaceSnapshot: LocalWorkspace
+  routeLanding?: RouteLanding
   directTarget: { kind: 'object' | 'orbit'; id: string } | null
   requiresOwnerChoice: boolean
   owners: ContinuousObjectAddOwner[]
@@ -122,12 +123,12 @@ export function selectContinuousObjectAddCandidate(
       && candidate.target.orbitId === directTarget.id)
     return directOrbit
       ? { candidate: directOrbit, error: directOrbit.error }
-      : { error: 'Choose an eligible Orbit in the owning system.' }
+      : { error: 'Choose an eligible Orbit in the owning Zone.' }
   }
   const candidate = candidates[0]
   return candidate
     ? { candidate, error: candidate.error } as ContinuousObjectAddCandidateSelection
-    : { error: 'Choose a valid placement target in the owning system.' }
+    : { error: 'Choose a valid placement target in the owning Zone.' }
 }
 
 /** Returns a keyboard placement point on the Orbit ring, translated into the Cluster scene. */

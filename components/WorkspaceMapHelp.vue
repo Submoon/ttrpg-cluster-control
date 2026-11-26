@@ -30,8 +30,8 @@
           <section class="grid gap-2" aria-labelledby="map-help-navigation-heading">
             <h3 id="map-help-navigation-heading" class="m-0 text-base font-semibold">Navigate and inspect</h3>
             <ul class="m-0 grid list-disc gap-1.5 pl-5">
-              <li>Scroll or pinch to zoom between the Jump Cluster and system detail. Drag empty map space with one finger to pan. Use <strong>Fit map</strong> to see the whole Cluster.</li>
-              <li>Choose <strong>Center selection</strong> to frame the inspected system, object, Orbit, or Jump Route.</li>
+              <li>Scroll or pinch to zoom between the Jump Cluster and Zone detail. Drag empty map space with one finger to pan. Use <strong>Fit map</strong> to see the whole Cluster.</li>
+              <li>Choose <strong>Center selection</strong> to frame the inspected Zone, object, Orbit, or Jump Route.</li>
               <li>Choose <strong>Select</strong> and click an item. Open <strong>Inspect</strong> if its details are hidden.</li>
               <li>Use <strong>Hierarchy</strong> to browse the map, or type an object name in <strong>Search</strong> and choose a result to find it.</li>
             </ul>
@@ -62,7 +62,7 @@
               </li>
               <li>
                 Click an empty spot to place the object freely, or click an <strong>Orbit</strong> (a ring on the map) to place it on that path.
-                Choose the owning system when prompted.
+                Choose the owning Zone when prompted.
               </li>
               <li>Click again to add another object of the same type. Choose <strong>Quit Add</strong> when you’re done.</li>
             </ol>
@@ -76,8 +76,8 @@
               <li>Choose <strong>Move</strong> and drag an object. If a placement preview opens, choose the target and confirm the new position.</li>
               <li>In <strong>Move</strong>, drag an unoccupied Orbit center or use its map placement controls. Drag the center onto an object to attach the Orbit to it.</li>
               <li>
-                On the Jump Cluster map, choose <strong>Move</strong> and click a system.
-                Choose <strong>Move selected system on map</strong>, click a new spot, then choose <strong>Confirm move</strong>.
+                On the Jump Cluster map, choose <strong>Move</strong> and click a Zone.
+                Choose <strong>Move selected Zone on map</strong>, click a new spot, then choose <strong>Confirm move</strong>.
               </li>
               <li>Choose <strong>Undo</strong> to take back your last change. Choose <strong>Redo</strong> to bring it back.</li>
             </ul>
@@ -87,8 +87,8 @@
             <h3 id="map-help-publication-heading" class="m-0 text-base font-semibold">Player visibility</h3>
             <ul class="m-0 grid list-disc gap-1.5 pl-5">
               <li><strong>Hidden</strong> hides a location. An object needed as an Orbit host can still appear as an unknown presence. <strong>Unknown presence</strong> shows a marker without its name or type. <strong>Known type</strong> also shows the type. <strong>Revealed</strong> shows the name.</li>
-              <li>Players can open a <strong>Revealed</strong> star system. Objects inside follow their own visibility settings.</li>
-              <li>A <strong>Shared</strong> Jump Route appears when at least one endpoint system is visible. Hidden systems are anonymized and Jump Point names stay private.</li>
+              <li>Players can open a <strong>Revealed</strong> Zone. Objects inside follow their own visibility settings.</li>
+              <li>A <strong>Shared</strong> Jump Route appears when at least one endpoint Zone is visible. Hidden Zones are anonymized and Jump Point names stay private.</li>
             </ul>
           </section>
 

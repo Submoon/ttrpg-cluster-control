@@ -1,7 +1,7 @@
 <template>
   <UModal
     v-model:open="dialogOpen"
-    title="Review Star System Restore"
+    title="Review Zone Restore"
     description="Adds an independent copy to the active Jump Cluster."
     :dismissible="!props.confirming"
     :content="{ onOpenAutoFocus: captureOpener, onCloseAutoFocus: restoreFocus }"
@@ -15,7 +15,7 @@
       <div v-if="props.summary" class="grid gap-4">
         <section class="grid gap-3" aria-label="Import effects">
           <ul class="m-0 grid gap-1 pl-5" aria-label="Import counts">
-            <li>Star systems: {{ props.summary.systems }}</li>
+            <li>Zones: {{ props.summary.systems }}</li>
             <li>Map objects: {{ props.summary.objects }}</li>
             <li>Orbits: {{ props.summary.orbits }}</li>
             <li>Jump Routes: {{ props.summary.routes }}</li>
@@ -44,6 +44,19 @@
                 class="break-words"
               >
                 {{ match.entity }} "{{ match.name }}" in "{{ match.existingSystem }}" ({{ match.reason }})
+              </li>
+            </ul>
+          </div>
+
+          <div v-if="props.summary.locationKeyReplacements.length" class="grid gap-1">
+            <h3 class="m-0 text-sm font-semibold">Location key replacements</h3>
+            <ul class="m-0 grid gap-1 pl-5">
+              <li
+                v-for="replacement in props.summary.locationKeyReplacements"
+                :key="replacement.replacementKey"
+                class="break-words"
+              >
+                {{ replacement.name }} in {{ replacement.system }} · {{ replacement.originalKey }} → {{ replacement.replacementKey }}
               </li>
             </ul>
           </div>
@@ -91,7 +104,7 @@
           :disabled="props.confirming"
           @click="emit('confirm')"
         >
-          Restore a Star System
+          Restore a Zone
         </UButton>
       </div>
     </template>
@@ -154,7 +167,7 @@ function restoreFocus(event: Event): void {
     : document.querySelector<HTMLElement>(
         '#workspace-hierarchy-panel [role="treeitem"][aria-selected="true"], #workspace-hierarchy-panel [aria-current="true"]',
       )
-      ?? document.querySelector<HTMLElement>('#workspace-main [role="group"][aria-label$="star system map"]')
+      ?? document.querySelector<HTMLElement>('#workspace-main [role="group"][aria-label$="Zone map"]')
       ?? document.getElementById('workspace-main')
   target?.focus()
   opener = null

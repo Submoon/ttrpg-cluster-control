@@ -2,7 +2,7 @@
   <section class="chart-details-editor flex min-h-0 flex-1 flex-col" aria-label="Jump Cluster details editor">
     <header class="shrink-0 border-b border-[var(--line-soft)] px-4 py-3 sm:px-5">
       <h2 class="mt-2 mb-1 text-2xl">Edit Jump Cluster details</h2>
-      <p class="inspector-intro m-0">Editing details for {{ props.targetSystemName || 'the selected star system' }}.</p>
+      <p class="inspector-intro m-0">Editing details for {{ props.targetSystemName || 'the selected Zone' }}.</p>
     </header>
 
     <form
@@ -25,7 +25,7 @@
               <span v-if="typeof error === 'string' && error" role="alert">{{ error }}</span>
             </template>
           </UFormField>
-          <UFormField label="Star system" :error="systemError || undefined" class="grid gap-1.5">
+          <UFormField label="Zone" :error="systemError || undefined" class="grid gap-1.5">
             <UInput
               id="chart-dialog-system-name"
               v-model="systemName"
@@ -111,7 +111,7 @@ const emit = defineEmits<{
 }>()
 
 const clusterError = computed(() => props.formError.startsWith('Jump Cluster name') ? props.formError : '')
-const systemError = computed(() => props.formError.startsWith('Star system name') ? props.formError : '')
+const systemError = computed(() => props.formError.startsWith('Zone name') ? props.formError : '')
 const playerTitleError = computed(() => props.formError.startsWith('Player-facing title') ? props.formError : '')
 const publicationError = computed(() => props.formError.startsWith('Choose a supported publication mode') ? props.formError : '')
 const publicationDescribedBy = computed(() => publicationError.value
@@ -119,7 +119,7 @@ const publicationDescribedBy = computed(() => publicationError.value
   : undefined)
 
 function fieldToFocus(): string {
-  return props.formError.startsWith('Star system name')
+  return props.formError.startsWith('Zone name')
     ? 'chart-dialog-system-name'
     : props.formError.startsWith('Player-facing title')
       ? 'chart-dialog-player-title'

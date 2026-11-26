@@ -5,7 +5,7 @@ import {
   type CustomFieldDefinition,
   type LocalWorkspace,
   type PublicationMode,
-  type SystemObject,
+  type CatalogueObject,
 } from '../domain/workspace'
 import { matchesFieldCondition, type FieldCondition, type FieldFilterOption } from './field-filter-matching'
 import { mapObjectTypeKey } from './map-type-filters'
@@ -33,7 +33,7 @@ export function wardenFieldFilterOptions(workspace: LocalWorkspace): FieldFilter
 /** Returns a valid assigned value; absent, inapplicable and stale values share the No value case. */
 export function wardenObjectFieldValue(
   workspace: LocalWorkspace,
-  object: SystemObject,
+  object: CatalogueObject,
   option: FieldFilterOption,
 ): unknown {
   return readWardenObjectFieldValue(workspace, object, option, new Map(
@@ -43,7 +43,7 @@ export function wardenObjectFieldValue(
 
 function readWardenObjectFieldValue(
   workspace: LocalWorkspace,
-  object: SystemObject,
+  object: CatalogueObject,
   option: FieldFilterOption,
   definitionsById: ReadonlyMap<string, CustomFieldDefinition>,
 ): unknown {
@@ -143,13 +143,13 @@ export function matchesPublicationFilter(
 }
 
 /** Evaluates the shared AND/OR rules for one object against current workspace definitions. */
-export function matchesWardenObjectFilters(
+export function matchesWardenObjectFilters<T extends CatalogueObject>(
   workspace: LocalWorkspace,
-  object: SystemObject,
+  object: T,
   selectedTypes: readonly string[],
   selectedPublicationModes: readonly PublicationMode[],
   fieldConditions: readonly FieldCondition[],
-  typeKey: (object: SystemObject) => string = mapObjectTypeKey,
+  typeKey: (object: T) => string = mapObjectTypeKey,
   options = wardenFieldFilterOptions(workspace),
 ): boolean {
   return createWardenObjectFilterMatcher(
@@ -163,14 +163,14 @@ export function matchesWardenObjectFilters(
 }
 
 /** Compiles stable definition and option lookups once for a computed filter snapshot. */
-export function createWardenObjectFilterMatcher(
+export function createWardenObjectFilterMatcher<T extends CatalogueObject>(
   workspace: LocalWorkspace,
   selectedTypes: readonly string[],
   selectedPublicationModes: readonly PublicationMode[],
   fieldConditions: readonly FieldCondition[],
-  typeKey: (object: SystemObject) => string = mapObjectTypeKey,
+  typeKey: (object: T) => string = mapObjectTypeKey,
   options = wardenFieldFilterOptions(workspace),
-): (object: SystemObject) => boolean {
+): (object: T) => boolean {
   const optionsById = new Map(options.map(option => [option.fieldId, option]))
   const definitionsById = new Map(workspace.objectFieldSettings.customFields.map(field => [field.id, field]))
   return object => {

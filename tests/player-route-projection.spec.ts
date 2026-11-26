@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { addZoneWithPrimaryStar, createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import {
   addStarSystem,
   createJumpRoute,
@@ -114,8 +115,8 @@ test('shared routes between retained systems use safe public references and filt
 test('player routes publish only independently Revealed Jump Points in their owning systems @pure', () => {
   for (const originMode of ['hidden', 'unknown', 'known-type', 'revealed'] as const) {
     for (const destinationMode of ['hidden', 'unknown', 'known-type', 'revealed'] as const) {
-      const initial = createLocalWorkspace('Private Route Reach', 'Origin System')
-      const added = addStarSystem(initial, 'Destination System')
+      const initial = createWorkspaceWithPrimaryStar('Private Route Reach', 'Origin System')
+      const added = addZoneWithPrimaryStar(initial, 'Destination System')
       const originSystemId = initial.cluster.systems[0]!.id
       const destinationSystemId = added.system.id
       const origin = addJumpPointPair(added.workspace, originSystemId)
@@ -137,7 +138,7 @@ test('player routes publish only independently Revealed Jump Points in their own
       const document = projectPlayerCluster(workspace)
       const projectedRoute = document.routes[0]
 
-      expect(document.version).toBe(2)
+      expect(document.version).toBe(3)
       expect(projectedRoute?.fromPointId).toBe(originMode === 'revealed' ? 'object-2' : undefined)
       expect(projectedRoute?.destination).toEqual({
         kind: 'system',
@@ -150,7 +151,7 @@ test('player routes publish only independently Revealed Jump Points in their own
 
 test('a Hidden source becomes an anonymous destination while its Revealed Jump Point becomes the public origin attachment @pure', () => {
   const initial = createLocalWorkspace('Private Route Reach', 'Hidden Origin')
-  const added = addStarSystem(initial, 'Revealed Destination')
+  const added = addZoneWithPrimaryStar(initial, 'Revealed Destination')
   const hiddenSystemId = initial.cluster.systems[0]!.id
   const revealedSystemId = added.system.id
   const hidden = addJumpPointPair(added.workspace, hiddenSystemId)

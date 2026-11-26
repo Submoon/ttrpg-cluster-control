@@ -46,8 +46,8 @@ export const CLUSTER_SYSTEM_PRESENTATION_CLASSES = Object.freeze({
 
 export const PLAYER_CLUSTER_HIERARCHY_DISCLOSURE_COPY = Object.freeze({
   unknown: 'No further information shared',
-  'known-type': 'Star system · internal map not shared',
-  revealed: 'Open shared system map',
+  'known-type': 'Zone · internal map not shared',
+  revealed: 'Open shared Zone map',
 })
 
 export interface ClusterSystemPoint {

@@ -1,3 +1,4 @@
+import { fitZoneObjectWorkspace } from '../../utils/zone-object-branch'
 /** Pure object-draft parsing and validation, separate from session identity and async guards. */
 import {
   canPlaceObjectInOrbit,
@@ -7,11 +8,16 @@ import {
   nativePlayerFieldIds,
   updateWorkspaceObject,
   type CustomFieldDefinition,
+  type CatalogueObject,
+  type RouteContents,
+  type RouteObject,
+  updateWorkspaceRouteObject,
   type LocalWorkspace,
   type StarSystem,
   type SystemObject,
   type SystemObjectChanges,
 } from '../../domain/workspace'
+import { clusterObjects, locationKeyConflict } from '../../domain/workspace-location-keys'
 import type { ObjectDraft } from './types'
 
 interface ParsedObjectDraft {
@@ -58,7 +64,7 @@ function parseOrbitPlacement(placement: string): string | null {
     : null
 }
 
-function isPhysicalStation(object: SystemObject): boolean {
+function isPhysicalStation(object: CatalogueObject): boolean {
   return object.family === 'Installation' && object.subtype === 'station'
 }
 
@@ -74,8 +80,8 @@ function sameStringSet(first: readonly string[], second: readonly string[]): boo
  */
 function parseObjectDraft(
   workspace: LocalWorkspace,
-  system: StarSystem,
-  object: SystemObject,
+  branch: StarSystem | RouteContents,
+  object: CatalogueObject,
   initial: ObjectDraft,
   draft: ObjectDraft,
 ): ParsedObjectDraft {
@@ -84,11 +90,9 @@ function parseObjectDraft(
   const locationKey = draft.locationKey.trim()
   const name = draft.name.trim()
   const subtype = draft.subtype.trim()
-  const duplicateLocationKey = system.objects.some(candidate => candidate.id !== object.id && candidate.locationKey === locationKey)
+  const keyConflict = locationKeyConflict(clusterObjects(workspace.cluster), locationKey, object.locationKey)
   if (!locationKey) errors.locationKey = 'Location key is required.'
-  else if (duplicateLocationKey) {
-    errors.locationKey = `Location key "${locationKey}" is already used in this star system.`
-  }
+  else if (keyConflict) errors.locationKey = keyConflict
   else if (locationKey !== initial.locationKey) changes.locationKey = locationKey
   if (!name) errors.name = 'Object name is required.'
   else if (name.length > 80) errors.name = 'Object name must be 80 characters or fewer.'
@@ -123,21 +127,25 @@ function parseObjectDraft(
   } else if (draft.markerColor !== initial.markerColor) {
     changes.markerColor = draft.markerColor
   }
-  if (draft.placement === 'system') {
-    if (draft.placement !== initial.placement) changes.placement = initialSystemPlacement(system)
-  } else {
-    const orbitId = parseOrbitPlacement(draft.placement)
-    if (!orbitId) {
-      errors.placement = 'Choose a valid map placement.'
-    } else if (!canPlaceObjectInOrbit(system, object.id, orbitId)) {
-      errors.placement = 'Choose an Orbit that does not create a circular relationship.'
-    } else if (draft.placement !== initial.placement) {
-      changes.placement = { kind: 'orbit', orbitId }
+  if ('id' in branch) {
+    if (draft.placement === 'system') {
+      if (draft.placement !== initial.placement) changes.placement = initialSystemPlacement(branch)
+    } else {
+      const orbitId = parseOrbitPlacement(draft.placement)
+      if (!orbitId) {
+        errors.placement = 'Choose a valid map placement.'
+      } else if (!canPlaceObjectInOrbit(branch, object.id, orbitId)) {
+        errors.placement = 'Choose an Orbit that does not create a circular relationship.'
+      } else if (draft.placement !== initial.placement) {
+        changes.placement = { kind: 'orbit', orbitId }
+      }
     }
+  } else if (draft.placement !== initial.placement) {
+    errors.placement = 'Route object placement cannot be edited here.'
   }
 
   const jumpStationId = draft.jumpStationId
-  if (jumpStationId && !system.objects.some(candidate => candidate.id === jumpStationId && isPhysicalStation(candidate))) {
+  if (jumpStationId && !branch.objects.some(candidate => candidate.id === jumpStationId && isPhysicalStation(candidate))) {
     errors.jumpStationId = 'Choose an existing Physical Station.'
   } else if (jumpStationId !== initial.jumpStationId) {
     changes.jumpStationId = jumpStationId || null
@@ -206,8 +214,11 @@ export function validateObjectDraft(
   const parsed = parseObjectDraft(workspace, system, object, initial, draft)
   if (Object.keys(parsed.errors).length) return { workspace: null, errors: parsed.errors }
   try {
+    const candidate = updateWorkspaceObject(workspace, system.id, object.id, parsed.changes)
     return {
-      workspace: updateWorkspaceObject(workspace, system.id, object.id, parsed.changes),
+      workspace: parsed.changes.placement
+        ? fitZoneObjectWorkspace(workspace, candidate, system.id, object.id)
+        : candidate,
       errors: parsed.errors,
     }
   } catch (error) {
@@ -233,7 +244,8 @@ export function projectObjectDraft(
   let projected = workspace
   const apply = (candidate: SystemObjectChanges): boolean => {
     try {
-      projected = updateWorkspaceObject(projected, system.id, object.id, candidate)
+      const next = updateWorkspaceObject(projected, system.id, object.id, candidate)
+      projected = candidate.placement ? fitZoneObjectWorkspace(projected, next, system.id, object.id) : next
       return true
     } catch {
       return false
@@ -279,4 +291,36 @@ export function projectObjectDraft(
   const projectedObject = projected.cluster.systems.find(candidate => candidate.id === system.id)
     ?.objects.find(candidate => candidate.id === object.id)
   return projectedObject && JSON.stringify(projectedObject) !== JSON.stringify(object) ? projected : null
+}
+
+/** Prepares a catalogue edit and any explicitly edited root percentage. */
+export function validateRouteObjectDraft(
+  workspace: LocalWorkspace,
+  routeId: string,
+  branch: RouteContents,
+  object: RouteObject,
+  initial: ObjectDraft,
+  draft: ObjectDraft,
+): { workspace: LocalWorkspace | null; errors: Record<string, string> } {
+  const parsed = parseObjectDraft(workspace, branch, object, initial, draft)
+  let position: { progression?: number } = {}
+  if (object.placement.kind === 'route' && draft.routePercentage !== initial.routePercentage) {
+    const text = draft.routePercentage?.trim() ?? ''
+    const percentage = Number(text)
+    if (!/^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:e[+-]?[0-9]+)?$/i.test(text)
+      || !Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+      parsed.errors.routePercentage = 'Enter a route position between 0% and 100%.'
+    } else {
+      position = { progression: percentage / 100 }
+    }
+  }
+  if (Object.keys(parsed.errors).length) return { workspace: null, errors: parsed.errors }
+  try {
+    return {
+      workspace: updateWorkspaceRouteObject(workspace, routeId, object.id, { ...parsed.changes, ...position }),
+      errors: {},
+    }
+  } catch (error) {
+    return { workspace: null, errors: { form: error instanceof Error ? error.message : String(error) } }
+  }
 }

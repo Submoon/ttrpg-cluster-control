@@ -1,7 +1,8 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { ref } from 'vue'
-import { createLocalWorkspace, createOrbit, type LocalWorkspace } from '../domain/workspace'
+import { createOrbit, type LocalWorkspace } from '../domain/workspace'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import type { SaveState } from '../composables/editor-workflows/types'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
@@ -11,7 +12,7 @@ import { mountController, withControlledBrowserEnvironment } from './support/mou
 
 function createHarness(options: { maxBytes?: number; allowCapacity?: boolean } = {}) {
   setActivePinia(createPinia())
-  const base = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const base = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const initialSystem = base.cluster.systems[0]!
   const primaryStar = initialSystem.objects.find(object => object.subtype === 'star')
     ?? initialSystem.objects[0]

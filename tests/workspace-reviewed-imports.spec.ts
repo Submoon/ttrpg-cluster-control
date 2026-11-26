@@ -1,8 +1,10 @@
 import { expect, test } from './fixtures'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import {
   createLocalWorkspace,
   createOrbit,
   createSystemObject,
+  exportJumpCluster,
   exportStarSystem,
 } from '../domain/workspace'
 import {
@@ -17,6 +19,8 @@ import {
   openChartDetailsEditor,
   fitWorkspaceMap,
   resolveImportReview,
+  resolveJumpClusterRestoreReview,
+  reviewJumpClusterBackup,
   setJsonFile,
   setHeaderMapActionsOpen,
 } from './helpers'
@@ -27,7 +31,7 @@ function incomingSystem(): {
   objectIds: string[]
   orbitId: string
 } {
-  const source = createLocalWorkspace('Incoming Reach', 'Incoming Vesper')
+  const source = createWorkspaceWithPrimaryStar('Incoming Reach', 'Incoming Vesper')
   const sourceSystem = source.cluster.systems[0]
   if (!sourceSystem) throw new Error('The import fixture needs its initial star system.')
 
@@ -69,8 +73,14 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   await captureMapExportBlobs(page)
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByLabel('First Zone').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
+  await waitForWorkspaceSaved(page)
+  const destination = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const zone = destination.cluster.systems[0]!
+  zone.objects.push(createSystemObject(zone, 'planet'))
+  const destinationReview = await reviewJumpClusterBackup(page, 'destination.json', JSON.stringify(exportJumpCluster(destination)))
+  await resolveJumpClusterRestoreReview(destinationReview, 'confirm')
   await waitForWorkspaceSaved(page)
   await fitWorkspaceMap(page)
 
@@ -78,13 +88,13 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   await expect(context.getByRole('heading', { name: 'Kestrel Reach', exact: true })).toBeVisible()
   const chartEditor = await openChartDetailsEditor(page)
   await chartEditor.getByLabel('Jump Cluster', { exact: true }).fill('Unapplied Reach')
-  await chartEditor.getByLabel('Star system', { exact: true }).fill('Unapplied Vesper')
+  await chartEditor.getByLabel('Zone', { exact: true }).fill('Unapplied Vesper')
   await hideWorkspaceInspector(page)
 
   const incoming = incomingSystem()
   const openPlacementReview = async () => {
     await setJsonFile(await openStarSystemImportPicker(page), 'incoming-reach.json', incoming.content)
-    const placement = page.getByRole('group', { name: 'Standalone star system placement controls', exact: true })
+    const placement = page.getByRole('group', { name: 'Standalone Zone placement controls', exact: true })
     await expect(placement).toBeVisible()
     const preview = page.locator('.continuous-warden-import-placement-preview')
     await expect(preview).toBeVisible()
@@ -120,10 +130,12 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   const firstPlacement = await openPlacementReview()
   const review = firstPlacement.review
   await expect(review).toBeVisible()
-  await expect(review).toContainText('Star systems: 1')
+  await expect(review).toContainText('Zones: 1')
   await expect(review).toContainText('Map objects: 2')
   await expect(review).toContainText('Orbits: 1')
   await expect(review).toContainText('Jump Routes: 0')
+  await expect(review.getByRole('heading', { name: 'Location key replacements' })).toBeVisible()
+  await expect(review).toContainText('PL-01 → PL-02')
   await expect(page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })).toHaveCount(0)
   await resolveImportReview(review, 'cancel')
   await expect(review).toBeHidden()
@@ -134,7 +146,7 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   expect(afterCancel.cluster?.systems.map(system => system.name)).toEqual(['Vesper'])
   await activeWorkspaceFeedback(page).getByRole('button', { name: 'Resume Jump Cluster details draft' }).click()
   await expect(chartEditor.getByLabel('Jump Cluster', { exact: true })).toHaveValue('Unapplied Reach')
-  await expect(chartEditor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
+  await expect(chartEditor.getByLabel('Zone', { exact: true })).toHaveValue('Unapplied Vesper')
   await hideWorkspaceInspector(page)
 
   const acceptedPlacement = await openPlacementReview()
@@ -148,7 +160,7 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   await expect(resumeDraft).toBeVisible()
   await resumeDraft.click()
   await expect(chartEditor.getByLabel('Jump Cluster', { exact: true })).toHaveValue('Unapplied Reach')
-  await expect(chartEditor.getByLabel('Star system', { exact: true })).toHaveValue('Unapplied Vesper')
+  await expect(chartEditor.getByLabel('Zone', { exact: true })).toHaveValue('Unapplied Vesper')
   await hideWorkspaceInspector(page)
 
   const exported = await downloadJson(page, 'Export Jump Cluster JSON')
@@ -156,6 +168,7 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   expect(exported.cluster?.systems.map(system => system.name)).toEqual(['Vesper', 'Incoming Vesper'])
   const importedSystem = exported.cluster?.systems.find(system => system.name === 'Incoming Vesper')
   expect(importedSystem?.id).not.toBe(incoming.systemId)
+  expect(importedSystem?.objects.some(object => object.locationKey === 'PL-02')).toBe(true)
   expect(importedSystem && exported.layout.systemPositions?.[importedSystem.id]).toEqual(acceptedPlacement.anchor)
   const importedOrbit = importedSystem?.orbits[0]
   expect(importedOrbit).toBeDefined()
@@ -170,9 +183,9 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   await chartEditor.getByRole('button', { name: 'Discard draft', exact: true }).click()
   const undo = page.getByRole('button', { name: /^Undo\b/ })
   await expect(undo).toBeEnabled()
-  await (await dockAction(page, 'Add star system')).click()
+  await (await dockAction(page, 'Add Zone')).click()
   await setJsonFile(await openStarSystemImportPicker(page), 'incoming-reach-copy.json', incoming.content)
-  const placement = page.getByRole('group', { name: 'Standalone star system placement controls', exact: true })
+  const placement = page.getByRole('group', { name: 'Standalone Zone placement controls', exact: true })
   await expect(placement).toBeVisible()
   await expect(undo).toBeDisabled()
   const map = page.locator('svg.continuous-warden-map-svg')

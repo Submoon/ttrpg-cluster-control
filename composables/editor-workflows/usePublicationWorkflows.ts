@@ -138,7 +138,7 @@ export function usePublicationWorkflows(options: PublicationWorkflowOptions) {
         prepare: currentWorkspace => {
           if (capturedTarget.kind === 'system') {
             const system = currentWorkspace.cluster.systems.find(candidate => candidate.id === capturedTarget.id)
-            if (!system) throw new Error('The selected star system no longer exists.')
+            if (!system) throw new Error('The selected Zone no longer exists.')
             return updateChartDetails(currentWorkspace, capturedTarget.id, {
               clusterName: currentWorkspace.cluster.name,
               systemName: system.name,

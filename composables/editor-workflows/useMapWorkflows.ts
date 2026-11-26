@@ -1,3 +1,4 @@
+import { fitZoneObjectWorkspace } from '../../utils/zone-object-branch'
 /**
  * Translates map and inspector intents into workspace commits; transient SVG drag previews stay renderer-local.
  */
@@ -22,6 +23,7 @@ import {
   type Point,
   type SystemFrameInsets,
 } from '../../domain/workspace'
+import { clusterObjects } from '../../domain/workspace-location-keys'
 import type {
   OrbitAdjustmentGeometry,
   OrbitAdjustmentIntent,
@@ -281,7 +283,7 @@ export function useMapWorkflows({
   async function updateOrbitAdjustment(intent: OrbitAdjustmentIntent) {
     const command: EntityCommand = { kind: 'orbit-geometry', orbitId: intent.orbitId }
     if (!canAdjustMapOrbit(intent.systemId, intent.orbitId) || !isOrbitAvailableOnCurrentMap(intent.systemId, intent.orbitId)) {
-      return { status: 'rejected', reason: 'stale', message: 'The selected system changed before this Orbit adjustment was received.' } as const
+      return { status: 'rejected', reason: 'stale', message: 'The selected Zone changed before this Orbit adjustment was received.' } as const
     }
     if (rejectBlockedEntityCommand(command)) {
       return { status: 'rejected', reason: 'unavailable', message: 'Resolve the Inspector draft before changing this Orbit.' } as const
@@ -365,7 +367,7 @@ export function useMapWorkflows({
         isCurrent: () => contextIsCurrent(workspace.value),
         prepare: (latest) => {
           if (!contextIsCurrent(latest)) {
-            throw new Error('The selected star system is no longer available.')
+            throw new Error('The selected Zone is no longer available.')
           }
           return {
             ...latest,
@@ -451,9 +453,10 @@ export function useMapWorkflows({
             fromOrbitId: latestObject.placement.kind === 'orbit' ? latestObject.placement.orbitId : null,
             toOrbitId: null,
           })) throw new Error('Resolve the Inspector draft before changing this object, Orbit, or a related dependency.')
-          return updateWorkspaceObject(latest, latestSystem.id, latestObject.id, {
+          const candidate = updateWorkspaceObject(latest, latestSystem.id, latestObject.id, {
             placement: { kind: 'system', x: position.x, y: position.y },
           })
+          return fitZoneObjectWorkspace(latest, candidate, latestSystem.id, latestObject.id)
         },
       })
       throwIfRejected(result)
@@ -568,7 +571,9 @@ export function useMapWorkflows({
           const latestBlocked = plan.changes.map(placementCommand).find(isEntityCommandBlocked)
           if (latestBlocked) throw new Error('Resolve the Inspector draft before changing this object or its placement.')
           const moved = applySelectedObjectTranslation(latest, systemId, plan)
-          return frameInsets ? setWorkspaceSystemFrame(moved, systemId, frameInsets) : moved
+          return frameInsets
+            ? setWorkspaceSystemFrame(moved, systemId, frameInsets)
+            : fitZoneObjectWorkspace(latest, moved, systemId, objectId)
         },
       })
       throwIfRejected(result)
@@ -636,7 +641,7 @@ export function useMapWorkflows({
       }
       const otherTypeLabel = subtype === 'other' ? validName(otherType ?? '', 'Object type') : undefined
       const orbitId = target.kind === 'orbit' ? target.orbitId : undefined
-      const identity = createSystemObject(system, subtype, orbitId)
+      const identity = createSystemObject(system, subtype, orbitId, clusterObjects(currentWorkspace.cluster))
       const command: EntityCommand = { kind: 'object-create', orbitId: orbitId ?? null }
       if (rejectBlockedEntityCommand(command)) return false
 
@@ -658,13 +663,13 @@ export function useMapWorkflows({
         },
         isCurrent: contextIsCurrent,
         prepare: latest => {
-          if (!contextIsCurrent()) throw new Error('The selected star system or Add target changed before this object could be added.')
+          if (!contextIsCurrent()) throw new Error('The selected Zone or Add target changed before this object could be added.')
           const latestSystem = latest.cluster.systems.find(candidate => candidate.id === systemId)
-          if (!latestSystem) throw new Error('The star system for this Add action is no longer available.')
+          if (!latestSystem) throw new Error('The Zone for this Add action is no longer available.')
           if (isEntityCommandBlocked(command)) {
             throw new Error('Resolve the Inspector draft before adding an object to this Orbit.')
           }
-          const latestGenerated = createSystemObject(latestSystem, subtype, orbitId)
+          const latestGenerated = createSystemObject(latestSystem, subtype, orbitId, clusterObjects(latest.cluster))
           const object = {
             ...latestGenerated,
             id: identity.id,
@@ -677,8 +682,8 @@ export function useMapWorkflows({
             ...latestSystem,
             objects: [...latestSystem.objects, object],
           })
-          if (target.kind !== 'orbit') return candidate
-          return {
+          if (target.kind !== 'orbit') return fitZoneObjectWorkspace(latest, candidate, latestSystem.id, object.id)
+          const withAngle = {
             ...candidate,
             layout: {
               ...candidate.layout,
@@ -689,6 +694,7 @@ export function useMapWorkflows({
               },
             },
           }
+          return fitZoneObjectWorkspace(latest, withAngle, latestSystem.id, object.id)
         },
       })
       throwIfRejected(result)
@@ -774,9 +780,10 @@ export function useMapWorkflows({
             fromOrbitId: latestObject.placement.kind === 'orbit' ? latestObject.placement.orbitId : null,
             toOrbitId: orbitId,
           })) throw new Error('Resolve the Inspector draft before changing this object, Orbit, or a related dependency.')
-          return updateWorkspaceObject(latest, latestSystem.id, latestObject.id, {
+          const candidate = updateWorkspaceObject(latest, latestSystem.id, latestObject.id, {
             placement: { kind: 'orbit', orbitId },
           }, { angle })
+          return fitZoneObjectWorkspace(latest, candidate, latestSystem.id, latestObject.id)
         },
       })
       throwIfRejected(result)

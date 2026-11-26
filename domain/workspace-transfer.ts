@@ -1,9 +1,8 @@
 /** Pure whole-workspace proposal and immutable application for transferring one hosted object branch. */
-import type { LocalWorkspace, StarSystem, SystemObject } from './workspace-model'
-import { catalogueTypes } from './workspace-model'
+import { catalogueBranches, routeContentsFor, type RouteLanding } from './workspace-route-objects'
+import type { CatalogueObject, LocalWorkspace, Orbit, RouteObject, RouteContents, StarSystem, SystemObject } from './workspace-model'
 import { canPlaceObjectInOrbit } from './workspace-orbits'
 import { captureEffectiveObjectAngles } from './workspace-placement'
-import { validText } from './workspace-validation'
 import { resolveSystemObjectBranch, type SystemObjectBranch } from './workspace-object-branch'
 import { fromNormalizedMapPoint } from './workspace-map-coordinates'
 
@@ -18,12 +17,6 @@ export interface SystemObjectTransferRequest {
   placement: SystemObjectTransferPlacement
 }
 
-export interface SystemObjectTransferKeyConflict {
-  objectId: string
-  currentKey: string
-  suggestedKey: string
-}
-
 export interface SystemObjectTransferRouteAttachment {
   routeId: string
   end: 'from' | 'to'
@@ -36,17 +29,37 @@ export interface SystemObjectTransferStationLink {
   direction: 'incoming' | 'outgoing'
 }
 
-/** Consequences and a safe destination projection remain available while keys are being corrected. */
-export interface SystemObjectTransferReview {
-  /** Exact source snapshot used to compute this proposal's labels and consequences. */
+export type CatalogueTransferSource =
+  | { kind: 'system'; systemId: string }
+  | { kind: 'route'; routeId: string }
+
+export type CatalogueTransferLanding =
+  | { kind: 'system'; systemId: string; placement: SystemObjectTransferPlacement }
+  | ({ kind: 'route' } & RouteLanding)
+
+export interface CatalogueObjectTransferRequest {
+  source: CatalogueTransferSource
+  rootObjectId: string
+  landing: CatalogueTransferLanding
+}
+
+/** The source snapshot, exact landing workspace and relationships shown for acceptance. */
+export interface CatalogueObjectTransferReview {
   sourceWorkspace: LocalWorkspace
-  request: SystemObjectTransferRequest
+  request: CatalogueObjectTransferRequest
   branch: SystemObjectBranch
-  suggestedLocationKeys: ReadonlyMap<string, string>
-  keyConflicts: SystemObjectTransferKeyConflict[]
   detachedRouteAttachments: SystemObjectTransferRouteAttachment[]
   clearedStationLinks: SystemObjectTransferStationLink[]
   previewWorkspace: LocalWorkspace
+}
+
+export interface SystemObjectTransferReview extends Omit<CatalogueObjectTransferReview, 'request'> {
+  request: SystemObjectTransferRequest
+}
+
+interface TransferContents {
+  objects: readonly CatalogueObject[]
+  orbits: readonly Orbit[]
 }
 
 /** Resolves the current owner of an object after transfer, Undo, or Redo. */
@@ -63,9 +76,18 @@ export function resolveSystemObjectHistoryTarget(
   return owner ? { kind: 'object', id: objectId, systemId: owner.id } : null
 }
 
+/** Finds the surviving owner of a unique catalogue identity after history traversal. */
+export function resolveCatalogueObjectHistoryTarget(workspace: LocalWorkspace, objectId: string) {
+  const local = resolveSystemObjectHistoryTarget(workspace, objectId)
+  if (local) return local
+  const routes = workspace.cluster.routes.filter(route => routeContentsFor(workspace.cluster, route.id)
+    ?.objects.some(object => object.id === objectId))
+  return routes.length === 1 ? { kind: 'route-object' as const, id: objectId, routeId: routes[0]!.id } : null
+}
+
 function findSystem(workspace: LocalWorkspace, systemId: string, label: string): StarSystem {
   const system = workspace.cluster.systems.find(candidate => candidate.id === systemId)
-  if (!system) throw new Error(`The ${label} star system no longer exists.`)
+  if (!system) throw new Error(`The ${label} Zone no longer exists.`)
   return system
 }
 
@@ -90,26 +112,10 @@ function validatePlacement(
   }
 }
 
-function locationKeyPrefix(object: SystemObject): string {
-  if (object.family === 'Other') return 'OTH'
-  return catalogueTypes.find(type => type.family === object.family && type.value === object.subtype)?.keyPrefix
-    ?? 'OTH'
-}
-
-function nextAvailableKey(prefix: string, reserved: Set<string>): string {
-  let index = 1
-  let key = `${prefix}-${String(index).padStart(2, '0')}`
-  while (reserved.has(key)) {
-    index += 1
-    key = `${prefix}-${String(index).padStart(2, '0')}`
-  }
-  reserved.add(key)
-  return key
-}
-
 function collectCrossingRelationships(
   workspace: LocalWorkspace,
-  source: StarSystem,
+  source: TransferContents,
+  sourceSystemId: string | undefined,
   branchObjectIds: ReadonlySet<string>,
 ): {
   detachedRouteAttachments: SystemObjectTransferRouteAttachment[]
@@ -117,10 +123,10 @@ function collectCrossingRelationships(
 } {
   const detachedRouteAttachments: SystemObjectTransferRouteAttachment[] = []
   for (const route of workspace.cluster.routes) {
-    if (route.fromSystemId === source.id && route.fromPointId !== null && branchObjectIds.has(route.fromPointId)) {
+    if (route.fromSystemId === sourceSystemId && route.fromPointId !== null && branchObjectIds.has(route.fromPointId)) {
       detachedRouteAttachments.push({ routeId: route.id, end: 'from', pointId: route.fromPointId })
     }
-    if (route.toSystemId === source.id && route.toPointId !== null && branchObjectIds.has(route.toPointId)) {
+    if (route.toSystemId === sourceSystemId && route.toPointId !== null && branchObjectIds.has(route.toPointId)) {
       detachedRouteAttachments.push({ routeId: route.id, end: 'to', pointId: route.toPointId })
     }
   }
@@ -141,252 +147,144 @@ function collectCrossingRelationships(
   return { detachedRouteAttachments, clearedStationLinks }
 }
 
-function buildTransferReview(
+function findContents(
   workspace: LocalWorkspace,
-  request: SystemObjectTransferRequest,
-): SystemObjectTransferReview {
-  if (request.sourceSystemId === request.destinationSystemId) {
-    throw new Error('Choose a different destination star system.')
+  owner: CatalogueTransferSource,
+  label: string,
+): TransferContents {
+  if (owner.kind === 'system') return findSystem(workspace, owner.systemId, label)
+  if (!workspace.cluster.routes.some(route => route.id === owner.routeId)) {
+    throw new Error(`The ${label} Jump Route no longer exists.`)
   }
-  const source = findSystem(workspace, request.sourceSystemId, 'source')
-  const destination = findSystem(workspace, request.destinationSystemId, 'destination')
-  const branch = resolveSystemObjectBranch(source, request.rootObjectId)
-  if (!branch) throw new Error('The selected map object no longer exists in its source system.')
-  const root = source.objects.find(object => object.id === request.rootObjectId)
-  if (!root) throw new Error('The selected map object no longer exists in its source system.')
-  if (destination.objects.some(object => object.id === root.id)) {
-    throw new Error('The selected map object already exists in the destination system.')
-  }
-  validatePlacement(destination, root.id, request.placement)
-
-  const branchObjectIds = new Set(branch.objectIds)
-  const branchObjects = source.objects.filter(object => branchObjectIds.has(object.id))
-  const reserved = new Set(destination.objects.map(object => object.locationKey))
-  for (const object of branchObjects) {
-    if (!reserved.has(object.locationKey)) reserved.add(object.locationKey)
-  }
-
-  const suggestedLocationKeys = new Map<string, string>()
-  const keyConflicts: SystemObjectTransferKeyConflict[] = []
-  for (const object of branchObjects) {
-    if (destination.objects.some(candidate => candidate.locationKey === object.locationKey)) {
-      const suggestedKey = nextAvailableKey(locationKeyPrefix(object), reserved)
-      suggestedLocationKeys.set(object.id, suggestedKey)
-      keyConflicts.push({ objectId: object.id, currentKey: object.locationKey, suggestedKey })
-    } else {
-      suggestedLocationKeys.set(object.id, object.locationKey)
-    }
-  }
-
-  const relationships = collectCrossingRelationships(workspace, source, branchObjectIds)
-  const previewWorkspace = applyTransfer(workspace, request, branch, suggestedLocationKeys, relationships)
-  return {
-    sourceWorkspace: workspace,
-    request: { ...request, placement: { ...request.placement } },
-    branch,
-    suggestedLocationKeys,
-    keyConflicts,
-    ...relationships,
-    previewWorkspace,
-  }
+  return routeContentsFor(workspace.cluster, owner.routeId) ?? { objects: [], orbits: [] }
 }
 
-interface TransferKeyValidationReview {
-  readonly branch: { readonly objectIds: readonly string[] }
-  readonly keyConflicts: readonly { readonly objectId: string }[]
-  readonly suggestedLocationKeys: ReadonlyMap<string, string>
-  readonly request: { readonly destinationSystemId: string }
-  readonly previewWorkspace: {
-    readonly cluster: {
-      readonly systems: readonly {
-        readonly id: string
-        readonly objects: readonly { readonly id: string; readonly locationKey: string }[]
-      }[]
+function replaceContents(
+  cluster: LocalWorkspace['cluster'],
+  owner: CatalogueTransferSource,
+  contents: TransferContents,
+): LocalWorkspace['cluster'] {
+  if (owner.kind === 'system') {
+    const objects = contents.objects.map((object): SystemObject => {
+      const { placement } = object
+      if (placement.kind === 'route') throw new Error('Choose a valid landing within the destination Zone.')
+      return { ...object, placement }
+    })
+    return {
+      ...cluster,
+      systems: cluster.systems.map(system => system.id === owner.systemId
+        ? { ...system, objects, orbits: [...contents.orbits] }
+        : system),
     }
   }
+
+  const routeContents = { ...cluster.routeContents }
+  if (!contents.objects.length && !contents.orbits.length) {
+    delete routeContents[owner.routeId]
+  } else {
+    const objects = contents.objects.map((object): RouteObject => {
+      const { placement } = object
+      if (placement.kind === 'system') throw new Error('Choose a valid position on the destination Jump Route.')
+      return { ...object, placement }
+    })
+    const orbits = contents.orbits.map((orbit): RouteContents['orbits'][number] => {
+      if (orbit.hostId === null) throw new Error('Only hosted Orbits can move onto a Jump Route.')
+      return { id: orbit.id, hostId: orbit.hostId, order: orbit.order }
+    })
+    return { ...cluster, routeContents: { ...routeContents, [owner.routeId]: { objects, orbits } } }
+  }
+  return { ...cluster, routeContents }
 }
 
-function normalizedLocationKeys(
-  review: TransferKeyValidationReview,
-  locationKeys?: ReadonlyMap<string, string>,
-): Map<string, string> {
-  const keys = new Map<string, string>()
-  for (const [objectId, suggested] of review.suggestedLocationKeys) {
-    const value = locationKeys?.has(objectId) ? locationKeys.get(objectId) : suggested
-    if (typeof value !== 'string') continue
-    keys.set(objectId, value.trim())
-  }
-  return keys
-}
-
-/**
- * Reports invalid, blank, duplicate, or destination-occupied Location keys by moved object ID.
- * Missing edits use their reviewed suggestion. Map semantics keep arbitrary supported IDs as data keys.
- */
-export function validateSystemObjectTransferKeys(
-  review: TransferKeyValidationReview,
-  locationKeys?: ReadonlyMap<string, string>,
-): ReadonlyMap<string, string> {
-  const issues = new Map<string, string>()
-  const branchIds = new Set(review.branch.objectIds)
-  const editableIds = new Set(review.keyConflicts.map(conflict => conflict.objectId))
-  for (const objectId of locationKeys?.keys() ?? []) {
-    if (!branchIds.has(objectId)) issues.set(objectId, 'This Location key no longer belongs to the transferred branch.')
-  }
-
-  const keys = normalizedLocationKeys(review, locationKeys)
-  for (const objectId of branchIds) {
-    if (!keys.has(objectId)) {
-      issues.set(objectId, 'Location key is required.')
-      continue
-    }
-    try {
-      keys.set(objectId, validText(keys.get(objectId)!, 'Location key'))
-    } catch (error) {
-      issues.set(objectId, error instanceof Error ? error.message : 'Location key is required.')
-    }
-  }
-
-  const destination = review.previewWorkspace.cluster.systems.find(system =>
-    system.id === review.request.destinationSystemId,
-  )
-  if (!destination) {
-    issues.set(review.request.destinationSystemId, 'The destination star system no longer exists.')
-    return issues
-  }
-
-  const destinationKeys = new Set(destination.objects
-    .filter(object => !branchIds.has(object.id))
-    .map(object => object.locationKey))
-  const grouped = new Map<string, string[]>()
-  for (const [objectId, key] of keys) {
-    const objectIds = grouped.get(key) ?? []
-    objectIds.push(objectId)
-    grouped.set(key, objectIds)
-  }
-  for (const [objectId, key] of keys) {
-    const originalKey = review.suggestedLocationKeys.get(objectId)
-    if (!editableIds.has(objectId) && key !== originalKey) {
-      issues.set(objectId, 'This Location key is available and must stay unchanged during transfer.')
-      continue
-    }
-    if (destinationKeys.has(key)) {
-      issues.set(objectId, `Location key "${key}" is already used in the destination star system.`)
-      continue
-    }
-    if ((grouped.get(key)?.length ?? 0) > 1) {
-      issues.set(objectId, `Location key "${key}" is duplicated in the transferred branch.`)
-    }
-  }
-  return issues
-}
-
-/**
- * Prepares a read-only review, including destination projection, key suggestions, and relationship effects.
- * Invalid keys do not hide the placement preview or transfer consequences.
- */
-export function prepareSystemObjectTransfer(
+/** Proposes a hosted-branch transfer or detachment onto its current Jump Route. */
+export function prepareCatalogueObjectTransfer(
   workspace: LocalWorkspace,
-  request: SystemObjectTransferRequest,
-): SystemObjectTransferReview {
-  return buildTransferReview(workspace, request)
-}
+  request: CatalogueObjectTransferRequest,
+): CatalogueObjectTransferReview {
+  const { source: sourceOwner, landing, rootObjectId } = request
+  if (sourceOwner.kind === 'system' && landing.kind === 'system' && sourceOwner.systemId === landing.systemId) {
+    throw new Error('Choose a different destination.')
+  }
+  const source = findContents(workspace, sourceOwner, 'source')
+  const destination = findContents(workspace, landing, 'destination')
+  const branch = resolveSystemObjectBranch(source, rootObjectId)
+  const root = source.objects.find(object => object.id === rootObjectId)
+  if (!branch || !root) throw new Error('The selected map object no longer exists in its source.')
 
-/**
- * Validates the reviewed consequences and returns one immutable whole-workspace transfer result.
- * The caller owns publishing this snapshot to history and persistence.
- */
-export function applySystemObjectTransfer(
-  workspace: LocalWorkspace,
-  request: SystemObjectTransferRequest,
-  locationKeys?: ReadonlyMap<string, string>,
-): LocalWorkspace {
-  const review = buildTransferReview(workspace, request)
-  const issues = validateSystemObjectTransferKeys(review, locationKeys)
-  const firstIssue = issues.values().next().value
-  if (firstIssue) throw new Error(firstIssue)
-  const finalKeys = normalizedLocationKeys(review, locationKeys)
-  return applyTransfer(
-    workspace,
-    request,
-    review.branch,
-    finalKeys,
-    {
-      detachedRouteAttachments: review.detachedRouteAttachments,
-      clearedStationLinks: review.clearedStationLinks,
-    },
-  )
-}
+  let placement: CatalogueObject['placement']
+  if (landing.kind === 'system') {
+    validatePlacement(findSystem(workspace, landing.systemId, 'destination'), root.id, landing.placement)
+    placement = landing.placement.kind === 'orbit'
+      ? { kind: 'orbit', orbitId: landing.placement.orbitId }
+      : { ...landing.placement }
+  } else {
+    if (!Number.isFinite(landing.progression) || landing.progression < 0 || landing.progression > 1) {
+      throw new Error('Route position must be between 0% and 100%.')
+    }
+    placement = { kind: 'route', progression: landing.progression }
+  }
 
-function applyTransfer(
-  workspace: LocalWorkspace,
-  request: SystemObjectTransferRequest,
-  branch: SystemObjectBranch,
-  locationKeys: ReadonlyMap<string, string>,
-  relationships: Pick<SystemObjectTransferReview, 'detachedRouteAttachments' | 'clearedStationLinks'>,
-): LocalWorkspace {
-  const source = findSystem(workspace, request.sourceSystemId, 'source')
-  const destination = findSystem(workspace, request.destinationSystemId, 'destination')
+  if (sourceOwner.kind === 'route' && landing.kind === 'route' && sourceOwner.routeId === landing.routeId) {
+    if (root.placement.kind !== 'orbit') throw new Error('Choose a different destination.')
+    const objectAngles = {
+      ...workspace.layout.objectAngles,
+      ...captureEffectiveObjectAngles(workspace, source, [root.placement.orbitId]),
+    }
+    delete objectAngles[root.id]
+    return {
+      sourceWorkspace: workspace,
+      request,
+      branch,
+      detachedRouteAttachments: [],
+      clearedStationLinks: [],
+      previewWorkspace: {
+        ...workspace,
+        cluster: replaceContents(workspace.cluster, sourceOwner, {
+          objects: source.objects.map(object => object.id === root.id ? { ...root, placement } : object),
+          orbits: source.orbits,
+        }),
+        layout: { ...workspace.layout, objectAngles },
+      },
+    }
+  }
+
   const branchObjectIds = new Set(branch.objectIds)
   const branchOrbitIds = new Set(branch.orbitIds)
-  const clearedStationObjectIds = new Set(relationships.clearedStationLinks.map(link => link.objectId))
-  const movedObjects = source.objects.filter(object => branchObjectIds.has(object.id))
-  const movedOrbits = source.orbits.filter(orbit => branchOrbitIds.has(orbit.id))
-  const root = movedObjects.find(object => object.id === request.rootObjectId)
-  if (!root) throw new Error('The selected map object no longer exists in its source system.')
+  if (destination.objects.some(object => branchObjectIds.has(object.id))
+    || destination.orbits.some(orbit => branchOrbitIds.has(orbit.id))) {
+    throw new Error('Part of the hosted branch already exists at the destination.')
+  }
 
+  const relationships = collectCrossingRelationships(
+    workspace, source, sourceOwner.kind === 'system' ? sourceOwner.systemId : undefined, branchObjectIds,
+  )
+  const clearedStationObjectIds = new Set(relationships.clearedStationLinks.map(link => link.objectId))
+  function clearStationLink(object: CatalogueObject): CatalogueObject {
+    return clearedStationObjectIds.has(object.id) ? { ...object, jumpStationId: null } : object
+  }
+  const movedObjects = source.objects.filter(object => branchObjectIds.has(object.id)).map(object => {
+    const moved = clearStationLink(object)
+    if (moved.id !== rootObjectId && moved.legacyZonePlacement === undefined) return moved
+    const relocated = { ...moved, placement: moved.id === rootObjectId ? placement : moved.placement }
+    delete relocated.legacyZonePlacement
+    return relocated
+  })
+  const movedOrbits = source.orbits.filter(orbit => branchOrbitIds.has(orbit.id))
+  const withSource = replaceContents(workspace.cluster, sourceOwner, {
+    objects: source.objects.filter(object => !branchObjectIds.has(object.id)).map(clearStationLink),
+    orbits: source.orbits.filter(orbit => !branchOrbitIds.has(orbit.id)),
+  })
+  const withDestination = replaceContents(withSource, landing, {
+    objects: [...destination.objects, ...movedObjects],
+    orbits: [...destination.orbits, ...movedOrbits],
+  })
   const sourceParentOrbitId = root.placement.kind === 'orbit' ? root.placement.orbitId : undefined
   const retainedSourceAngles = sourceParentOrbitId
     ? captureEffectiveObjectAngles(workspace, source, [sourceParentOrbitId])
     : {}
-  const destinationOrbitId = request.placement.kind === 'orbit' ? request.placement.orbitId : undefined
-  const retainedDestinationAngles = destinationOrbitId
-    ? captureEffectiveObjectAngles(workspace, destination, [destinationOrbitId])
+  const retainedDestinationAngles = placement.kind === 'orbit'
+    ? captureEffectiveObjectAngles(workspace, destination, [placement.orbitId])
     : {}
-
-  const transferObject = (object: SystemObject): SystemObject => {
-    const moves = branchObjectIds.has(object.id)
-    const stationMoves = object.jumpStationId ? branchObjectIds.has(object.jumpStationId) : false
-    const clearStationLink = object.family === 'JumpPoint'
-      && object.jumpStationId !== undefined
-      && object.jumpStationId !== null
-      && moves !== stationMoves
-    const locationKey = moves ? locationKeys.get(object.id) : undefined
-    const placement = moves && object.id === request.rootObjectId
-      ? request.placement.kind === 'system'
-        ? { kind: 'system' as const, x: request.placement.x, y: request.placement.y }
-        : { kind: 'orbit' as const, orbitId: request.placement.orbitId }
-      : object.placement
-    const linkCleared = clearStationLink && clearedStationObjectIds.has(object.id)
-    if (
-      (moves && locationKey !== object.locationKey)
-      || (moves && object.id === request.rootObjectId)
-      || linkCleared
-    ) {
-      return {
-        ...object,
-        ...(locationKey !== undefined ? { locationKey } : {}),
-        placement,
-        ...(linkCleared ? { jumpStationId: null } : {}),
-      }
-    }
-    return object
-  }
-
-  const sourceObjects = source.objects
-    .filter(object => !branchObjectIds.has(object.id))
-    .map(transferObject)
-  const sourceOrbits = source.orbits.filter(orbit => !branchOrbitIds.has(orbit.id))
-  const destinationObjects = [
-    ...destination.objects,
-    ...movedObjects.map(transferObject),
-  ]
-  const destinationOrbits = [...destination.orbits, ...movedOrbits]
-  const systems = workspace.cluster.systems.map(system => {
-    if (system.id === source.id) return { ...system, objects: sourceObjects, orbits: sourceOrbits }
-    if (system.id === destination.id) return { ...system, objects: destinationObjects, orbits: destinationOrbits }
-    return system
-  })
 
   const detachedRouteEnds = new Map<string, Set<'from' | 'to'>>()
   for (const attachment of relationships.detachedRouteAttachments) {
@@ -407,8 +305,10 @@ function applyTransfer(
     return route
   })
 
-  const retainedOrbitIds = new Set(systems.flatMap(system => system.orbits.map(orbit => orbit.id)))
-  const retainedOrbitalObjectIds = new Set(systems.flatMap(system => system.objects
+  const cluster = { ...withDestination, routes }
+  const branches = catalogueBranches(cluster)
+  const retainedOrbitIds = new Set(branches.flatMap(branch => branch.orbits.map(orbit => orbit.id)))
+  const retainedOrbitalObjectIds = new Set(branches.flatMap(branch => branch.objects
     .filter(object => object.placement.kind === 'orbit')
     .map(object => object.id)))
   const orbitRadii = Object.fromEntries(Object.entries(workspace.layout.orbitRadii)
@@ -419,17 +319,48 @@ function applyTransfer(
     .filter(([objectId]) => retainedOrbitalObjectIds.has(objectId)))
   for (const [objectId, angle] of Object.entries(retainedSourceAngles)) objectAngles.set(objectId, angle)
   for (const [objectId, angle] of Object.entries(retainedDestinationAngles)) objectAngles.set(objectId, angle)
-  if (request.placement.kind === 'orbit') objectAngles.set(root.id, request.placement.angle)
-  else objectAngles.delete(root.id)
+  if (landing.kind === 'system' && landing.placement.kind === 'orbit') {
+    objectAngles.set(root.id, landing.placement.angle)
+  } else {
+    objectAngles.delete(root.id)
+  }
 
   return {
-    ...workspace,
-    cluster: { ...workspace.cluster, systems, routes },
-    layout: {
-      ...workspace.layout,
-      orbitRadii,
-      orbitRotations,
-      objectAngles: Object.fromEntries(objectAngles),
+    sourceWorkspace: workspace,
+    request,
+    branch,
+    ...relationships,
+    previewWorkspace: {
+      ...workspace,
+      cluster,
+      layout: {
+        ...workspace.layout,
+        orbitRadii,
+        orbitRotations,
+        objectAngles: Object.fromEntries(objectAngles),
+      },
     },
   }
+}
+
+/** Prepares the Zone-to-Zone review using the shared hosted-branch transfer rules. */
+export function prepareSystemObjectTransfer(
+  workspace: LocalWorkspace,
+  request: SystemObjectTransferRequest,
+): SystemObjectTransferReview {
+  if (request.sourceSystemId === request.destinationSystemId) throw new Error('Choose a different destination Zone.')
+  const review = prepareCatalogueObjectTransfer(workspace, {
+    source: { kind: 'system', systemId: request.sourceSystemId },
+    rootObjectId: request.rootObjectId,
+    landing: { kind: 'system', systemId: request.destinationSystemId, placement: request.placement },
+  })
+  return { ...review, request: { ...request, placement: { ...request.placement } } }
+}
+
+/** Validates and applies the exact Zone-to-Zone transfer to an immutable snapshot. */
+export function applySystemObjectTransfer(
+  workspace: LocalWorkspace,
+  request: SystemObjectTransferRequest,
+): LocalWorkspace {
+  return prepareSystemObjectTransfer(workspace, request).previewWorkspace
 }

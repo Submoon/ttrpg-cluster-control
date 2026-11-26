@@ -3,6 +3,7 @@ import { computed, ref, type Ref } from 'vue'
 import {
   createJumpRoute,
   jumpPointsInCluster,
+  routeContentsFor,
   updateJumpRoute,
   type JumpRouteInput,
   type LocalWorkspace,
@@ -92,14 +93,29 @@ function replaceRouteInWorkspace(
   workspace: LocalWorkspace,
   route: LocalWorkspace['cluster']['routes'][number],
 ): LocalWorkspace {
-  const routes = workspace.cluster.routes.some(candidate => candidate.id === route.id)
+  const previous = workspace.cluster.routes.find(candidate => candidate.id === route.id)
+  const routes = previous
     ? workspace.cluster.routes.map(candidate => candidate.id === route.id ? route : candidate)
     : [...workspace.cluster.routes, route]
+  const contents = routeContentsFor(workspace.cluster, route.id)
+  const reversed = previous?.toSystemId === route.fromSystemId && previous.toPointId === route.fromPointId
+    && previous.fromSystemId === route.toSystemId && previous.fromPointId === route.toPointId
+  const routeContents = reversed && contents
+    ? {
+        ...workspace.cluster.routeContents,
+        [route.id]: {
+          ...contents,
+          objects: contents.objects.map(object => object.placement.kind === 'route'
+            ? { ...object, placement: { kind: 'route' as const, progression: 1 - object.placement.progression } }
+            : object),
+        },
+      }
+    : workspace.cluster.routeContents
   const unresolvedExitPositions = { ...(workspace.layout.unresolvedExitPositions ?? {}) }
   if (route.toSystemId !== null) delete unresolvedExitPositions[route.id]
   return {
     ...workspace,
-    cluster: { ...workspace.cluster, routes },
+    cluster: { ...workspace.cluster, routes, routeContents },
     layout: { ...workspace.layout, unresolvedExitPositions },
   }
 }
@@ -204,6 +220,25 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     active.error = ''
   }
 
+  function reverseRouteEndpoints(id: number): void {
+    const active = session.value
+    if (!active || active.id !== id || active.routeId === null) return
+    const { fromSystemId, fromPointId, toSystemId, toPointId, destination } = active.draft
+    if (destination !== 'system' || !fromSystemId || !toSystemId || fromSystemId === toSystemId) return
+
+    active.draft = {
+      ...active.draft,
+      fromSystemId: toSystemId,
+      fromPointId: toPointId,
+      toSystemId: fromSystemId,
+      toPointId: fromPointId,
+    }
+    active.sourceSystemIds = null
+    active.destinationSystemIds = null
+    active.errors = {}
+    active.error = ''
+  }
+
   function offerRouteSystems(id: number, systemIds: string[]): void {
     const active = session.value
     const current = workspace.value
@@ -214,7 +249,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
       candidateId !== otherSystemId && current.cluster.systems.some(system => system.id === candidateId),
     )
     if (!eligibleSystemIds.length) {
-      active.error = 'Choose a different known system for this route endpoint.'
+      active.error = 'Choose a different known Zone for this route endpoint.'
       return
     }
 
@@ -240,7 +275,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     const choosing = active.endpointToChoose
     const offered = choosing === 'from' ? active.sourceSystemIds : active.destinationSystemIds
     if (!offered?.includes(systemId)) {
-      active.error = 'Choose one of the known systems offered for this endpoint.'
+      active.error = 'Choose one of the known Zones offered for this endpoint.'
       return
     }
     if (choosing === 'from') active.sourceSystemIds = null
@@ -257,7 +292,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     const point = jumpPointsInCluster(current.cluster).find(reference => reference.point.id === pointId)
     if (!point || !systemId || point.system.id !== systemId
       || (!isFrom && point.point.id === active.draft.fromPointId)) {
-      active.error = 'Choose a Jump Point from the selected endpoint system.'
+      active.error = 'Choose a Jump Point from the selected endpoint Zone.'
       return
     }
     updateRouteInput(id, isFrom ? 'fromPointId' : 'toPointId', pointId)
@@ -328,7 +363,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     if (session.value?.routeId === null) session.value = null
   }
 
-  async function applyRouteSession(id: number): Promise<boolean> {
+  async function applyRouteSession(id: number, onApplied?: () => void): Promise<boolean> {
     const active = session.value
     const current = workspace.value
     if (!active || active.id !== id) return false
@@ -336,8 +371,13 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
       active.error = 'The Jump Cluster for this draft no longer exists.'
       return false
     }
-    if (active.routeId && !current.cluster.routes.some(route => route.id === active.routeId)) {
+    const currentRoute = current.cluster.routes.find(route => route.id === active.routeId)
+    if (active.routeId && !currentRoute) {
       active.error = 'The Jump Route for this draft no longer exists.'
+      return false
+    }
+    if (currentRoute && !sameValue(routeDraft(currentRoute), active.initial)) {
+      active.error = 'The Jump Route changed. Reopen the Inspector to edit it.'
       return false
     }
 
@@ -352,20 +392,20 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     const errors: RouteInspectorSession['errors'] = {}
     if (!isJumpLevel(jumpLevel)) errors.jumpLevel = 'Jump level must be a positive integer.'
     if (!fromSystem) {
-      errors.fromSystemId = 'Choose an existing system as the route origin.'
+      errors.fromSystemId = 'Choose an existing Zone as the route origin.'
     }
     if (fromPointId && !points.some(reference =>
       reference.point.id === fromPointId && reference.system.id === active.draft.fromSystemId)) {
-      errors.fromPointId = 'Choose a Jump Point in the selected origin system.'
+      errors.fromPointId = 'Choose a Jump Point in the selected origin Zone.'
     }
     if (active.draft.destination === 'system') {
-      if (!toSystem) errors.toSystemId = 'Choose an existing system as the route destination.'
+      if (!toSystem) errors.toSystemId = 'Choose an existing Zone as the route destination.'
       else if (toSystem.id === active.draft.fromSystemId) {
-        errors.toSystemId = 'Choose a different system as the route destination.'
+        errors.toSystemId = 'Choose a different Zone as the route destination.'
       }
       if (active.draft.toPointId && !points.some(reference =>
         reference.point.id === active.draft.toPointId && reference.system.id === active.draft.toSystemId)) {
-        errors.toPointId = 'Choose a Jump Point in the selected destination system.'
+        errors.toPointId = 'Choose a Jump Point in the selected destination Zone.'
       }
     }
     if (active.draft.destination === 'external') {
@@ -421,7 +461,6 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
       const route = active.routeId
         ? updateJumpRoute(current.cluster, active.routeId, routeInput)
         : createJumpRoute(current.cluster, routeInput)
-      const nextWorkspace = replaceRouteInWorkspace(current, route)
       const result = await mutations.execute({
         action: {
           kind: active.routeId === null ? 'create' : 'update',
@@ -429,8 +468,18 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
           target: { kind: 'route', id: route.id },
           parent: { kind: 'cluster', id: active.clusterId },
         },
-        prepare: () => nextWorkspace,
+        prepare: (latest) => {
+          if (latest.id !== current.id || latest.cluster.id !== active.clusterId
+            || (currentRoute && !sameValue(
+              latest.cluster.routes.find(candidate => candidate.id === currentRoute.id), currentRoute,
+            ))) {
+            throw new Error('The Jump Route changed before this edit could be applied.')
+          }
+          const updatedRoute = active.routeId ? updateJumpRoute(latest.cluster, active.routeId, routeInput) : route
+          return replaceRouteInWorkspace(latest, updatedRoute)
+        },
         isCurrent: isSubmittedSessionCurrent,
+        onApplied,
       })
       if (result.status === 'rejected') {
         if (isSubmittedSessionCurrent()) active.error = result.message
@@ -448,7 +497,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
       if (/jump level/i.test(message)) active.errors.jumpLevel = message
       else if (/route origin/i.test(message)) active.errors.fromSystemId = message
       else if (/route destination/i.test(message)) active.errors.toSystemId = message
-      else if (/origin system/i.test(message)) active.errors.fromSystemId = message
+      else if (/origin Zone/i.test(message)) active.errors.fromSystemId = message
       else if (/origin Jump Point/i.test(message)) active.errors.fromPointId = message
       else if (/destination Jump Point/i.test(message)) active.errors.toPointId = message
       else if (/unresolved exit/i.test(message)) active.errors.unresolvedExit = message
@@ -495,6 +544,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     chooseRouteSystem,
     chooseRoutePoint,
     updateRouteInput,
+    reverseRouteEndpoints,
     projectDraft,
     applyRouteSession,
     discardRouteSession,

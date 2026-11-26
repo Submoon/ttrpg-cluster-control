@@ -1,6 +1,7 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { ref, shallowRef } from 'vue'
-import { createLocalWorkspace, type LocalWorkspace } from '../domain/workspace'
+import { type LocalWorkspace } from '../domain/workspace'
 import { resolveSystemObjectHistoryTarget } from '../domain/workspace'
 import { useSystemObjectTransferWorkflow } from '../composables/editor-workflows/useSystemObjectTransferWorkflow'
 import {
@@ -9,7 +10,7 @@ import {
 } from '../composables/editor-workflows/workspace-mutations'
 
 function transferWorkspace(): { workspace: LocalWorkspace; sourceSystemId: string; destinationSystemId: string; rootObjectId: string } {
-  const base = createLocalWorkspace('Kestrel Reach', 'Source')
+  const base = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Source')
   const source = base.cluster.systems[0]!
   const root = source.objects[0]!
   const destination = { ...source, id: 'destination', name: 'Destination', objects: [], orbits: [] }
@@ -153,15 +154,28 @@ test('a drop in another system publishes the transfer and starting frame as one 
   }
 })
 
-test('a drop with a conflicting key keeps its chosen location in review until accepted @pure', async () => {
+test('a drop that clears a Jump Route attachment keeps its chosen location in review until accepted @pure', async () => {
   const harness = transferHarness()
   const workspace = harness.workspace.value
   const [source, destination] = workspace.cluster.systems
   if (!source || !destination || !source.objects[0]) throw new Error('Expected a source object and two systems.')
-  const existing = { ...source.objects[0], id: 'destination-occupant' }
+  const root = { ...source.objects[0], family: 'JumpPoint' as const, subtype: 'jump-point' }
+  const route = {
+    id: 'transfer-route',
+    jumpLevel: 1,
+    fromSystemId: source.id,
+    fromPointId: root.id,
+    toSystemId: destination.id,
+    toPointId: null,
+    playerShared: false,
+  }
   const before = {
     ...workspace,
-    cluster: { ...workspace.cluster, systems: [source, { ...destination, objects: [existing] }] },
+    cluster: {
+      ...workspace.cluster,
+      systems: [{ ...source, objects: [root, ...source.objects.slice(1)] }, destination],
+      routes: [route],
+    },
   }
   harness.workspace.value = before
   const placement = { kind: 'system' as const, x: 0.61, y: 0.39 }
@@ -176,10 +190,10 @@ test('a drop with a conflicting key keeps its chosen location in review until ac
     const review = harness.workflow.session.value
     expect(review?.open).toBe(true)
     expect(review?.placement).toEqual(placement)
-    expect(review?.review?.keyConflicts).toHaveLength(1)
+    expect(review?.review?.detachedRouteAttachments).toHaveLength(1)
     expect(harness.publishCount).toBe(0)
     expect(harness.workspace.value).toBe(before)
-    if (!review) throw new Error('The conflict needs an explicit transfer review.')
+    if (!review) throw new Error('The route change needs an explicit transfer review.')
     const result = await harness.workflow.handleIntent({ kind: 'apply', sessionId: review.sessionId })
     expect(result?.status).toBe('applied')
     expect(harness.publishCount).toBe(1)
@@ -319,4 +333,24 @@ test('a stale transfer session no longer publishes its captured map ghost @pure'
   expect(harness.workflow.session.value).toMatchObject({ sessionId, stale: true, canAccept: false })
   expect(harness.workflow.mapPreview.value).toBeNull()
   harness.dispose()
+})
+
+test('typed off-frame Zone coordinates cannot publish a hosted transfer @pure', async () => {
+  const harness = transferHarness()
+  const before = harness.workspace.value
+  try {
+    const sessionId = await openTransfer(harness)
+    await harness.workflow.handleIntent({ kind: 'choose-free-placement', sessionId, point: { x: 2.3, y: 0.6 } })
+    expect(harness.workflow.session.value).toMatchObject({
+      canAccept: false,
+      error: expect.stringMatching(/must fit within the destination Zone/),
+    })
+    expect(harness.workflow.mapPreview.value).toBeNull()
+    const result = await harness.workflow.handleIntent({ kind: 'apply', sessionId })
+    expect(result?.status).toBe('rejected')
+    expect(harness.publishCount).toBe(0)
+    expect(harness.workspace.value).toBe(before)
+  } finally {
+    harness.dispose()
+  }
 })

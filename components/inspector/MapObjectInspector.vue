@@ -63,7 +63,7 @@
           :parent-publication="selectedSystem?.publication"
           :draft="Boolean(objectSession)"
           :focus-target-id="controlId('publication')"
-          :disabled="props.saving || props.publicationBusy"
+          :disabled="props.saving || props.publicationBusy || (Boolean(props.routeObjectContext) && !objectSession)"
           @select="setObjectPublication"
         />
         <p v-if="fieldError('publication')" class="feedback m-0 error-text" role="alert">
@@ -115,7 +115,7 @@
               :rows="4"
               autoresize
             />
-            <template #hint>This text appears in the player preview when this object is Revealed.</template>
+            <template v-if="!props.routeObjectContext" #hint>This text appears in the player preview when this object is Revealed.</template>
           </UFormField>
           <UFormField label="GM notes" class="entity-inspector-full-row" :error="fieldError('description')">
             <UTextarea
@@ -133,30 +133,67 @@
       <section class="entity-inspector-section" aria-labelledby="object-placement-heading">
         <div class="entity-inspector-section-heading">
           <div>
-            <p class="section-kicker">SYSTEM STRUCTURE</p>
+            <p class="section-kicker">{{ props.routeObjectContext ? 'JUMP ROUTE' : 'ZONE STRUCTURE' }}</p>
             <h3 id="object-placement-heading">Placement and relationships</h3>
           </div>
-          <UButton
-            v-if="props.systemTransferEnabled"
-            class="workspace-control"
-            color="neutral"
-            variant="outline"
-            size="xs"
-            type="button"
-            :disabled="props.saving || props.transferBusy || !selectedSystem"
-            @click="requestSystemTransfer"
-          >
-            Change system…
-          </UButton>
+          <div class="flex flex-wrap justify-end gap-2">
+            <UButton
+              v-if="props.systemTransferEnabled"
+              class="workspace-control"
+              color="neutral"
+              variant="outline"
+              size="xs"
+              type="button"
+              :disabled="props.saving || props.transferBusy || !selectedSystem"
+              @click="requestSystemTransfer"
+            >
+              Change Zone…
+            </UButton>
+            <UButton
+              v-else-if="props.routeObjectContext"
+              class="workspace-control"
+              color="neutral"
+              variant="outline"
+              size="xs"
+              type="button"
+              :disabled="props.saving || props.transferBusy"
+              @click="emit('place-catalogue-object', 'system', $event.currentTarget)"
+            >
+              Detach…
+            </UButton>
+            <UButton
+              v-if="props.routeTransferEnabled"
+              class="workspace-control"
+              color="neutral"
+              variant="outline"
+              size="xs"
+              type="button"
+              :disabled="props.saving || props.transferBusy"
+              @click="emit('place-catalogue-object', 'route', $event.currentTarget)"
+            >
+              Place on Jump Route…
+            </UButton>
+          </div>
         </div>
+        <p v-if="props.routeObjectContext" class="entity-inspector-subtitle m-0">
+          {{ props.routeObjectContext.summary }} · {{ routePlacementSummary }}
+        </p>
         <fieldset class="entity-inspector-fields entity-inspector-fields--paired" :disabled="!objectSession || props.saving">
-          <UFormField label="Placement" class="entity-inspector-full-row" :error="fieldError('placement')">
+          <UFormField v-if="!props.routeObjectContext" label="Placement" class="entity-inspector-full-row" :error="fieldError('placement')">
             <USelect
               :id="controlId('placement')"
               :model-value="objectDraft.placement"
               :items="placementItems"
               @update:model-value="updatePlacement"
             />
+          </UFormField>
+          <UFormField
+            v-else-if="selectedObject.placement.kind === 'route' && objectSession"
+            label="Route position (%)"
+            class="entity-inspector-full-row"
+            :error="fieldError('routePercentage')"
+          >
+            <UInput :id="controlId('routePercentage')" v-model="objectDraft.routePercentage" inputmode="decimal" />
           </UFormField>
           <UFormField v-if="selectedObject.family === 'JumpPoint'" label="Physical Station association" class="entity-inspector-full-row" :error="fieldError('jumpStationId')">
             <USelect
@@ -383,6 +420,8 @@ import {
   type LocalWorkspace,
   type PublicationMode,
   type StarSystem,
+  type CatalogueObject,
+  type RouteContents,
   type SystemObject,
 } from '../../domain/workspace'
 import type { EntityInspectorSession, ObjectDraft, ObjectInspectorFocusRequest } from '../../composables/editor-workflows/types'
@@ -397,11 +436,12 @@ import WorkspaceFeedback from '../WorkspaceFeedback.vue'
 const props = defineProps<{
   workspace: LocalWorkspace
   selectedSystem?: StarSystem
-  selectedObject?: SystemObject
+  selectedObject?: CatalogueObject
+  routeObjectContext?: { summary: string; contents: RouteContents }
   draftObject?: SystemObject
   focusRequest: ObjectInspectorFocusRequest | null
   focusEnabled: boolean
-  session: Extract<EntityInspectorSession, { kind: 'object' }> | null
+  session: Pick<Extract<EntityInspectorSession, { kind: 'object' }>, 'kind' | 'id' | 'targetId' | 'draft' | 'error' | 'errors'> | null
   hasModifiedEntitySession: boolean
   saving: boolean
   editorError: string
@@ -414,6 +454,7 @@ const props = defineProps<{
   publicationBusy?: boolean
   transferBusy?: boolean
   systemTransferEnabled?: boolean
+  routeTransferEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -429,6 +470,7 @@ const emit = defineEmits<{
   'resume-chart-draft': []
   'retry-save': []
   'export-current-json': []
+  'place-catalogue-object': [destination: 'system' | 'route', opener: EventTarget | null]
   'system-transfer-intent': [intent: Extract<SystemObjectTransferIntent, { kind: 'open' }>]
 }>()
 const commands = useEditorCommands()
@@ -461,9 +503,20 @@ const customFields = computed(() => props.workspace.objectFieldSettings.customFi
 const applicableCustomFields = computed(() => selectedObject.value
   ? customFields.value.filter(field => isCustomFieldApplicableToObject(field, selectedObject.value!))
   : [])
-const physicalStations = computed(() => selectedSystem.value?.objects.filter(object =>
-  object.family === 'Installation' && object.subtype === 'station',
-) ?? [])
+const physicalStations = computed(() => (props.routeObjectContext?.contents.objects ?? selectedSystem.value?.objects ?? [])
+  .filter(object => object.family === 'Installation' && object.subtype === 'station'))
+const routePlacementSummary = computed(() => {
+  const placement = selectedObject.value?.placement
+  if (placement?.kind === 'route') {
+    return new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 4 }).format(placement.progression)
+  }
+  if (placement?.kind !== 'orbit' || !props.routeObjectContext) return ''
+  const { objects, orbits } = props.routeObjectContext.contents
+  const orbit = orbits.find(candidate => candidate.id === placement.orbitId)
+  if (!orbit) return ''
+  const host = objects.find(candidate => candidate.id === orbit.hostId)
+  return `Orbit ${orbit.order} around ${host?.name ?? 'missing host'}`
+})
 const placeableOrbits = computed(() => {
   const system = selectedSystem.value
   const object = selectedObject.value
@@ -477,7 +530,7 @@ const hasAtmosphere = computed(() => selectedObject.value?.family === 'Celestial
 const hasNativeFields = computed(() => hasAtmosphere.value || selectedObject.value?.family === 'Installation')
 type StoredSelectOption = { label: string; storedValue: string }
 const placementItems = computed(() => [
-  { label: 'System-level position', value: 'system' },
+  { label: 'Zone-level position', value: 'system' },
   ...placeableOrbits.value.map(orbit => ({
     label: `Orbit ${orbit.order} around ${orbit.hostId === null
       ? 'unoccupied center'

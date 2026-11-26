@@ -1,8 +1,9 @@
 import { gzipSync } from 'node:zlib'
 import { readFile } from 'node:fs/promises'
-import { serializePlayerJson } from '../domain/workspace'
+import { projectPlayerCluster, serializePlayerJson } from '../domain/workspace'
 import { createPlayerShareUrl } from '../utils/player-share-link'
 import { expect, test, type Locator } from './fixtures'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 import { createPlayerInterfaceFixture } from './fixtures/player-interface-fixture'
 import { parseMapCameraTransform } from './helpers'
 import { largestUnobstructedClientRect } from '../utils/map-usable-area'
@@ -92,7 +93,8 @@ function playerRouteFitsViewport(path: Locator): Promise<boolean> {
 }
 
 test('the default player reader opens shared links and files with one camera and public image scopes', async ({ page, baseURL }) => {
-  test.setTimeout(60_000)
+  // This journey exercises file and fragment replacement as well as two document shapes.
+  test.setTimeout(90_000)
   if (!baseURL) throw new Error('The player reader requires a configured base URL.')
   const { document } = createPlayerInterfaceFixture()
   const publicSystem = document.systems.find(system => system.disclosure === 'revealed')
@@ -111,7 +113,7 @@ test('the default player reader opens shared links and files with one camera and
     position: { x: 620, y: 360 },
     disclosure: 'known-type',
     type: 'star-system',
-    label: 'Star system',
+    label: 'Zone',
   })
   document.systems.push({
     id: 'system-3',
@@ -352,9 +354,9 @@ test('the default player reader opens shared links and files with one camera and
   await expect(searchLocator).toBeVisible()
   await page.getByRole('button', { name: 'Map files', exact: true }).click()
   const imageFiles = page.getByRole('dialog', { name: 'Map files', exact: true })
-  await imageFiles.getByRole('radio', { name: /^selected system$/i }).click()
+  await imageFiles.getByRole('radio', { name: /^selected Zone$/i }).click()
   const svgDownloadPromise = page.waitForEvent('download')
-  await imageFiles.getByRole('button', { name: 'Export Selected system SVG', exact: true }).click()
+  await imageFiles.getByRole('button', { name: 'Export Selected Zone SVG', exact: true }).click()
   const svgDownload = await svgDownloadPromise
   const exportedSvg = await readFile(await svgDownload.path(), 'utf8')
   for (const publicName of ['Public Star', 'Harbor World', 'Quiet Moon', 'Unknown presence']) {
@@ -405,6 +407,7 @@ test('the default player reader opens shared links and files with one camera and
   await expect(crossSystemInspector).toBeHidden()
   const remoteMarker = system.getByRole('button', { name: 'Inspect Remote Echo', exact: true })
   await expect(remoteMarker).toHaveClass(/player-continuous-object--dimmed/)
+  await expect(remoteMarker.locator('.player-continuous-object-label')).toHaveText('Remote Echo')
   await expect(searchLocator).toBeVisible()
 
   await page.getByRole('button', { name: 'Filters (2 active criteria)', exact: true }).click()
@@ -423,9 +426,9 @@ test('the default player reader opens shared links and files with one camera and
   expect(overviewSvg).toContain('Remote System')
   expect(overviewSvg).toContain('class="cluster-route-line"')
   expect(overviewSvg).not.toContain('Harbor World')
-  await imageFiles.getByRole('radio', { name: /^selected system$/i }).click()
+  await imageFiles.getByRole('radio', { name: /^selected Zone$/i }).click()
   const pendingDownload = page.waitForEvent('download')
-  await imageFiles.getByRole('button', { name: 'Export Selected system PNG', exact: true }).click()
+  await imageFiles.getByRole('button', { name: 'Export Selected Zone PNG', exact: true }).click()
   const download = await pendingDownload
   expect(download.suggestedFilename()).toMatch(/\.png$/i)
   expect((await readFile(await download.path())).subarray(0, 8))
@@ -465,6 +468,7 @@ test('the default player reader opens shared links and files with one camera and
   const legacyShareUrl = new URL(readerUrl)
   legacyShareUrl.hash = `player=1.gzip.${gzipSync(Buffer.from(JSON.stringify({
     ...document,
+    routeBranches: undefined,
     version: 1,
     routes: [legacyLoop, sharedRoute],
   }), 'utf8')).toString('base64url')}`
@@ -694,4 +698,25 @@ test('the default player reader opens shared links and files with one camera and
   await expect(anonymousRoute).toBeFocused()
   await expect(anonymousRoute).toHaveAttribute('aria-pressed', 'true')
   await expect(routeDetails).toContainText('Unknown destination')
+
+  const { workspace, route, root } = workspaceWithRouteObjects()
+  for (const zone of workspace.cluster.systems) zone.publication = 'hidden'
+  workspace.cluster.routeContents[route.id]!.objects[0]!.publication = 'revealed'
+  await page.goto(readerUrl)
+  await uploadPlayerJson(page.getByLabel('Open player JSON', { exact: true }), 'route-object-only.json',
+    serializePlayerJson(projectPlayerCluster(workspace)))
+  const detached = page.getByRole('region', { name: 'Player-visible continuous map', exact: true })
+  const detachedMarker = detached.getByRole('button', { name: `Inspect ${root.name}`, exact: true })
+  await expect(detachedMarker).toBeInViewport()
+  await detachedMarker.press('Enter')
+  await expect(page.getByRole('region', { name: 'Player object details', exact: true })).toContainText(root.playerText)
+  await expect(page.getByRole('region', { name: 'Public Jump Route association', exact: true })).toHaveCount(0)
+  await expect(detached.getByRole('button', { name: /Jump Level/ })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Map files', exact: true }).click()
+  await expect(imageFiles.getByRole('radio', { name: /^selected Zone$/i })).toBeDisabled()
+  const detachedDownload = page.waitForEvent('download')
+  await imageFiles.getByRole('button', { name: 'Export Entire Cluster SVG', exact: true }).click()
+  const detachedSvg = await readFile(await (await detachedDownload).path(), 'utf8')
+  expect(detachedSvg).toContain(root.name)
+  expect(detachedSvg).not.toMatch(/Vesper|Aster|Jump-3|Unknown destination|Private expedition log/)
 })

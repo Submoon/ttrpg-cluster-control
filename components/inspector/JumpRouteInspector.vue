@@ -3,11 +3,11 @@
     <section class="jump-route-details" aria-label="Jump Route details">
       <div class="jump-route-details-body">
         <span class="section-kicker">JUMP ROUTE / SELECTED</span>
-        <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">SYSTEM CONNECTIONS</span>
+        <span class="type-chip mt-[0.65rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">ZONE CONNECTIONS</span>
         <h2 class="mt-[0.65rem] mb-[0.35rem] [overflow-wrap:anywhere] text-[1.65rem]">Jump Level {{ selectedRoute.jumpLevel }}</h2>
         <p v-if="selectedRoute.name" class="inspector-intro [overflow-wrap:anywhere]">{{ selectedRoute.name }}</p>
         <p class="inspector-intro mb-[1em]">
-          Routes connect systems directly. Local Jump Points are optional; Stations remain separate physical locations.
+          Routes connect Zones directly. Local Jump Points are optional; Stations remain separate physical locations.
         </p>
         <p v-if="props.editorError" class="route-sharing-error" role="alert" aria-live="assertive">
           {{ props.editorError }}
@@ -56,7 +56,7 @@
             :class="{ 'route-sharing-blocked': selectedRouteSharingStatus.isBlocked }"
             role="status"
           >
-            {{ selectedRouteSharingStatus.noVisibleEndpointMessage ?? 'Hidden systems are anonymized, and Jump Point names stay private.' }}
+            {{ selectedRouteSharingStatus.noVisibleEndpointMessage ?? 'Hidden Zones are anonymized, and Jump Point names stay private.' }}
           </p>
         </section>
         <div class="orbit-facts my-4 grid grid-cols-[1fr_auto] gap-[0.55rem] border-y border-[var(--line-soft)] py-[0.8rem]">
@@ -101,12 +101,12 @@
   <section v-else-if="props.session" class="route-session-inspector" aria-label="Jump Route editor">
     <header class="route-session-header">
       <span class="section-kicker">{{ props.session.routeId ? 'JUMP ROUTE / EDIT' : 'JUMP ROUTE / NEW' }}</span>
-      <span class="type-chip mt-[0.45rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">SYSTEM CONNECTIONS</span>
+      <span class="type-chip mt-[0.45rem] inline-block border border-[var(--line)] px-[0.4rem] py-[0.27rem]">ZONE CONNECTIONS</span>
       <h2 class="mt-2 mb-1 [overflow-wrap:anywhere]">
-        {{ props.session.routeId ? 'Edit Jump Route' : 'Connect Systems' }}
+        {{ props.session.routeId ? 'Edit Jump Route' : 'Connect Zones' }}
       </h2>
       <p class="inspector-intro m-0">
-        Routes connect systems directly. Local Jump Points are optional attachments; Stations remain separate physical locations.
+        Routes connect Zones directly. Local Jump Points are optional attachments; Stations remain separate physical locations.
       </p>
     </header>
 
@@ -151,12 +151,12 @@
           <template #hint>Standard levels are 1–9; any positive integer level is supported.</template>
         </UFormField>
 
-        <UFormField label="From system" :error="fieldError('fromSystemId')">
+        <UFormField label="From Zone" :error="fieldError('fromSystemId')">
           <USelect
             id="route-from-system"
             :model-value="props.session.draft.fromSystemId"
             :items="sourceSystemItems"
-            placeholder="Choose an origin system"
+            placeholder="Choose an origin Zone"
             @update:model-value="updateFromSystem($event)"
           />
         </UFormField>
@@ -165,7 +165,7 @@
             id="route-from-point"
             :model-value="pointOptionValue(props.session.draft.fromPointId)"
             :items="sourcePointItems"
-            placeholder="System-only endpoint"
+            placeholder="Zone-only endpoint"
             :disabled="!props.session.draft.fromSystemId"
             @update:model-value="updateFromPoint($event)"
           />
@@ -181,12 +181,12 @@
         </UFormField>
 
         <template v-if="props.session.draft.destination === 'system'">
-          <UFormField label="To system" :error="fieldError('toSystemId')">
+          <UFormField label="To Zone" :error="fieldError('toSystemId')">
             <USelect
               id="route-to-system"
               :model-value="props.session.draft.toSystemId"
               :items="destinationSystemItems"
-              placeholder="Choose a different system"
+              placeholder="Choose a different Zone"
               @update:model-value="updateToSystem($event)"
             />
           </UFormField>
@@ -195,13 +195,23 @@
               id="route-to-point"
               :model-value="pointOptionValue(props.session.draft.toPointId)"
               :items="destinationPointItems"
-              placeholder="System-only endpoint"
+              placeholder="Zone-only endpoint"
               :disabled="!props.session.draft.toSystemId"
               @update:model-value="updateToPoint($event)"
             />
           </UFormField>
+          <UButton
+            v-if="props.session.routeId !== null && props.session.draft.fromSystemId && props.session.draft.toSystemId"
+            color="neutral"
+            variant="outline"
+            type="button"
+            :disabled="props.saving"
+            @click="emit('reverse-route-endpoints', props.session.id)"
+          >
+            Reverse endpoints
+          </UButton>
           <p class="inspector-intro m-0">
-            Destination system: {{ destinationSystem?.name ?? 'Select a system' }}.
+            Destination Zone: {{ destinationSystem?.name ?? 'Select a Zone' }}.
             Jump Points are optional local attachments; Stations remain separate physical locations.
           </p>
         </template>
@@ -232,7 +242,7 @@
         </div>
 
         <p v-if="props.session.routeId === null && props.workspace.cluster.systems.length < 2" class="empty-copy m-0" role="status">
-          Add another system before creating a known-system route. An unresolved external exit remains available.
+          Add another Zone before creating a route between Zones. An unresolved external exit remains available.
         </p>
       </div>
 
@@ -303,6 +313,7 @@ const emit = defineEmits<{
   'delete-route': []
   'clear-error': []
   'update-route-input': [sessionId: number, field: RouteDraftField, value: string | boolean]
+  'reverse-route-endpoints': [sessionId: number]
   'choose-route-system': [sessionId: number, systemId: string]
   'choose-route-point': [sessionId: number, pointId: string]
   'apply-route-session': [sessionId: number]
@@ -352,16 +363,16 @@ const destinationPointItems = computed(() => {
   ]
 })
 const destinationItems = [
-  { label: 'Known system', value: 'system' },
+  { label: 'Known Zone', value: 'system' },
   { label: 'Unresolved external exit', value: 'external' },
 ]
 const destinationSystem = computed(() => systems.value.find(system => system.id === props.session?.draft.toSystemId))
 const fieldLabels: Record<RouteDraftField, string> = {
   jumpLevel: 'Jump level',
-  fromSystemId: 'From system',
+  fromSystemId: 'From Zone',
   fromPointId: 'From Jump Point',
   destination: 'Route destination',
-  toSystemId: 'To system',
+  toSystemId: 'To Zone',
   toPointId: 'To Jump Point',
   unresolvedExit: 'Unknown destination label',
   playerShared: 'Share with players',
@@ -408,7 +419,7 @@ const routeDraftSummary = computed(() => {
     : undefined
   const origin = fromSystem
     ? fromPoint ? `${fromPoint.name} (${fromSystem.name})` : fromSystem.name
-    : 'Choose origin system'
+    : 'Choose origin Zone'
   const toPoint = draft.toPointId
     ? jumpPointsInCluster(props.workspace.cluster).find(reference => reference.point.id === draft.toPointId)?.point
     : undefined
@@ -416,7 +427,7 @@ const routeDraftSummary = computed(() => {
     ? draft.unresolvedExit ? `Unknown destination: ${draft.unresolvedExit}` : 'Name external exit'
     : destinationSystem.value
       ? toPoint ? `${toPoint.name} (${destinationSystem.value.name})` : destinationSystem.value.name
-      : 'Choose destination system'
+      : 'Choose destination Zone'
   return `From ${origin} · To ${destination}`
 })
 const hasRouteChanges = computed(() => {

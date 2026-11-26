@@ -8,7 +8,8 @@ import { projectPlayerContinuousRouteEndpoints } from '../utils/player-continuou
 function publicDocument(): PlayerClusterDocument {
   return {
     format: 'ttrpg-cluster-control-player',
-    version: 2,
+    version: 3,
+    routeBranches: [],
     title: 'Pilgrim Reach',
     systems: [
       {
@@ -200,7 +201,7 @@ test('generic public route endpoints meet the published marker edge without fram
     position: { ...genericSystem.position },
     disclosure: 'known-type',
     type: 'star-system',
-    label: 'Star system',
+    label: 'Zone',
   }
   document.routes = [
     {
@@ -305,7 +306,7 @@ test('generic public marker edge offsets scale with the scene-to-screen transfor
     position: { ...system.position },
     disclosure: 'known-type',
     type: 'star-system',
-    label: 'Star system',
+    label: 'Zone',
   }
   document.routes = [{
     id: 'scaled-marker-edge',

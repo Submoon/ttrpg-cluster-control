@@ -1,6 +1,7 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import process from 'node:process'
-import { createLocalWorkspace, createOrbit, type LocalWorkspace } from '../domain/workspace'
+import { createOrbit, type LocalWorkspace } from '../domain/workspace'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
 import {
   createContinuousOrbitAdjustmentController,
@@ -50,7 +51,7 @@ function createHarness(options: {
   confirmCapacity?: (signal: AbortSignal) => Promise<boolean>
   maxBytes?: number
 } = {}) {
-  let workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  let workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const system = workspace.cluster.systems[0]
   const host = system?.objects[0]
   if (!system || !host) throw new Error('The orbit fixture needs a host object.')

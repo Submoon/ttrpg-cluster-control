@@ -1,3 +1,4 @@
+import { fitZoneObjectWorkspace } from '../../utils/zone-object-branch'
 /** Owns persistent Add intent and one transient, single-use completion token. */
 import { computed, ref, shallowRef, watch, type Ref } from 'vue'
 import {
@@ -16,6 +17,7 @@ import {
   type Point,
   type StarSystem,
 } from '../../domain/workspace'
+import { clusterObjects } from '../../domain/workspace-location-keys'
 import { validName } from '../../domain/workspace-validation'
 import {
   objectPositions,
@@ -901,7 +903,7 @@ export function useSystemCreationWorkflows({
     clearErrors()
     const system = currentSystemForSession(session)
     if (!system) {
-      setError('target', 'The star system for this Add session is no longer available.')
+      setError('target', 'The Zone for this Add session is no longer available.')
       return false
     }
 
@@ -1009,12 +1011,12 @@ export function useSystemCreationWorkflows({
     invalidatePreview(session)
     clearErrors()
     if (!sessionMatchesCurrentContext(session)) {
-      setError('target', 'The star system for this Add session is no longer available.')
+      setError('target', 'The Zone for this Add session is no longer available.')
       return false
     }
     const system = currentSystemForSession(session)
     if (!system) {
-      setError('target', 'The star system for this Add session is no longer available.')
+      setError('target', 'The Zone for this Add session is no longer available.')
       return false
     }
 
@@ -1085,7 +1087,7 @@ export function useSystemCreationWorkflows({
     let system = currentSystemForSession(session)
     if (!currentWorkspace || !system) {
       invalidatePreview(session)
-      if (session === creationSession.value) setError('target', 'The star system for this Add session is no longer available.')
+      if (session === creationSession.value) setError('target', 'The Zone for this Add session is no longer available.')
       return false
     }
 
@@ -1134,7 +1136,7 @@ export function useSystemCreationWorkflows({
         system = currentSystemForSession(session)
         if (!currentWorkspace || !system) {
           invalidatePreview(session)
-          setError('target', 'The star system for this Add session is no longer available.')
+          setError('target', 'The Zone for this Add session is no longer available.')
           return false
         }
         const latestPreview = session.preview
@@ -1155,7 +1157,7 @@ export function useSystemCreationWorkflows({
       let identityName = ''
       let identityOrder = 0
       if (session.type.kind === 'object') {
-        const identity = createSystemObject(system, session.type.subtype)
+        const identity = createSystemObject(system, session.type.subtype, undefined, clusterObjects(currentWorkspace.cluster))
         identityId = identity.id
         identityName = identity.name
       } else {
@@ -1186,7 +1188,7 @@ export function useSystemCreationWorkflows({
           if (latestWorkspace.cluster.id !== session.clusterId || !latestSystem
             || !ownsSession() || session.preview?.id !== previewId
             || JSON.stringify(session.preview) !== previewSignature) {
-            throw new Error('The star system or Add preview changed before this item could be added.')
+            throw new Error('The Zone or Add preview changed before this item could be added.')
           }
           const latestError = validateTarget(session, latestSystem, target)
           if (latestError) throw new Error(latestError)
@@ -1206,7 +1208,7 @@ export function useSystemCreationWorkflows({
             if (target.kind !== 'free' && target.kind !== 'orbit') {
               throw new Error('Choose a clear map position or an existing Orbit for this object.')
             }
-            const generated = createSystemObject(latestSystem, session.type.subtype)
+            const generated = createSystemObject(latestSystem, session.type.subtype, undefined, clusterObjects(latestWorkspace.cluster))
             const object = {
               ...generated,
               id: identityId,
@@ -1227,7 +1229,7 @@ export function useSystemCreationWorkflows({
               }
               candidate = { ...candidate, layout: { ...candidate.layout, objectAngles } }
             }
-            return candidate
+            return fitZoneObjectWorkspace(latestWorkspace, candidate, latestSystem.id, object.id)
           }
 
           const rotation = preview.rotation
@@ -1304,7 +1306,7 @@ export function useSystemCreationWorkflows({
     const system = currentSystemForSession(session)
     const error = candidate.error ?? (system
       ? validateTarget(session, system, candidate.target)
-      : 'The star system for this Add session is no longer available.')
+      : 'The Zone for this Add session is no longer available.')
     if (error) {
       invalidatePreview(session)
       setTargetError(candidate.target, error)

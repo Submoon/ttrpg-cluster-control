@@ -4,14 +4,18 @@ import {
   createLocalWorkspace,
   exportJumpCluster,
   prepareSystemObjectTransfer,
+  prepareCatalogueObjectTransfer,
+  createJumpRoute,
+  routeContentsFor,
   resolveSystemObjectHistoryTarget,
   restoreJumpClusterBackup,
-  validateSystemObjectTransferKeys,
   type LocalWorkspace,
   type StarSystem,
   type SystemObject,
 } from '../domain/workspace'
+import { captureEffectiveObjectAngles } from '../domain/workspace-placement'
 import { objectPositions } from '../utils/system-map-geometry'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 
 function object(
   id: string,
@@ -99,7 +103,7 @@ function nestedBranchWorkspace(): LocalWorkspace {
     ],
   }
   const destination = secondSystem(base, [
-    object('destination-host', { kind: 'system', x: 0.25, y: 0.35 }, { subtype: 'star', locationKey: 'STAR-01' }),
+    object('destination-host', { kind: 'system', x: 0.25, y: 0.35 }, { subtype: 'star', locationKey: 'STAR-02' }),
     object('destination-inherited', { kind: 'orbit', orbitId: 'destination-ring' }, { locationKey: 'PL-03' }),
     object('destination-explicit', { kind: 'orbit', orbitId: 'destination-ring' }, { locationKey: 'PL-04' }),
   ], [{ id: 'destination-ring', hostId: 'destination-host', order: 1 }])
@@ -193,79 +197,6 @@ test('history reveal resolves the transferred root to its actual owner in each s
   expect(resolveSystemObjectHistoryTarget(after, 'missing')).toBeNull()
 })
 
-test('key suggestions skip destination keys and every retained moved key, then reject unavailable edits @pure', () => {
-  const base = createLocalWorkspace('Kestrel Reach', 'Source')
-  const sourceBase = base.cluster.systems[0]!
-  const source: StarSystem = {
-    ...sourceBase,
-    objects: [
-      object('key-root', { kind: 'system', x: 0.5, y: 0.5 }, { subtype: 'star', locationKey: 'STAR-01' }),
-      object('collision-a', { kind: 'orbit', orbitId: 'key-ring-a' }, { locationKey: 'PL-01' }),
-      object('collision-b', { kind: 'orbit', orbitId: 'key-ring-b' }, { locationKey: 'PL-02' }),
-      object('retained-key', { kind: 'orbit', orbitId: 'key-ring-retained' }, { locationKey: 'PL-03' }),
-    ],
-    orbits: [
-      { id: 'key-ring-a', hostId: 'key-root', order: 1 },
-      { id: 'key-ring-b', hostId: 'key-root', order: 2 },
-      { id: 'key-ring-retained', hostId: 'key-root', order: 3 },
-    ],
-  }
-  const destination = secondSystem(base, [
-    object('used-pl-01', { kind: 'system', x: 0.2, y: 0.3 }, { locationKey: 'PL-01' }),
-    object('used-pl-02', { kind: 'system', x: 0.8, y: 0.3 }, { locationKey: 'PL-02' }),
-  ])
-  const workspace = workspaceWithSystems(base, source, destination)
-  const request = {
-    sourceSystemId: source.id,
-    rootObjectId: 'key-root',
-    destinationSystemId: destination.id,
-    placement: { kind: 'system' as const, x: 0.61, y: 0.42 },
-  }
-  const review = prepareSystemObjectTransfer(workspace, request)
-  expect(review.suggestedLocationKeys).toEqual(new Map([
-    ['key-root', 'STAR-01'],
-    ['collision-a', 'PL-04'],
-    ['collision-b', 'PL-05'],
-    ['retained-key', 'PL-03'],
-  ]))
-  expect(review.keyConflicts).toEqual([
-    { objectId: 'collision-a', currentKey: 'PL-01', suggestedKey: 'PL-04' },
-    { objectId: 'collision-b', currentKey: 'PL-02', suggestedKey: 'PL-05' },
-  ])
-
-  const changedAvailableKey = new Map(review.suggestedLocationKeys)
-  changedAvailableKey.set('retained-key', 'PL-20')
-  expect(validateSystemObjectTransferKeys(review, changedAvailableKey).get('retained-key'))
-    .toContain('must stay unchanged')
-  expect(() => applySystemObjectTransfer(workspace, request, changedAvailableKey)).toThrow()
-
-  const invalidKeys = new Map(review.suggestedLocationKeys)
-  invalidKeys.set('collision-a', '   ')
-  invalidKeys.set('collision-b', 'PL-01')
-  const errors = validateSystemObjectTransferKeys(review, invalidKeys)
-  expect(errors.get('collision-a')).toContain('required')
-  expect(errors.get('collision-b')).toContain('already used')
-  expect(() => applySystemObjectTransfer(workspace, request, invalidKeys)).toThrow()
-
-  const duplicateKeys = new Map(review.suggestedLocationKeys)
-  duplicateKeys.set('collision-a', 'SHARED')
-  duplicateKeys.set('collision-b', ' SHARED ')
-  const duplicateErrors = validateSystemObjectTransferKeys(review, duplicateKeys)
-  expect(duplicateErrors.get('collision-a')).toContain('duplicated')
-  expect(duplicateErrors.get('collision-b')).toContain('duplicated')
-  expect(() => applySystemObjectTransfer(workspace, request, duplicateKeys)).toThrow()
-
-  invalidKeys.set('collision-a', ' CUSTOM-A ')
-  invalidKeys.set('collision-b', 'CUSTOM-B')
-  const next = applySystemObjectTransfer(workspace, request, invalidKeys)
-  expect(next.cluster.systems[1]!.objects.slice(-4).map(candidate => candidate.locationKey)).toEqual([
-    'STAR-01', 'CUSTOM-A', 'CUSTOM-B', 'PL-03',
-  ])
-  expect(workspace.cluster.systems[0]!.objects.map(candidate => candidate.locationKey)).toEqual([
-    'STAR-01', 'PL-01', 'PL-02', 'PL-03',
-  ])
-})
-
 test('transfer clears only cross-owner route attachments and Station links in both directions @pure', () => {
   const base = createLocalWorkspace('Kestrel Reach', 'Source')
   const sourceBase = base.cluster.systems[0]!
@@ -321,9 +252,12 @@ test('transfer clears only cross-owner route attachments and Station links in bo
       toPointId: 'destination-jp', playerShared: false,
     },
   ]
+  const { branch, workspace: routeFixture } = workspaceWithRouteObjects()
   const workspace = workspaceWithSystems(base, source, destination, routes, {
     unresolvedExitPositions: { unresolved: { x: 1320, y: 360 } },
+    ...geometryOf(routeFixture),
   })
+  workspace.cluster.routeContents.outbound = branch
   const request = {
     sourceSystemId: sourceId,
     rootObjectId: 'transfer-root',
@@ -349,6 +283,8 @@ test('transfer clears only cross-owner route attachments and Station links in bo
     routes[3],
   ])
   expect(next.layout.unresolvedExitPositions).toEqual({ unresolved: { x: 1320, y: 360 } })
+  expect(next.cluster.routeContents.outbound).toEqual(branch)
+  expect(geometryOf(next)).toMatchObject(geometryOf(routeFixture))
   const nextSource = next.cluster.systems[0]!
   const nextDestination = next.cluster.systems[1]!
   expect(nextSource.objects.find(candidate => candidate.id === 'source-jp-incoming')?.jumpStationId).toBeNull()
@@ -378,7 +314,7 @@ test('the accepted transfer is a complete backup round trip with the original sn
   expect(accepted.cluster.systems[1]!.objects.map(candidate => candidate.id)).toContain('root')
 })
 
-test('prototype-looking legacy entity IDs remain map keys through branch angles and key edits @pure', () => {
+test('prototype-looking legacy entity IDs remain map keys through branch angle changes @pure', () => {
   const base = createLocalWorkspace('Kestrel Reach', 'Source')
   const sourceBase = base.cluster.systems[0]!
   const source: StarSystem = {
@@ -416,19 +352,97 @@ test('prototype-looking legacy entity IDs remain map keys through branch angles 
     destinationSystemId: destination.id,
     placement: { kind: 'orbit' as const, orbitId: 'legacy-destination-ring', angle: 2.3 },
   }
-  const review = prepareSystemObjectTransfer(workspace, request)
-  expect(review.suggestedLocationKeys.get('__proto__')).toBe('PL-02')
-  const next = applySystemObjectTransfer(workspace, request, new Map([
-    ['__proto__', ' TRANSFERRED '],
-  ]))
+  const next = applySystemObjectTransfer(workspace, request)
   const sourceAfter = objectPositions(next.cluster.systems[0]!, geometryOf(next))
 
   expect(next.cluster.systems[1]!.objects.find(candidate => candidate.id === '__proto__')?.locationKey)
-    .toBe('TRANSFERRED')
+    .toBe('PL-01')
   expect(Object.hasOwn(next.layout.objectAngles, '__proto__')).toBe(true)
   expect(next.layout.objectAngles['__proto__']).toBe(2.3)
   expect(Object.hasOwn(next.layout.objectAngles, 'constructor')).toBe(true)
   expect(Object.hasOwn(workspace.layout.objectAngles, 'constructor')).toBe(false)
   expect(next.layout.objectAngles.constructor).toBeCloseTo(Math.PI / 2, 12)
   expect(sourceAfter.get('constructor')).toEqual(sourceBefore.get('constructor'))
+})
+
+test('a Zone Orbit occupant carries its complete branch across Jump Routes and back @pure', () => {
+  const workspace = nestedBranchWorkspace()
+  const [source, destination] = workspace.cluster.systems
+  const route = createJumpRoute(workspace.cluster, {
+    jumpLevel: 2,
+    fromSystemId: source!.id,
+    fromPointId: null,
+    toSystemId: destination!.id,
+    toPointId: null,
+  })
+  workspace.cluster.routes.push(route)
+  const before = objectPositions(source!, geometryOf(workspace))
+  const departure = prepareCatalogueObjectTransfer(workspace, {
+    source: { kind: 'system', systemId: source!.id },
+    rootObjectId: 'root',
+    landing: { kind: 'route', routeId: route.id, progression: 1 },
+  })
+  const inTransit = departure.previewWorkspace
+  expect(routeContentsFor(inTransit.cluster, route.id)?.objects.map(object => [object.id, object.locationKey]))
+    .toEqual([['root', 'PL-01'], ['moon', 'MO-01'], ['nested', 'MO-02']])
+  expect(routeContentsFor(inTransit.cluster, route.id)?.objects[0]?.placement).toEqual({ kind: 'route', progression: 1 })
+  expect(objectPositions(inTransit.cluster.systems[0]!, geometryOf(inTransit)).get('source-survivor'))
+    .toEqual(before.get('source-survivor'))
+  const relay = createJumpRoute(inTransit.cluster, {
+    jumpLevel: 3,
+    fromSystemId: destination!.id,
+    fromPointId: null,
+    toSystemId: source!.id,
+    toPointId: null,
+  })
+  const relaySource = { ...inTransit, cluster: { ...inTransit.cluster, routes: [...inTransit.cluster.routes, relay] } }
+  const transferred = prepareCatalogueObjectTransfer(relaySource, {
+    source: { kind: 'route', routeId: route.id },
+    rootObjectId: 'root',
+    landing: { kind: 'route', routeId: relay.id, progression: 0.32 },
+  }).previewWorkspace
+  expect(routeContentsFor(transferred.cluster, route.id)).toBeUndefined()
+  expect(routeContentsFor(transferred.cluster, relay.id)?.objects[0]?.placement).toEqual({ kind: 'route', progression: 0.32 })
+  const arrival = prepareCatalogueObjectTransfer(transferred, {
+    source: { kind: 'route', routeId: relay.id },
+    rootObjectId: 'root',
+    landing: { kind: 'system', systemId: destination!.id, placement: { kind: 'system', x: 0.61, y: 0.35 } },
+  })
+  const landed = arrival.previewWorkspace
+  const after = objectPositions(landed.cluster.systems[1]!, geometryOf(landed))
+  expect(routeContentsFor(landed.cluster, relay.id)).toBeUndefined()
+  expect(landed.cluster.systems[1]?.orbits.map(orbit => orbit.id)).toEqual([
+    'destination-ring', 'root-ring', 'root-empty', 'moon-ring',
+  ])
+  expect(landed.layout.orbitRotations['moon-ring']).toBe(36)
+  expect(landed.layout.orbitRadii['moon-ring']).toEqual({ horizontal: 37, vertical: 33 })
+  expect(after.get('nested')!.x - after.get('root')!.x).toBeCloseTo(before.get('nested')!.x - before.get('root')!.x, 8)
+  expect(after.get('nested')!.y - after.get('root')!.y).toBeCloseTo(before.get('nested')!.y - before.get('root')!.y, 8)
+})
+
+test('a hosted route object can land as a root on its own Jump Route @pure', () => {
+  const { workspace, route, root, orbit, occupant, branch } = workspaceWithRouteObjects()
+  const sibling = { ...occupant, id: 'sibling', locationKey: 'VE-77' }
+  const carriedOrbit = { id: 'carried-orbit', hostId: occupant.id, order: 1 }
+  const carried = {
+    ...occupant, id: 'carried-object', locationKey: 'VE-78',
+    placement: { kind: 'orbit' as const, orbitId: carriedOrbit.id },
+  }
+  branch.objects.push(sibling, carried)
+  branch.orbits.push(carriedOrbit)
+  const beforeAngle = captureEffectiveObjectAngles(workspace, branch, [orbit.id])[sibling.id]
+  const proposal = prepareCatalogueObjectTransfer(workspace, {
+    source: { kind: 'route', routeId: route.id },
+    rootObjectId: occupant.id,
+    landing: { kind: 'route', routeId: route.id, progression: 0.7 },
+  })
+  const next = proposal.previewWorkspace
+  expect(routeContentsFor(next.cluster, route.id)).toEqual({
+    objects: [root, { ...occupant, placement: { kind: 'route', progression: 0.7 } }, sibling, carried],
+    orbits: [orbit, carriedOrbit],
+  })
+  expect(next.layout.objectAngles[sibling.id]).toBe(beforeAngle)
+  expect(next.layout.objectAngles[occupant.id]).toBeUndefined()
+  expect(proposal.clearedStationLinks).toEqual([])
+  expect(restoreJumpClusterBackup(exportJumpCluster(next)).cluster.routeContents).toEqual(next.cluster.routeContents)
 })

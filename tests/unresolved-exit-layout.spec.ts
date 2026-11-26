@@ -117,7 +117,7 @@ test('workspace validation rejects finite exit anchors whose shared scene bounds
 
   expect(restoreLocalWorkspace(oppositeFiniteExits)).toBeNull()
   expect(() => prepareJsonImport(createLocalWorkspace('Other Reach', 'Other system'), imported))
-    .toThrow('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
+    .toThrow('Choose a valid version 1 through 7 Jump Cluster or version 1 through 5 Zone JSON export.')
 })
 
 test('workspace validation rejects finite coordinates outside the SVG renderer numeric range', { tag: '@pure' }, () => {

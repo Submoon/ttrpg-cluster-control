@@ -1,6 +1,7 @@
 /**
  * Cluster operations keep route references and workspace layout aligned with system changes.
  */
+import { catalogueBranches } from './workspace-route-objects'
 import { defaultObjectFieldSettings } from './workspace-model'
 import type {
   JumpCluster,
@@ -24,28 +25,17 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 type JumpRouteDetails = DistributiveOmit<JumpRoute, 'id' | 'name' | 'playerShared'>
 
 /**
- * Builds a named system with its generated identity and one centered primary star.
- * @param name Name to validate for the new system.
- * @returns New system data; the caller supplies its cluster membership and layout position.
+ * Builds an empty Zone with its generated identity.
+ * @param name Name to validate for the new Zone.
+ * @returns An empty Zone ready for the caller to place in the Cluster.
  * @throws If the name is blank or exceeds the domain name limit.
  */
-function initialStarSystem(name: string): StarSystem {
+function initialZone(name: string): StarSystem {
   return {
     id: crypto.randomUUID(),
-    name: validName(name, 'Star system name'),
+    name: validName(name, 'Zone name'),
     publication: 'known-type',
-    objects: [{
-      id: crypto.randomUUID(),
-      publication: 'known-type',
-      family: 'CelestialBody',
-      subtype: 'star',
-      locationKey: 'A',
-      name: 'Primary Star',
-      description: '',
-      playerText: '',
-      playerFieldMasks: [],
-      placement: { kind: 'system', x: 0.5, y: 0.5 },
-    }],
+    objects: [],
     orbits: [],
   }
 }
@@ -64,18 +54,18 @@ export function initialClusterSystemPosition(index: number): Point {
 }
 
 /**
- * Creates an in-memory workspace containing one cluster and its initial star system.
+ * Creates an in-memory workspace containing one cluster and its initial Zone.
  * This does not persist anything; callers own the save boundary.
  * @param clusterName Name validated for the new Jump Cluster.
- * @param systemName Name validated for the initial star system.
+ * @param systemName Name validated for the initial Zone.
  * @returns A new workspace with default field settings and initial layout.
  * @throws If either name is blank or exceeds the domain name limit.
  */
 export function createLocalWorkspace(clusterName: string, systemName: string): LocalWorkspace {
-  const system = initialStarSystem(systemName)
+  const system = initialZone(systemName)
 
   return {
-    version: 5,
+    version: 7,
     id: crypto.randomUUID(),
     cluster: {
       id: crypto.randomUUID(),
@@ -83,6 +73,7 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
       playerTitle: 'Player Jump Cluster',
       systems: [system],
       routes: [],
+      routeContents: {},
     },
     layout: {
       systemPositions: { [system.id]: initialClusterSystemPosition(0) },
@@ -96,17 +87,17 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
 }
 
 /**
- * Adds a new system and its initial cluster position without changing existing systems.
+ * Adds an empty Zone and its initial Cluster position.
  * @param workspace Current immutable workspace.
  * @param name Optional name; defaults to the next "New System" label.
  * @returns Both the added system and the resulting workspace.
- * @throws If the supplied system name is invalid.
+ * @throws If the supplied Zone name is invalid.
  */
 export function addStarSystem(
   workspace: LocalWorkspace,
-  name = `New System ${workspace.cluster.systems.length + 1}`,
+  name = `New Zone ${workspace.cluster.systems.length + 1}`,
 ): { workspace: LocalWorkspace; system: StarSystem } {
-  const system = initialStarSystem(name)
+  const system = initialZone(name)
   const index = workspace.cluster.systems.length
   return {
     system,
@@ -139,8 +130,9 @@ export function replaceWorkspaceSystem(workspace: LocalWorkspace, system: StarSy
   const systems = workspace.cluster.systems.map(candidate =>
     candidate.id === system.id ? system : candidate,
   )
-  const orbitIds = new Set(systems.flatMap(candidate => candidate.orbits.map(orbit => orbit.id)))
-  const orbitalObjectIds = new Set(systems.flatMap(candidate =>
+  const branches = catalogueBranches({ ...workspace.cluster, systems })
+  const orbitIds = new Set(branches.flatMap(candidate => candidate.orbits.map(orbit => orbit.id)))
+  const orbitalObjectIds = new Set(branches.flatMap(candidate =>
     candidate.objects
       .filter(object => object.placement.kind === 'orbit')
       .map(object => object.id),
@@ -251,10 +243,10 @@ function jumpRouteDetails(cluster: JumpCluster, input: JumpRouteInput): JumpRout
   if (!isJumpLevel(input.jumpLevel)) throw new Error('Jump level must be a positive integer.')
 
   const fromSystem = cluster.systems.find(system => system.id === input.fromSystemId)
-  if (!fromSystem) throw new Error('Choose an existing system as the route origin.')
+  if (!fromSystem) throw new Error('Choose an existing Zone as the route origin.')
   if (input.fromPointId !== null && !fromSystem.objects.some(object =>
     object.id === input.fromPointId && object.family === 'JumpPoint')) {
-    throw new Error('Choose a Jump Point in the selected origin system.')
+    throw new Error('Choose a Jump Point in the selected origin Zone.')
   }
 
   if (input.toSystemId === null) {
@@ -270,14 +262,14 @@ function jumpRouteDetails(cluster: JumpCluster, input: JumpRouteInput): JumpRout
   }
 
   const toSystem = cluster.systems.find(system => system.id === input.toSystemId)
-  if (!toSystem) throw new Error('Choose an existing system as the route destination.')
-  if (toSystem.id === fromSystem.id) throw new Error('Choose a different system as the route destination.')
+  if (!toSystem) throw new Error('Choose an existing Zone as the route destination.')
+  if (toSystem.id === fromSystem.id) throw new Error('Choose a different Zone as the route destination.')
   if (input.toPointId !== null && !toSystem.objects.some(object =>
     object.id === input.toPointId && object.family === 'JumpPoint')) {
-    throw new Error('Choose a Jump Point in the selected destination system.')
+    throw new Error('Choose a Jump Point in the selected destination Zone.')
   }
   if (input.unresolvedExit !== undefined) {
-    throw new Error('A known-system destination cannot include an unresolved-exit label.')
+    throw new Error('A destination Zone cannot include an unresolved-exit label.')
   }
   return {
     jumpLevel: input.jumpLevel,
@@ -338,7 +330,7 @@ export function renameLocalWorkspace(
   systemId = workspace.cluster.systems[0]?.id,
 ): LocalWorkspace {
   if (!systemId || !workspace.cluster.systems.some(system => system.id === systemId)) {
-    throw new Error('The local workspace has no matching star system.')
+    throw new Error('The local workspace has no matching Zone.')
   }
 
   return {
@@ -348,7 +340,7 @@ export function renameLocalWorkspace(
       name: validName(clusterName, 'Jump Cluster name'),
       systems: workspace.cluster.systems.map(system =>
         system.id === systemId
-          ? { ...system, name: validName(systemName, 'Star system name') }
+          ? { ...system, name: validName(systemName, 'Zone name') }
           : system,
       ),
     },
@@ -369,14 +361,14 @@ export function updateChartDetails(
   changes: ChartDetailsChanges,
 ): LocalWorkspace {
   if (!workspace.cluster.systems.some(system => system.id === systemId)) {
-    throw new Error('The local workspace has no matching star system.')
+    throw new Error('The local workspace has no matching Zone.')
   }
   if (!isPublicationMode(changes.publication)) {
     throw new Error('Choose a supported publication mode.')
   }
 
   const clusterName = validName(changes.clusterName, 'Jump Cluster name')
-  const systemName = validName(changes.systemName, 'Star system name')
+  const systemName = validName(changes.systemName, 'Zone name')
   const playerTitle = validText(changes.playerTitle, 'Player-facing title', maxNameLength)
 
   return {

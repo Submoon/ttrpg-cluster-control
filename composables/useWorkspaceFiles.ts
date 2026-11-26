@@ -394,7 +394,7 @@ export function useWorkspaceFiles({
         return
       }
       if (!content || typeof content !== 'object' || !('type' in content) || content.type !== 'system') {
-        throw new Error('Choose a standalone star system JSON file. Use Restore Jump Cluster for a complete Cluster backup.')
+        throw new Error('Choose a standalone Zone JSON file. Use Restore Jump Cluster for a complete Cluster backup.')
       }
       if (!await beforeWorkspaceOperation()) {
         if (importOperationIsCurrent(epoch)) clearImportReview()
@@ -420,7 +420,7 @@ export function useWorkspaceFiles({
         ? prepared.workspace.layout.systemPositions[importedSystemId]
         : undefined
       if (!importedSystemId || !system || !anchor || !isFinitePoint(anchor)) {
-        throw new Error('The imported star system could not be prepared for placement.')
+        throw new Error('The imported Zone could not be prepared for placement.')
       }
 
       importContent = content

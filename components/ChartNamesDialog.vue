@@ -52,6 +52,7 @@ const closeFocus = useDialogCloseFocusBarrier(open)
 const props = defineProps<{
   guardMode: TransitionGuard
   hasModifiedEntitySession: boolean
+  suppressReturnFocus?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -59,6 +60,7 @@ const emit = defineEmits<{
 }>()
 
 let dialogOpener: HTMLElement | null = null
+let returnFocusSuppressedForOpening = false
 
 function focusableElement(active: Element | null): HTMLElement | null {
   if (active instanceof HTMLElement) return active
@@ -75,7 +77,8 @@ function isVisibleFocusTarget(element: HTMLElement): boolean {
 
 function focusAfterDialogClose(event: Event): void {
   event.preventDefault()
-  if (open.value) {
+  if (open.value || returnFocusSuppressedForOpening) {
+    dialogOpener = null
     closeFocus.settleClosingFocus()
     return
   }
@@ -90,6 +93,7 @@ function focusAfterDialogClose(event: Event): void {
 function captureDialogOpener(): void {
   const active = document.activeElement
   dialogOpener = focusableElement(active)
+  returnFocusSuppressedForOpening = props.suppressReturnFocus === true
 }
 
 defineExpose({ whenClosingFocusSettled: closeFocus.whenClosingFocusSettled })

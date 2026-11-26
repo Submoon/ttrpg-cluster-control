@@ -1,5 +1,6 @@
 import { computed, type ComputedRef, type Ref } from 'vue'
 import type { LocalWorkspace, StarSystem } from '../domain/workspace'
+import { clusterObjects } from '../domain/workspace-location-keys'
 import type { FieldFilterOption } from '../utils/field-filter-matching'
 import type { WardenFilterCriteria } from '../utils/filter-criteria'
 import { createWardenObjectFilterMatcher } from '../utils/warden-map-filters'
@@ -40,7 +41,7 @@ export function useWardenMapFilters({
     if (!matcher || !currentWorkspace) return []
     const objects = activeView.value === 'system'
       ? selectedSystem.value?.objects ?? []
-      : currentWorkspace.cluster.systems.flatMap(system => system.objects)
+      : clusterObjects(currentWorkspace.cluster)
     return objects.filter(object => !matcher(object)).map(object => object.id)
   })
 

@@ -1,9 +1,9 @@
 <template>
-  <section class="player-public-hierarchy" aria-label="Visible system hierarchy">
-    <div v-if="props.workspacePresentation" class="player-public-panel-heading">
+  <section class="player-public-hierarchy" :aria-label="props.branch ? 'Visible object branch' : 'Visible Zone hierarchy'">
+    <div v-if="!props.branch && props.workspacePresentation" class="player-public-panel-heading">
       <span class="section-kicker">PUBLIC NAVIGATION</span><h2>Visible objects</h2>
     </div>
-    <h3 v-else class="m-0 text-sm font-semibold">Visible objects</h3>
+    <h3 v-else-if="!props.branch" class="m-0 text-sm font-semibold">Visible objects</h3>
     <p v-if="!treeItems.length" class="empty-copy">No map objects are visible to players.</p>
     <div v-else ref="treeContainer" class="player-system-hierarchy-tree">
       <!-- @vue-generic {PlayerTreeItem[]} -->
@@ -115,6 +115,7 @@ const props = withDefaults(defineProps<{
   selectedOrbitId?: string | null
   dimmedObjectIds: ReadonlySet<string>
   workspacePresentation?: boolean
+  branch?: boolean
 }>(), {
   selectedOrbitId: null,
   workspacePresentation: false,
