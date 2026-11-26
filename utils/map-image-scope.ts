@@ -11,6 +11,7 @@ export interface MapImageContextSnapshot {
   detailSystemIds: readonly string[]
   dimmedObjectIds: readonly string[]
   selectedRouteId: string | null
+  selectedRouteObjectId?: string
 }
 
 /** Falls back to the Cluster when a selected-system image no longer has an inspected owner. */
@@ -36,6 +37,7 @@ export function mapImageContextKey(
     detailSystemIds: [...snapshot.detailSystemIds].sort(),
     dimmedObjectIds: [...snapshot.dimmedObjectIds].sort(),
     selectedRouteId: snapshot.selectedRouteId,
+    selectedRouteObjectId: snapshot.selectedRouteObjectId,
   })
 }
 

@@ -1,10 +1,44 @@
 import { readFile } from 'node:fs/promises'
+import { exportJumpCluster, restoreJumpClusterBackup } from '../domain/workspace'
 import { expect, test } from './fixtures'
 import { openMapFilesSection } from './helpers'
 import { importCampaignWorkspace } from './scenarios/campaign-workspace'
+import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 
-test('a Warden downloads the named system interior as SVG and PNG', async ({ page }) => {
-  await importCampaignWorkspace(page, undefined, { width: 390, height: 844 })
+test('a Warden downloads the Cluster overview and the named Zone interior', async ({ page }) => {
+  const campaign = restoreJumpClusterBackup(campaignBaselineFixture)
+  const { branch, root } = workspaceWithRouteObjects()
+  const routeId = campaign.cluster.routes[0]!.id
+  root.locationKey = 'VES-99'
+  campaign.cluster.routeContents[routeId] = branch
+  await importCampaignWorkspace(page, exportJumpCluster(campaign), { width: 390, height: 844 })
+
+  const overview = await openMapFilesSection(page, 'Export an image')
+  const clusterDownload = page.waitForEvent('download')
+  await overview.getByRole('menuitem', { name: 'Warden SVG', exact: true }).click()
+  const clusterSvg = await clusterDownload
+  expect(clusterSvg.suggestedFilename()).toBe('Kestrel Reach Prime-jump-cluster.svg')
+  const clusterText = await readFile(await clusterSvg.path(), 'utf8')
+  const routePaint = await page.evaluate((source) => {
+    const image = new DOMParser().parseFromString(source, 'image/svg+xml')
+    const marks = [...image.querySelectorAll('[data-route-object-id]')]
+    return {
+      marks: marks.map(mark => ({
+        owner: mark.getAttribute('data-owner-route-id'),
+        name: mark.querySelector('title')?.textContent,
+        color: (mark.querySelector('.warden-route-object-glyph') as SVGElement | null)?.style.fill,
+        radius: mark.querySelector('.warden-route-object-marker')?.getAttribute('r'),
+      })),
+      interactiveContent: image.querySelectorAll('foreignObject, [tabindex], [role="button"]').length,
+    }
+  }, clusterText)
+  expect(routePaint).toEqual({
+    marks: [{ owner: routeId, name: 'VES-99, Survey vessel (Vessel)', color: 'rgb(34, 153, 255)', radius: '14' }],
+    interactiveContent: 0,
+  })
+  expect(clusterText).not.toContain(root.description)
+
   const images = await openMapFilesSection(page, 'Export an image', 'keyboard')
   await images.getByRole('menuitem', { name: 'Export a Zone…', exact: true }).press('ArrowRight')
   const systems = page.getByRole('menu', { name: 'Export a Zone…', exact: true })
@@ -24,12 +58,14 @@ test('a Warden downloads the named system interior as SVG and PNG', async ({ pag
       objects: [...image.querySelectorAll('.continuous-warden-object-name')].map(name => name.textContent),
       frames: image.querySelectorAll('.continuous-warden-system-envelope').length,
       captions: [...image.querySelectorAll('.continuous-warden-system-route-caption text')].map(label => label.textContent),
+      routeObjects: image.querySelectorAll('[data-route-object-id]').length,
     }
   }, text)
   expect(scene.names).toEqual(['Vesper Prime'])
   expect(scene.objects).toContain('Iria')
   expect(scene.frames).toBe(0)
   expect(scene.captions).toEqual(expect.arrayContaining(['Jump-1', 'Harrow']))
+  expect(scene.routeObjects).toBe(0)
 
   const pngMenu = await openMapFilesSection(page, 'Export an image')
   const pngDownload = page.waitForEvent('download')
@@ -38,5 +74,9 @@ test('a Warden downloads the named system interior as SVG and PNG', async ({ pag
   expect(png.suggestedFilename()).toBe('Vesper Prime-star-system.png')
   const bytes = await readFile(await png.path())
   expect(bytes.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-  expect(Math.max(bytes.readUInt32BE(16), bytes.readUInt32BE(20))).toBeGreaterThan(1400)
+  const width = bytes.readUInt32BE(16)
+  const height = bytes.readUInt32BE(20)
+  expect(Math.max(width, height)).toBeGreaterThan(1400)
+  expect(Math.max(width, height)).toBeLessThanOrEqual(4096)
+  expect(width * height).toBeLessThanOrEqual(4_194_304)
 })

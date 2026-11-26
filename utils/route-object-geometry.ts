@@ -5,6 +5,20 @@ import { CONTINUOUS_MAP_SYSTEM_SCALE } from './continuous-map-projection'
 
 type RouteCurve = Pick<ContinuousMapRouteGeometry, 'start' | 'control1' | 'control2' | 'end'>
 
+export const routeObjectMarkerRadiusPixels = 14
+
+export function routeBranchShowsDetail(pixelsPerSceneUnit: number): boolean {
+  return pixelsPerSceneUnit * CONTINUOUS_MAP_SYSTEM_SCALE >= 0.65
+}
+
+export function routeObjectIsVisible(
+  object: RouteContents['objects'][number],
+  showDetail: boolean,
+  selectedObjectId?: string,
+): boolean {
+  return showDetail || object.placement.kind === 'route' || object.id === selectedObjectId
+}
+
 /** Logical progression follows the cubic parameter of the displayed path. */
 export function pointOnRoute(curve: RouteCurve, progression: number): Point {
   const t = progression
