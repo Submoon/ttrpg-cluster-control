@@ -42,7 +42,7 @@ Implementation started from integration candidate c925e1a1, which adds the appro
 
 ## Resolution
 
-443a94b7 was integrated in 1d31002d. New key assignments and reviewed copies use the whole Cluster; existing duplicate assignments survive transfers and backups. The initial integration candidate passed 44 focused checks and typecheck. The hosted-transfer browser case passed in the candidate containing ticket 03. Integrated browser coverage of the standalone import review remains part of cumulative verification.
+443a94b7 was integrated in 1d31002d. New key assignments and reviewed copies use the whole Cluster. Existing duplicate assignments survive transfers and backups. The initial integration candidate passed 44 focused checks and typecheck. The hosted-transfer browser case passed in the candidate containing ticket 03. With tickets 01 to 03 integrated, all 718 pure checks, typecheck and the existing standalone import browser journey passed. Browser evidence is in `test-results/local-test-1795686828770-1092-47d79e68/playwright-run-1`.
 
 ## Verification
 
@@ -57,4 +57,4 @@ Record the checked candidate, command/scope, result and evidence location. This 
 
 On the ticket branch based on c925e1a1, the focused Playwright pure suite passed 161 cases covering workspace admission, codec and import behavior, retained keys, editing controllers, transfer, and history. The subsequent typed current-version fixture correction was checked with the import and Location key suites, which passed 12 cases. The reports are under the ticket worktree's `test-results/ticket02-candidate-pure.json` and `test-results/ticket02-current-fixture-pure.json`. Scoped ESLint passed with zero warnings.
 
-The initial full pure run identified fixtures that still used older version expectations or unmarked local duplicate keys. It also exposed worktree access limits for the Windows symlink and local Playwright runner tests. The initial evidence is `test-results/ticket02-first-full-pure.json`. The existing import and hosted-branch browser journeys now assert reviewed key replacement and key retention, respectively. They are pending verification on the integrated candidate.
+The initial full pure run identified fixtures that still used older version expectations or unmarked local duplicate keys. It also exposed worktree access limits for the Windows symlink and local Playwright runner tests. The initial evidence is `test-results/ticket02-first-full-pure.json`. The existing import and hosted-branch browser journeys assert reviewed key replacement and key retention, respectively.
