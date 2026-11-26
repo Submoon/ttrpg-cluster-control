@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures'
 import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import {
+  createLocalWorkspace,
   createOrbit,
   createSystemObject,
   exportJumpCluster,

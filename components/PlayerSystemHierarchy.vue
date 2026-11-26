@@ -1,5 +1,5 @@
 <template>
-  <section class="player-public-hierarchy" aria-label="Visible system hierarchy">
+  <section class="player-public-hierarchy" aria-label="Visible Zone hierarchy">
     <div v-if="props.workspacePresentation" class="player-public-panel-heading">
       <span class="section-kicker">PUBLIC NAVIGATION</span><h2>Visible objects</h2>
     </div>
