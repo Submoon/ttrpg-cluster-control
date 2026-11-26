@@ -11,6 +11,7 @@ import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import {
   addClusterSystem,
   captureMapExportBlobs,
+  centerWorkspaceSelection,
   createSingleSystemWorkspace,
   downloadJson,
   exposedContinuousObjectHitPoint,
@@ -328,17 +329,24 @@ test('transferring a hosted branch reviews its route attachment and retains its 
   await expect(routeRoot.locator('.warden-route-object-key')).toBeHidden()
   await expect(routeRoot.locator('.warden-route-object-name')).toBeHidden()
   await expect(routeRoot.locator('.gm-publication-badge')).toBeHidden()
+  await routeRoot.press('Enter')
   await page.setViewportSize({ width: 390, height: 700 })
+  await hideWorkspaceInspector(page)
   const navigation = page.getByRole('button', { name: 'Open map navigation controls' })
   await navigation.click()
   await page.getByRole('slider', { name: 'Map zoom level' }).press('End')
   await expect(zoomIn).toBeDisabled()
+  await navigation.click()
+  await centerWorkspaceSelection(page)
   await expect(routeRoot.locator('.warden-route-object-key')).toHaveText(fixture.root.locationKey)
   await expect(routeRoot.locator('.warden-route-object-name')).toHaveText('Herma')
   await expect(routeRoot.locator('.gm-publication-badge')).toBeVisible()
-  await expect(map.locator(`[data-route-object-id="${fixture.child.id}"] .warden-route-object-name`)).toHaveText('Nix')
+  const routeChild = map.locator(`[data-route-object-id="${fixture.child.id}"]`)
+  await routeChild.press('Enter')
+  await hideWorkspaceInspector(page)
+  await centerWorkspaceSelection(page)
+  await expect(routeChild.locator('.warden-route-object-name')).toHaveText('Nix')
   await expect(map.locator('.warden-route-object-orbit')).toHaveCount(1)
-  await navigation.click()
   await page.setViewportSize({ width: 1440, height: 900 })
   await waitForWorkspaceSaved(page)
   await routeRoot.press('Enter')
