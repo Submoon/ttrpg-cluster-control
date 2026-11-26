@@ -320,3 +320,23 @@ test('a stale transfer session no longer publishes its captured map ghost @pure'
   expect(harness.workflow.mapPreview.value).toBeNull()
   harness.dispose()
 })
+
+test('typed off-frame Zone coordinates cannot publish a hosted transfer @pure', async () => {
+  const harness = transferHarness()
+  const before = harness.workspace.value
+  try {
+    const sessionId = await openTransfer(harness)
+    await harness.workflow.handleIntent({ kind: 'choose-free-placement', sessionId, point: { x: 2.3, y: 0.6 } })
+    expect(harness.workflow.session.value).toMatchObject({
+      canAccept: false,
+      error: expect.stringMatching(/must fit within the destination Zone/),
+    })
+    expect(harness.workflow.mapPreview.value).toBeNull()
+    const result = await harness.workflow.handleIntent({ kind: 'apply', sessionId })
+    expect(result?.status).toBe('rejected')
+    expect(harness.publishCount).toBe(0)
+    expect(harness.workspace.value).toBe(before)
+  } finally {
+    harness.dispose()
+  }
+})

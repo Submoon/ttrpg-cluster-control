@@ -314,16 +314,16 @@
       <g class="cluster-map-content" :transform="cameraTransform">
         <g class="cluster-map-items">
           <g
-            v-if="transferBranchPreview"
-            class="continuous-warden-transfer-preview"
-            :transform="systemTransform(transferBranchPreview.projection)"
+            v-if="landingBranchPreview"
+            class="continuous-warden-transfer-preview continuous-warden-branch-landing"
+            :transform="systemTransform(landingBranchPreview.projection)"
             aria-hidden="true"
             pointer-events="none"
           >
-            <title>Transferred branch placement preview</title>
+            <title>Branch landing preview</title>
             <g class="system-orbits continuous-warden-transfer-orbits">
               <ellipse
-                v-for="orbit in transferBranchPreview.orbits"
+                v-for="orbit in landingBranchPreview.orbits"
                 :key="orbit.id"
                 class="orbit-ring continuous-warden-transfer-orbit"
                 :cx="orbit.center.x"
@@ -335,15 +335,15 @@
             </g>
             <g class="system-map-items continuous-warden-transfer-objects">
               <g
-                v-for="object in transferBranchPreview.objects"
+                v-for="object in landingBranchPreview.objects"
                 :key="object.id"
                 class="continuous-warden-transfer-object"
-                :class="{ 'is-root': object.id === transferBranchPreview.rootObjectId }"
+                :class="{ 'is-root': object.id === landingBranchPreview.rootObjectId }"
                 :transform="`translate(${object.position.x} ${object.position.y})`"
               >
                 <circle class="continuous-warden-transfer-object-mark" r="12" />
                 <text class="continuous-warden-object-glyph" y="5" text-anchor="middle">
-                  {{ transferObjectGlyph(object) }}
+                  {{ landingObjectGlyph(object) }}
                 </text>
                 <text class="continuous-warden-object-key" y="31" text-anchor="middle">
                   {{ object.locationKey }}
@@ -486,7 +486,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, useId, watch } from 'vue'
 import type { DeepReadonly } from 'vue'
 import { pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
-import { jumpPointsInCluster, minimumOrbitRadius, workspaceSystemFrame, type CatalogueSubtype, type JumpCluster, type JumpRoute, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem, type SystemFrameInsets, type SystemObjectTransferPlacement } from '../domain/workspace'
+import { prepareSystemObjectTransfer, jumpPointsInCluster, minimumOrbitRadius, workspaceSystemFrame, type CatalogueSubtype, type JumpCluster, type JumpRoute, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem, type SystemFrameInsets, type SystemObjectTransferPlacement } from '../domain/workspace'
 import { normalizeOrbitRotation } from '../domain/workspace-orbits'
 import { getDetachedOrbitCenter, objectPositions, objectsMovedWithOrbit, orbitCenter, orbitPlacementHitsAtPoint, orbitPointAtAngle, orbitRadii as readOrbitRadii, orbitRotation, orbitRotationHandlePoint, rotatePoint, requiredPosition } from '../utils/system-map-geometry'
 import { orbitGeometrySource } from '../utils/orbit-geometry-source'
@@ -517,6 +517,7 @@ import {
   moveWardenClusterAnchorBySceneDelta,
   previewWardenSystemObjects,
   projectWardenSystem,
+  previewWardenSystemObjects,
   unprojectWardenClusterAnchor,
   wardenStarHaloRadius,
   type ContinuousWardenSystemProjection,
@@ -549,6 +550,7 @@ import { useWardenMapDom } from './maps/useWardenMapDom'
 import type { MapImageExportOptions, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import { mapImageContextKey, type MapImageScope } from '../utils/map-image-scope'
 import { exportContinuousWardenMapImage } from '../utils/continuous-warden-image-export'
+import { projectZoneObjectBranch } from '../utils/zone-object-branch'
 import { resolveSystemObjectTransferMapPlacement } from '../utils/system-object-transfer-map-placement'
 import {
   CONTINUOUS_SYSTEM_NAME_FONT_PIXELS as SYSTEM_NAME_FONT_PIXELS,
@@ -561,7 +563,8 @@ import { continuousSystemFrames } from '../utils/continuous-system-frames'
 import { constrainContinuousSystemFrame, type ContinuousSystemFrameInput } from '../utils/continuous-system-frames'
 import {
   continuousMapRoundedFrameContains,
-  planContinuousMapElasticPlacement,
+  continuousMapRoundedFramePath,
+  planBoundedZoneLanding,
   type ContinuousMapElasticPlacementPreview,
 } from '../utils/continuous-map-elastic-placement'
 import { nextContinuousMapPreviewVersion } from '../utils/continuous-map-preview-version'
@@ -683,6 +686,7 @@ const frameGrowthAnimation = shallowRef<ElasticFrameGrowthAnimation | null>(null
 let pendingElasticFrameGrowth: PendingElasticFrameGrowth | null = null
 const selectedObjectDragPreview = shallowRef<SelectedObjectDragPreview | null>(null)
 const transferPreviewOverride = shallowRef<SystemObjectTransferMapPreview | null | undefined>(undefined)
+const draggedBranchPreview = shallowRef<ReturnType<typeof projectZoneObjectBranch>>(null)
 const objectMovePreview = shallowRef<{ systemId: string; objectId: string; projection: ContinuousWardenSystemProjection } | null>(null)
 const preciseObjectPlacementPreview = shallowRef<{ systemId: string; objectId: string; projection: ContinuousWardenSystemProjection } | null>(null)
 const preciseOrbitCenterMovePreview = shallowRef<{ systemId: string; orbitId: string; projection: ContinuousWardenSystemProjection } | null>(null)
@@ -731,9 +735,14 @@ interface ActiveObjectDrag {
   preferredFrame: SvgViewportRect
   fixedFrames: readonly ContinuousSystemFrameInput[]
   startFrames: readonly ContinuousSystemFrameInput[]
+  authoredFrames: readonly ContinuousSystemFrameInput[]
   selectDrag?: SelectMapObjectDragContext
   moved: boolean
-  targetPosition: Point
+  landing: {
+    position: Point
+    frameInsets?: SystemFrameInsets
+  } | null
+  transfer: SystemObjectTransferDrop | null
   targetScenePoint: Point
 }
 
@@ -901,6 +910,7 @@ const transferBranchPreview = computed(() => {
     return null
   }
 })
+const landingBranchPreview = computed(() => draggedBranchPreview.value ?? transferBranchPreview.value)
 const sceneCluster = computed(() => props.presentation?.cluster ?? props.cluster)
 const presentationProjections = computed(() => {
   const draft = props.presentation
@@ -1608,8 +1618,8 @@ function objectGlyph(projectionId: string, objectId: string): string {
   return objectGlyphs[objectSubtype(projectionId, objectId)] ?? '◇'
 }
 
-function transferObjectGlyph(object: ContinuousWardenSystemProjection['objects'][number]): string {
-  const subtype = transferBranchPreview.value?.objectSubtypes.get(object.id)
+function landingObjectGlyph(object: ContinuousWardenSystemProjection['objects'][number]): string {
+  const subtype = landingBranchPreview.value?.objectSubtypes.get(object.id)
   return objectGlyphs[subtype ?? ''] ?? '◇'
 }
 
@@ -2543,6 +2553,8 @@ function addOwnersAtPoint(
   const ownerResolution = resolveContinuousObjectOwnerResolution(point, systems, definiteOwnerId)
   const geometry = systemMapGeometry(props.workspace)
   const owners = ownerResolution.systemIds.flatMap(systemId => {
+    const frame = systems.find(candidate => candidate.id === systemId)?.envelope
+    if (!definiteOwnerId && (!frame || !continuousMapRoundedFrameContains(point, frame))) return []
     const projection = projections.value.find(candidate => candidate.id === systemId)
     const system = props.cluster.systems.find(candidate => candidate.id === systemId)
     if (!projection || !system) return []
@@ -2738,33 +2750,101 @@ function updateObjectMovePreview(drag: ActiveObjectDrag, scenePoint: Point): voi
     drag.startScene,
     scenePoint,
   )
-  const delta = { x: targetLocal.x - drag.originLocal.x, y: targetLocal.y - drag.originLocal.y }
-  const plan = planSelectedObjectTranslation(drag.workspaceSnapshot, drag.systemId, [drag.objectId], delta)
-  const previewPosition = plan?.positions.get(drag.objectId)
-  const system = plan
-    ? applySelectedObjectTranslation(drag.workspaceSnapshot, drag.systemId, plan).cluster.systems.find(candidate => candidate.id === drag.systemId)
-    : undefined
-  if (!plan || !previewPosition || !system) return
-  const previewWorkspace = applySelectedObjectTranslation(drag.workspaceSnapshot, drag.systemId, plan)
-  const projection = projectWardenSystem(system, drag.legacyAnchor, systemMapGeometry(previewWorkspace), drag.projection.scale)
-  drag.targetPosition = toNormalizedMapPoint(previewPosition)
-  drag.targetScenePoint = {
-    x: drag.projection.projectLocalPoint(targetLocal).x + drag.anchorDelta.x,
-    y: drag.projection.projectLocalPoint(targetLocal).y + drag.anchorDelta.y,
+  const source = drag.workspaceSnapshot.cluster.systems.find(system => system.id === drag.systemId)
+  if (!source) return
+  const sourceBranch = projectZoneObjectBranch(source, drag.projection, drag.objectId)
+  if (!sourceBranch) return
+  const projectPoint = (point: Point) => {
+    const projected = drag.projection.projectLocalPoint(point)
+    return { x: projected.x + drag.anchorDelta.x, y: projected.y + drag.anchorDelta.y }
   }
+  drag.targetScenePoint = projectPoint(targetLocal)
+  drag.landing = null
+  drag.transfer = null
+  draggedBranchPreview.value = null
+  elasticPlacementPreview.value = null
+
+  const moveBranch = (point: Point) => {
+    const delta = { x: point.x - drag.originLocal.x, y: point.y - drag.originLocal.y }
+    const plan = planSelectedObjectTranslation(drag.workspaceSnapshot, drag.systemId, [drag.objectId], delta)
+    if (!plan) return null
+    const workspace = applySelectedObjectTranslation(drag.workspaceSnapshot, drag.systemId, plan)
+    const system = workspace.cluster.systems.find(candidate => candidate.id === drag.systemId)
+    if (!system) return null
+    const projection = projectWardenSystem(system, drag.legacyAnchor, systemMapGeometry(workspace), drag.projection.scale)
+    return projectZoneObjectBranch(system, projection, drag.objectId)
+  }
+  const pointerDelta = { x: targetLocal.x - drag.originLocal.x, y: targetLocal.y - drag.originLocal.y }
+  const pointerPositions = new Map(sourceBranch.objects.map(object => [object.id, {
+    x: object.position.x + pointerDelta.x,
+    y: object.position.y + pointerDelta.y,
+  }]))
+  const projection = previewWardenSystemObjects(
+    drag.projection,
+    pointerPositions,
+    new Map(source.orbits.map(orbit => [orbit.id, orbit.hostId])),
+  )
   objectMovePreview.value = { systemId: drag.systemId, objectId: drag.objectId, projection }
-  const elastic = drag.startDisplayedFrame && hasPositiveFrame(drag.startDisplayedFrame)
-    ? planContinuousMapElasticPlacement({
+  const pointer = moveBranch(targetLocal)
+
+  let transfer: ReturnType<typeof transferDropForObjectDrag> = null
+  try {
+    transfer = transferDropForObjectDrag(drag)
+  } catch {
+    // A candidate whose relationships or geometry cannot be resolved leaves the source in control.
+  }
+  if (transfer) {
+    drag.transfer = transfer.drop
+    draggedBranchPreview.value = transfer.branch
+    return
+  }
+
+  const displayedFrame = drag.startDisplayedFrame
+  if (!displayedFrame || !pointer) return
+  const geometry = {
     systemId: drag.systemId,
     anchor: drag.anchor,
-    displayedFrame: drag.startDisplayedFrame,
-    preferredFrame: drag.preferredFrame,
-    target: drag.targetScenePoint,
+    displayedFrame,
     fixedFrames: drag.fixedFrames,
-    pixelsPerSceneUnit: viewport.value.k * svgPixelScale.value,
-    })
-    : null
-  elasticPlacementPreview.value = elastic ? { ...elastic, systemId: drag.systemId } : null
+    authoredFrames: drag.authoredFrames,
+    pixelsPerSceneUnit: drag.camera.k * svgPixelScale.value,
+  }
+  const scenePosition = (point: Point) => ({ x: point.x + drag.anchorDelta.x, y: point.y + drag.anchorDelta.y })
+  const origin = scenePosition(sourceBranch.root)
+  const requestedRoot = scenePosition(pointer.root)
+  const proposal = planBoundedZoneLanding({
+    ...geometry, target: requestedRoot, origin, relativeBounds: sourceBranch.relativeBounds,
+  })
+  if (!proposal) return
+  const exact = proposal.root.x === requestedRoot.x && proposal.root.y === requestedRoot.y
+  const position = exact ? targetLocal : drag.projection.unprojectLocalPoint({
+    x: proposal.root.x - drag.anchorDelta.x,
+    y: proposal.root.y - drag.anchorDelta.y,
+  })
+  const landing = exact ? pointer : moveBranch(position)
+  if (!landing) return
+
+  // Orbit snapping can change the root after a bounded pointer proposal. Check the
+  // translated branch at its actual position before presenting or accepting it.
+  const finalLanding = planBoundedZoneLanding({
+    ...geometry, target: scenePosition(landing.root), relativeBounds: landing.relativeBounds,
+  })
+  if (!finalLanding) return
+  const frameInsets = finalLanding.grew
+    ? frameInsetsFor(drag.anchor, finalLanding.authoredFrame)
+    : legacyFrameInsets(drag.workspaceSnapshot, drag.systemId, drag.anchor, drag.preferredFrame)
+  if (finalLanding.grew && !frameInsets) return
+  drag.landing = { position: toNormalizedMapPoint(position), ...(frameInsets ? { frameInsets } : {}) }
+  draggedBranchPreview.value = landing
+  if (finalLanding.grew) {
+    elasticPlacementPreview.value = {
+      systemId: drag.systemId,
+      path: continuousMapRoundedFramePath(finalLanding.frame),
+      displayedFrame: finalLanding.frame,
+      preferredFrame: finalLanding.authoredFrame,
+      acceptsDrop: true,
+    }
+  }
 }
 
 function orbitGestureLocalPoint(gesture: OrbitGestureBase, event: PointerEvent): Point | null {
@@ -3076,6 +3156,7 @@ function clearOwnedGestureClickSuppression(): void {
 }
 
 function clearObjectMovePreview(): void {
+  draggedBranchPreview.value = null
   objectMovePreview.value = null
 }
 
@@ -3172,16 +3253,17 @@ function finishObjectDrag(cancelled: boolean): void {
     : null
   elasticPlacementPreview.value = null
   if (!cancelled && drag.moved) {
-    const transfer = transferDropForObjectDrag(drag)
-    if (transfer) {
+    if (drag.transfer) {
       clearObjectMovePreview()
-      emit('transfer-object-on-drop', transfer, drag.selectDrag)
+      emit('transfer-object-on-drop', drag.transfer, drag.selectDrag)
       return
     }
-    const position = drag.targetPosition
-    const acceptedFrameInsets = elastic?.acceptsDrop
-      ? frameInsetsFor(drag.anchor, elastic.preferredFrame)
-      : undefined
+    const landing = drag.landing
+    if (!landing) {
+      clearObjectMovePreview()
+      return
+    }
+    const acceptedFrameInsets = landing.frameInsets
     if (elastic?.acceptsDrop && acceptedFrameInsets && drag.startDisplayedFrame) {
       pendingElasticFrameGrowth = {
         systemId: drag.systemId,
@@ -3194,11 +3276,8 @@ function finishObjectDrag(cancelled: boolean): void {
       }
       frameGrowthAnimation.value = null
     }
-    const frameInsets = elastic?.acceptsDrop
-      ? acceptedFrameInsets
-      : legacyFrameInsets(drag.workspaceSnapshot, drag.systemId, drag.anchor, drag.preferredFrame)
     clearObjectMovePreview()
-    emit('move-object-in-system', drag.systemId, drag.objectId, position, drag.workspaceSnapshot, frameInsets, drag.selectDrag)
+    emit('move-object-in-system', drag.systemId, drag.objectId, landing.position, drag.workspaceSnapshot, acceptedFrameInsets, drag.selectDrag)
     return
   }
   clearObjectMovePreview()
@@ -3222,7 +3301,10 @@ function legacyFrameInsets(
   return frameInsetsFor(anchor, frame)
 }
 
-function transferDropForObjectDrag(drag: ActiveObjectDrag): SystemObjectTransferDrop | null {
+function transferDropForObjectDrag(drag: ActiveObjectDrag): {
+  drop: SystemObjectTransferDrop
+  branch: NonNullable<ReturnType<typeof projectZoneObjectBranch>>
+} | null {
   const containingFrames = drag.startFrames.filter(frame =>
     continuousMapRoundedFrameContains(drag.targetScenePoint, frame.envelope))
   // Source and destination both count at their shared edge, so only a unique other frame transfers.
@@ -3272,33 +3354,40 @@ function transferDropForObjectDrag(drag: ActiveObjectDrag): SystemObjectTransfer
     x: authoredDestination.x + destinationDelta.x,
     y: authoredDestination.y + destinationDelta.y,
   }
-  const destinationElastic = planContinuousMapElasticPlacement({
+  const request = { sourceSystemId: drag.systemId, rootObjectId: drag.objectId, destinationSystemId, placement }
+  const review = prepareSystemObjectTransfer(drag.workspaceSnapshot, request)
+  const previewSystem = review.previewWorkspace.cluster.systems.find(system => system.id === destinationSystemId)
+  const legacyAnchor = props.systemPositions[destinationSystemId]
+  if (!previewSystem || !legacyAnchor) return null
+  const projected = projectWardenSystem(previewSystem, legacyAnchor, systemMapGeometry(review.previewWorkspace))
+  const branch = projectZoneObjectBranch(previewSystem, projected, drag.objectId)
+  if (!branch) return null
+  const landing = planBoundedZoneLanding({
     systemId: destinationSystemId,
     anchor: destinationAnchor,
     displayedFrame: destinationFrame.envelope,
-    preferredFrame: destinationPreferredFrame,
-    target: drag.targetScenePoint,
+    target: { x: branch.root.x + destinationDelta.x, y: branch.root.y + destinationDelta.y },
     fixedFrames: drag.startFrames.filter(frame => frame.id !== destinationSystemId),
+    authoredFrames: drag.authoredFrames,
     pixelsPerSceneUnit: drag.camera.k * svgPixelScale.value,
+    relativeBounds: branch.relativeBounds,
   })
-  const sourceFrameInsets = legacyFrameInsets(
-    drag.workspaceSnapshot,
-    drag.systemId,
-    drag.anchor,
-    drag.preferredFrame,
-  )
-  const destinationFrameInsets = destinationElastic?.acceptsDrop
-    ? frameInsetsFor(destinationAnchor, destinationElastic.preferredFrame)
+  if (!landing) return null
+
+  const sourceFrameInsets = legacyFrameInsets(drag.workspaceSnapshot, drag.systemId, drag.anchor, drag.preferredFrame)
+  const destinationFrameInsets = landing.grew
+    ? frameInsetsFor(destinationAnchor, landing.authoredFrame)
     : legacyFrameInsets(drag.workspaceSnapshot, destinationSystemId, destinationAnchor, destinationPreferredFrame)
+  if (landing.grew && !destinationFrameInsets) return null
 
   return {
-    sourceSystemId: drag.systemId,
-    rootObjectId: drag.objectId,
-    destinationSystemId,
-    placement,
-    workspaceSnapshot: drag.workspaceSnapshot,
-    ...(sourceFrameInsets ? { sourceFrameInsets } : {}),
-    ...(destinationFrameInsets ? { destinationFrameInsets } : {}),
+    branch,
+    drop: {
+      ...request,
+      workspaceSnapshot: drag.workspaceSnapshot,
+      ...(sourceFrameInsets ? { sourceFrameInsets } : {}),
+      ...(destinationFrameInsets ? { destinationFrameInsets } : {}),
+    },
   }
 }
 
@@ -3442,9 +3531,11 @@ function beginSingleObjectDrag(
     preferredFrame,
     fixedFrames: baselineFrames.filter(candidate => candidate.id !== objectTarget.systemId),
     startFrames: baselineFrames.map(candidate => ({ ...candidate, envelope: { ...candidate.envelope } })),
+    authoredFrames: systemFrameInputs.value,
     ...(selectDrag ? { selectDrag } : {}),
     moved: false,
-    targetPosition: toNormalizedMapPoint(localObject.position),
+    landing: null,
+    transfer: null,
     targetScenePoint: { x: localObject.scenePosition.x + delta.x, y: localObject.scenePosition.y + delta.y },
   }
   event.preventDefault()

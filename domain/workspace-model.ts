@@ -105,6 +105,8 @@ export interface SystemObject {
   playerText: string
   playerFieldMasks: string[]
   placement: ObjectPlacement
+  /** Exact effective position retained from an older Zone frame. */
+  legacyZonePlacement?: { systemId: string; orbitId: string | null; x: number; y: number }
   atmosphere?: string
   portClass?: string
   customFieldValues?: Record<string, CustomFieldValue>

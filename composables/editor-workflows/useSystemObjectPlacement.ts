@@ -1,3 +1,4 @@
+import { fitZoneObjectWorkspace } from '../../utils/zone-object-branch'
 /** Owns precise, single-use placement previews for existing system objects. */
 import { computed, nextTick, ref, watch, type ComputedRef, type Ref } from 'vue'
 import {
@@ -459,6 +460,14 @@ export function useSystemObjectPlacement({
       if (isEntityCommandBlocked(moveCommand(current, target))) {
         throw new Error('Resolve the Inspector draft before changing this object or its placement.')
       }
+      const placement = target.kind === 'orbit'
+        ? { kind: 'orbit' as const, orbitId: target.orbitId }
+        : { kind: 'system' as const, ...target.point }
+      const candidate = updateWorkspaceObject(
+        current.workspace, current.system.id, current.object.id, { placement },
+        target.kind === 'orbit' ? { angle: target.angle } : undefined,
+      )
+      fitZoneObjectWorkspace(current.workspace, candidate, current.system.id, current.object.id)
       const fingerprint = placementFingerprint(current, target)
       const scenePoint = scenePointForTarget(current, target)
       const preview: SystemObjectMovePreview = {
@@ -734,13 +743,14 @@ export function useSystemObjectPlacement({
           if (placementFingerprint(latest, preview.target) !== baseline.fingerprint) {
             throw new Error('The object placement or Orbit geometry changed. Preview the position again.')
           }
-          return updateWorkspaceObject(
+          const candidate = updateWorkspaceObject(
             latestWorkspace,
             latestSystem.id,
             latestObject.id,
             { placement },
             preview.target.kind === 'orbit' ? { angle: preview.target.angle } : undefined,
           )
+          return fitZoneObjectWorkspace(latestWorkspace, candidate, latestSystem.id, latestObject.id)
         },
       })
       if (result.status === 'rejected') throw new Error(result.message)

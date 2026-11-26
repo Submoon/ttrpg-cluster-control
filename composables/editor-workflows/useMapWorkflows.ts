@@ -1,3 +1,4 @@
+import { fitZoneObjectWorkspace } from '../../utils/zone-object-branch'
 /**
  * Translates map and inspector intents into workspace commits; transient SVG drag previews stay renderer-local.
  */
@@ -451,9 +452,10 @@ export function useMapWorkflows({
             fromOrbitId: latestObject.placement.kind === 'orbit' ? latestObject.placement.orbitId : null,
             toOrbitId: null,
           })) throw new Error('Resolve the Inspector draft before changing this object, Orbit, or a related dependency.')
-          return updateWorkspaceObject(latest, latestSystem.id, latestObject.id, {
+          const candidate = updateWorkspaceObject(latest, latestSystem.id, latestObject.id, {
             placement: { kind: 'system', x: position.x, y: position.y },
           })
+          return fitZoneObjectWorkspace(latest, candidate, latestSystem.id, latestObject.id)
         },
       })
       throwIfRejected(result)
@@ -568,7 +570,9 @@ export function useMapWorkflows({
           const latestBlocked = plan.changes.map(placementCommand).find(isEntityCommandBlocked)
           if (latestBlocked) throw new Error('Resolve the Inspector draft before changing this object or its placement.')
           const moved = applySelectedObjectTranslation(latest, systemId, plan)
-          return frameInsets ? setWorkspaceSystemFrame(moved, systemId, frameInsets) : moved
+          return frameInsets
+            ? setWorkspaceSystemFrame(moved, systemId, frameInsets)
+            : fitZoneObjectWorkspace(latest, moved, systemId, objectId)
         },
       })
       throwIfRejected(result)
@@ -677,8 +681,8 @@ export function useMapWorkflows({
             ...latestSystem,
             objects: [...latestSystem.objects, object],
           })
-          if (target.kind !== 'orbit') return candidate
-          return {
+          if (target.kind !== 'orbit') return fitZoneObjectWorkspace(latest, candidate, latestSystem.id, object.id)
+          const withAngle = {
             ...candidate,
             layout: {
               ...candidate.layout,
@@ -689,6 +693,7 @@ export function useMapWorkflows({
               },
             },
           }
+          return fitZoneObjectWorkspace(latest, withAngle, latestSystem.id, object.id)
         },
       })
       throwIfRejected(result)
@@ -774,9 +779,10 @@ export function useMapWorkflows({
             fromOrbitId: latestObject.placement.kind === 'orbit' ? latestObject.placement.orbitId : null,
             toOrbitId: orbitId,
           })) throw new Error('Resolve the Inspector draft before changing this object, Orbit, or a related dependency.')
-          return updateWorkspaceObject(latest, latestSystem.id, latestObject.id, {
+          const candidate = updateWorkspaceObject(latest, latestSystem.id, latestObject.id, {
             placement: { kind: 'orbit', orbitId },
           }, { angle })
+          return fitZoneObjectWorkspace(latest, candidate, latestSystem.id, latestObject.id)
         },
       })
       throwIfRejected(result)

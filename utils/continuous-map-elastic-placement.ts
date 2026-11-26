@@ -1,6 +1,6 @@
 import type { Point } from '../domain/workspace'
 import { CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS } from './continuous-map-route-geometry'
-import { constrainContinuousSystemFrame, type ContinuousSystemFrameInput } from './continuous-system-frames'
+import { constrainContinuousSystemFrame, continuousSystemFrames, type ContinuousSystemFrameInput } from './continuous-system-frames'
 import type { SvgViewportRect } from './map-zoom'
 
 const ELASTIC_REACH_PIXELS = 80
@@ -448,4 +448,118 @@ function contourPath(points: readonly ContourPoint[]): string {
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value))
+}
+
+interface BoundedZoneLandingInput {
+  systemId: string
+  anchor: Point
+  displayedFrame: SvgViewportRect
+  target: Point
+  /** A known starting root enables fallback for an existing object's pointer gesture. */
+  origin?: Point
+  /** A pointer gesture supplies its screen scale. Numeric placement must fit the current root frame. */
+  pixelsPerSceneUnit?: number
+  /** Axis-aligned bounds of the entire branch, relative to its root in scene units. */
+  relativeBounds: SvgViewportRect
+  /** Raw frames reproduce the same clipping when the grown preferred frame is saved. */
+  authoredFrames?: readonly ContinuousSystemFrameInput[]
+  fixedFrames: readonly ContinuousSystemFrameInput[]
+}
+
+interface BoundedZoneLanding {
+  root: Point
+  frame: SvgViewportRect
+  authoredFrame: SvgViewportRect
+  grew: boolean
+}
+
+/** Fits one rigid branch. Numeric placement and new support must fit at the requested point. */
+export function planBoundedZoneLanding(input: BoundedZoneLandingInput): BoundedZoneLanding | null {
+  const { systemId, anchor, displayedFrame, target, origin, pixelsPerSceneUnit, relativeBounds, authoredFrames, fixedFrames } = input
+  if (![anchor.x, anchor.y, target.x, target.y].every(Number.isFinite)
+    || !isFinitePositiveFrame(displayedFrame) || !isFiniteFrame(relativeBounds)
+    || fixedFrames.some(frame => frame.id === systemId || !isFiniteFrame(frame.envelope))
+    || new Set(fixedFrames.map(frame => frame.id)).size !== fixedFrames.length) return null
+  const reach = pixelsPerSceneUnit === undefined ? 0 : ELASTIC_REACH_PIXELS / pixelsPerSceneUnit
+  if (!Number.isFinite(reach) || reach < 0) return null
+
+  const fit = (root: Point): BoundedZoneLanding | null => {
+    const inside = continuousMapRoundedFrameContains(root, displayedFrame)
+    if (!inside && nearestContinuousMapRoundedFramePoint(root, displayedFrame).distance > reach + 1e-9) return null
+    const left = root.x + relativeBounds.x
+    const top = root.y + relativeBounds.y
+    const right = left + relativeBounds.width
+    const bottom = top + relativeBounds.height
+    const points = [root, { x: left, y: top }, { x: left, y: bottom }, { x: right, y: top }, { x: right, y: bottom }]
+    const preferred = points.reduce<SvgViewportRect>((candidate, point) => continuousMapRoundedFrameContains(point, candidate)
+      ? candidate
+      : growRoundedFrameToContain(candidate, point, CONTINUOUS_SYSTEM_FRAME_CORNER_RADIUS, 0.001), displayedFrame)
+    let frame = constrainContinuousSystemFrame({ id: systemId, anchor, envelope: preferred }, fixedFrames)
+    if (!containsFrame(frame, displayedFrame) || points.some(point => !continuousMapRoundedFrameContains(point, frame))) return null
+    const original = authoredFrames?.find(candidate => candidate.id === systemId)?.envelope ?? displayedFrame
+    const grew = !sameFrame(frame, displayedFrame)
+    if (!grew) return { root, frame, authoredFrame: original, grew }
+
+    const leftEdge = Math.min(frame.x, original.x)
+    const topEdge = Math.min(frame.y, original.y)
+    const authoredFrame = {
+      x: leftEdge,
+      y: topEdge,
+      width: Math.max(frame.x + frame.width, original.x + original.width) - leftEdge,
+      height: Math.max(frame.y + frame.height, original.y + original.height) - topEdge,
+    }
+    if (authoredFrames) {
+      const applied = continuousSystemFrames(authoredFrames.map(candidate => candidate.id === systemId
+        ? { ...candidate, envelope: authoredFrame }
+        : candidate))
+      const appliedFrame = applied.get(systemId)
+      if (!appliedFrame || !containsFrame(appliedFrame, displayedFrame)
+        || fixedFrames.some(fixed => !sameFrame(fixed.envelope, applied.get(fixed.id)))
+        || points.some(point => !continuousMapRoundedFrameContains(point, appliedFrame))) return null
+      frame = appliedFrame
+    }
+    return { root, frame, authoredFrame, grew }
+  }
+
+  const exact = fit(target)
+  if (exact || !origin) return exact
+
+  const nearest = nearestContinuousMapRoundedFramePoint(target, displayedFrame)
+  const boundedTarget = nearest.distance > reach && !continuousMapRoundedFrameContains(target, displayedFrame)
+    ? {
+        x: nearest.point.x + (target.x - nearest.point.x) * reach / nearest.distance,
+        y: nearest.point.y + (target.y - nearest.point.y) * reach / nearest.distance,
+      }
+    : target
+  const projected = fit(boundedTarget)
+  if (projected) return projected
+
+  let lastFeasible = fit(origin)
+  if (!lastFeasible) return null
+  let lower = 0
+  let upper = 1
+  for (let step = 0; step < 30; step += 1) {
+    const fraction = (lower + upper) / 2
+    const candidate = fit({
+      x: origin.x + (boundedTarget.x - origin.x) * fraction,
+      y: origin.y + (boundedTarget.y - origin.y) * fraction,
+    })
+    if (candidate) {
+      lastFeasible = candidate
+      lower = fraction
+    } else upper = fraction
+  }
+  return lastFeasible
+}
+
+
+function containsFrame(outer: SvgViewportRect, inner: SvgViewportRect): boolean {
+  const tolerance = 1e-7
+  return outer.x <= inner.x + tolerance && outer.y <= inner.y + tolerance
+    && outer.x + outer.width >= inner.x + inner.width - tolerance
+    && outer.y + outer.height >= inner.y + inner.height - tolerance
+}
+
+function sameFrame(first: SvgViewportRect, second: SvgViewportRect | undefined): boolean {
+  return !!second && containsFrame(first, second) && containsFrame(second, first)
 }

@@ -1,7 +1,8 @@
 /** Coordinates guarded review, map ownership, and one reversible transfer publication. */
+import { fitZoneObjectWorkspace } from '../../utils/zone-object-branch'
 import { computed, readonly, ref, shallowRef, toRaw, watch } from 'vue'
 import type { Ref } from 'vue'
-import type { LocalWorkspace, SystemObjectTransferPlacement, SystemObjectTransferReview } from '../../domain/workspace'
+import type { LocalWorkspace, SystemObjectTransferPlacement, SystemObjectTransferRequest, SystemObjectTransferReview } from '../../domain/workspace'
 import {
   applySystemObjectTransfer,
   prepareSystemObjectTransfer,
@@ -107,6 +108,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     if (!current) return null
     const draft = current.draft
     const currentReview = draft.review.value
+    const geometryError = currentReview ? transferGeometryError(current, currentReview) : null
     const stale = draft.isStale.value
       || options.workspace.value !== current.workspaceReference
       || options.appliedRevision.value !== current.appliedRevision
@@ -115,7 +117,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       open: current.open.value,
       placingOnMap: current.placingOnMap.value,
       confirming: current.confirming.value,
-      error: current.error.value,
+      error: current.error.value ?? geometryError,
       sourceSystemId: current.sourceSystemId,
       rootObjectId: current.rootObjectId,
       destinationSystemId: draft.destinationSystemId.value,
@@ -130,10 +132,43 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       movedOrbitIds: currentReview?.branch.orbitIds ?? [],
       locationKeys: draft.locationKeys.value,
       validationErrors: draft.validationErrors.value,
-      canAccept: draft.canAccept.value && !stale,
+      canAccept: draft.canAccept.value && !stale && !geometryError,
       stale,
     }
   }))
+
+  function fitTransfer(
+    current: ActiveTransferSession,
+    workspace: LocalWorkspace,
+    candidate: LocalWorkspace,
+    request: Readonly<SystemObjectTransferRequest>,
+  ): LocalWorkspace {
+    const drop = current.drop
+    const originalDrop = !!drop && toRaw(current.workspaceReference) === toRaw(drop.workspaceSnapshot)
+      && request.destinationSystemId === drop.destinationSystemId
+      && JSON.stringify(request.placement) === JSON.stringify(drop.placement)
+    let next = candidate
+    if (drop?.sourceFrameInsets && !workspaceSystemFrame(next, current.sourceSystemId)) {
+      next = setWorkspaceSystemFrame(next, current.sourceSystemId, drop.sourceFrameInsets)
+    }
+    if (originalDrop && drop.destinationFrameInsets) {
+      return setWorkspaceSystemFrame(next, request.destinationSystemId, drop.destinationFrameInsets)
+    }
+    return fitZoneObjectWorkspace(workspace, next, request.destinationSystemId, request.rootObjectId)
+  }
+
+  function transferGeometryError(
+    current: ActiveTransferSession,
+    review: { readonly request: Readonly<SystemObjectTransferRequest> },
+  ): string | null {
+    try {
+      const candidate = prepareSystemObjectTransfer(current.workspaceReference, review.request).previewWorkspace
+      fitTransfer(current, current.workspaceReference, candidate, review.request)
+      return null
+    } catch (error) {
+      return error instanceof Error ? error.message : 'The branch cannot fit at this Zone position.'
+    }
+  }
 
   function setSessionError(current: ActiveTransferSession | null, message: string): void {
     if (current && activeSession.value === current) current.error.value = message
@@ -147,7 +182,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
     if (!current || options.workspace.value !== current.workspaceReference
       || options.appliedRevision.value !== current.appliedRevision || current.draft.isStale.value) return null
     const review = current?.draft.review.value
-    if (!review) return null
+    if (!review || transferGeometryError(current, review)) return null
     return {
       sessionId: current.id,
       sourceSystemId: current.sourceSystemId,
@@ -397,6 +432,15 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
       return failMapPlacement(current, 'The destination map changed during placement. Review the transfer and place it again.')
     }
 
+    const request = {
+      sourceSystemId: current.sourceSystemId,
+      rootObjectId: current.rootObjectId,
+      destinationSystemId: lease.destinationSystemId,
+      placement,
+    }
+    const geometryError = transferGeometryError(current, { request })
+    if (geometryError) return failMapPlacement(current, geometryError)
+
     if (placement.kind === 'system') current.draft.chooseFreePlacement({ x: placement.x, y: placement.y })
     else current.draft.chooseOrbitPlacement(placement.orbitId, placement.angle)
     mapPointerPreview.value = null
@@ -429,6 +473,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
         destinationSystemId: lease.destinationSystemId,
         placement,
       })
+      const fitted = fitTransfer(current, lease.workspaceReference, review.previewWorkspace, review.request)
       mapPointerPreview.value = {
         lease,
         preview: {
@@ -436,7 +481,7 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
           sourceSystemId: review.request.sourceSystemId,
           rootObjectId: review.request.rootObjectId,
           destinationSystemId: review.request.destinationSystemId,
-          previewWorkspace: review.previewWorkspace,
+          previewWorkspace: fitted,
           movedObjectIds: review.branch.objectIds,
           movedOrbitIds: review.branch.orbitIds,
         },
@@ -516,15 +561,8 @@ export function useSystemObjectTransferWorkflow(options: SystemObjectTransferWor
         // The shared history pipeline prepares against a detached snapshot. `isCurrent` binds
         // that snapshot to the exact reviewed owner, revision, and input generation.
         if (!isCurrent()) throw new Error('The transfer review changed before it could be applied.')
-        let next = applySystemObjectTransfer(latest, acceptance.request, acceptance.locationKeys)
-        if (current.drop?.sourceFrameInsets && !workspaceSystemFrame(next, current.sourceSystemId)) {
-          next = setWorkspaceSystemFrame(next, current.sourceSystemId, current.drop.sourceFrameInsets)
-        }
-        if (current.drop?.destinationFrameInsets && acceptance.request.destinationSystemId === current.drop.destinationSystemId
-          && !workspaceSystemFrame(next, acceptance.request.destinationSystemId)) {
-          next = setWorkspaceSystemFrame(next, acceptance.request.destinationSystemId, current.drop.destinationFrameInsets)
-        }
-        return next
+        const next = applySystemObjectTransfer(latest, acceptance.request, acceptance.locationKeys)
+        return fitTransfer(current, latest, next, acceptance.request)
       },
     }
 

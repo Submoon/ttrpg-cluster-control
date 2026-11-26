@@ -6,6 +6,7 @@ import {
   createSystemObject,
   exportJumpCluster,
 } from '../domain/workspace'
+import { fromNormalizedMapPoint } from '../domain/workspace-map-coordinates'
 import { expect, test } from './fixtures'
 import {
   addClusterSystem,
@@ -189,6 +190,16 @@ test('transferring a hosted branch reviews and resolves a destination Location k
     bounds.y + bounds.height / 2 + hit.y - origin.y,
     { steps: 14 },
   )
+  const branchGhost = map.locator('.continuous-warden-branch-landing')
+  await expect(branchGhost).toContainText('Herma')
+  await expect(branchGhost).toContainText('Nix')
+  await expect(branchGhost.locator('ellipse')).toHaveCount(1)
+  const landingRoot = await branchGhost.locator('.continuous-warden-transfer-object.is-root').evaluate(mark => {
+    if (!(mark instanceof SVGGraphicsElement)) throw new Error('Expected an SVG landing mark.')
+    const transform = mark.transform.baseVal.consolidate()?.matrix
+    if (!transform) throw new Error('Expected the landing position in destination-local coordinates.')
+    return { x: transform.e, y: transform.f }
+  })
   await page.mouse.up()
 
   const review = page.getByRole('dialog', { name: 'Change system', exact: true })
@@ -213,6 +224,10 @@ test('transferring a hosted branch reviews and resolves a destination Location k
   expect(sourceAfter.orbits).toEqual([])
   const movedRoot = destinationAfter.objects.find(object => object.id === fixture.root.id)
   const movedChild = destinationAfter.objects.find(object => object.id === fixture.child.id)
+  if (movedRoot?.placement.kind !== 'system') throw new Error('Expected a free position in the destination Zone.')
+  const appliedRootPosition = fromNormalizedMapPoint(movedRoot.placement)
+  expect(appliedRootPosition.x).toBeCloseTo(landingRoot.x, 2)
+  expect(appliedRootPosition.y).toBeCloseTo(landingRoot.y, 2)
   expect(movedRoot?.locationKey).toBe(appliedRootKey)
   expect(movedRoot?.locationKey).not.toBe(fixture.root.locationKey)
   expect(movedChild?.placement).toEqual({ kind: 'orbit', orbitId: fixture.orbit.id })

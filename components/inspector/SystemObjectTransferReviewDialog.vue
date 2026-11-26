@@ -58,7 +58,7 @@
                 Local Y
                 <input class="workspace-control min-h-10 rounded-md px-3" type="number" step="any" :value="props.session.placement.y" @input="updateFreeY">
               </label>
-              <p class="inspector-intro col-span-2 m-0">Coordinates are normalized to the destination system map. Positions beyond the visible envelope are allowed.</p>
+              <p class="inspector-intro col-span-2 m-0">Enter normalized coordinates within the destination Zone frame. The hosted branch must fit before you can apply the transfer.</p>
             </div>
 
             <label class="flex items-start gap-2 text-sm">
