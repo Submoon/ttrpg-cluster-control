@@ -1,6 +1,6 @@
 ---
 title: Publish and read route objects without private-route leaks
-status: in-progress
+status: closed
 assignee: codex/issue-60-ticket-09
 type: implementation
 specification: ../spec.md
@@ -52,6 +52,8 @@ The checked candidate `94b0fef69f4335bb0a347b6c88ca04c75c0906f7` includes the in
 - The first reader trace reached the existing Center route assertion as its 60-second journey budget expired. The first publication attempt reached isolated link hydration as its 30-second journey budget expired, and its teardown screenshot shows the hydrated document. Only the two expanded test cases received longer budgets. Their first failure traces remain in `test-results/local-test-1795689970316-14724-f0d935f9/playwright-run-1/` and `test-results/local-test-1795690274937-13288-ce5006e3/playwright-run-1/`, respectively.
 
 ## Verification
+
+29a86b77 was integrated in 10243c2a. The v3 player document supports authorized route branches, object-only consultation and detached publication without private route information. Both maintained player journeys passed, as did 124 focused checks, lint and typecheck. The updated Warden selector introduced by ticket 07 is queued for cumulative browser verification.
 
 Use paired private-variance projection/codec tests and real reader/export-operation controllers for the main privacy matrix. Extend the maintained publication and reader journeys with one representative route object case.
 

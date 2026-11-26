@@ -1,6 +1,6 @@
 ---
 title: Create and position catalogue objects on routes
-status: in-progress
+status: closed
 assignee: Codex
 type: implementation
 specification: ../spec.md
@@ -34,14 +34,16 @@ Implementation started at 199145211568c9d9ff9236ee57efd5c8fe82ef92, the integrat
 
 ## Acceptance criteria
 
-- [ ] Creation targets a valid route directly and does not require a previous Zone object or an incident-origin restriction. Invalid new drops create nothing and cannot allocate orphan records.
-- [ ] Use globally available new keys and the same catalogue data/publication fields as local objects. Route ownership is explicit; no arbitrary Cluster-coordinate arm is introduced.
-- [ ] Expose finite 0%-100% progression in Inspect and pointer/keyboard placement. No clock, speed or automatic endpoint detachment is added.
-- [ ] With no different valid target, an existing route object's ghost projects onto its current route and release applies that proposal. Reaching an endpoint or unresolved exit leaves it attached.
-- [ ] Recheck captured context and revision before publication, exclude previews from persistence, and use one accepted mutation/history action with current durability feedback.
-- [ ] A stationary obstacle can be created at a chosen route percentage and remain there until an explicit position edit; relative placement and route-reshape rules apply without a separate automatic travel mode.
+- [x] Creation targets a valid route directly and does not require a previous Zone object or an incident-origin restriction. Invalid new drops create nothing and cannot allocate orphan records.
+- [x] Use globally available new keys and the same catalogue data/publication fields as local objects. Route ownership is explicit; no arbitrary Cluster-coordinate arm is introduced.
+- [x] Expose finite 0%-100% progression in Inspect and pointer/keyboard placement. No clock, speed or automatic endpoint detachment is added.
+- [x] With no different valid target, an existing route object's ghost projects onto its current route and release applies that proposal. Reaching an endpoint or unresolved exit leaves it attached.
+- [x] Recheck captured context and revision before publication, exclude previews from persistence, and use one accepted mutation/history action with current durability feedback.
+- [x] A stationary obstacle can be created at a chosen route percentage and remain there until an explicit position edit; relative placement and route-reshape rules apply without a separate automatic travel mode.
 
 ## Verification
+
+b6d4d5ef was integrated in c8becb7b. The verified candidate passed 79 focused checks, lint, typecheck and the maintained Chromium route journey with a stationary Hazard, exact position editing and matching ghost/committed centers. The merge reconciles this gesture with the new Warden branch rendering.
 
 Use deterministic catalogue/progression/drop matrices and guarded command checks. Extend the existing route/object editing journey for a representative created route object; do not add a browser case per type or percentage.
 

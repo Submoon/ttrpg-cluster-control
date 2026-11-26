@@ -1,6 +1,6 @@
 ---
 title: Review route edits and destructive consequences
-status: in-progress
+status: closed
 assignee: codex/issue-60-ticket-08
 type: implementation
 specification: ../spec.md
@@ -49,6 +49,8 @@ Candidate `36483421d336c8c10a77e20ecbe32c8ab4e0ff12` adds a Reverse endpoints ac
 - The maintained `continuous routes support` and `focused map deletion` browser journeys were selected with the local browser launcher on port 3188. The sandbox denied loopback on the first attempt. In the authorized run Nuxt started, but the local HTTP request timed out and the browser readiness gate had yet to begin the tests when the launcher was stopped. Server evidence is in `test-results/local-test-1795689239083-17580-63abc11b/server.log`. The two journeys require an integrated rerun.
 
 ## Verification
+
+8faebaab was integrated in 3470aa42. Route retargeting, reversal, endpoint changes and the reviewed deletion cascade are implemented. The checked candidate passed 51 focused checks, lint and typecheck. The maintained mounted route and deletion journeys are queued for cumulative qualification after local startup failed in the isolated worktree.
 
 Own reversal, retarget and cascade matrices in domain/controller tests. Extend maintained route editing and destructive-history journeys only for the visible review/Undo obligation.
 

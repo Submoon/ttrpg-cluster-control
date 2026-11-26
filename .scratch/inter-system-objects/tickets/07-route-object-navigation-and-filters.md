@@ -1,6 +1,6 @@
 ---
 title: Find and inspect route objects across semantic zoom
-status: in-progress
+status: closed
 assignee: codex/issue-60-ticket-07
 type: implementation
 specification: ../spec.md
@@ -50,6 +50,8 @@ The runtime at `387a7f45d71d7c3cb74ca039a4d6756a19a277cc` adds route-owned recor
 - Browser qualification remains on the integration branch. The maintained Search journey in `tests/workspace-global-search.spec.ts` covers a seeded anomaly, its dimmed map marker and locator, routed Hierarchy depth and selection after zooming out. The existing publication journey in `tests/workspace-player-content.spec.ts` uses the Hierarchy's route treeitem.
 
 ## Verification
+
+a3ac0ab2 was integrated in b4790623. The Warden Hierarchy, Search, criteria and semantic zoom include all route objects and hosted branches. The checked candidate passed 59 focused checks, lint and typecheck. The maintained Search and Hierarchy browser journeys are queued for cumulative qualification.
 
 Use search/criteria and selection-controller checks for combinations. Extend the owning Search, continuous navigation and deep-Hierarchy journeys with route object data rather than creating parallel navigation scenarios.
 
