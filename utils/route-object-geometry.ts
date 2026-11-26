@@ -44,8 +44,10 @@ export function projectRouteObjects(contents: RouteContents, curve: RouteCurve, 
   })
   const toScene = ({ x, y }: Point): Point => ({ x: x * scale, y: y * scale })
   const positions = new Map([...localPositions].map(([id, point]) => [id, toScene(point)]))
+  const objectsById = new Map(contents.objects.map(object => [object.id, object]))
   const orbits = contents.orbits.map(orbit => {
-    const radii = orbitRadii(contents, orbit, layout)
+    const host = objectsById.get(orbit.hostId)
+    const radii = orbitRadii({ objects: host ? [host] : [] }, orbit, layout)
     return {
       id: orbit.id,
       center: orbitCenter(orbit, positions),

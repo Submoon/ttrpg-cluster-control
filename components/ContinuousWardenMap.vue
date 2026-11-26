@@ -331,6 +331,8 @@
         :contents="routeLandingPreview.contents"
         :geometry="routeLandingPreview.geometry"
         :layout="routeLandingPreview.layout"
+        :projected="routeLandingPreview.projected"
+        :offset="routeLandingPreview.offset"
         :visible-branch="routeLandingPreview.branch"
         :viewport="viewport"
         :svg-pixel-scale="svgPixelScale"
@@ -822,6 +824,7 @@ interface ActiveRouteObjectDrag extends RouteDragSource {
   geometry: ContinuousMapRouteGeometry
   branch: SystemObjectBranch
   contents: RouteContents
+  projected: ReturnType<typeof projectRouteObjects>
   root: RouteObject
   moved: boolean
   landing: RouteLanding | null
@@ -842,6 +845,8 @@ const routeLandingPreview = shallowRef<{
   geometry: ContinuousMapRouteGeometry
   layout: LocalWorkspace['layout']
   branch: SystemObjectBranch
+  projected?: ReturnType<typeof projectRouteObjects>
+  offset?: Point
 } | null>(null)
 let selectObjectDragGeneration = 0
 let activeSelectedObjectDrag: {
@@ -3744,6 +3749,15 @@ function hasRouteObjectDragContext(target: RouteDragSource): boolean {
     .some(object => object.id === target.objectId) === true
 }
 
+function routeBranchContents(contents: RouteContents, branch: SystemObjectBranch): RouteContents {
+  const objects = new Set(branch.objectIds)
+  const orbits = new Set(branch.orbitIds)
+  return {
+    objects: contents.objects.filter(object => objects.has(object.id)),
+    orbits: contents.orbits.filter(orbit => orbits.has(orbit.id)),
+  }
+}
+
 function startRouteObjectDrag(event: PointerEvent, element: SVGSVGElement, source: RouteDragSource): void {
   if (!event.isPrimary || event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey
     || !canDragRouteObject(source) || (props.mode !== 'select' && props.mode !== 'move')) return
@@ -3752,7 +3766,8 @@ function startRouteObjectDrag(event: PointerEvent, element: SVGSVGElement, sourc
   const geometry = displayedRouteGeometry(source.routeId)
   const pointerStart = cameraPoint(event)
   if (!contents || !root || !geometry || !pointerStart) return
-  const origin = projectRouteObjects(contents, geometry, props.workspace.layout).positions.get(root.id)
+  const projected = projectRouteObjects(contents, geometry, props.workspace.layout)
+  const origin = projected.positions.get(root.id)
   if (!origin) return
   const branch = resolveSystemObjectBranch(contents, root.id)
   if (!branch) return
@@ -3767,7 +3782,8 @@ function startRouteObjectDrag(event: PointerEvent, element: SVGSVGElement, sourc
     workspaceSnapshot: props.workspace,
     geometry,
     branch,
-    contents,
+    contents: routeBranchContents(contents, branch),
+    projected,
     root,
     moved: false,
     landing: null,
@@ -3839,7 +3855,7 @@ function previewCrossContextTransfer(
       if (!contents || !geometry) return null
       routeLandingPreview.value = {
         routeId: landing.routeId,
-        contents,
+        contents: routeBranchContents(contents, branch),
         geometry,
         layout: candidate.layout,
         branch,
@@ -3880,7 +3896,7 @@ function updateRouteObjectDrag(drag: ActiveRouteObjectDrag, event: PointerEvent)
   const startingPlacement = drag.root.placement
   const progression = atOrigin && startingPlacement.kind === 'route'
     ? startingPlacement.progression
-    : projectPointOntoRoute(aim, geometry)
+    : routeTarget?.routeId === drag.routeId ? routeTarget.progression : projectPointOntoRoute(aim, geometry)
   if (progression === null) return
   drag.moved = true
   const root = { ...drag.root, placement: { kind: 'route' as const, progression } }
@@ -3889,11 +3905,11 @@ function updateRouteObjectDrag(drag: ActiveRouteObjectDrag, event: PointerEvent)
   if (!drag.crossContext) routeLandingPreview.value = {
     routeId: drag.routeId,
     geometry,
-    contents: drag.landing
-      ? { ...drag.contents, objects: drag.contents.objects.map(object => object.id === root.id ? root : object) }
-      : drag.contents,
+    contents: drag.contents,
     layout: drag.workspaceSnapshot.layout,
     branch: drag.branch,
+    projected: drag.projected,
+    offset: drag.landing ? { x: anchor.x - drag.origin.x, y: anchor.y - drag.origin.y } : undefined,
   }
   routeMovePreview.value = {
     routeId: drag.routeId,

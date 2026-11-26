@@ -302,15 +302,19 @@ export function catalogueObjectPositions<P extends CataloguePlacement>(
   overrides?: MapGeometryOverrides,
 ): Map<string, Point> {
   const objectsById = new Map(system.objects.map(object => [object.id, object]))
-  const childrenByOrbit = new Map<string, SystemMapProjectionSource<P>['objects'][number][]>()
+  const orbitsById = new Map(system.orbits.map(orbit => [orbit.id, orbit]))
+  const orbitOccupancy = new Map<string, number>()
+  const occupantIndices = new Map<string, number>()
+  const radiiByOrbit = new Map<string, OrbitRadii>()
   const positions = new Map<string, Point>()
   const visiting = new Set<string>()
 
   for (const object of system.objects) {
     if (object.placement.kind !== 'orbit') continue
-    const children = childrenByOrbit.get(object.placement.orbitId) ?? []
-    children.push(object)
-    childrenByOrbit.set(object.placement.orbitId, children)
+    const orbitId = object.placement.orbitId
+    const index = orbitOccupancy.get(orbitId) ?? 0
+    occupantIndices.set(object.id, index)
+    orbitOccupancy.set(orbitId, index + 1)
   }
 
   function locate(object: SystemMapProjectionSource<P>['objects'][number]): Point {
@@ -331,29 +335,32 @@ export function catalogueObjectPositions<P extends CataloguePlacement>(
       point = rootPosition(object.placement as Exclude<P, { kind: 'orbit' }>)
     } else {
       const { orbitId } = object.placement
-      const orbit = system.orbits.find(candidate => candidate.id === orbitId)
+      const orbit = orbitsById.get(orbitId)
       if (!orbit) {
         throw new Error('The map contains an object with an invalid Orbit host.')
       }
 
       let center: Point
+      const host = orbit.hostId === null ? undefined : objectsById.get(orbit.hostId)
       if (orbit.hostId === null) {
         center = orbitCenter(orbit, positions, overrides?.orbitCenters)
       } else {
-        const host = objectsById.get(orbit.hostId)
         if (!host) {
           throw new Error('The map contains an object with an invalid Orbit host.')
         }
         center = locate(host)
       }
-      const siblings = childrenByOrbit.get(orbit.id) ?? []
-      const index = siblings.findIndex(candidate => candidate.id === object.id)
       const angle = Object.hasOwn(geometry.objectAngles, object.id)
         ? geometry.objectAngles[object.id]!
-        : defaultObjectOrbitAngle(index, siblings.length)
+        : defaultObjectOrbitAngle(occupantIndices.get(object.id)!, orbitOccupancy.get(orbitId)!)
+      let radii = radiiByOrbit.get(orbitId)
+      if (!radii) {
+        radii = orbitRadii({ objects: host ? [host] : [] }, orbit, geometry, overrides?.orbitRadii)
+        radiiByOrbit.set(orbitId, radii)
+      }
       point = orbitPointAtAngle(
         center,
-        orbitRadii(system, orbit, geometry, overrides?.orbitRadii),
+        radii,
         angle,
         orbitRotation(orbit, geometry, overrides?.orbitRotations),
       )

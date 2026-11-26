@@ -74,7 +74,7 @@
         @keydown.capture="openRouteContextMenuFromKeyboard($event, route.id)"
         @click="commands.navigation.selectRoute(route.id)"
       >
-        <span class="orbit-mark w-[2.2rem] shrink-0 text-center text-[var(--map-muted)]" aria-hidden="true">R</span>
+        <span class="system-seal grid size-[1.5rem] shrink-0 place-items-center rounded-full border border-[var(--line-strong)]" aria-hidden="true">R</span>
         <span class="tree-copy min-w-0 [overflow-wrap:anywhere]">
           Jump Level {{ route.jumpLevel }}
           <small class="mt-[0.18rem] block">{{ commands.navigation.routeSummary(route) }}</small>
@@ -141,9 +141,10 @@
             <span class="tree-copy col-start-1 row-start-1 block min-w-0 whitespace-normal [overflow-wrap:anywhere]">
               <span class="tree-object-title flex min-w-0 items-start gap-1">
                 <span class="tree-leading shrink-0" aria-hidden="true">
-                  <span v-if="item.kind === 'system'" class="system-seal grid size-[1.5rem] place-items-center rounded-full border border-[var(--line-strong)]">ZN</span>
-                  <span v-else-if="item.kind === 'object'" class="object-mark">{{ objectMark(item.row.object) }}</span>
-                  <span v-else class="orbit-mark">R</span>
+                  <span v-if="item.kind === 'object'" class="object-mark">{{ objectMark(item.row.object) }}</span>
+                  <span v-else class="system-seal grid size-[1.5rem] place-items-center rounded-full border border-[var(--line-strong)]">
+                    {{ item.kind === 'system' ? 'ZN' : 'R' }}
+                  </span>
                 </span>
                 <span class="tree-object-name flex min-w-0 flex-1 items-start gap-1">
                   <span class="min-w-0 [overflow-wrap:anywhere]">{{ item.label }}</span>

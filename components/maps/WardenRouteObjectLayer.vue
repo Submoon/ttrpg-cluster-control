@@ -1,6 +1,6 @@
 <template>
   <g
-    :transform="`translate(${viewport.x} ${viewport.y}) scale(${viewport.k})`"
+    :transform="`translate(${viewport.x + (offset?.x ?? 0) * viewport.k} ${viewport.y + (offset?.y ?? 0) * viewport.k}) scale(${viewport.k})`"
     :class="preview ? `warden-route-object-${preview}-preview` : undefined"
     :aria-hidden="preview ? true : undefined"
   >
@@ -68,7 +68,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { RouteContents } from '../../domain/workspace'
+import type { Point, RouteContents } from '../../domain/workspace'
 import { catalogueObjectLabel } from '../../utils/catalogue-labels'
 import { objectMark } from '../../utils/catalogue-marks'
 import type { ContinuousMapRouteGeometry } from '../../utils/continuous-map-route-geometry'
@@ -96,22 +96,38 @@ const props = defineProps<{
   preview?: 'landing' | 'pointer'
   hiddenBranch?: SystemObjectBranch
   visibleBranch?: SystemObjectBranch
+  projected?: ReturnType<typeof projectRouteObjects>
+  offset?: Point
 }>()
 
 const focusedObjectId = ref<string>()
-const projection = computed(() => projectRouteObjects(props.contents, props.geometry, props.layout))
 const pixelsPerSceneUnit = computed(() => props.viewport.k * props.svgPixelScale)
 const markerScale = computed(() => 1 / Math.max(pixelsPerSceneUnit.value, Number.EPSILON))
 const showDetail = computed(() => routeBranchShowsDetail(props.viewport.k, props.svgPixelScale))
-const visibleOrbits = computed(() => props.preview === 'landing' || showDetail.value
-  ? projection.value.orbits.filter(orbit => !props.hiddenBranch?.orbitIds.includes(orbit.id)
-    && (!props.visibleBranch || props.visibleBranch.orbitIds.includes(orbit.id))) : [])
-const marks = computed(() => props.contents.objects.flatMap(object => {
+const showOrbits = computed(() => props.preview === 'landing' || showDetail.value)
+const rootContents = computed(() => ({
+  objects: props.contents.objects.filter(object => object.placement.kind === 'route'),
+  orbits: [],
+}))
+const needsOrbitalGeometry = computed(() => showOrbits.value
+  || ((props.selectedObjectId !== undefined || focusedObjectId.value !== undefined)
+    && props.contents.objects.some(object => object.placement.kind === 'orbit'
+      && (object.id === props.selectedObjectId || object.id === focusedObjectId.value))))
+const renderedContents = computed(() => needsOrbitalGeometry.value ? props.contents : rootContents.value)
+const projection = computed(() => props.projected ?? projectRouteObjects(renderedContents.value, props.geometry, props.layout))
+const hiddenObjects = computed(() => new Set(props.hiddenBranch?.objectIds))
+const hiddenOrbits = computed(() => new Set(props.hiddenBranch?.orbitIds))
+const visibleObjects = computed(() => props.visibleBranch && new Set(props.visibleBranch.objectIds))
+const branchOrbits = computed(() => props.visibleBranch && new Set(props.visibleBranch.orbitIds))
+const visibleOrbits = computed(() => showOrbits.value
+  ? projection.value.orbits.filter(orbit => !hiddenOrbits.value.has(orbit.id)
+    && (!branchOrbits.value || branchOrbits.value.has(orbit.id))) : [])
+const marks = computed(() => renderedContents.value.objects.flatMap(object => {
   const point = projection.value.positions.get(object.id)
-  const showObject = routeObjectIsVisible(object, props.preview === 'landing' || showDetail.value, props.selectedObjectId)
+  const showObject = routeObjectIsVisible(object, showOrbits.value, props.selectedObjectId)
     || object.id === focusedObjectId.value
-  return point && showObject && !props.hiddenBranch?.objectIds.includes(object.id)
-    && (!props.visibleBranch || props.visibleBranch.objectIds.includes(object.id))
+  return point && showObject && !hiddenObjects.value.has(object.id)
+    && (!visibleObjects.value || visibleObjects.value.has(object.id))
     ? [{ object, point }]
     : []
 }))
