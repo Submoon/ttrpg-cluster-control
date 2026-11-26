@@ -517,7 +517,6 @@ import {
   moveWardenClusterAnchorBySceneDelta,
   previewWardenSystemObjects,
   projectWardenSystem,
-  previewWardenSystemObjects,
   unprojectWardenClusterAnchor,
   wardenStarHaloRadius,
   type ContinuousWardenSystemProjection,
