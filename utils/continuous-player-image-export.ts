@@ -452,7 +452,7 @@ function routeBranchSvg(
       stroke: selected ? paint.mapSelected : paint.mapText,
       'stroke-width': selected ? 3 : 1.5,
     })
-    const symbol = glyph ? svgElement('text', {
+    const symbol = object.disclosure !== 'unknown' && glyph ? svgElement('text', {
       y: 4, 'text-anchor': 'middle', fill: object.markerColor ?? paint.mapText,
       'font-family': 'Consolas, monospace', 'font-size': 14,
     }, xml(glyph)) : ''
