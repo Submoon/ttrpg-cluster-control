@@ -355,7 +355,7 @@
               </small>
             </span>
           </template>
-          <template v-else>
+          <template v-else-if="item.kind === 'system'">
             <span class="tree-copy col-start-1 row-span-2 block min-w-0 [overflow-wrap:anywhere]">
               <span class="tree-object-title flex min-w-0 items-start gap-1">
                 <span class="tree-object-name min-w-0 [overflow-wrap:anywhere]">{{ item.system.name }}</span>
