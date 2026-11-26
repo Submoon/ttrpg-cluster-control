@@ -130,9 +130,10 @@ freshTest('a Warden edits an object and moves a group onto an Orbit in Select', 
   if (!sourceOwner || !sourceObject || !otherOwner || !otherOwnerObject || !fixture.cluster) {
     throw new Error('The continuous group fixture needs an exposed object in each owner.')
   }
+  // Leave room for Iria's hosted Orbit to follow the shared move without crossing the other Zone.
   fixture.layout.systemPositions = {
-    [sourceOwner.id]: { x: .44, y: .5 },
-    [otherOwner.id]: { x: .53, y: .5 },
+    [sourceOwner.id]: { x: .42, y: .5 },
+    [otherOwner.id]: { x: .56, y: .5 },
   }
   otherOwnerObject.placement = { kind: 'system', x: .63, y: .59 }
   const destinationOrbitId = 'group-arrival-destination-orbit'
