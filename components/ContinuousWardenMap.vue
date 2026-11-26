@@ -609,7 +609,7 @@ import type { SelectedObjectDrag, SelectedObjectDragPreview } from '../composabl
 import { useContinuousMapDetailMotion } from '../composables/useContinuousMapDetailMotion'
 import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
 import WardenRouteObjectLayer from './maps/WardenRouteObjectLayer.vue'
-import { pointOnRoute, projectRouteObjects } from '../utils/route-object-geometry'
+import { pointOnRoute, projectRouteObjects, routeObjectMarkerRadiusPixels } from '../utils/route-object-geometry'
 import { routeObjectTargetAt } from './maps/route-object-target'
 import { projectPointOntoRoute } from '../utils/continuous-map-route-hit'
 import type { SystemObjectBranch } from '../domain/workspace-object-branch'
@@ -674,6 +674,7 @@ const props = defineProps<{
     anchorId: string,
     continuousSystemScales: ReadonlyMap<string, number>,
     expectedMode?: Extract<MapInteractionMode, 'select' | 'move'>,
+    pixelsPerSceneUnit?: number,
   ) => SelectedObjectDrag | null
 }>()
 
@@ -1027,9 +1028,9 @@ const systemFrameInputs = computed(() => presentationProjections.value.map(proje
 const displayFrames = computed(() => {
   const resize = frameResizePreview.value
   const baseline = baselineDisplayedFrameInputs()
-  if (!resize) return new Map(baseline.map(frame => [frame.id, frame.envelope] as const))
   const preview = new Map(baseline.map(frame => [frame.id, frame.envelope] as const))
-  preview.set(resize.systemId, resize.frame)
+  if (resize) preview.set(resize.systemId, resize.frame)
+  for (const [id, frame] of selectedObjectDragPreview.value?.frames ?? []) preview.set(id, frame)
   return preview
 })
 
@@ -2299,21 +2300,25 @@ function centerInspectedTarget(target: InspectedMapTarget, usableRect?: SvgViewp
   return false
 }
 
-function frameRouteObject(routeId: string, objectId: string, usableRect?: SvgViewportRect): boolean {
+function frameRouteObject(routeId: string, objectId: string, usableRect?: SvgViewportRect, center = true): boolean {
   const branch = displayedRouteBranches.value.find(candidate => candidate.id === routeId)
   const element = svgElement.value
   if (!branch || !element || !zoomBehavior) return false
   const point = projectRouteObjects(branch.contents, branch.geometry, props.workspace.layout).positions.get(objectId)
   const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
   if (!point || !rect) return false
-  const next = centerMapTargetViewport({
-    current: getViewport(),
+  const current = getViewport()
+  const radius = center ? 0 : (routeObjectMarkerRadiusPixels + 1.5) / (current.k * svgPixelScale.value)
+  const options = {
+    current,
     usableRect: rect,
-    targetBounds: { x: point.x, y: point.y, width: 0, height: 0 },
+    targetBounds: { x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2 },
     maximumScale: MAP_ZOOM_MAX_SCALE,
-  })
+  }
+  const next = center ? centerMapTargetViewport(options) : minimumHistoryRevealViewport(options)
   if (!next) return false
-  setViewport(next)
+  if (Math.abs(next.x - current.x) >= 0.01 || Math.abs(next.y - current.y) >= 0.01
+    || next.k !== current.k) setViewport(next)
   return true
 }
 
@@ -2380,6 +2385,7 @@ watch([() => props.cluster.id, () => props.inspectedTarget, dimmedObjectIds], ([
 function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportRect): boolean {
   if (!usableRect) return false
   if (target.kind === 'route') return frameRoute(target.id, usableRect, false)
+  if (target.kind === 'route-object') return frameRouteObject(target.routeId, target.id, usableRect, false)
   const systemId = target.kind === 'system' ? target.id : target.systemId
   const projection = projections.value.find(candidate => candidate.id === systemId)
   const element = svgElement.value
@@ -3634,7 +3640,9 @@ function beginSelectedGroupDrag(
   if (!scene) return false
   const camera = getViewport()
   const systemScales = new Map(projections.value.map(projection => [projection.id, projection.scale] as const))
-  const drag = props.beginSelectedObjectDrag?.(objectTarget.objectId, systemScales, expectedMode) ?? null
+  const drag = props.beginSelectedObjectDrag?.(
+    objectTarget.objectId, systemScales, expectedMode, camera.k * svgPixelScale.value,
+  ) ?? null
   if (expectedMode === 'select' && !drag) return false
   activeSelectedObjectDrag = {
     drag,
@@ -3842,7 +3850,9 @@ function updateRouteObjectDrag(drag: ActiveRouteObjectDrag, event: PointerEvent)
   draggedBranchPreview.value = null
   const routeTarget = routeDropTarget(aim, event)
   const crossTarget = routeTarget
-    ? routeTarget.routeId === drag.routeId ? null : { kind: 'route' as const, ...routeTarget }
+    ? routeTarget.routeId === drag.routeId && drag.root.placement.kind === 'route'
+      ? null
+      : { kind: 'route' as const, ...routeTarget }
     : zoneDropTarget(aim, drag.workspaceSnapshot, drag.objectId)
   drag.crossContext = crossTarget ? previewCrossContextTransfer(drag.workspaceSnapshot, {
     source: { kind: 'route', routeId: drag.routeId },

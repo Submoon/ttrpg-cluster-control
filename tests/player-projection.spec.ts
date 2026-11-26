@@ -198,6 +198,17 @@ test('a visible route descendant publishes as an independent branch with only it
   expect(serializePlayerJson(projectPlayerCluster(withPrivateMetadata))).toBe(text)
 })
 
+test('private parallel routes cannot displace a detached published branch @pure', () => {
+  const { workspace, route, root } = workspaceWithRouteObjects()
+  workspace.cluster.routeContents[route.id]!.objects = [{ ...root, publication: 'revealed' }]
+  const published = serializePlayerJson(projectPlayerCluster(workspace))
+  const privateRoute = { ...route, id: 'private-parallel', name: 'Secret course' }
+  workspace.cluster.routes.unshift(privateRoute)
+  expect(serializePlayerJson(projectPlayerCluster(workspace))).toBe(published)
+  workspace.cluster.routes.reverse()
+  expect(serializePlayerJson(projectPlayerCluster(workspace))).toBe(published)
+})
+
 test('a shared route publishes only admitted branch content and reorients progression for its public origin @pure', () => {
   const { workspace, route, root, occupant } = workspaceWithRouteObjects()
   workspace.cluster.routes[0]!.playerShared = true

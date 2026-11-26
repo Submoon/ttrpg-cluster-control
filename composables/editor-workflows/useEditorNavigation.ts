@@ -810,6 +810,11 @@ export function useEditorNavigation(options: {
         ? { kind: 'system', id: target.id }
         : null
     }
+    if (target.kind === 'route-object') {
+      return continuousMap.value && routeObjectTargetExists(current, target.routeId, target.id)
+        ? { kind: 'route-object', routeId: target.routeId, id: target.id }
+        : null
+    }
     if (target.kind === 'route') {
       return current.cluster.routes.some(routeValue => routeValue.id === target.id)
         ? { kind: 'route', id: target.id }
@@ -834,18 +839,6 @@ export function useEditorNavigation(options: {
       && (action.target.kind === 'object' || action.target.kind === 'route-object') && workspaceAtSelection
       ? resolveCatalogueObjectHistoryTarget(workspaceAtSelection, action.target.id) ?? action.target
       : action.target
-    if (actionTarget.kind === 'route-object' && continuousMap.value
-      && routeObjectTargetExists(workspaceAtSelection, actionTarget.routeId, actionTarget.id)) {
-      const { routeId, id } = actionTarget
-      selectRouteObjectInCluster(routeId, id)
-      const acceptedContextStamp = navigationContextStamp()
-      await nextTick()
-      if (workspace.value !== workspaceAtSelection || navigationContextStamp() !== acceptedContextStamp) return
-      mapControls.revealHistoryTarget({ kind: 'route', id: routeId })
-      mapControls.focusActiveMap()
-      editorError.value = ''
-      return
-    }
     if (action.target.kind === 'field') {
       const acceptedContextStamp = navigationContextStamp()
       await nextTick()
@@ -875,7 +868,9 @@ export function useEditorNavigation(options: {
           ? target.id
           : store.selectedSystemId
 
-    if (continuousMap.value && target
+    if (target?.kind === 'route-object') {
+      selectRouteObjectInCluster(target.routeId, target.id)
+    } else if (continuousMap.value && target
       && (target.kind === 'system' || target.kind === 'object' || target.kind === 'orbit')) {
       const targetSystemId = target.kind === 'system' ? target.id : target.systemId
       setSelection({

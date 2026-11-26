@@ -2,10 +2,10 @@ import { computed, watch, type Ref } from 'vue'
 import type { LocalWorkspace, ObjectPlacement, Point } from '../../domain/workspace'
 import type { CommittedObjectPosition, EntityCommand, MapInteractionMode } from './types'
 import type { WorkspaceMutationExecutor } from './workspace-mutations'
+import type { SvgViewportRect } from '../../utils/map-zoom'
 import { useEditorUiStore } from '../../stores/editor-ui'
 import {
-  applyContinuousSelectedObjectTranslation,
-  applySelectedObjectTranslation,
+  fitSelectedObjectTranslation,
   prepareContinuousSelectedObjectTranslation,
   prepareSelectedObjectTranslation,
   type ContinuousSelectedObjectTranslationPlan,
@@ -22,6 +22,8 @@ export interface SelectedObjectDragPreview {
   objectSystemIds: ReadonlyMap<string, string>
   /** Selected objects that will detach from their current Orbit at the exact translated point. */
   departingObjectIds: ReadonlySet<string>
+  /** Exact displayed Zone frames from this collective landing proposal. */
+  frames: ReadonlyMap<string, SvgViewportRect>
   /** Independently moving group members that will attach to an exact eligible Orbit destination. */
   arrivingObjectIds: ReadonlySet<string>
 }
@@ -69,12 +71,6 @@ function planUpdates(plan: DragPlan): OwnedSelectedObjectPlacementChange[] {
   return 'systemPlans' in plan
     ? [...plan.updates]
     : plan.updates.map(change => ({ systemId: '', change }))
-}
-
-function applyPlan(workspace: LocalWorkspace, plan: DragPlan, fallbackSystemId: string): LocalWorkspace {
-  return 'systemPlans' in plan
-    ? applyContinuousSelectedObjectTranslation(workspace, plan)
-    : applySelectedObjectTranslation(workspace, fallbackSystemId, plan)
 }
 
 function orbitIdOf(placement: ObjectPlacement): string | null {
@@ -158,6 +154,7 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
     anchorId: string,
     continuousSystemScales?: ReadonlyMap<string, number>,
     expectedMode: Extract<MapInteractionMode, 'select' | 'move'> = 'move',
+    pixelsPerSceneUnit?: number,
   ): SelectedObjectDrag | null {
     const currentWorkspace = workspace.value
     const selectedIds = [...store.selectedObjectIds]
@@ -208,7 +205,17 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
     let released = false
     let externallyCancelled = false
 
-    const currentPlan = (delta: Point) => contextIsCurrent(captured) ? preparedPlan!(delta) : null
+    let cached: { delta: Point; plan: DragPlan; fitted: ReturnType<typeof fitSelectedObjectTranslation> } | undefined
+
+    function currentProposal(delta: Point) {
+      if (!contextIsCurrent(captured)) return null
+      if (cached?.delta.x === delta.x && cached.delta.y === delta.y) return cached
+      const plan = preparedPlan!(delta)
+      if (!plan) return null
+      const fitted = fitSelectedObjectTranslation(captured.workspace, plan, captured.systemId, anchorId, pixelsPerSceneUnit)
+      cached = { delta: { ...delta }, plan, fitted }
+      return cached
+    }
 
     function setError(message: string): void {
       if (feedbackGestureId === captured.id && !externallyCancelled) moveError.value = message
@@ -233,17 +240,19 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
       preview(delta) {
         if (completed || released) return null
         try {
-          const plan = currentPlan(delta)
-          if (!plan) {
+          const proposal = currentProposal(delta)
+          if (!proposal) {
             if (!contextIsCurrent(captured)) setError('The selected objects or map context changed. Preview the move again.')
             return null
           }
+          const { plan, fitted } = proposal
           if (!validatePlan(plan)) {
             setError('Resolve the Inspector draft before changing an object or its placement.')
             return null
           }
           return {
             positions: plan.positions,
+            frames: fitted.frames,
             objectSystemIds: 'objectSystemIds' in plan
               ? plan.objectSystemIds
               : new Map(plan.movedObjectIds.map(objectId => [objectId, ownerSystemId])),
@@ -259,11 +268,12 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
         if (completed || released) return
         released = true
         try {
-          let plan = currentPlan(delta)
-          if (!plan) {
+          const proposal = currentProposal(delta)
+          if (!proposal) {
             setError('The selected objects or map context changed. Preview the move again.')
             return
           }
+          const { plan, fitted } = proposal
           if (!validatePlan(plan)) {
             setError('Resolve the Inspector draft before changing an object or its placement.')
             return
@@ -286,17 +296,12 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
             return
           }
 
-          plan = currentPlan(delta)
-          if (!plan) {
+          if (!contextIsCurrent(captured)) {
             setError('The selected objects or map context changed. Preview the move again.')
             return
           }
           if (!validatePlan(plan)) {
             setError('Resolve the Inspector draft before changing an object or its placement.')
-            return
-          }
-          if (plan.updates.length === 0) {
-            clearError()
             return
           }
 
@@ -321,14 +326,14 @@ export function useSelectedObjectDrag(options: SelectedObjectDragOptions) {
               }
               return true
             },
-            prepare: latestWorkspace => {
+            prepare: () => {
               if (!contextIsCurrent(captured)) {
                 throw new Error(staleMessage)
               }
               if (!validatePlan(plan)) {
                 throw new Error('Resolve the Inspector draft before changing an object or its placement.')
               }
-              return applyPlan(latestWorkspace, plan, captured.systemId)
+              return fitted.workspace
             },
             ...(handlers.length ? { onApplied: () => handlers.forEach(handler => handler()) } : {}),
           })

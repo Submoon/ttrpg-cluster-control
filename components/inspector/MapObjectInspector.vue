@@ -136,30 +136,44 @@
             <p class="section-kicker">{{ props.routeObjectContext ? 'JUMP ROUTE' : 'ZONE STRUCTURE' }}</p>
             <h3 id="object-placement-heading">Placement and relationships</h3>
           </div>
-          <UButton
-            v-if="props.systemTransferEnabled"
-            class="workspace-control"
-            color="neutral"
-            variant="outline"
-            size="xs"
-            type="button"
-            :disabled="props.saving || props.transferBusy || !selectedSystem"
-            @click="requestSystemTransfer"
-          >
-            Change Zone…
-          </UButton>
-          <UButton
-            v-else-if="props.routeObjectContext"
-            class="workspace-control"
-            color="neutral"
-            variant="outline"
-            size="xs"
-            type="button"
-            :disabled="props.saving || props.transferBusy"
-            @click="emit('detach-route-object')"
-          >
-            Detach�
-          </UButton>
+          <div class="flex flex-wrap justify-end gap-2">
+            <UButton
+              v-if="props.systemTransferEnabled"
+              class="workspace-control"
+              color="neutral"
+              variant="outline"
+              size="xs"
+              type="button"
+              :disabled="props.saving || props.transferBusy || !selectedSystem"
+              @click="requestSystemTransfer"
+            >
+              Change Zone…
+            </UButton>
+            <UButton
+              v-else-if="props.routeObjectContext"
+              class="workspace-control"
+              color="neutral"
+              variant="outline"
+              size="xs"
+              type="button"
+              :disabled="props.saving || props.transferBusy"
+              @click="emit('place-catalogue-object', 'system', $event.currentTarget)"
+            >
+              Detach…
+            </UButton>
+            <UButton
+              v-if="props.routeTransferEnabled"
+              class="workspace-control"
+              color="neutral"
+              variant="outline"
+              size="xs"
+              type="button"
+              :disabled="props.saving || props.transferBusy"
+              @click="emit('place-catalogue-object', 'route', $event.currentTarget)"
+            >
+              Place on Jump Route…
+            </UButton>
+          </div>
         </div>
         <p v-if="props.routeObjectContext" class="entity-inspector-subtitle m-0">
           {{ props.routeObjectContext.summary }} · {{ routePlacementSummary }}
@@ -440,6 +454,7 @@ const props = defineProps<{
   publicationBusy?: boolean
   transferBusy?: boolean
   systemTransferEnabled?: boolean
+  routeTransferEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -455,7 +470,7 @@ const emit = defineEmits<{
   'resume-chart-draft': []
   'retry-save': []
   'export-current-json': []
-  'detach-route-object': []
+  'place-catalogue-object': [destination: 'system' | 'route', opener: EventTarget | null]
   'system-transfer-intent': [intent: Extract<SystemObjectTransferIntent, { kind: 'open' }>]
 }>()
 const commands = useEditorCommands()

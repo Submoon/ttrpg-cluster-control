@@ -522,6 +522,7 @@ function committedRouteCurves(workspace: LocalWorkspace) {
       workspaceSystemFrame(workspace, system.id),
     )),
     detailSystemIds: new Set(),
+    independentCurves: true,
     unresolvedExitPositions: layout.unresolvedExitPositions,
   })
 }

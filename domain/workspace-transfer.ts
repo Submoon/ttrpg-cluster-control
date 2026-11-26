@@ -196,14 +196,13 @@ function replaceContents(
   return { ...cluster, routeContents }
 }
 
-/** Proposes an immutable move between different catalogue owners while retaining the hosted branch. */
+/** Proposes a hosted-branch transfer or detachment onto its current Jump Route. */
 export function prepareCatalogueObjectTransfer(
   workspace: LocalWorkspace,
   request: CatalogueObjectTransferRequest,
 ): CatalogueObjectTransferReview {
   const { source: sourceOwner, landing, rootObjectId } = request
-  if ((sourceOwner.kind === 'system' && landing.kind === 'system' && sourceOwner.systemId === landing.systemId)
-    || (sourceOwner.kind === 'route' && landing.kind === 'route' && sourceOwner.routeId === landing.routeId)) {
+  if (sourceOwner.kind === 'system' && landing.kind === 'system' && sourceOwner.systemId === landing.systemId) {
     throw new Error('Choose a different destination.')
   }
   const source = findContents(workspace, sourceOwner, 'source')
@@ -211,13 +210,6 @@ export function prepareCatalogueObjectTransfer(
   const branch = resolveSystemObjectBranch(source, rootObjectId)
   const root = source.objects.find(object => object.id === rootObjectId)
   if (!branch || !root) throw new Error('The selected map object no longer exists in its source.')
-
-  const branchObjectIds = new Set(branch.objectIds)
-  const branchOrbitIds = new Set(branch.orbitIds)
-  if (destination.objects.some(object => branchObjectIds.has(object.id))
-    || destination.orbits.some(orbit => branchOrbitIds.has(orbit.id))) {
-    throw new Error('Part of the hosted branch already exists at the destination.')
-  }
 
   let placement: CatalogueObject['placement']
   if (landing.kind === 'system') {
@@ -230,6 +222,37 @@ export function prepareCatalogueObjectTransfer(
       throw new Error('Route position must be between 0% and 100%.')
     }
     placement = { kind: 'route', progression: landing.progression }
+  }
+
+  if (sourceOwner.kind === 'route' && landing.kind === 'route' && sourceOwner.routeId === landing.routeId) {
+    if (root.placement.kind !== 'orbit') throw new Error('Choose a different destination.')
+    const objectAngles = {
+      ...workspace.layout.objectAngles,
+      ...captureEffectiveObjectAngles(workspace, source, [root.placement.orbitId]),
+    }
+    delete objectAngles[root.id]
+    return {
+      sourceWorkspace: workspace,
+      request,
+      branch,
+      detachedRouteAttachments: [],
+      clearedStationLinks: [],
+      previewWorkspace: {
+        ...workspace,
+        cluster: replaceContents(workspace.cluster, sourceOwner, {
+          objects: source.objects.map(object => object.id === root.id ? { ...root, placement } : object),
+          orbits: source.orbits,
+        }),
+        layout: { ...workspace.layout, objectAngles },
+      },
+    }
+  }
+
+  const branchObjectIds = new Set(branch.objectIds)
+  const branchOrbitIds = new Set(branch.orbitIds)
+  if (destination.objects.some(object => branchObjectIds.has(object.id))
+    || destination.orbits.some(orbit => branchOrbitIds.has(orbit.id))) {
+    throw new Error('Part of the hosted branch already exists at the destination.')
   }
 
   const relationships = collectCrossingRelationships(

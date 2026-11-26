@@ -62,6 +62,7 @@
           :workspace="props.workspace"
           :publication-busy="props.publicationBusy"
           :transfer-busy="props.systemTransferSession !== null && props.systemTransferSession !== undefined"
+          :route-transfer-enabled="props.routeTransferEnabled"
           :system-transfer-enabled="props.systemTransferEnabled && !props.routeObjectContext"
           :route-object-context="props.routeObjectContext"
           :selected-system="props.selectedSystem"
@@ -92,7 +93,7 @@
           @retry-save="emit('retry-save')"
           @export-current-json="emit('export-current-json')"
           @system-transfer-intent="emit('system-transfer-intent', $event)"
-          @detach-route-object="emit('detach-route-object')"
+          @place-catalogue-object="(destination, opener) => emit('place-catalogue-object', destination, opener)"
         />
       </div>
       <div v-else-if="props.selectedOrbit" class="map-inspector-entity-content">
@@ -176,6 +177,7 @@ const props = defineProps<{
   mode: 'cluster' | 'system'
   workspace: LocalWorkspace
   systemTransferEnabled?: boolean
+  routeTransferEnabled?: boolean
   selectedSystem?: StarSystem
   draftSystem?: StarSystem
   inspectedClusterSystem?: StarSystem
@@ -235,7 +237,7 @@ const emit = defineEmits<{
   'resume-chart-draft': []
   'retry-save': []
   'export-current-json': []
-  'detach-route-object': []
+  'place-catalogue-object': [destination: 'system' | 'route', opener: EventTarget | null]
   'system-transfer-intent': [intent: SystemObjectTransferIntent]
 }>()
 

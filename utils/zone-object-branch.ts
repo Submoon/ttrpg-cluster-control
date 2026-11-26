@@ -72,6 +72,17 @@ export function fitZoneObjectWorkspace(
   systemId: string,
   rootObjectId: string,
 ): LocalWorkspace {
+  return fitZoneObjectLanding(before, next, systemId, rootObjectId).workspace
+}
+
+/** Fits one rigid group in its owner. Secondary selected objects and hosted geometry grow the same frame. */
+export function fitZoneObjectLanding(
+  before: LocalWorkspace,
+  next: LocalWorkspace,
+  systemId: string,
+  rootObjectId: string,
+  group?: { movedObjectIds: readonly string[]; pixelsPerSceneUnit?: number },
+): { workspace: LocalWorkspace; frame?: SvgViewportRect } {
   const inputs = before.cluster.systems.map((system, index) => {
     const projection = projectInWorkspace(before, system, index)
     return { id: system.id, anchor: projection.anchor, envelope: projection.preferredFrame ?? projection.envelope, projection }
@@ -82,31 +93,45 @@ export function fitZoneObjectWorkspace(
   if (!projectedSource || !system) throw new Error('The destination Zone is no longer available.')
 
   const projection = projectInWorkspace(next, system, index)
-  const branch = projectZoneObjectBranch(system, projection, rootObjectId)
-  if (!branch) throw new Error('The object is no longer available for placement.')
+  const root = projection.objects.find(object => object.id === rootObjectId)?.scenePosition
+  if (!root) throw new Error('The object is no longer available for placement.')
   const previousRoot = projectedSource.projection.objects.find(object => object.id === rootObjectId)?.scenePosition
   const previousObject = before.cluster.systems.find(system => system.id === systemId)?.objects
     .find(object => object.id === rootObjectId)
   const nextObject = system.objects.find(object => object.id === rootObjectId)
-  if (previousRoot?.x === branch.root.x && previousRoot?.y === branch.root.y
-    && JSON.stringify(previousObject?.placement) === JSON.stringify(nextObject?.placement)) return next
+  if (!group && previousRoot?.x === root.x && previousRoot?.y === root.y
+    && JSON.stringify(previousObject?.placement) === JSON.stringify(nextObject?.placement)) return { workspace: next }
 
+  let relativeBounds: SvgViewportRect
+  if (group) {
+    const moving = new Set(group.movedObjectIds)
+    const hosted = new Set(system.orbits.filter(orbit => orbit.hostId !== null && moving.has(orbit.hostId)).map(orbit => orbit.id))
+    relativeBounds = zoneBranchBounds(root, projection.objects.filter(object => moving.has(object.id)),
+      projection.orbits.filter(orbit => hosted.has(orbit.id)))
+  } else {
+    const branch = projectZoneObjectBranch(system, projection, rootObjectId)
+    if (!branch) throw new Error('The object is no longer available for placement.')
+    relativeBounds = branch.relativeBounds
+  }
   const displayed = continuousSystemFrames(inputs)
   const displayedFrame = displayed.get(systemId)!
   const landing = planBoundedZoneLanding({
     systemId,
     anchor: projectedSource.anchor,
     displayedFrame,
-    target: branch.root,
-    relativeBounds: branch.relativeBounds,
+    target: root,
+    relativeBounds,
+    pixelsPerSceneUnit: group?.pixelsPerSceneUnit,
     authoredFrames: inputs,
     fixedFrames: inputs.filter(input => input.id !== systemId)
       .map(input => ({ ...input, envelope: displayed.get(input.id)! })),
   })
   if (!landing) throw new Error('The object and its hosted branch must fit within the destination Zone and its available frame growth.')
 
-  if (!landing.grew && workspaceSystemFrame(before, systemId)) return next
-  return setWorkspaceSystemFrame(next, systemId, systemFrameInsetsFromRect(projectedSource.anchor, landing.authoredFrame))
+  const workspace = !landing.grew && workspaceSystemFrame(before, systemId)
+    ? next
+    : setWorkspaceSystemFrame(next, systemId, systemFrameInsetsFromRect(projectedSource.anchor, landing.authoredFrame))
+  return { workspace, frame: landing.frame }
 }
 
 function projectInWorkspace(workspace: LocalWorkspace, system: StarSystem, index: number): ContinuousWardenSystemProjection {
