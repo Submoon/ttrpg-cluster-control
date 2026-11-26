@@ -77,6 +77,7 @@ const props = defineProps<{
   routes: readonly RouteMark[]
   geometries: ReadonlyMap<string, ContinuousMapRouteGeometry>
   detailSystemIds?: ReadonlySet<string>
+  reduceMotion?: boolean
   selectedRouteId: string | null
   viewport: MapViewport
   viewportRect: SvgViewportRect
@@ -167,8 +168,12 @@ function focusRoute(id: string): void {
 }
 
 watch(
-  [() => props.geometries, () => props.detailSystemIds],
+  [() => props.geometries, () => props.detailSystemIds, () => props.reduceMotion],
   ([next, nextDetail], [previous, previousDetail]) => {
+    if (props.reduceMotion) {
+      stopAnimation()
+      return
+    }
     if (nextDetail === previousDetail) return
     const displayed = animated.value
     stopAnimation()
@@ -184,7 +189,7 @@ watch(
     animated.value = new Map(motions.map(({ id, from }) => [id, from]))
     const started = window.performance.now()
     function step(now: number): void {
-      if (now >= started + CONTINUOUS_MAP_DETAIL_MOTION_MS || motionPreference.matches) {
+      if (now >= started + CONTINUOUS_MAP_DETAIL_MOTION_MS || props.reduceMotion || motionPreference.matches) {
         stopAnimation()
         return
       }

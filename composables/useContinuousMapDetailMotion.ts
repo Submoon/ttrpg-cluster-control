@@ -2,11 +2,15 @@ import { onBeforeUnmount, shallowRef, watch, type ShallowRef } from 'vue'
 import { CONTINUOUS_MAP_DETAIL_MOTION_MS, continuousMapDetailMotionEase } from '../utils/continuous-map-projection'
 
 /** Drives the name and vector paints from the same reveal, independently of camera updates. */
-export function useContinuousMapDetailMotion(detailSystemIds: Readonly<ShallowRef<ReadonlySet<string>>>) {
+export function useContinuousMapDetailMotion(
+  detailSystemIds: Readonly<ShallowRef<ReadonlySet<string>>>,
+  reduceMotion?: () => boolean,
+) {
   const progress = shallowRef<ReadonlyMap<string, number>>(new Map())
   const transitions = new Map<string, { from: number; to: number; startedAt: number }>()
   let frame: number | null = null
   let motionPreference: MediaQueryList | undefined
+  const motionIsReduced = () => reduceMotion?.() ?? motionPreference?.matches ?? false
 
   function stopMotion(): void {
     if (frame !== null) window.cancelAnimationFrame(frame)
@@ -17,7 +21,7 @@ export function useContinuousMapDetailMotion(detailSystemIds: Readonly<ShallowRe
 
   function tick(time: number): void {
     frame = null
-    if (motionPreference?.matches) {
+    if (motionIsReduced()) {
       stopMotion()
       return
     }
@@ -39,7 +43,7 @@ export function useContinuousMapDetailMotion(detailSystemIds: Readonly<ShallowRe
   watch(detailSystemIds, (next, previous) => {
     if (typeof window === 'undefined') return
     motionPreference ??= window.matchMedia('(prefers-reduced-motion: reduce)')
-    if (motionPreference.matches) {
+    if (motionIsReduced()) {
       stopMotion()
       return
     }
@@ -61,6 +65,8 @@ export function useContinuousMapDetailMotion(detailSystemIds: Readonly<ShallowRe
     progress.value = values
     if (transitions.size && frame === null) frame = window.requestAnimationFrame(tick)
   }, { flush: 'sync' })
+
+  if (reduceMotion) watch(reduceMotion, reduced => { if (reduced) stopMotion() }, { flush: 'sync' })
 
   onBeforeUnmount(stopMotion)
 

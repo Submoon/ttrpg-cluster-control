@@ -48,6 +48,8 @@ export interface ContinuousWardenImageRequest extends ContinuousWardenImageScene
   source: SVGSVGElement
   palette: MapImagePalette
   isCurrent?: () => boolean
+  compactLabels?: boolean
+  selectedObjectIds?: readonly string[]
 }
 
 type ExportRouteGeometry = NonNullable<ContinuousWardenImageSceneRoute['renderGeometry']>
@@ -64,6 +66,9 @@ export async function exportContinuousWardenMapImage(
     textWidth: estimateTextWidth,
   })
   const imageLabels = scene.labels
+  const captionIds = request.scope === 'viewport' && request.compactLabels
+    ? new Set([...(request.selectedObjectIds ?? []), request.selectedRouteObjectId])
+    : undefined
 
   return exportMapImageScene(
     source,
@@ -122,6 +127,7 @@ export async function exportContinuousWardenMapImage(
           scene.sceneViewport,
           scene.systemSvgPixelScale,
           scene.dimmedObjectIds,
+          captionIds,
         )
       }
       content.append(items)
@@ -129,7 +135,7 @@ export async function exportContinuousWardenMapImage(
       const routeObjects = createScopedElement(clone, 'g', 'continuous-warden-route-objects')
       const routeMarkerScale = 1 / Math.max(Number.EPSILON, scene.sceneViewport.k * scene.routeSvgPixelScale)
       for (const route of scene.routes) {
-        if (route.branch) appendRouteBranch(routeObjects, route.route.id, route.branch, routeMarkerScale, scene.dimmedObjectIds)
+        if (route.branch) appendRouteBranch(routeObjects, route.route.id, route.branch, routeMarkerScale, scene.dimmedObjectIds, captionIds)
       }
       content.append(routeObjects)
 
@@ -147,6 +153,7 @@ function appendRouteBranch(
   branch: NonNullable<ContinuousWardenImageSceneRoute['branch']>,
   markerScale: number,
   dimmedObjectIds: ReadonlySet<string>,
+  captionIds?: ReadonlySet<string | undefined>,
 ): void {
   for (const orbit of branch.orbits) {
     const ring = createScopedElement(parent, 'ellipse', 'warden-route-object-orbit')
@@ -171,7 +178,7 @@ function appendRouteBranch(
     glyph.setAttribute('y', '5')
     glyph.textContent = objectMark(object)
     mark.append(marker, glyph)
-    if (branch.detailed) {
+    if (branch.detailed && (!captionIds || captionIds.has(object.id))) {
       const title = mark.ownerDocument.createElementNS(svgNamespace, 'title')
       title.textContent = catalogueObjectLabel(object)
       const key = createScopedElement(parent, 'text', 'warden-route-object-key')
@@ -199,6 +206,7 @@ function appendSystem(
   viewport: MapViewport,
   svgPixelScale: number,
   dimmedObjectIds: ReadonlySet<string>,
+  captionIds?: ReadonlySet<string | undefined>,
 ): void {
   const group = createScopedElement(parent, 'g', 'continuous-warden-system')
   group.setAttribute('data-system-id', projection.id)
@@ -216,7 +224,7 @@ function appendSystem(
     ? viewport.k * svgPixelScale
     : scope === 'system' ? svgPixelScale : 1
   if (detailed && system) {
-    appendSystemDetail(group, projection, system, dimmedObjectIds, pixelsPerSceneUnit, scope === 'system')
+    appendSystemDetail(group, projection, system, dimmedObjectIds, pixelsPerSceneUnit, scope === 'system', captionIds)
   }
 
   parent.append(group)
@@ -229,6 +237,7 @@ function appendSystemDetail(
   dimmedObjectIds: ReadonlySet<string>,
   pixelsPerSceneUnit: number,
   readableExportText: boolean,
+  captionIds?: ReadonlySet<string | undefined>,
 ): void {
   const detail = createScopedElement(parent, 'g', 'continuous-warden-system-detail')
   detail.setAttribute(
@@ -273,17 +282,20 @@ function appendSystemDetail(
     glyph.setAttribute('text-anchor', 'middle')
     if (sourceObject.markerColor !== undefined) glyph.style.fill = sourceObject.markerColor
     glyph.textContent = objectGlyphs[sourceObject.subtype] ?? '◇'
-    const key = createScopedElement(parent, 'text', 'continuous-warden-object-key')
-    key.setAttribute('y', '31')
-    key.setAttribute('text-anchor', 'middle')
-    key.textContent = object.locationKey
-    const name = createScopedElement(parent, 'text', 'continuous-warden-object-name')
-    name.setAttribute('y', '46')
-    name.setAttribute('text-anchor', 'middle')
-    name.textContent = object.name
     const text = createScopedElement(mark, 'g', 'continuous-warden-object-text')
     text.setAttribute('transform', `scale(${textScale})`)
-    text.append(glyph, key, name)
+    text.append(glyph)
+    if (!captionIds || captionIds.has(object.id)) {
+      const key = createScopedElement(parent, 'text', 'continuous-warden-object-key')
+      key.setAttribute('y', '31')
+      key.setAttribute('text-anchor', 'middle')
+      key.textContent = object.locationKey
+      const name = createScopedElement(parent, 'text', 'continuous-warden-object-name')
+      name.setAttribute('y', '46')
+      name.setAttribute('text-anchor', 'middle')
+      name.textContent = object.name
+      text.append(key, name)
+    }
     mark.append(text)
     items.append(mark)
   }

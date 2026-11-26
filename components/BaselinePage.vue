@@ -117,7 +117,7 @@
               v-model:mobile-menu-open="mobileMenuOpen"
               :has-field-draft="hasModifiedFieldDefinitionsSession"
               show-privacy-link
-              @open-fields="openFieldsFromMobileMenu"
+              @open-fields="openSettingsFromMobileMenu"
               @open-help="openHelpFromMobileMenu"
             >
               <template #editor-actions>
@@ -125,7 +125,8 @@
                   ref="fieldDefinitionsDialog"
                   v-if="workspace"
                   :session="fieldDefinitionsSession"
-                  :detail-zoom-percent="mapDetailZoomPercent"
+                  v-model:tab="settingsTab"
+                  :display="display"
                   :workspace="workspace"
                   :saving="saveState === 'saving'"
                   :save-error="fieldDefinitionError"
@@ -135,7 +136,7 @@
                   :hide-trigger="isCompactViewport"
                   :focus-fallback="focusMobileWorkspaceMenu"
                   @intent="handleFieldDefinitionsIntent"
-                  @detail-zoom-change="setMapDetailZoomPercent"
+                  @display-change="updateDisplay"
                 />
                 <WorkspaceMapHelp
                   v-model:open="helpOpen"
@@ -453,8 +454,10 @@
                     :dimmed-object-ids="dimmedMapObjectIds"
                     :applied-dimmed-object-ids="dimmedAppliedObjectIds"
                     :map-key="activeMapKey ?? ''"
-                    :initial-viewport="initialViewport"
-                    :detail-zoom-percent="mapDetailZoomPercent"
+                    :initial-viewport="initialWardenViewport"
+                    :detail-zoom-percent="display.detailZoom"
+                    :compact-labels="display.labels === 'compact'"
+                    :map-motion="motion"
                     :workspace="workspace"
                     :draft-workspace="wardenDraftWorkspace"
                     :system="selectedSystem"
@@ -515,7 +518,7 @@
                     @resize-orbit="resizeMapOrbit"
                     @rotate-orbit="rotateMapOrbit"
                     @place-object-in-orbit="placeMapObjectInOrbit"
-                    @viewport-change="recordViewport($event.key, $event.viewport)"
+                    @viewport-change="recordWardenViewport($event.key, $event.viewport)"
                     @system-transfer-placement-preview="transfer.previewMapPlacement($event.lease, $event.placement)"
                     @system-transfer-placement-complete="transfer.completeMapPlacement($event.lease, $event.placement)"
                     @system-transfer-placement-cancel="transfer.handleIntent({ kind: 'cancel-map-placement', sessionId: $event.sessionId, lease: $event })"
@@ -628,7 +631,7 @@
               @resume-chart-draft="beginChartNamesEdit()"
               @retry-save="retryLatestSave"
               @export-current-json="downloadClusterJson"
-              @open-field-definitions="openFieldDefinitions"
+              @open-field-definitions="openSettingsFields"
               @system-transfer-intent="inspector.handleSystemTransferIntent"
               @place-catalogue-object="openCatalogueTransfer"
             >
@@ -750,7 +753,8 @@
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch, type Ref } from 'vue'
-import { WARDEN_DETAIL_ZOOM_DEFAULT, WARDEN_DETAIL_ZOOM_MAX, WARDEN_DETAIL_ZOOM_MIN } from '../utils/continuous-map-projection'
+import { useWardenDisplayPreferences } from '../composables/useWardenDisplayPreferences'
+import type { MapViewport } from '../utils/map-zoom'
 import type { DropdownMenuItem } from '@nuxt/ui'
 import { catalogueTypes, projectPlayerCluster, routeContentsFor, type CatalogueObjectTransferReview, type CatalogueTransferSource, type CatalogueSubtype, type JumpRoute, type LocalWorkspace, type ObjectFamily, type Point, type SystemFrameInsets } from '../domain/workspace'
 import { validName } from '../domain/workspace-validation'
@@ -852,22 +856,8 @@ watch(dropboxBackup.lastSaved, receipt => {
 const runtimeConfig = useRuntimeConfig()
 const editorUi = useEditorUiStore()
 const continuousMap = computed(() => true)
-const mapDetailZoomStorageKey = 'ttrpg-cluster-control:map-detail-zoom'
-const mapDetailZoomPercent = ref(WARDEN_DETAIL_ZOOM_DEFAULT)
-
-function validMapDetailZoomPercent(percent: number): boolean {
-  return Number.isInteger(percent) && percent >= WARDEN_DETAIL_ZOOM_MIN && percent <= WARDEN_DETAIL_ZOOM_MAX
-}
-
-function setMapDetailZoomPercent(percent: number): void {
-  if (!validMapDetailZoomPercent(percent) || mapDetailZoomPercent.value === percent) return
-  mapDetailZoomPercent.value = percent
-  try {
-    window.localStorage.setItem(mapDetailZoomStorageKey, String(percent))
-  } catch {
-    // The preference still applies in this tab if storage is unavailable.
-  }
-}
+const { display, motion, updateDisplay, lastViewport, rememberViewport } = useWardenDisplayPreferences()
+const settingsTab = ref<'display' | 'fields'>('display')
 
 let readEditorHistoryBlockReason: () => string | null = () => 'The editor is opening.'
 let endCleanHistorySessions: () => void = () => undefined
@@ -890,8 +880,14 @@ async function closeMobileMenuForAction(): Promise<HTMLElement | null> {
   return focusMobileWorkspaceMenu()
 }
 
-async function openFieldsFromMobileMenu(): Promise<void> {
+async function openSettingsFromMobileMenu(): Promise<void> {
   await closeMobileMenuForAction()
+  settingsTab.value = 'display'
+  await openFieldDefinitions()
+}
+
+async function openSettingsFields(): Promise<void> {
+  settingsTab.value = 'fields'
   await openFieldDefinitions()
 }
 
@@ -1506,6 +1502,14 @@ const {
   requestPanel, closePanel, togglePanel,
   zoomActiveMap, panActiveMap, setViewportPercentage, fitActiveMap, centerInspectedTarget, recordViewport, setMapMode,
 } = mapControls
+
+const initialWardenViewport = computed(() => initialViewport.value
+  ?? (display.value.startup === 'resume' && activeMapKey.value ? lastViewport(activeMapKey.value) : null))
+
+function recordWardenViewport(key: string, viewport: MapViewport): void {
+  recordViewport(key, viewport)
+  if (key === activeMapKey.value) rememberViewport(key, viewport)
+}
 
 watch(inspectorPanelVisible, visible => {
   if (!visible) charts.hideEditing()
@@ -2887,12 +2891,6 @@ function warnBeforeLeaving(event: BeforeUnloadEvent): void {
 }
 
 onMounted(() => {
-  try {
-    const storedZoom = Number(window.localStorage.getItem(mapDetailZoomStorageKey))
-    if (validMapDetailZoomPercent(storedZoom)) mapDetailZoomPercent.value = storedZoom
-  } catch {
-    // Keep the default if preferences cannot be read.
-  }
   window.addEventListener('beforeunload', warnBeforeLeaving)
   window.addEventListener('keydown', handleAddEscape)
   void hydrate()

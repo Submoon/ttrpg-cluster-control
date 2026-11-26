@@ -36,6 +36,8 @@
       :cluster="props.workspace.cluster"
       :workspace="props.workspace"
       :detail-zoom-percent="props.detailZoomPercent"
+      :compact-labels="props.compactLabels"
+      :map-motion="props.mapMotion"
       :system-positions="props.workspace.layout.systemPositions"
       :unresolved-exit-positions="props.workspace.layout.unresolvedExitPositions"
       :dimmed-object-ids="props.dimmedObjectIds ?? []"
@@ -228,6 +230,7 @@ import type { MapImageScope } from '../utils/map-image-scope'
 import { useEditorCommands } from '../composables/editor-workflows/editor-command-context'
 import type { EntityContextTarget, PublicationMenuLease } from '../composables/editor-workflows/publication-types'
 import type { MapViewport } from '../utils/map-zoom'
+import type { WardenMapMotion } from '../composables/useWardenDisplayPreferences'
 import type { SearchTarget } from '../utils/workspace-search'
 import type { InspectedMapTarget } from '../stores/editor-ui'
 import type { ContinuousObjectAddTarget } from '../utils/continuous-map-editing'
@@ -258,6 +261,8 @@ const props = defineProps<{
   /** Validated Warden edit projection used only to paint the visible map scene. */
   draftWorkspace?: LocalWorkspace | null
   detailZoomPercent?: number
+  compactLabels?: boolean
+  mapMotion?: WardenMapMotion
   system: StarSystem | undefined
   selectedSystemId: string | null
   selectedObjectId: string | null

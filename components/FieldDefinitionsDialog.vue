@@ -39,7 +39,7 @@
         <header class="field-definitions-header">
           <div class="field-definitions-title">
             <UButton
-              v-if="props.session.screen !== 'list'"
+              v-if="props.tab === 'fields' && props.session.screen !== 'list'"
               class="field-definitions-back"
               color="neutral"
               variant="ghost"
@@ -63,213 +63,213 @@
           </UButton>
         </header>
 
-        <UAlert
-          v-if="visibleError"
-          color="error"
-          variant="subtle"
-          role="alert"
-          :description="visibleError"
-        />
-
-        <section
-          v-if="props.session.screen === 'list' && !props.session.review && !props.session.pendingGuard"
-          class="flex shrink-0 flex-col gap-2"
-          aria-labelledby="map-detail-zoom-label"
+        <UTabs
+          :model-value="props.tab"
+          :items="settingsTabs"
+          :unmount-on-hide="false"
+          activation-mode="manual"
+          variant="link"
+          :ui="{ root: 'min-h-0 flex-1 gap-3', content: 'min-h-0 flex-1' }"
+          aria-label="Map settings sections"
+          @update:model-value="value => (value === 'display' || value === 'fields') && emit('update:tab', value)"
         >
-          <div class="flex items-center justify-between gap-3">
-            <h3 id="map-detail-zoom-label" class="m-0 text-sm font-medium">Minimum zoom for map details</h3>
-            <output class="text-sm tabular-nums">{{ props.detailZoomPercent }}%</output>
-          </div>
-          <USlider
-            :model-value="props.detailZoomPercent"
-            :min="WARDEN_DETAIL_ZOOM_MIN"
-            :max="WARDEN_DETAIL_ZOOM_MAX"
-            :step="5"
-            aria-label="Minimum zoom for map details"
-            :aria-valuetext="`${props.detailZoomPercent}%`"
-            @update:model-value="value => typeof value === 'number' && emit('detail-zoom-change', value)"
-          />
-        </section>
-
-        <div class="field-definitions-workspace">
-          <FieldDefinitionList
-            ref="fieldList"
-            v-show="showListPane && !props.session.review && !props.session.pendingGuard"
-            :native-fields="nativeFields"
-            :custom-fields="customFields"
-            :selected-field-id="props.session.selectedId ?? ''"
-            @select="selectField"
-            @position-change="rememberListPosition"
-          />
-
-          <FieldDefinitionEditor
-            v-if="selectedDefinition"
-            v-show="showDetailPane && !props.session.review && !props.session.pendingGuard"
-            :definition="selectedDefinition"
-            :assignments="selectedAssignments"
-            :draft="props.session.draft"
-            :saving="props.saving"
-            :change-pending="props.session.review !== null"
-            :editing="props.session.screen === 'edit'"
-            @request-delete="deleteField"
-            @patch-definition="patchDefinition"
-          />
-
-          <section
-            v-else-if="showDetailPane"
-            class="field-definition-empty-detail"
-            role="region"
-            aria-label="Field definition editor"
-            tabindex="-1"
-          >
-            <p>Choose a field to inspect its saved values.</p>
-          </section>
-
-          <form
-            v-if="props.session.screen === 'new' && !props.session.review && !props.session.pendingGuard"
-            class="field-definition-create-form"
-            tabindex="-1"
-            @submit.prevent="submitField"
-          >
-            <span class="section-kicker">NEW REUSABLE FIELD</span>
-            <h3>Add custom field</h3>
-            <UFormField label="Custom field label">
-              <UInput
-                id="new-custom-field-name"
-                :model-value="props.session.createDraft?.name ?? ''"
-                maxlength="80"
-                autocomplete="off"
-                required
-                @update:model-value="patchCreate({ name: String($event) })"
-              />
-            </UFormField>
-            <UFormField label="Value type">
-              <USelect
-                id="new-custom-field-type"
-                aria-label="Value type"
-                :model-value="props.session.createDraft?.type ?? 'text'"
-                :items="customFieldTypeItems"
-                @update:model-value="patchCreate({ type: $event as CustomFieldType })"
-              />
-            </UFormField>
-            <UCheckbox
-              :model-value="props.session.createDraft?.playerShared ?? false"
-              label="Share with players"
-              @update:model-value="value => patchCreate({ playerShared: value === true })"
-            />
-            <UFormField v-if="props.session.createDraft?.type === 'single-select'" label="New field choices">
-              <UTextarea
-                id="new-custom-field-options"
-                aria-label="New field choices"
-                :model-value="props.session.createDraft.options"
-                :rows="4"
-                @update:model-value="patchCreate({ options: String($event) })"
-              />
-            </UFormField>
-          </form>
-
-          <section
-            v-if="props.session.review"
-            class="field-definition-review"
-            role="region"
-            aria-label="Field change review"
-            tabindex="-1"
-          >
-            <span class="section-kicker">REVIEW FIELD CHANGE</span>
-            <h3>{{ props.session.review.operation === 'remove' ? 'Delete' : 'Update' }} {{ props.session.review.fieldName }}?</h3>
-            <p>Review the saved values affected by this change before applying it.</p>
-            <p v-if="props.session.review.fromType && props.session.review.toType && props.session.review.fromType !== props.session.review.toType">
-              Type: {{ props.session.review.fromType }} → {{ props.session.review.toType }}
-            </p>
-            <div v-if="props.session.review.removedOptions?.length" class="field-definition-removed-choices">
-              <p>Removed choices</p>
-              <ul aria-label="Removed field choices">
-                <li v-for="option in props.session.review.removedOptions" :key="option">{{ option }}</li>
-              </ul>
+          <template #display>
+            <div class="h-full overflow-y-auto overscroll-contain px-1 py-2">
+              <MapDisplaySettings :display="props.display" @change="emit('display-change', $event)" />
             </div>
-            <ul v-if="props.session.review.impacts.length">
-              <li v-for="impact in props.session.review.impacts" :key="`${impact.systemId}:${impact.objectId}`">
-                <span>{{ impact.objectName }} / {{ impact.systemName }}</span>
-                <strong>{{ impact.value }}</strong>
-                <span v-if="impact.resolution === 'preserve'">Retain as {{ impact.nextValue }}</span>
-                <span v-else-if="impact.resolution === 'remove'">Remove with definition</span>
-                <span v-else>Clear this value</span>
-              </li>
-            </ul>
-            <p v-else>No saved values are affected.</p>
-          </section>
+          </template>
+          <template #fields>
+            <div class="flex h-full min-h-0 flex-col gap-3">
+              <UAlert
+                v-if="visibleError"
+                color="error"
+                variant="subtle"
+                role="alert"
+                :description="visibleError"
+              />
 
-          <section
-            v-if="props.session.pendingGuard"
-            class="field-definition-pending-guard"
-            role="status"
-            aria-label="Unsaved field draft"
-            tabindex="-1"
-          >
-            <span class="section-kicker">UNSAVED FIELD DRAFT</span>
-            <h3>Apply this draft before switching?</h3>
-            <p>Your current field work stays here until you choose an action.</p>
-          </section>
-        </div>
+              <div class="field-definitions-workspace">
+                <FieldDefinitionList
+                  ref="fieldList"
+                  v-show="showListPane && !props.session.review && !props.session.pendingGuard"
+                  :native-fields="nativeFields"
+                  :custom-fields="customFields"
+                  :selected-field-id="props.session.selectedId ?? ''"
+                  @select="selectField"
+                  @position-change="rememberListPosition"
+                />
 
-        <footer class="field-definitions-actions" aria-label="Field actions">
-          <template v-if="props.session.pendingGuard">
-            <UButton color="neutral" variant="ghost" @click="emitIntent({ kind: 'resolve-transition', decision: 'stay' })">
-              Stay here
-            </UButton>
-            <UButton color="error" variant="outline" @click="emitIntent({ kind: 'resolve-transition', decision: 'discard' })">
-              Discard and continue
-            </UButton>
-            <UButton color="primary" @click="emitIntent({ kind: 'resolve-transition', decision: 'apply' })">
-              Apply and continue
-            </UButton>
+                <FieldDefinitionEditor
+                  v-if="selectedDefinition"
+                  v-show="showDetailPane && !props.session.review && !props.session.pendingGuard"
+                  :definition="selectedDefinition"
+                  :assignments="selectedAssignments"
+                  :draft="props.session.draft"
+                  :saving="props.saving"
+                  :change-pending="props.session.review !== null"
+                  :editing="props.session.screen === 'edit'"
+                  @request-delete="deleteField"
+                  @patch-definition="patchDefinition"
+                />
+
+                <section
+                  v-else-if="showDetailPane"
+                  class="field-definition-empty-detail"
+                  role="region"
+                  aria-label="Field definition editor"
+                  tabindex="-1"
+                >
+                  <p>Choose a field to inspect its saved values.</p>
+                </section>
+
+                <form
+                  v-if="props.session.screen === 'new' && !props.session.review && !props.session.pendingGuard"
+                  class="field-definition-create-form"
+                  tabindex="-1"
+                  @submit.prevent="submitField"
+                >
+                  <span class="section-kicker">NEW REUSABLE FIELD</span>
+                  <h3>Add custom field</h3>
+                  <UFormField label="Custom field label">
+                    <UInput
+                      id="new-custom-field-name"
+                      :model-value="props.session.createDraft?.name ?? ''"
+                      maxlength="80"
+                      autocomplete="off"
+                      required
+                      @update:model-value="patchCreate({ name: String($event) })"
+                    />
+                  </UFormField>
+                  <UFormField label="Value type">
+                    <USelect
+                      id="new-custom-field-type"
+                      aria-label="Value type"
+                      :model-value="props.session.createDraft?.type ?? 'text'"
+                      :items="customFieldTypeItems"
+                      @update:model-value="patchCreate({ type: $event as CustomFieldType })"
+                    />
+                  </UFormField>
+                  <UCheckbox
+                    :model-value="props.session.createDraft?.playerShared ?? false"
+                    label="Share with players"
+                    @update:model-value="value => patchCreate({ playerShared: value === true })"
+                  />
+                  <UFormField v-if="props.session.createDraft?.type === 'single-select'" label="New field choices">
+                    <UTextarea
+                      id="new-custom-field-options"
+                      aria-label="New field choices"
+                      :model-value="props.session.createDraft.options"
+                      :rows="4"
+                      @update:model-value="patchCreate({ options: String($event) })"
+                    />
+                  </UFormField>
+                </form>
+
+                <section
+                  v-if="props.session.review"
+                  class="field-definition-review"
+                  role="region"
+                  aria-label="Field change review"
+                  tabindex="-1"
+                >
+                  <span class="section-kicker">REVIEW FIELD CHANGE</span>
+                  <h3>{{ props.session.review.operation === 'remove' ? 'Delete' : 'Update' }} {{ props.session.review.fieldName }}?</h3>
+                  <p>Review the saved values affected by this change before applying it.</p>
+                  <p v-if="props.session.review.fromType && props.session.review.toType && props.session.review.fromType !== props.session.review.toType">
+                    Type: {{ props.session.review.fromType }} → {{ props.session.review.toType }}
+                  </p>
+                  <div v-if="props.session.review.removedOptions?.length" class="field-definition-removed-choices">
+                    <p>Removed choices</p>
+                    <ul aria-label="Removed field choices">
+                      <li v-for="option in props.session.review.removedOptions" :key="option">{{ option }}</li>
+                    </ul>
+                  </div>
+                  <ul v-if="props.session.review.impacts.length">
+                    <li v-for="impact in props.session.review.impacts" :key="`${impact.systemId}:${impact.objectId}`">
+                      <span>{{ impact.objectName }} / {{ impact.systemName }}</span>
+                      <strong>{{ impact.value }}</strong>
+                      <span v-if="impact.resolution === 'preserve'">Retain as {{ impact.nextValue }}</span>
+                      <span v-else-if="impact.resolution === 'remove'">Remove with definition</span>
+                      <span v-else>Clear this value</span>
+                    </li>
+                  </ul>
+                  <p v-else>No saved values are affected.</p>
+                </section>
+
+                <section
+                  v-if="props.session.pendingGuard"
+                  class="field-definition-pending-guard"
+                  role="status"
+                  aria-label="Unsaved field draft"
+                  tabindex="-1"
+                >
+                  <span class="section-kicker">UNSAVED FIELD DRAFT</span>
+                  <h3>Apply this draft before switching?</h3>
+                  <p>Your current field work stays here until you choose an action.</p>
+                </section>
+              </div>
+
+              <footer class="field-definitions-actions" aria-label="Field actions">
+                <template v-if="props.session.pendingGuard">
+                  <UButton color="neutral" variant="ghost" @click="emitIntent({ kind: 'resolve-transition', decision: 'stay' })">
+                    Stay here
+                  </UButton>
+                  <UButton color="error" variant="outline" @click="emitIntent({ kind: 'resolve-transition', decision: 'discard' })">
+                    Discard and continue
+                  </UButton>
+                  <UButton color="primary" @click="emitIntent({ kind: 'resolve-transition', decision: 'apply' })">
+                    Apply and continue
+                  </UButton>
+                </template>
+                <template v-else-if="props.session.review">
+                  <UButton color="neutral" variant="ghost" @click="emitIntent({ kind: 'cancel-review' })">
+                    Cancel field changes
+                  </UButton>
+                  <UButton color="error" @click="emitIntent({ kind: 'confirm-review' })">
+                    {{ props.session.review.operation === 'remove' ? 'Delete field and clear values' : 'Apply field changes' }}
+                  </UButton>
+                </template>
+                <template v-else-if="props.session.screen === 'edit'">
+                  <UButton color="neutral" variant="ghost" @click="emitIntent({ kind: 'cancel-edit' })">
+                    Discard field edits
+                  </UButton>
+                  <UButton color="primary" :disabled="props.saving || !props.session.draft || props.hasModifiedDraft === false" @click="emitIntent({ kind: 'save-field' })">
+                    Apply field changes
+                  </UButton>
+                </template>
+                <template v-else-if="props.session.screen === 'new'">
+                  <UButton color="neutral" variant="ghost" @click="emitIntent({ kind: 'cancel-create' })">
+                    Cancel creation
+                  </UButton>
+                  <UButton color="primary" :disabled="props.saving" @click="submitField">
+                    Add custom field
+                  </UButton>
+                </template>
+                <template v-else>
+                  <UButton
+                    block
+                    class="w-full flex-none justify-center"
+                    v-if="props.session.screen === 'detail' && selectedDefinition"
+                    color="primary"
+                    variant="outline"
+                    :disabled="props.saving || props.session.review !== null"
+                    aria-label="Edit field definition"
+                    @click="editField"
+                  >
+                    Edit definition
+                  </UButton>
+                  <UButton
+                    color="primary"
+                    :disabled="props.saving"
+                    @click="emitIntent({ kind: 'new-field' })"
+                  >
+                    New custom field
+                  </UButton>
+                </template>
+              </footer>
+            </div>
           </template>
-          <template v-else-if="props.session.review">
-            <UButton color="neutral" variant="ghost" @click="emitIntent({ kind: 'cancel-review' })">
-              Cancel field changes
-            </UButton>
-            <UButton color="error" @click="emitIntent({ kind: 'confirm-review' })">
-              {{ props.session.review.operation === 'remove' ? 'Delete field and clear values' : 'Apply field changes' }}
-            </UButton>
-          </template>
-          <template v-else-if="props.session.screen === 'edit'">
-            <UButton color="neutral" variant="ghost" @click="emitIntent({ kind: 'cancel-edit' })">
-              Discard field edits
-            </UButton>
-            <UButton color="primary" :disabled="props.saving || !props.session.draft || props.hasModifiedDraft === false" @click="emitIntent({ kind: 'save-field' })">
-              Apply field changes
-            </UButton>
-          </template>
-          <template v-else-if="props.session.screen === 'new'">
-            <UButton color="neutral" variant="ghost" @click="emitIntent({ kind: 'cancel-create' })">
-              Cancel creation
-            </UButton>
-            <UButton color="primary" :disabled="props.saving" @click="submitField">
-              Add custom field
-            </UButton>
-          </template>
-          <template v-else>
-            <UButton
-              block
-              class="w-full flex-none justify-center"
-              v-if="props.session.screen === 'detail' && selectedDefinition"
-              color="primary"
-              variant="outline"
-              :disabled="props.saving || props.session.review !== null"
-              aria-label="Edit field definition"
-              @click="editField"
-            >
-              Edit definition
-            </UButton>
-            <UButton
-              color="primary"
-              :disabled="props.saving"
-              @click="emitIntent({ kind: 'new-field' })"
-            >
-              New custom field
-            </UButton>
-          </template>
-        </footer>
+        </UTabs>
       </div>
     </template>
   </UModal>
@@ -290,12 +290,14 @@ import {
 } from './field-definitions/model'
 import FieldDefinitionEditor from './field-definitions/FieldDefinitionEditor.vue'
 import FieldDefinitionList from './field-definitions/FieldDefinitionList.vue'
-import { WARDEN_DETAIL_ZOOM_MAX, WARDEN_DETAIL_ZOOM_MIN } from '../utils/continuous-map-projection'
+import type { WardenDisplayPreferences } from '../composables/useWardenDisplayPreferences'
+import MapDisplaySettings from './MapDisplaySettings.vue'
 
 const props = defineProps<{
   session: FieldDefinitionsSessionState
   workspace: LocalWorkspace
-  detailZoomPercent: number
+  display: WardenDisplayPreferences
+  tab: 'display' | 'fields'
   saving: boolean
   saveError?: string
   inspectorConflict?: boolean
@@ -307,8 +309,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   intent: [intent: FieldDefinitionsIntent]
-  'detail-zoom-change': [percent: number]
+  'display-change': [patch: Partial<WardenDisplayPreferences>]
+  'update:tab': [tab: 'display' | 'fields']
 }>()
+
+const settingsTabs = computed(() => [
+  { label: 'Display', value: 'display', slot: 'display', disabled: !!(props.session.review || props.session.pendingGuard) },
+  { label: 'Fields', value: 'fields', slot: 'fields', badge: props.hasModifiedDraft ? 'Draft' : undefined },
+])
 
 const contentRoot = ref<HTMLElement | null>(null)
 const trigger = ref<{ $el?: HTMLElement } | null>(null)
@@ -358,6 +366,7 @@ function emitIntent(intent: FieldDefinitionsIntent): void {
 }
 
 function open(): void {
+  emit('update:tab', 'display')
   emitIntent({ kind: 'open' })
 }
 
@@ -470,6 +479,10 @@ function restoreOpenerFocus(): void {
 
 async function focusActivePane(): Promise<void> {
   await nextTick()
+  if (props.tab === 'display') {
+    contentRoot.value?.querySelector<HTMLElement>('[role="tab"][data-state="active"]')?.focus({ preventScroll: true })
+    return
+  }
   if (props.session.screen === 'list') {
     await restoreListPosition()
     return
@@ -507,7 +520,7 @@ watch(
 watch(
   () => props.session.screen,
   async (screen, previousScreen) => {
-    if (!props.session.open || screen === previousScreen) return
+    if (!props.session.open || props.tab !== 'fields' || screen === previousScreen) return
     await nextTick()
     if (screen === 'list') await restoreListPosition()
     else await focusActivePane()
@@ -519,6 +532,7 @@ watch(
   () => [props.session.review, props.session.pendingGuard] as const,
   async ([review, pendingGuard]) => {
     if (!props.session.open || (!review && !pendingGuard)) return
+    emit('update:tab', 'fields')
     await nextTick()
     contentRoot.value
       ?.querySelector<HTMLElement>('.field-definition-review, .field-definition-pending-guard')

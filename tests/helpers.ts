@@ -1425,7 +1425,9 @@ export async function openFieldDefinitionDialog(
   page: import('@playwright/test').Page,
 ): Promise<import('@playwright/test').Locator> {
   await page.getByRole('button', { name: 'Open settings' }).click()
-  return page.getByRole('dialog', { name: 'Map settings' })
+  const settings = page.getByRole('dialog', { name: 'Map settings' })
+  await settings.getByRole('tab', { name: /^Fields/ }).click()
+  return settings
 }
 
 export async function editFieldDefinition(dialog: import('@playwright/test').Locator): Promise<void> {

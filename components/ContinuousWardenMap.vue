@@ -3,7 +3,7 @@
     <svg
       ref="svgElement"
       class="cluster-map-svg continuous-warden-map-svg block h-full min-h-0 w-full flex-1"
-      :class="{ 'map-touch-surface': touchNavigation }"
+      :class="{ 'map-touch-surface': touchNavigation, 'map-reduced-motion': reducesDetailMotion }"
       viewBox="0 0 960 560"
       :style="{ '--warden-halo-fill': `url(#${haloGradientId}-fill)` }"
       role="group"
@@ -37,6 +37,7 @@
         :routes="routeMarks"
         :geometries="routeGeometries"
         :detail-system-ids="ready ? detailSystemIds : undefined"
+        :reduce-motion="reducesDetailMotion"
         :selected-route-id="selectedRouteId"
         :viewport="viewport"
         :viewport-rect="svgViewport"
@@ -270,10 +271,10 @@
                     >
                       {{ objectGlyph(projection.id, object.id) }}
                     </text>
-                    <text class="continuous-warden-object-key" :y="31 * detailTextPaintScale(projection)" text-anchor="middle">
+                    <text v-if="!props.compactLabels || isSelectedObject(projection.id, object.id)" class="continuous-warden-object-key" :y="31 * detailTextPaintScale(projection)" text-anchor="middle">
                       {{ object.locationKey }}
                     </text>
-                    <text class="continuous-warden-object-name" :y="46 * detailTextPaintScale(projection)" text-anchor="middle">
+                    <text v-if="!props.compactLabels || isSelectedObject(projection.id, object.id)" class="continuous-warden-object-name" :y="46 * detailTextPaintScale(projection)" text-anchor="middle">
                       {{ object.name }}
                     </text>
                   </g>
@@ -317,6 +318,7 @@
         :route-id="id"
         :contents="contents"
         :detail-zoom-percent="props.detailZoomPercent"
+        :compact-labels="props.compactLabels"
         :geometry="geometry"
         :layout="workspace.layout"
         :viewport="viewport"
@@ -612,6 +614,7 @@ import { continuousMapKeyboardIntent } from '../utils/continuous-map-keyboard-in
 import { canStartSelectedObjectDrag } from './maps/select-object-drag-input'
 import type { SelectedObjectDrag, SelectedObjectDragPreview } from '../composables/editor-workflows/selected-object-drag'
 import { useContinuousMapDetailMotion } from '../composables/useContinuousMapDetailMotion'
+import type { WardenMapMotion } from '../composables/useWardenDisplayPreferences'
 import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
 import WardenRouteObjectLayer from './maps/WardenRouteObjectLayer.vue'
 import { pointOnRoute, projectRouteObjects, routeObjectMarkerRadiusPixels } from '../utils/route-object-geometry'
@@ -644,6 +647,8 @@ const props = defineProps<{
   cluster: JumpCluster
   workspace: LocalWorkspace
   detailZoomPercent?: number
+  compactLabels?: boolean
+  mapMotion?: WardenMapMotion
   systemPositions: Readonly<Record<string, Point>>
   unresolvedExitPositions?: Readonly<Record<string, Point>>
   dimmedObjectIds?: readonly string[]
@@ -747,7 +752,8 @@ const orbitPlacementPreview = shallowRef<{ systemId: string; orbitId: string; pr
 const exitPositionOverrides = ref(new Map<string, Point>())
 const previewVersions = ref(new Map<string, number>())
 const detailSystemIds = shallowRef<ReadonlySet<string>>(new Set())
-const detailMotion = useContinuousMapDetailMotion(detailSystemIds)
+const reducesDetailMotion = computed(() => props.mapMotion === 'reduced' || props.mapMotion === 'off')
+const detailMotion = useContinuousMapDetailMotion(detailSystemIds, () => reducesDetailMotion.value)
 const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
 const svgPixelScale = ref(1)
 const svgViewport = ref<SvgViewportRect>({ x: 0, y: 0, width: 960, height: 560 })
@@ -2859,7 +2865,7 @@ function onWheelCapture(event: WheelEvent): void {
 
   // Coalesce precise input into one paint without adding an easing animation.
   const preciseInput = event.deltaMode === 0 && Math.abs(event.deltaY) < PRECISE_WHEEL_DELTA_THRESHOLD
-  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  const reducedMotion = props.mapMotion === 'off'
   const direct = preciseInput || reducedMotion
   if (direct && pendingWheelZoom && pendingWheelZoom.durationMs > 0) cancelWheelZoom()
 
@@ -2886,7 +2892,7 @@ function onWheelCapture(event: WheelEvent): void {
     return
   }
 
-  scheduleWheelZoom(target, current, direct ? 0 : WHEEL_ZOOM_DURATION_MS)
+  scheduleWheelZoom(target, current, direct ? 0 : props.mapMotion === 'reduced' ? WHEEL_ZOOM_DURATION_MS / 2 : WHEEL_ZOOM_DURATION_MS)
 }
 
 function invalidateWheelAnchorTransform(): void {
@@ -3390,6 +3396,12 @@ function clearElasticFrameGrowthAnimation(): void {
   frameGrowthAnimation.value = null
 }
 
+watch(() => props.mapMotion, (motion) => {
+  if (motion === 'full') return
+  if (pendingWheelZoom) setViewport(pendingWheelZoom.target)
+  clearElasticFrameGrowthAnimation()
+})
+
 function finishElasticFrameGrowthAnimation(): void {
   frameGrowthAnimation.value = null
 }
@@ -3398,6 +3410,7 @@ function showAcceptedElasticFrameGrowth(workspace: LocalWorkspace): void {
   const pending = pendingElasticFrameGrowth
   if (!pending || toRaw(workspace) === pending.workspaceSnapshot) return
   pendingElasticFrameGrowth = null
+  if (reducesDetailMotion.value) return
   if (workspace.id !== pending.workspaceSnapshot.id
     || workspace.cluster.id !== pending.workspaceSnapshot.cluster.id) return
 
@@ -4712,6 +4725,8 @@ function exportImage(
     viewportRect: { ...svgViewport.value },
     svgPixelScale: svgPixelScale.value,
     detailZoomPercent: props.detailZoomPercent,
+    compactLabels: props.compactLabels,
+    selectedObjectIds: props.selectedObjectIds,
     detailSystemIds: new Set(detailSystemIds.value),
     isCurrent: options.isCurrent,
   })
@@ -4727,6 +4742,8 @@ function getImageContextKey(scope: MapImageScope | null = 'viewport'): string {
     dimmedObjectIds: [...(props.appliedDimmedObjectIds ?? dimmedObjectIds.value)],
     selectedRouteId: props.selectedRouteId,
     selectedRouteObjectId: props.inspectedTarget?.kind === 'route-object' ? props.inspectedTarget.objectId : undefined,
+    detailZoomPercent: props.detailZoomPercent,
+    compactLabelObjectIds: props.compactLabels ? props.selectedObjectIds : undefined,
   })
 }
 
@@ -5279,6 +5296,10 @@ defineExpose({
   to {
     stroke-dashoffset: -100;
   }
+}
+
+.map-reduced-motion .system-object-selection-dashes {
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

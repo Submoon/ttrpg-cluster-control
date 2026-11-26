@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { createSingleSystemWorkspace, waitForWorkspaceStartup } from './helpers'
+import { createSingleSystemWorkspace, selectInspectorOption, waitForWorkspaceStartup, wardenMap } from './helpers'
 
 test('compact landscape workspace menu keeps Help, Settings, theme, privacy, and focus usable @ui-smoke', async ({ page }) => {
   const clusterName = 'Vesper Observatory and the Outer Beacon of the Meridian Expanse'
@@ -34,14 +34,19 @@ test('compact landscape workspace menu keeps Help, Settings, theme, privacy, and
   await options.getByRole('button', { name: 'Open settings', exact: true }).click()
   const settings = page.getByRole('dialog', { name: 'Map settings', exact: true })
   await expect(settings).toBeVisible()
+  await expect(settings.getByRole('tab', { name: 'Display', exact: true })).toHaveAttribute('aria-selected', 'true')
   const threshold = settings.getByRole('slider', { name: 'Minimum zoom for map details' })
   await expect(threshold).toHaveAttribute('aria-valuetext', '75%')
   await threshold.press('ArrowRight')
   await expect(threshold).toHaveAttribute('aria-valuetext', '80%')
+  await selectInspectorOption(settings.getByRole('combobox', { name: 'Label density' }), 'Compact')
+  await selectInspectorOption(settings.getByRole('combobox', { name: 'Map animations' }), 'Off')
+  await selectInspectorOption(settings.getByRole('combobox', { name: 'When opening the map' }), 'Resume last view')
   await settings.getByRole('button', { name: 'Close settings', exact: true }).click()
   await expect(settings).toBeHidden()
   await expect(menu).toBeHidden()
   await expect(menuButton).toBeFocused()
+  await expect(wardenMap(page)).toHaveClass(/map-reduced-motion/)
 
   await menuButton.press('Enter')
   const help = options.getByRole('button', { name: 'Help', exact: true })
@@ -61,9 +66,18 @@ test('compact landscape workspace menu keeps Help, Settings, theme, privacy, and
   await expect(toolbar).toBeInViewport({ ratio: 1 })
   await expect(toolbar.getByRole('button', { name: 'Map files', exact: true })).toBeInViewport({ ratio: 1 })
 
+  const camera = wardenMap(page).locator('.cluster-map-content')
+  const previous = await camera.getAttribute('transform')
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click()
+  await expect(camera).not.toHaveAttribute('transform', previous!)
+  const lastView = await camera.getAttribute('transform')
   await page.reload()
   await waitForWorkspaceStartup(page)
+  await expect(camera).toHaveAttribute('transform', lastView!)
   await menuButton.click()
   await options.getByRole('button', { name: 'Open settings', exact: true }).click()
   await expect(threshold).toHaveAttribute('aria-valuetext', '80%')
+  await expect(settings.getByRole('combobox', { name: 'Label density' })).toContainText('Compact')
+  await expect(settings.getByRole('combobox', { name: 'Map animations' })).toContainText('Off')
+  await expect(settings.getByRole('combobox', { name: 'When opening the map' })).toContainText('Resume last view')
 })
