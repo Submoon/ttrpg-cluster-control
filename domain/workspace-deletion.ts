@@ -1,6 +1,7 @@
 /**
  * Builds a previewable cascade without mutating the current workspace; callers commit only after confirmation.
  */
+import { routeContentsFor } from './workspace-route-objects'
 import { catalogueTypes } from './workspace-model'
 import type {
   LocalWorkspace,
@@ -286,6 +287,11 @@ export function planMapEntityDeletion(
     if (nextRoute !== route) routeUpdates.set(route.id, nextRoute)
   }
 
+  for (const routeId of [...removedRouteIds, ...routeUpdates.keys()]) {
+    if (routeContentsFor(workspace.cluster, routeId)?.objects.length) {
+      throw new Error('This Jump Route contains route objects and its endpoints cannot be deleted here.')
+    }
+  }
   const systems = workspace.cluster.systems
     .filter(candidate => !removedSystemIds.has(candidate.id))
     .map(candidate => {
@@ -353,6 +359,8 @@ export function planMapEntityDeletion(
       cluster: {
         ...workspace.cluster,
         systems,
+        routeContents: Object.fromEntries(Object.entries(workspace.cluster.routeContents)
+          .filter(([routeId]) => !removedRouteIds.has(routeId))),
         routes: workspace.cluster.routes
           .filter(route => !removedRouteIds.has(route.id))
           .map(route => routeUpdates.get(route.id) ?? route),

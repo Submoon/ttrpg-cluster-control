@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { expect, type Locator } from '@playwright/test'
-import type { JumpRoute, PublicationMode, SystemFrameInsets } from '../domain/workspace'
+import type { JumpRoute, PublicationMode, RouteContents, SystemFrameInsets } from '../domain/workspace'
 import { CONTINUOUS_MAP_LOCAL_ORIGIN, CONTINUOUS_MAP_SYSTEM_SCALE } from '../utils/continuous-map-projection'
 
 export type PublicationModeLabel = 'Hidden' | 'Unknown presence' | 'Known type' | 'Revealed'
@@ -292,7 +292,7 @@ export type ExportedMap<Route = JumpRoute> = {
   format: string
   version: number
   type: 'cluster' | 'system'
-  cluster?: { id: string; name: string; playerTitle?: string; systems: ExportedSystem[]; routes: Route[] }
+  cluster?: { id: string; name: string; playerTitle?: string; systems: ExportedSystem[]; routes: Route[]; routeContents?: Record<string, RouteContents> }
   system?: ExportedSystem
   objectFieldSettings: {
     atmosphereOptions: string[]

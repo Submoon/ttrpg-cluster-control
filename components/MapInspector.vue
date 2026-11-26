@@ -14,7 +14,7 @@
       <UButton color="primary" variant="soft" @click="resumeEntitySession">Resume Inspector draft</UButton>
     </div>
     <div
-      v-if="props.mode === 'cluster'"
+      v-if="props.mode === 'cluster' && !props.routeObjectContext"
       class="map-inspector-route-content"
       :class="{
         'map-inspector-route-content--session': props.routeSession !== null,
@@ -25,7 +25,7 @@
         :workspace="props.workspace"
         :publication-busy="props.publicationBusy"
         :selected-system="props.selectedSystem"
-        :selected-object="props.selectedObject"
+        :selected-object="zoneObject"
         :selected-orbit="props.selectedOrbit"
         :selected-route="props.selectedRoute"
         :inspected-system="props.inspectedClusterSystem"
@@ -46,7 +46,7 @@
         @clear-error="emit('clear-error')"
       />
     </div>
-    <div v-else-if="props.selectedSystem" class="map-inspector-system-content">
+    <div v-else-if="props.selectedSystem || props.routeObjectContext" class="map-inspector-system-content">
       <div
         v-if="props.selectedObjectCount > 1"
         class="map-inspector-details-content map-inspector-selection-count"
@@ -61,13 +61,14 @@
           :workspace="props.workspace"
           :publication-busy="props.publicationBusy"
           :transfer-busy="props.systemTransferSession !== null && props.systemTransferSession !== undefined"
-          :system-transfer-enabled="props.systemTransferEnabled"
+          :system-transfer-enabled="props.systemTransferEnabled && !props.routeObjectContext"
+          :route-object-context="props.routeObjectContext"
           :selected-system="props.selectedSystem"
           :selected-object="props.selectedObject"
           :draft-object="props.draftSystem?.objects.find(object => object.id === props.selectedObject?.id)"
           :focus-request="props.objectFocusRequest"
           :focus-enabled="props.inspectorVisible"
-          :session="objectSession"
+          :session="props.routeObjectSession ?? objectSession"
           :has-modified-entity-session="props.hasModifiedEntitySession"
           :saving="props.saving"
           :editor-error="props.editorError"
@@ -130,7 +131,7 @@
           mode="system"
           :workspace="props.workspace"
           :selected-system="props.selectedSystem"
-          :chart-edit-system-id="props.selectedSystem.id"
+          :chart-edit-system-id="props.selectedSystem?.id"
           :publication-busy="props.publicationBusy"
           :has-chart-name-draft="props.hasChartNameDraft"
           :saving="props.saving"
@@ -147,6 +148,7 @@
  * Applying a session publishes accepted workspace memory; IndexedDB completion remains separate UI state.
  */
 import { computed, watch } from 'vue'
+import type { RouteObjectInspectorSession } from '../composables/editor-workflows/useRouteObjectInspectorSession'
 import type { EntityInspectorSession, ObjectInspectorFocusRequest } from '../composables/editor-workflows/types'
 import type { SaveState } from '../composables/editor-workflows/types'
 import type { RouteDraftField, RouteInspectorSession } from '../composables/editor-workflows/useRouteInspectorSession'
@@ -159,7 +161,8 @@ import type {
   LocalWorkspace,
   Orbit,
   StarSystem,
-  SystemObject,
+  CatalogueObject,
+  RouteContents,
 } from '../domain/workspace'
 import ChartDetailsPanel from './inspector/ChartDetailsPanel.vue'
 import JumpRouteInspector from './inspector/JumpRouteInspector.vue'
@@ -174,7 +177,9 @@ const props = defineProps<{
   selectedSystem?: StarSystem
   draftSystem?: StarSystem
   inspectedClusterSystem?: StarSystem
-  selectedObject?: SystemObject
+  selectedObject?: CatalogueObject
+  routeObjectContext?: { summary: string; contents: RouteContents }
+  routeObjectSession?: RouteObjectInspectorSession | null
   selectedObjectCount: number
   objectFocusRequest: ObjectInspectorFocusRequest | null
   inspectorVisible: boolean
@@ -197,6 +202,8 @@ const props = defineProps<{
   publicationBusy?: boolean
   systemTransferSession?: SystemObjectTransferReviewState | null
 }>()
+
+const zoneObject = computed(() => props.selectedSystem?.objects.find(object => object.id === props.selectedObject?.id))
 
 const emit = defineEmits<{
   hide: []

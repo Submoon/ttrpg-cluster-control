@@ -1,13 +1,16 @@
-import { catalogueTypes, type JumpCluster, type SystemObject } from './workspace-model'
+import { catalogueTypes, type CatalogueObject, type JumpCluster, type SystemObject } from './workspace-model'
 import { isRecord } from './workspace-validation'
 
 /** Enumerates all objects sharing the Cluster's Location key namespace. */
-export function clusterObjects(cluster: Pick<JumpCluster, 'systems'>): SystemObject[] {
-  return cluster.systems.flatMap(system => system.objects)
+export function clusterObjects(cluster: Pick<JumpCluster, 'systems' | 'routeContents'>): CatalogueObject[] {
+  return [
+    ...cluster.systems.flatMap(system => system.objects),
+    ...Object.values(cluster.routeContents).flatMap(contents => contents.objects),
+  ]
 }
 
 export function locationKeyConflict(
-  objects: readonly SystemObject[],
+  objects: readonly CatalogueObject[],
   key: string,
   existingKey?: string,
 ): string | null {
@@ -32,8 +35,8 @@ export function objectLocationKeyPrefix(object: Pick<SystemObject, 'family' | 's
 }
 
 /** Every duplicate participant must carry its own exact retained assignment. */
-export function validLocationKeyAssignments(objects: readonly SystemObject[]): boolean {
-  const firstByKey = new Map<string, SystemObject>()
+export function validLocationKeyAssignments(objects: readonly CatalogueObject[]): boolean {
+  const firstByKey = new Map<string, CatalogueObject>()
   for (const object of objects) {
     const retained = object.legacyLocationKey
     if (Object.hasOwn(object, 'legacyLocationKey')

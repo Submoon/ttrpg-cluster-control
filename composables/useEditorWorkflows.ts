@@ -14,6 +14,7 @@ import { useEntityInspectorSession } from './editor-workflows/useEntityInspector
 import { useFieldDefinitionWorkflows } from './editor-workflows/useFieldDefinitionWorkflows'
 import { useMapInteractionCoordinator } from './editor-workflows/useMapInteractionCoordinator'
 import { useMapWorkflows } from './editor-workflows/useMapWorkflows'
+import { useRouteObjectInspectorSession } from './editor-workflows/useRouteObjectInspectorSession'
 import { useRouteInspectorSession } from './editor-workflows/useRouteInspectorSession'
 import { useSystemCreationWorkflows } from './editor-workflows/useSystemCreationWorkflows'
 import { useSystemObjectPlacement } from './editor-workflows/useSystemObjectPlacement'
@@ -66,6 +67,15 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   onBeforeUnmount(() => store.reset(null))
 
   const entity = useEntityInspectorSession({ workspace, mutations })
+  const routeObject = useRouteObjectInspectorSession({
+    workspace,
+    mutations,
+    isSelected: (routeId, objectId) => store.activeView === 'cluster'
+      && store.inspectedTarget?.kind === 'route-object'
+      && store.inspectedTarget.routeId === routeId && store.inspectedTarget.objectId === objectId,
+  })
+  const hasModifiedInspector = computed(() => entity.hasModifiedEntitySession.value || routeObject.hasModified.value)
+  const activeInspectorSession = computed(() => routeObject.session.value ?? entity.entitySession.value)
   const collectiveMoveError = ref('')
   const route = useRouteInspectorSession({ workspace, mutations })
   const selectedSystemForChart = computed(() => workspace.value?.cluster.systems.find(system => system.id === store.selectedSystemId))
@@ -127,6 +137,10 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   }
 
   async function applyEntitySession(sessionId?: number): Promise<boolean> {
+    const routeDraft = routeObject.session.value
+    if (routeDraft && (sessionId === undefined || sessionId === routeDraft.id)) {
+      return await beforeWorkspaceOperation() && await routeObject.apply(routeDraft.id)
+    }
     const submittedSession = entity.entitySession.value
     const expectedId = sessionId ?? submittedSession?.id
     if (!submittedSession || expectedId !== submittedSession.id) return false
@@ -139,6 +153,11 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   }
 
   function discardEntitySession(sessionId?: number): void {
+    const routeDraft = routeObject.session.value
+    if (routeDraft && (sessionId === undefined || sessionId === routeDraft.id)) {
+      routeObject.discard(routeDraft.id)
+      return
+    }
     const active = entity.entitySession.value
     if (!active || (sessionId !== undefined && active.id !== sessionId)) return
     entity.discardEntitySession(active.id)
@@ -165,8 +184,8 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const transitions = useEditorTransitions({
     chart: charts,
     entity: {
-      session: entity.entitySession,
-      hasModified: entity.hasModifiedEntitySession,
+      session: activeInspectorSession,
+      hasModified: hasModifiedInspector,
       apply: applyEntitySession,
       discard: discardEntitySession,
     },
@@ -473,7 +492,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     if (systemTransfer.session.value) return systemTransfer.session.value.placingOnMap
       ? 'Finish or cancel the transfer map placement first.'
       : 'Apply or cancel the open transfer review first.'
-    if (entity.hasModifiedEntitySession.value) return 'Apply or discard the modified Inspector draft first.'
+    if (hasModifiedInspector.value) return 'Apply or discard the modified Inspector draft first.'
     if (route.hasModifiedRouteSession.value) return 'Apply or discard the modified Jump Route draft first.'
     if (charts.hasChangedNames.value) return 'Apply or discard the modified Jump Cluster details draft first.'
     if (fields.hasModifiedFieldDefinitionsSession.value) return 'Apply or discard the modified Fields draft first.'
@@ -508,6 +527,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   function endCleanHistorySessions(): void {
     charts.endCleanHistorySession()
     entity.endCleanHistorySession()
+    if (!routeObject.hasModified.value) routeObject.discard()
     route.endCleanHistorySession()
     fields.endCleanHistorySession()
   }
@@ -520,6 +540,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     if (chartSession) charts.discard(chartSession.id)
     const entitySession = entity.entitySession.value
     if (entitySession) entity.discardEntitySession(entitySession.id)
+    routeObject.discard()
     const routeSession = route.routeSession.value
     if (routeSession) route.discardRouteSession(routeSession.id)
     fields.resetForWorkspaceReplacement()
@@ -580,11 +601,18 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       objectInspectorFocusRequest,
       acknowledgeObjectInspectorFocusRequest,
       entitySession: entity.entitySession,
-      hasModifiedEntitySession: entity.hasModifiedEntitySession,
+      routeObjectSession: routeObject.session,
+      hasModifiedEntitySession: hasModifiedInspector,
       orbitPlacementPreview: entity.orbitPlacementPreview,
       isEntityCommandBlocked,
       resumeEntitySession: navigation.resumeEntitySession,
-      beginObjectEdit: map.beginObjectEdit,
+      beginObjectEdit: async () => {
+        const target = store.inspectedTarget
+        if (target?.kind !== 'route-object') return map.beginObjectEdit()
+        if (await beforeWorkspaceOperation() && store.inspectedTarget === target) {
+          routeObject.begin(target.routeId, target.objectId)
+        }
+      },
       beginOrbitEdit: map.beginOrbitEdit,
       updateObjectPlacement: entity.updateObjectPlacement,
       updateOrbitHost: entity.updateOrbitHost,
@@ -782,6 +810,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       selectSystem: navigation.selectSystem,
       selectClusterSystem: navigation.selectClusterSystem,
       inspectContinuousTarget: navigation.inspectContinuousTarget,
+      inspectRouteObject: navigation.inspectRouteObject,
       selectObject: navigation.selectObject,
       replaceObjectSelection: navigation.replaceObjectSelection,
       toggleObjectSelection: navigation.toggleObjectSelection,

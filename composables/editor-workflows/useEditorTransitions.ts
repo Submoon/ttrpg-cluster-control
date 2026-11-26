@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, ref, type Ref } from 'vue'
-import type { EntityInspectorSession, TransitionDecision, TransitionGuard, TransitionOptions } from './types'
+import type { TransitionDecision, TransitionGuard, TransitionOptions } from './types'
 import type { ChartNamesSession } from './useChartNamesSession'
 import type { RouteInspectorSession } from './useRouteInspectorSession'
 
@@ -13,7 +13,7 @@ export function useEditorTransitions(options: {
     discard(sessionId?: number): void
   }
   entity: {
-    session: Readonly<Ref<EntityInspectorSession | null>>
+    session: Readonly<Ref<{ id: number } | null>>
     hasModified: Readonly<Ref<boolean>>
     apply(sessionId?: number): Promise<boolean>
     discard(sessionId?: number): void

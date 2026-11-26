@@ -211,7 +211,7 @@ function getRenderedRouteEnd(id: string): Point | undefined {
   return (animated.value.get(id) ?? props.geometries.get(id))?.end
 }
 
-defineExpose({ routeIdAtStroke, focusRoute, getRenderedRouteEnd })
+defineExpose({ routeIdAtStroke, focusRoute, getRenderedRouteEnd, displayedMarks: marks })
 </script>
 
 <style scoped>

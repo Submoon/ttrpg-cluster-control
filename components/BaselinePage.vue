@@ -72,7 +72,7 @@
           :inspector-label="inspectorLabel"
           :hierarchy-visible="hierarchyPanelVisible"
           :inspector-visible="inspectorPanelVisible"
-          :entity-inspector-active="!chartEditing && inspectorMode === 'system' && Boolean(inspectorSelectedObject || inspectorSelectedOrbit)"
+          :entity-inspector-active="!chartEditing && (inspectorMode === 'system' || Boolean(inspectorRouteObjectContext)) && Boolean(inspectorSelectedObject || inspectorSelectedOrbit)"
           :route-session-active="!chartEditing && activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelPresentationOpen"
           :compact-panel="compactPanel"
@@ -481,6 +481,7 @@
                     @select-continuous-object="(systemId: string, objectId: string, openInspector?: boolean) => inspectContinuousTarget({ kind: 'object', systemId, objectId }, openInspector)"
                     @select-continuous-orbit="(systemId: string, orbitId: string, openInspector?: boolean) => inspectContinuousTarget({ kind: 'orbit', systemId, orbitId }, openInspector)"
                     @select-route="selectRoute"
+                    @select-route-object="inspectRouteObject"
                     @move-select-route="selectRoute($event, false)"
                     @select-object="selectObject"
                     @move-select-object="selectObject($event, false)"
@@ -573,6 +574,8 @@
               :draft-system="wardenSystem"
               :inspected-cluster-system="inspectorSelectedSystem"
               :selected-object="inspectorSelectedObject"
+              :route-object-context="routeSession?.routeId === null ? undefined : inspectorRouteObjectContext"
+              :route-object-session="routeObjectSession"
               :selected-object-count="selectedObjectIds.length"
               :object-focus-request="objectInspectorFocusRequest"
               :inspector-visible="inspectorPanelVisible"
@@ -718,7 +721,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch, type Ref } from 'vue'
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { catalogueTypes, projectPlayerCluster, type CatalogueSubtype, type JumpRoute, type LocalWorkspace, type ObjectFamily, type Point, type SystemFrameInsets } from '../domain/workspace'
+import { catalogueTypes, projectPlayerCluster, routeContentsFor, type CatalogueSubtype, type JumpRoute, type LocalWorkspace, type ObjectFamily, type Point, type SystemFrameInsets } from '../domain/workspace'
 import { validName } from '../domain/workspace-validation'
 import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { EntityCommand, SearchPresentationSettlement, SelectMapObjectDragContext, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
@@ -1265,7 +1268,7 @@ const {
   activeView, mapMode, selectedSystemId, clusterSelectedSystemId, selectedObjectId, selectedObjectIds, selectedOrbitId,
   selectedRouteId, selectedSystem, selectedObject, selectedOrbit, selectedRoute, clusterSelectedSystem,
   inspectedTarget, routeEndpointSummary, showClusterMap, selectSystem,
-  selectClusterSystem, inspectContinuousTarget, selectObject, replaceObjectSelection, toggleObjectSelection, selectOrbit, selectRoute, showChartDetails,
+  selectClusterSystem, inspectContinuousTarget, inspectRouteObject, selectObject, replaceObjectSelection, toggleObjectSelection, selectOrbit, selectRoute, showChartDetails,
 } = navigation
 const continuousInspectorSystemId = computed(() => {
   const target = inspectedTarget.value
@@ -1275,8 +1278,19 @@ const continuousInspectorSystemId = computed(() => {
 })
 const inspectorSelectedSystem = computed(() => workspace.value?.cluster.systems
   .find(system => system.id === continuousInspectorSystemId.value))
+const inspectorRouteObjectContext = computed(() => {
+  const target = inspectedTarget.value
+  const current = workspace.value
+  if (target?.kind !== 'route-object' || !current) return undefined
+  const route = current.cluster.routes.find(candidate => candidate.id === target.routeId)
+  const contents = routeContentsFor(current.cluster, target.routeId)
+  return route && contents ? { summary: wardenRouteSummary(route), contents } : undefined
+})
 const inspectorSelectedObject = computed(() => {
   const target = inspectedTarget.value
+  if (target?.kind === 'route-object') {
+    return inspectorRouteObjectContext.value?.contents.objects.find(object => object.id === target.objectId)
+  }
   if (target?.kind !== 'object') return selectedObject.value
   return workspace.value?.cluster.systems.find(system => system.id === target.systemId)?.objects
     .find(object => object.id === target.objectId)
@@ -1334,7 +1348,7 @@ const {
 } = fields
 const {
   objectInspectorFocusRequest, acknowledgeObjectInspectorFocusRequest,
-  entitySession, hasModifiedEntitySession, orbitPlacementPreview, applyEntitySession, discardEntitySession,
+  entitySession, routeObjectSession, hasModifiedEntitySession, orbitPlacementPreview, applyEntitySession, discardEntitySession,
   updateObjectPlacement, updateOrbitHost, previewOrbitPlacement, isEntityCommandBlocked, resumeEntitySession,
   beginObjectEdit, beginOrbitEdit,
   routeSession, hasModifiedRouteSession, offerRouteSystems, chooseRouteSystem, chooseRoutePoint, updateRouteInput,
@@ -1347,6 +1361,7 @@ const inspectorMode = computed(() => {
 })
 const inspectorLabel = computed(() => {
   if (chartEditing.value) return 'Jump Cluster details editor'
+  if (inspectorRouteObjectContext.value && routeSession.value?.routeId !== null) return 'Object inspector'
   if (inspectorMode.value === 'system') {
     if (selectedObjectIds.value.length > 1) return 'Object selection'
     if (inspectorSelectedObject.value) return 'Object inspector'
@@ -2305,7 +2320,7 @@ function draftConsentState(): { signature: string; hasDrafts: boolean } {
       playerTitle: playerTitle.value,
       publication: publication.value,
     },
-    entity: entitySession.value,
+    entity: routeObjectSession.value ?? entitySession.value,
     route: routeSession.value,
     fields: fieldDefinitionsSession,
     creation: creationSession.value,

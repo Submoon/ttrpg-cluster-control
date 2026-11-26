@@ -5,12 +5,12 @@ import {
   replaceWorkspaceSystem,
   type LocalWorkspace,
   type StarSystem,
-  type SystemObject,
+  type CatalogueObject,
 } from '../../domain/workspace'
 import { clusterObjects } from '../../domain/workspace-location-keys'
 
 /** Supplies the centered stellar host used by legacy campaign fixtures. */
-function withPrimaryStar(zone: StarSystem, keyOwners?: readonly SystemObject[]): StarSystem {
+function withPrimaryStar(zone: StarSystem, keyOwners?: readonly CatalogueObject[]): StarSystem {
   const star = createSystemObject(zone, 'star', undefined, keyOwners)
   return {
     ...zone,

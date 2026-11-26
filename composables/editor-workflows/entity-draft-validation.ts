@@ -8,6 +8,10 @@ import {
   nativePlayerFieldIds,
   updateWorkspaceObject,
   type CustomFieldDefinition,
+  type CatalogueObject,
+  type RouteContents,
+  type RouteObject,
+  updateWorkspaceRouteObject,
   type LocalWorkspace,
   type StarSystem,
   type SystemObject,
@@ -60,7 +64,7 @@ function parseOrbitPlacement(placement: string): string | null {
     : null
 }
 
-function isPhysicalStation(object: SystemObject): boolean {
+function isPhysicalStation(object: CatalogueObject): boolean {
   return object.family === 'Installation' && object.subtype === 'station'
 }
 
@@ -76,8 +80,8 @@ function sameStringSet(first: readonly string[], second: readonly string[]): boo
  */
 function parseObjectDraft(
   workspace: LocalWorkspace,
-  system: StarSystem,
-  object: SystemObject,
+  branch: StarSystem | RouteContents,
+  object: CatalogueObject,
   initial: ObjectDraft,
   draft: ObjectDraft,
 ): ParsedObjectDraft {
@@ -123,21 +127,25 @@ function parseObjectDraft(
   } else if (draft.markerColor !== initial.markerColor) {
     changes.markerColor = draft.markerColor
   }
-  if (draft.placement === 'system') {
-    if (draft.placement !== initial.placement) changes.placement = initialSystemPlacement(system)
-  } else {
-    const orbitId = parseOrbitPlacement(draft.placement)
-    if (!orbitId) {
-      errors.placement = 'Choose a valid map placement.'
-    } else if (!canPlaceObjectInOrbit(system, object.id, orbitId)) {
-      errors.placement = 'Choose an Orbit that does not create a circular relationship.'
-    } else if (draft.placement !== initial.placement) {
-      changes.placement = { kind: 'orbit', orbitId }
+  if ('id' in branch) {
+    if (draft.placement === 'system') {
+      if (draft.placement !== initial.placement) changes.placement = initialSystemPlacement(branch)
+    } else {
+      const orbitId = parseOrbitPlacement(draft.placement)
+      if (!orbitId) {
+        errors.placement = 'Choose a valid map placement.'
+      } else if (!canPlaceObjectInOrbit(branch, object.id, orbitId)) {
+        errors.placement = 'Choose an Orbit that does not create a circular relationship.'
+      } else if (draft.placement !== initial.placement) {
+        changes.placement = { kind: 'orbit', orbitId }
+      }
     }
+  } else if (draft.placement !== initial.placement) {
+    errors.placement = 'Route object placement cannot be edited here.'
   }
 
   const jumpStationId = draft.jumpStationId
-  if (jumpStationId && !system.objects.some(candidate => candidate.id === jumpStationId && isPhysicalStation(candidate))) {
+  if (jumpStationId && !branch.objects.some(candidate => candidate.id === jumpStationId && isPhysicalStation(candidate))) {
     errors.jumpStationId = 'Choose an existing Physical Station.'
   } else if (jumpStationId !== initial.jumpStationId) {
     changes.jumpStationId = jumpStationId || null
@@ -283,4 +291,25 @@ export function projectObjectDraft(
   const projectedObject = projected.cluster.systems.find(candidate => candidate.id === system.id)
     ?.objects.find(candidate => candidate.id === object.id)
   return projectedObject && JSON.stringify(projectedObject) !== JSON.stringify(object) ? projected : null
+}
+
+/** Prepares a route catalogue edit without altering progression or Orbit relationships. */
+export function validateRouteObjectDraft(
+  workspace: LocalWorkspace,
+  routeId: string,
+  branch: RouteContents,
+  object: RouteObject,
+  initial: ObjectDraft,
+  draft: ObjectDraft,
+): { workspace: LocalWorkspace | null; errors: Record<string, string> } {
+  const parsed = parseObjectDraft(workspace, branch, object, initial, draft)
+  if (Object.keys(parsed.errors).length) return { workspace: null, errors: parsed.errors }
+  try {
+    return {
+      workspace: updateWorkspaceRouteObject(workspace, routeId, object.id, parsed.changes),
+      errors: {},
+    }
+  } catch (error) {
+    return { workspace: null, errors: { form: error instanceof Error ? error.message : String(error) } }
+  }
 }

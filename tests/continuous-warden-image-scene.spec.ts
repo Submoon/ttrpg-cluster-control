@@ -20,6 +20,7 @@ test('selected-system export fits the supplied label metrics independently of th
     name: 'Cluster',
     playerTitle: '',
     systems: [selected, neighbor],
+    routeContents: {},
     routes: [{
       id: 'incoming',
       jumpLevel: 2,

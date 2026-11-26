@@ -1,5 +1,5 @@
 /** Projects a saved map object and its current field definitions into the Inspector's editable string draft. */
-import type { ObjectFieldSettings, SystemObject } from '../../domain/workspace'
+import type { ObjectFieldSettings, CatalogueObject } from '../../domain/workspace'
 import type { ObjectDraft } from './types'
 
 /**
@@ -7,7 +7,7 @@ import type { ObjectDraft } from './types'
  * Empty values are included for currently defined custom fields; stored values retain their display text.
  */
 export function objectDraftValuesFor(
-  object: SystemObject | undefined,
+  object: CatalogueObject | undefined,
   settings: ObjectFieldSettings,
 ): ObjectDraft {
   const customFieldIds = new Set([
@@ -28,7 +28,8 @@ export function objectDraftValuesFor(
     publication: object?.publication ?? 'hidden',
     markerColor: object?.markerColor ?? null,
     subtype: object?.subtype ?? '',
-    placement: object?.placement.kind === 'orbit' ? `orbit:${object.placement.orbitId}` : 'system',
+    placement: object?.placement.kind === 'orbit'
+      ? `orbit:${object.placement.orbitId}` : object?.placement.kind ?? 'system',
     atmosphere: object?.atmosphere ?? '',
     portClass: object?.portClass ?? '',
     jumpStationId: object?.jumpStationId ?? '',

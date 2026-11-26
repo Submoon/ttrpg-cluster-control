@@ -4,6 +4,7 @@
 import { catalogueTypes } from './workspace-model'
 import type {
   CatalogueSubtype,
+  CatalogueObject,
   ObjectFieldSettings,
   ObjectPlacement,
   StarSystem,
@@ -44,7 +45,7 @@ export function createSystemObject(
   system: StarSystem,
   subtype: CatalogueSubtype,
   orbitId?: string,
-  keyOwners: readonly SystemObject[] = system.objects,
+  keyOwners: readonly CatalogueObject[] = system.objects,
 ): SystemObject {
   const catalogueType = catalogueTypes.find(type => type.value === subtype)
   if (!catalogueType) {
@@ -96,12 +97,40 @@ export function updateSystemObject(
   objectId: string,
   changes: SystemObjectChanges,
   objectFieldSettings: ObjectFieldSettings,
-  keyOwners: readonly SystemObject[] = system.objects,
+  keyOwners: readonly CatalogueObject[] = system.objects,
 ): StarSystem {
   const object = system.objects.find(candidate => candidate.id === objectId)
   if (!object) {
     throw new Error('The selected map object no longer exists.')
   }
+  const updated = updateCatalogueObject(
+    system.objects, object, changes, objectFieldSettings, keyOwners,
+    changes.placement ?? object.placement,
+  )
+
+  if (updated.placement.kind === 'system') {
+    if (!Number.isFinite(updated.placement.x) || !Number.isFinite(updated.placement.y)) {
+      throw new Error('Schematic X and Y must be finite numbers.')
+    }
+  } else if (!canPlaceObjectInOrbit(system, objectId, updated.placement.orbitId)) {
+    throw new Error('That placement would create a circular Orbit relationship.')
+  }
+
+  return {
+    ...system,
+    objects: system.objects.map(candidate => candidate.id === objectId ? updated : candidate),
+  }
+}
+
+/** Applies common authored catalogue changes within the object's current relationship branch. */
+export function updateCatalogueObject<T extends CatalogueObject>(
+  objects: readonly CatalogueObject[],
+  object: T,
+  changes: Omit<SystemObjectChanges, 'placement'>,
+  objectFieldSettings: ObjectFieldSettings,
+  keyOwners: readonly CatalogueObject[],
+  placement: T['placement'] = object.placement,
+): T {
   if (changes.publication !== undefined && !isPublicationMode(changes.publication)) {
     throw new Error('Choose a valid object publication mode.')
   }
@@ -110,9 +139,10 @@ export function updateSystemObject(
     throw new Error('Choose a valid marker color in #RRGGBB format.')
   }
 
-  const updated: SystemObject = {
+  const updated: T = {
     ...object,
     ...otherChanges,
+    placement,
     ...(markerColor === undefined || markerColor === null ? {} : { markerColor }),
     locationKey: validText(changes.locationKey ?? object.locationKey, 'Location key'),
     name: validName(changes.name ?? object.name, 'Object name'),
@@ -138,7 +168,7 @@ export function updateSystemObject(
     throw new Error(fieldError)
   }
   if (updated.jumpStationId !== undefined && updated.jumpStationId !== null) {
-    const station = system.objects.find(candidate => candidate.id === updated.jumpStationId)
+    const station = objects.find(candidate => candidate.id === updated.jumpStationId)
     if (
       updated.family !== 'JumpPoint'
       || !station
@@ -151,7 +181,7 @@ export function updateSystemObject(
   if (
     object.subtype === 'station'
     && updated.subtype !== 'station'
-    && system.objects.some(candidate => candidate.jumpStationId === objectId)
+    && objects.some(candidate => candidate.jumpStationId === object.id)
   ) {
     throw new Error('A Station linked to a Jump Point cannot change type.')
   }
@@ -160,16 +190,5 @@ export function updateSystemObject(
   if (keyError) throw new Error(keyError)
   if (updated.locationKey !== object.locationKey) delete updated.legacyLocationKey
 
-  if (updated.placement.kind === 'system') {
-    if (!Number.isFinite(updated.placement.x) || !Number.isFinite(updated.placement.y)) {
-      throw new Error('Schematic X and Y must be finite numbers.')
-    }
-  } else if (!canPlaceObjectInOrbit(system, objectId, updated.placement.orbitId)) {
-    throw new Error('That placement would create a circular Orbit relationship.')
-  }
-
-  return {
-    ...system,
-    objects: system.objects.map(candidate => candidate.id === objectId ? updated : candidate),
-  }
+  return updated
 }

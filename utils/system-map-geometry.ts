@@ -5,6 +5,8 @@ import {
   canPlaceObjectInOrbit,
   defaultOrbitRadius,
   normalizeOrbitRotation,
+  type CataloguePlacement,
+  type ObjectPlacement,
   type Orbit,
   type OrbitRadii,
   type Point,
@@ -21,7 +23,7 @@ import type {
 import { catalogueObjectLabel } from './catalogue-labels'
 
 /** Read-only system geometry accepted by projection code, including detached immutable previews. */
-export interface SystemMapProjectionSource {
+export interface SystemMapProjectionSource<P extends CataloguePlacement = ObjectPlacement> {
   readonly id: string
   readonly name: string
   readonly publication?: PublicationMode
@@ -30,9 +32,7 @@ export interface SystemMapProjectionSource {
     readonly name: string
     readonly locationKey: string
     readonly subtype: string
-    readonly placement:
-      | { readonly kind: 'system'; readonly x: number; readonly y: number }
-      | { readonly kind: 'orbit'; readonly orbitId: string }
+    readonly placement: P
   }[]
   readonly orbits: readonly (
     | { readonly id: string; readonly order: number; readonly hostId: string; readonly center?: never }
@@ -103,7 +103,7 @@ export function orbitCenter(
  * @returns Horizontal and vertical radii in SVG scene units.
  */
 export function orbitRadii(
-  system: SystemMapProjectionSource,
+  system: Pick<SystemMapProjectionSource<CataloguePlacement>, 'objects'>,
   orbit: SystemMapProjectionSource['orbits'][number],
   geometry: SystemMapGeometry,
   overrides?: ReadonlyMap<string, OrbitRadii>,
@@ -291,8 +291,18 @@ export function objectPositions(
   geometry: SystemMapGeometry,
   overrides?: MapGeometryOverrides,
 ): Map<string, Point> {
+  return catalogueObjectPositions(system, geometry, fromNormalizedMapPoint, overrides)
+}
+
+/** Resolves a hosted catalogue branch once its root anchors are known. */
+export function catalogueObjectPositions<P extends CataloguePlacement>(
+  system: Pick<SystemMapProjectionSource<P>, 'objects' | 'orbits'>,
+  geometry: SystemMapGeometry,
+  rootPosition: (placement: Exclude<P, { kind: 'orbit' }>) => Point,
+  overrides?: MapGeometryOverrides,
+): Map<string, Point> {
   const objectsById = new Map(system.objects.map(object => [object.id, object]))
-  const childrenByOrbit = new Map<string, SystemMapProjectionSource['objects'][number][]>()
+  const childrenByOrbit = new Map<string, SystemMapProjectionSource<P>['objects'][number][]>()
   const positions = new Map<string, Point>()
   const visiting = new Set<string>()
 
@@ -303,7 +313,7 @@ export function objectPositions(
     childrenByOrbit.set(object.placement.orbitId, children)
   }
 
-  function locate(object: SystemMapProjectionSource['objects'][number]): Point {
+  function locate(object: SystemMapProjectionSource<P>['objects'][number]): Point {
     const cached = positions.get(object.id)
     if (cached) return cached
     const override = overrides?.positions.get(object.id)
@@ -312,18 +322,18 @@ export function objectPositions(
       return override
     }
     if (visiting.has(object.id)) {
-      throw new Error('The Zone map contains a circular Orbit relationship.')
+      throw new Error('The map contains a circular Orbit relationship.')
     }
     visiting.add(object.id)
 
     let point: Point
-    if (object.placement.kind === 'system') {
-      point = fromNormalizedMapPoint(object.placement)
+    if (object.placement.kind !== 'orbit') {
+      point = rootPosition(object.placement as Exclude<P, { kind: 'orbit' }>)
     } else {
-      const placement = object.placement
-      const orbit = system.orbits.find(candidate => candidate.id === placement.orbitId)
+      const { orbitId } = object.placement
+      const orbit = system.orbits.find(candidate => candidate.id === orbitId)
       if (!orbit) {
-        throw new Error('The Zone map contains an object with an invalid Orbit host.')
+        throw new Error('The map contains an object with an invalid Orbit host.')
       }
 
       let center: Point
@@ -332,7 +342,7 @@ export function objectPositions(
       } else {
         const host = objectsById.get(orbit.hostId)
         if (!host) {
-          throw new Error('The Zone map contains an object with an invalid Orbit host.')
+          throw new Error('The map contains an object with an invalid Orbit host.')
         }
         center = locate(host)
       }

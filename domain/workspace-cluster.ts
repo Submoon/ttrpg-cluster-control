@@ -1,6 +1,7 @@
 /**
  * Cluster operations keep route references and workspace layout aligned with system changes.
  */
+import { routeContentsFor } from './workspace-route-objects'
 import { defaultObjectFieldSettings } from './workspace-model'
 import type {
   JumpCluster,
@@ -64,7 +65,7 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
   const system = initialZone(systemName)
 
   return {
-    version: 6,
+    version: 7,
     id: crypto.randomUUID(),
     cluster: {
       id: crypto.randomUUID(),
@@ -72,6 +73,7 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
       playerTitle: 'Player Jump Cluster',
       systems: [system],
       routes: [],
+      routeContents: {},
     },
     layout: {
       systemPositions: { [system.id]: initialClusterSystemPosition(0) },
@@ -228,10 +230,17 @@ export function updateJumpRoute(
   if (input.playerShared !== undefined && typeof input.playerShared !== 'boolean') {
     throw new Error('Choose whether this Jump Route is shared with players.')
   }
+  const endpoints = jumpRouteDetails(cluster, input)
+  if (routeContentsFor(cluster, routeId)?.objects.length
+    && (endpoints.fromSystemId !== route.fromSystemId || endpoints.fromPointId !== route.fromPointId
+      || endpoints.toSystemId !== route.toSystemId || endpoints.toPointId !== route.toPointId
+      || endpoints.unresolvedExit !== route.unresolvedExit)) {
+    throw new Error('This Jump Route contains route objects and its endpoints cannot be changed here.')
+  }
   return {
     id: route.id,
     ...(route.name !== undefined ? { name: route.name } : {}),
-    ...jumpRouteDetails(cluster, input),
+    ...endpoints,
     playerShared: input.playerShared ?? route.playerShared,
   }
 }

@@ -138,7 +138,7 @@ test('new player-sharing data starts private and empty @pure', () => {
   const withField = addCustomFieldDefinition(workspace, 'Faction', 'single-select', ['Merchants'])
   const customField = withField.objectFieldSettings.customFields[0]!
 
-  expect(workspace.version).toBe(6)
+  expect(workspace.version).toBe(7)
   expect(system.objects[0]).toMatchObject({ playerText: '', playerFieldMasks: [] })
   expect(newObject).toMatchObject({ playerText: '', playerFieldMasks: [] })
   expect(withField.objectFieldSettings.nativePlayerSharing).toEqual({ atmosphere: false, portClass: false })
@@ -191,7 +191,7 @@ test('version 3 workspaces migrate publication additions privately while retaini
 
   expect(restored).not.toBeNull()
   if (!restored) throw new Error('Expected the supported v3 workspace to restore.')
-  expect(restored.version).toBe(6)
+  expect(restored.version).toBe(7)
   expect(restored.cluster.systems[0]).toHaveProperty('publication', 'revealed')
   expect(restored.cluster.systems[0]?.objects[0]).toMatchObject({
     description: 'PRIVATE GM NOTES',
@@ -206,7 +206,7 @@ test('version 3 workspaces migrate publication additions privately while retaini
 test('current workspace data requires every sharing field and rejects unsupported versions @pure', () => {
   const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   expect(isLocalWorkspace(workspace)).toBe(true)
-  expect(restoreLocalWorkspace(workspace)).toMatchObject({ version: 6 })
+  expect(restoreLocalWorkspace(workspace)).toMatchObject({ version: 7 })
 
   const missingPlayerText = structuredClone(workspace) as unknown as Record<string, unknown>
   const missingTextCluster = missingPlayerText.cluster as {
@@ -218,7 +218,7 @@ test('current workspace data requires every sharing field and rejects unsupporte
   const missingSettings = missingNativeSharing.objectFieldSettings as Record<string, unknown>
   delete missingSettings.nativePlayerSharing
 
-  const unsupportedVersion = { ...workspace, version: 7 }
+  const unsupportedVersion = { ...workspace, version: 8 }
 
   expect(isLocalWorkspace(missingPlayerText)).toBe(false)
   expect(restoreLocalWorkspace(missingPlayerText)).toBeNull()
@@ -259,7 +259,7 @@ test('versions 1 and 2 keep their prior disclosure rules and receive private sha
   const restoredV1 = restoreLocalWorkspace(unversioned)
 
   expect(restoredV2).toMatchObject({
-    version: 6,
+    version: 7,
     cluster: {
       playerTitle: 'Aster Reach',
       systems: [{ publication: 'revealed', objects: [{ publication: 'hidden', playerText: '', playerFieldMasks: [] }] }],
@@ -267,7 +267,7 @@ test('versions 1 and 2 keep their prior disclosure rules and receive private sha
     objectFieldSettings: { nativePlayerSharing: { atmosphere: false, portClass: false } },
   })
   expect(restoredV1).toMatchObject({
-    version: 6,
+    version: 7,
     cluster: {
       name: workspace.cluster.name,
       playerTitle: 'Player Jump Cluster',
@@ -403,7 +403,7 @@ test('route endpoints require distinct known systems and local Jump Point owners
   })).toThrow(/different Zone/)
 })
 
-test('version 6 backup restore and independent import preserve private notes and remap Field masks @pure', () => {
+test('version 7 backup restore and independent import preserve private notes and remap Field masks @pure', () => {
   const initial = addStarSystem(createWorkspaceWithPrimaryStar('Source Reach', 'Aster'), 'Boreal').workspace
   const withFaction = addCustomFieldDefinition(initial, 'Faction', 'single-select', ['Merchants', 'Cult'], true)
   const faction = withFaction.objectFieldSettings.customFields[0]!
@@ -450,13 +450,13 @@ test('version 6 backup restore and independent import preserve private notes and
   const backup = exportJumpCluster(source)
 
   expect(restored).not.toBeNull()
-  if (!restored) throw new Error('Expected the version 6 source workspace to restore.')
-  expect(restored.version).toBe(6)
+  if (!restored) throw new Error('Expected the version 7 source workspace to restore.')
+  expect(restored.version).toBe(7)
   expect(restored.cluster.systems[0]?.objects[0]).toMatchObject({
     description: 'PRIVATE BACKUP NOTES',
     playerText: 'PUBLIC BACKUP TEXT',
   })
-  expect(backup.version).toBe(6)
+  expect(backup.version).toBe(7)
   expect(restored?.cluster.routes[0]).toMatchObject({ jumpLevel: 6, playerShared: true })
   expect(backup.cluster.routes[0]).toMatchObject({ jumpLevel: 6, playerShared: true })
 
@@ -806,7 +806,7 @@ test('current portable import remains strict about reserved custom Field IDs @pu
   expect(() => prepareJsonImport(
     createLocalWorkspace('Reserved V4 Destination', 'Boreal'),
     currentExport,
-  )).toThrow(/valid version 1 through 6/)
+  )).toThrow(/valid version 1 through 7/)
 })
 
 test('legacy migration rejects a reserved custom ID that originally collides with an object ID @pure', () => {
@@ -826,7 +826,7 @@ test('legacy migration rejects a reserved custom ID that originally collides wit
   expect(() => prepareJsonImport(
     createLocalWorkspace('Entity Collision Destination', 'Boreal'),
     collideAtmosphereDefinitionWithObject(legacyExport),
-  )).toThrow(/valid version 1 through 6/)
+  )).toThrow(/valid version 1 through 7/)
 })
 
 test('legacy migration keeps previously valid workspace and cluster ID overlap @pure', () => {
@@ -858,5 +858,5 @@ test('legacy migration rejects duplicate original custom field IDs @pure', () =>
   expect(() => prepareJsonImport(
     createLocalWorkspace('Duplicate Alias Destination', 'Boreal'),
     duplicateFirstTwoFieldIds(legacyExport),
-  )).toThrow(/valid version 1 through 6/)
+  )).toThrow(/valid version 1 through 7/)
 })
