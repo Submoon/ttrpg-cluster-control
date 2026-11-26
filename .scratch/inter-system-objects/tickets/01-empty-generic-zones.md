@@ -33,10 +33,10 @@ Claimed on 2026-11-26 on codex/issue-60-ticket-01 from integration revision c925
 
 ## Acceptance criteria
 
-- [ ] Initial and subsequently added Zones are empty; stars are added through the ordinary catalogue. Generic commands, consultation, sharing and history use Zone language consistently.
-- [ ] Existing names, stars, Orbits, publication and saved layout survive reading and restoring supported files. Retain at least one source Zone and the current route endpoint rules.
-- [ ] Use the existing creation, writer and history flows. Treat old persisted terminology as a compatibility concern rather than requiring a sweeping internal-symbol rename.
-- [ ] Existing test fixtures that require a star establish it explicitly; do not remove assertions or skip coverage to accommodate the new empty default.
+- [x] Initial and subsequently added Zones are empty; stars are added through the ordinary catalogue. Generic commands, consultation, sharing and history use Zone language consistently.
+- [x] Existing names, stars, Orbits, publication and saved layout survive reading and restoring supported files. Retain at least one source Zone and the current route endpoint rules.
+- [x] Use the existing creation, writer and history flows. Treat old persisted terminology as a compatibility concern rather than requiring a sweeping internal-symbol rename.
+- [x] Existing test fixtures that require a star establish it explicitly; do not remove assertions or skip coverage to accommodate the new empty default.
 
 ## Resolution
 

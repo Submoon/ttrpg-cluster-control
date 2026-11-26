@@ -34,12 +34,12 @@ Implementation started from c925e1a10e63969f1b2184121fdf3a8d8365dde5, which adds
 
 ## Acceptance criteria
 
-- [ ] A shared pure landing proposal drives the full-branch ghost and final applied geometry. The pointer preview may leave a frame; accepted new or changed local placement obeys the permitted elastic limit.
-- [ ] Fit descendants by frame growth while retaining dimensions, orientation and internal relationships. Do not clamp descendants independently, move neighbors, overlap their frames or move the camera automatically.
-- [ ] If required growth is blocked, show the last feasible landing or reject the change. Numeric coordinates reject impossible proposals instead of silently changing context.
-- [ ] An existing object released over empty space applies its bounded ghost position; new creation with no valid support creates nothing. Valid Zone targets retain current guarded transfer behavior.
-- [ ] Retain old out-of-frame positions on opening, unrelated edits and round trips. Persist the specific compatibility information without making new outliers valid.
-- [ ] Cancellation, touch/pinch takeover and stale input preserve source data. One accepted move includes frame growth and relationship consequences in one history action.
+- [x] A shared pure landing proposal drives the full-branch ghost and final applied geometry. The pointer preview may leave a frame; accepted new or changed local placement obeys the permitted elastic limit.
+- [x] Fit descendants by frame growth while retaining dimensions, orientation and internal relationships. Do not clamp descendants independently, move neighbors, overlap their frames or move the camera automatically.
+- [x] If required growth is blocked, show the last feasible landing or reject the change. Numeric coordinates reject impossible proposals instead of silently changing context.
+- [x] An existing object released over empty space applies its bounded ghost position; new creation with no valid support creates nothing. Valid Zone targets retain current guarded transfer behavior.
+- [x] Retain old out-of-frame positions on opening, unrelated edits and round trips. Persist the specific compatibility information without making new outliers valid.
+- [x] Cancellation, touch/pinch takeover and stale input preserve source data. One accepted move includes frame growth and relationship consequences in one history action.
 
 ## Resolution
 
@@ -52,4 +52,3 @@ Keep geometry, compatibility and cancellation matrices in pure/controller tests.
 Prefer existing domain, geometry, codec/projection and real controller seams. A ticket does not imply a new browser journey. Extend the maintained owning journey with the smallest useful assertion; a new browser scenario requires a distinct important native-input, data-loss or disclosure failure that cheaper checks cannot observe. Follow repository artifact ownership, source-freeze and first-failure evidence rules.
 
 Record the checked candidate, command/scope, result and evidence location. This brief does not authorize merge, release or modification/closure of the GitHub source.
-

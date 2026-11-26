@@ -34,11 +34,11 @@ Implementation started from integration candidate c925e1a1, which adds the appro
 
 ## Acceptance criteria
 
-- [ ] New automatic and manual key assignments scan all available object contexts. Creating a local map, editing an object and importing an independent Zone copy cannot introduce a new duplicate.
-- [ ] Retain existing duplicate assignments on opening, unrelated edits, relocation, save/reload, history and complete backup/restore; keys remain separate from globally unique entity IDs.
-- [ ] Compatibility information survives serialization and distinguishes retained assignments from new duplicates or malformed current data. A changed key must satisfy the global rule.
-- [ ] Review necessary key replacements for newly copied objects without modifying destination objects or silently rewriting notes. Complete restore retains saved assignments.
-- [ ] Expose useful validation through the actual object and copy-import workflows, not only a schema validator.
+- [x] New automatic and manual key assignments scan all available object contexts. Creating a local map, editing an object and importing an independent Zone copy cannot introduce a new duplicate.
+- [x] Retain existing duplicate assignments on opening, unrelated edits, relocation, save/reload, history and complete backup/restore; keys remain separate from globally unique entity IDs.
+- [x] Compatibility information survives serialization and distinguishes retained assignments from new duplicates or malformed current data. A changed key must satisfy the global rule.
+- [x] Review necessary key replacements for newly copied objects without modifying destination objects or silently rewriting notes. Complete restore retains saved assignments.
+- [x] Expose useful validation through the actual object and copy-import workflows, not only a schema validator.
 
 ## Resolution
 

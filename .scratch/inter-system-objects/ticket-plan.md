@@ -81,4 +81,3 @@ Use temporary artifacts for incidental visual inspection, retain first-failure e
 ## Publication record
 
 The approved granularities and edges are the graph above. Detailed acceptance criteria and focused verification obligations live only in the linked ticket briefs. All 72 specification stories are assigned to delivery tickets before the cumulative qualification ticket. Implementation has not started; no merge, release or source closure is authorized by this plan.
-
