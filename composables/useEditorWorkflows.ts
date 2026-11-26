@@ -137,10 +137,10 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     return entity.isEntityCommandBlocked(command) || (placementGuard.value?.(command) ?? false)
   }
 
-  async function applyEntitySession(sessionId?: number): Promise<boolean> {
+  async function applyEntitySession(sessionId?: number, onApplied?: () => void): Promise<boolean> {
     const routeDraft = routeObject.session.value
     if (routeDraft && (sessionId === undefined || sessionId === routeDraft.id)) {
-      return await beforeWorkspaceOperation() && await routeObject.apply(routeDraft.id)
+      return await beforeWorkspaceOperation() && await routeObject.apply(routeDraft.id, onApplied)
     }
     const submittedSession = entity.entitySession.value
     const expectedId = sessionId ?? submittedSession?.id
@@ -148,7 +148,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     const startingError = editorError.value
     if (!await beforeWorkspaceOperation()) return false
     if (entity.entitySession.value?.id !== expectedId) return false
-    const applied = await entity.applyEntitySession(expectedId)
+    const applied = await entity.applyEntitySession(expectedId, onApplied)
     if (applied && editorError.value === startingError) editorError.value = ''
     return applied
   }
@@ -165,12 +165,12 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     if (entity.entitySession.value === null) editorError.value = ''
   }
 
-  async function applyRouteSession(sessionId: number): Promise<boolean> {
+  async function applyRouteSession(sessionId: number, onApplied?: () => void): Promise<boolean> {
     if (route.routeSession.value?.id !== sessionId) return false
     const startingError = editorError.value
     if (!await beforeWorkspaceOperation()) return false
     if (route.routeSession.value?.id !== sessionId) return false
-    const applied = await route.applyRouteSession(sessionId)
+    const applied = await route.applyRouteSession(sessionId, onApplied)
     if (applied && editorError.value === startingError) editorError.value = ''
     return applied
   }
@@ -293,7 +293,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
   const applyRouteLanding = useRouteObjectPlacement({
     workspace, mutations, getRevision: () => appliedRevision.value,
     beforeWorkspaceOperation, editorError,
-    resolveBeforeTransfer: (proposal, ownsTransfer) => {
+    resolveBeforeTransfer: (proposal, ownsTransfer, onDraftApplied) => {
       const affectedRouteIds = proposal.detachedRouteAttachments.map(attachment => attachment.routeId)
       const source = proposal.request.source
       const routeDraftBlocks = source.kind === 'system' && route.isRouteCommandBlocked({
@@ -308,6 +308,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
         leaveChart: false,
         leaveEntitySession: entity.wouldInvalidateEntitySession(proposal.previewWorkspace) || Boolean(routeObjectSessionMoves),
         leaveRouteSession: routeDraftBlocks,
+        onDraftApplied,
       }, ownsTransfer)
     },
     reviewTransfer: proposal => {

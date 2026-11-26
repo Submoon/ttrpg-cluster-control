@@ -115,7 +115,7 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
   }
 
   /** Applies a valid rename to memory and only then completes the owning chart-name session. */
-  async function apply(): Promise<boolean> {
+  async function apply(onApplied?: () => void): Promise<boolean> {
     const submittedSession = session.value
     if (!submittedSession) {
       formError.value = 'Start editing Jump Cluster details before applying these values.'
@@ -187,6 +187,7 @@ export function useChartNamesSession(options: Pick<EditorWorkflowOptions, 'works
           publication: submittedPublication,
         }),
         isCurrent: isSubmittedSessionCurrent,
+        onApplied,
       })
       if (result.status === 'rejected') {
         if (isSubmittedSessionCurrent()) {

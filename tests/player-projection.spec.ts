@@ -166,7 +166,7 @@ test('a visible route descendant publishes as an independent branch with only it
   expect(document.routeBranches).toEqual([
     {
       id: 'branch-1',
-      anchor: { kind: 'detached', position: { x: expect.closeTo(313.36), y: expect.any(Number) } },
+      anchor: { kind: 'detached', position: { x: expect.closeTo(303.36), y: expect.any(Number) } },
       map: {
         objects: [
           { id: 'object-1', position: { x: 0, y: 0 }, placement: { kind: 'branch-root' }, disclosure: 'unknown', label: 'Unknown presence' },
@@ -198,14 +198,26 @@ test('a visible route descendant publishes as an independent branch with only it
   expect(serializePlayerJson(projectPlayerCluster(withPrivateMetadata))).toBe(text)
 })
 
-test('private parallel routes cannot displace a detached published branch @pure', () => {
+test('private route lanes and hidden Zone geometry cannot displace a detached published branch @pure', () => {
   const { workspace, route, root } = workspaceWithRouteObjects()
   workspace.cluster.routeContents[route.id]!.objects = [{ ...root, publication: 'revealed' }]
+  for (const system of workspace.cluster.systems) system.publication = 'hidden'
   const published = serializePlayerJson(projectPlayerCluster(workspace))
   const privateRoute = { ...route, id: 'private-parallel', name: 'Secret course' }
   workspace.cluster.routes.unshift(privateRoute)
   expect(serializePlayerJson(projectPlayerCluster(workspace))).toBe(published)
   workspace.cluster.routes.reverse()
+  expect(serializePlayerJson(projectPlayerCluster(workspace))).toBe(published)
+
+  const endpoint = workspace.cluster.systems[0]!
+  const privateOrbit = { id: 'private-orbit', hostId: null, center: { x: 0.5, y: 0.5 }, order: 1 }
+  endpoint.orbits.push(privateOrbit)
+  workspace.layout.orbitRadii[privateOrbit.id] = { horizontal: 3000, vertical: 1000 }
+  expect(serializePlayerJson(projectPlayerCluster(workspace))).toBe(published)
+
+  const neighbor = { ...endpoint, id: 'hidden-neighbor', name: 'Secret outpost', objects: [], orbits: [] }
+  workspace.cluster.systems.push(neighbor)
+  workspace.layout.systemPositions[neighbor.id] = { x: 0.29, y: 0.35 }
   expect(serializePlayerJson(projectPlayerCluster(workspace))).toBe(published)
 })
 

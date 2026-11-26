@@ -3,7 +3,7 @@ import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRenderer, nextTick, ref } from 'vue'
-import { applySystemObjectTransfer, createOrbit, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
+import { applySystemObjectTransfer, createOrbit, prepareCatalogueObjectTransfer, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
 import type { MapNavigationHandle, SaveState, SearchPresentationSettlement, SystemMapHandle } from '../composables/editor-workflows/types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
@@ -104,13 +104,13 @@ function createSearchHarness(
   }
   const workspace = ref(initialWorkspace)
   const searchFilterInvalidations: number[] = []
-  let revision = 0
+  const revision = ref(0)
   const history = createWorkspaceHistoryCoordinator({
     getWorkspace: () => workspace.value,
-    getRevision: () => revision,
+    getRevision: () => revision.value,
     publishWorkspace: next => {
       workspace.value = next
-      revision += 1
+      revision.value += 1
       return { durable }
     },
     getTraversalBlockReason: () => null,
@@ -121,6 +121,7 @@ function createSearchHarness(
     setup() {
       workflows = useEditorWorkflows({
         workspace,
+        appliedRevision: revision,
         mutations: history,
         initializeWorkspace: async () => undefined,
         saveState: ref<SaveState>('saved'),
@@ -726,6 +727,67 @@ test('transfer Undo and Redo reveal the stable root in its actual owner @pure', 
     expect(harness.store.selectedSystemId).toBe(destination.id)
     expect(harness.store.inspectedTarget).toEqual({ kind: 'object', systemId: destination.id, objectId: root.id })
     expect(harness.store.selectedObjectIds).toEqual([root.id])
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('applying a modified route-object Inspector draft continues its exact transfer @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const { workspace, route, root, orbit } = workspaceWithRouteObjects()
+    const destination = workspace.cluster.systems[1]!
+    harness.workspace.value = workspace
+    await nextTick()
+    expect(await harness.workflows.navigation.inspectRouteObject(route.id, root.id)).toBe(true)
+    await harness.workflows.inspector.beginObjectEdit()
+    const session = harness.workflows.inspector.routeObjectSession.value!
+    session.draft.name = 'Updated survey vessel'
+    const landing = { kind: 'system' as const, systemId: destination.id, placement: { kind: 'system' as const, x: 0.53, y: 0.48 } }
+    const proposal = prepareCatalogueObjectTransfer(harness.workspace.value, {
+      source: { kind: 'route', routeId: route.id }, rootObjectId: root.id, landing,
+    })
+    const transfer = harness.workflows.placement.map.placeRouteObject({ kind: 'transfer', proposal }, () => true)
+    await expect.poll(() => harness.workflows.charts.transitionGuard.value).toBe('inspector')
+    await harness.workflows.charts.resolveTransitionChoice('apply')
+    expect(await transfer).toBe(true)
+    const landed = harness.workspace.value.cluster.systems.find(system => system.id === destination.id)!
+    expect(landed.objects.find(object => object.id === root.id)).toMatchObject({
+      name: 'Updated survey vessel', placement: landing.placement,
+    })
+    expect(landed.orbits).toContainEqual(orbit)
+    expect(harness.history.getEntries().map(({ action }) => action.kind)).toEqual(['update', 'transfer'])
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('a separate workspace publication invalidates a transfer waiting for Inspector Apply @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const { workspace, route, root } = workspaceWithRouteObjects()
+    const destination = workspace.cluster.systems[1]!
+    harness.workspace.value = workspace
+    await nextTick()
+    await harness.workflows.navigation.inspectRouteObject(route.id, root.id)
+    await harness.workflows.inspector.beginObjectEdit()
+    harness.workflows.inspector.routeObjectSession.value!.draft.name = 'Pending name'
+    const proposal = prepareCatalogueObjectTransfer(harness.workspace.value, {
+      source: { kind: 'route', routeId: route.id },
+      rootObjectId: root.id,
+      landing: { kind: 'system', systemId: destination.id, placement: { kind: 'system', x: 0.53, y: 0.48 } },
+    })
+    const transfer = harness.workflows.placement.map.placeRouteObject({ kind: 'transfer', proposal }, () => true)
+    await expect.poll(() => harness.workflows.charts.transitionGuard.value).toBe('inspector')
+    expect((await harness.history.execute({
+      action: { kind: 'rename', label: 'Rename Jump Cluster', target: { kind: 'cluster', id: workspace.cluster.id } },
+      prepare: latest => ({ ...latest, cluster: { ...latest.cluster, name: 'Changed in a separate operation' } }),
+    })).status).toBe('applied')
+    await harness.workflows.charts.resolveTransitionChoice('apply')
+    expect(await transfer).toBe(false)
+    expect(harness.workspace.value.cluster.routeContents[route.id]?.objects).toContainEqual(root)
+    expect(harness.workflows.inspector.routeObjectSession.value?.draft.name).toBe('Pending name')
+    expect(harness.history.getEntries().map(({ action }) => action.kind)).toEqual(['rename'])
   } finally {
     harness.dispose()
   }
