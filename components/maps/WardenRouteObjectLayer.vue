@@ -80,6 +80,7 @@ const props = defineProps<{
   searchLocatorObjectId?: string
   preview?: 'landing' | 'pointer'
   hiddenBranch?: SystemObjectBranch
+  visibleBranch?: SystemObjectBranch
 }>()
 
 const focusedObjectId = ref<string>()
@@ -88,12 +89,14 @@ const pixelsPerSceneUnit = computed(() => props.viewport.k * props.svgPixelScale
 const markerScale = computed(() => 1 / Math.max(pixelsPerSceneUnit.value, Number.EPSILON))
 const showDetail = computed(() => routeBranchShowsDetail(pixelsPerSceneUnit.value))
 const visibleOrbits = computed(() => props.preview === 'landing' || showDetail.value
-  ? projection.value.orbits.filter(orbit => !props.hiddenBranch?.orbitIds.includes(orbit.id)) : [])
+  ? projection.value.orbits.filter(orbit => !props.hiddenBranch?.orbitIds.includes(orbit.id)
+    && (!props.visibleBranch || props.visibleBranch.orbitIds.includes(orbit.id))) : [])
 const marks = computed(() => props.contents.objects.flatMap(object => {
   const point = projection.value.positions.get(object.id)
   const showObject = routeObjectIsVisible(object, props.preview === 'landing' || showDetail.value, props.selectedObjectId)
     || object.id === focusedObjectId.value
   return point && showObject && !props.hiddenBranch?.objectIds.includes(object.id)
+    && (!props.visibleBranch || props.visibleBranch.objectIds.includes(object.id))
     ? [{ object, point }]
     : []
 }))

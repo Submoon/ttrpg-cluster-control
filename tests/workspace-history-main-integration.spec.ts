@@ -992,3 +992,60 @@ test('route detachment applies its exact landing once and Undo and Redo preserve
     harness.dispose()
   }
 })
+
+test('a cancelled or stale consequence review cannot detach a Jump Point or publish its transfer @pure', async () => {
+  const { workspace, routeId } = createUnresolvedRouteWorkspace()
+  const sourceId = workspace.cluster.systems[0]!.id
+  const pointId = workspace.cluster.routes[0]!.fromPointId!
+  const harness = createHistoryHarness(workspace)
+  const request = {
+    kind: 'transfer' as const,
+    proposal: prepareCatalogueObjectTransfer(harness.workspace.value!, {
+      source: { kind: 'system', systemId: sourceId },
+      rootObjectId: pointId,
+      landing: { kind: 'route', routeId, progression: 0.4 },
+    }),
+  }
+  let completeReview: ((accept: boolean) => void) | undefined
+  let ownsRequest = true
+  const apply = useRouteObjectPlacement({
+    workspace: harness.workspace,
+    mutations: harness.history,
+    getRevision: () => harness.publicationCount,
+    editorError: ref(''),
+    beforeWorkspaceOperation: async () => true,
+    reviewTransfer: proposal => {
+      expect(proposal.detachedRouteAttachments).toEqual([{ routeId, end: 'from', pointId }])
+      return new Promise(resolve => { completeReview = resolve })
+    },
+  })
+  try {
+    const cancelled = apply(request, () => ownsRequest)
+    await expect.poll(() => Boolean(completeReview)).toBe(true)
+    completeReview!(false)
+    expect(await cancelled).toBe(false)
+
+    completeReview = undefined
+    const stale = apply(request, () => ownsRequest)
+    await expect.poll(() => Boolean(completeReview)).toBe(true)
+    ownsRequest = false
+    completeReview!(true)
+    expect(await stale).toBe(false)
+    expect(harness.publicationCount).toBe(0)
+    expect(harness.workspace.value?.cluster.routes[0]?.fromPointId).toBe(pointId)
+
+    completeReview = undefined
+    ownsRequest = true
+    const confirmed = apply(request, () => ownsRequest)
+    await expect.poll(() => Boolean(completeReview)).toBe(true)
+    completeReview!(true)
+    expect(await confirmed).toBe(true)
+    expect(harness.publicationCount).toBe(1)
+    expect(harness.workspace.value?.cluster.routes[0]).toMatchObject({
+      fromSystemId: sourceId, fromPointId: null, toSystemId: null, unresolvedExit: 'Beyond the known Cluster',
+    })
+    expect(harness.workspace.value?.cluster.routeContents[routeId]?.objects.map(object => object.id)).toEqual([pointId])
+  } finally {
+    harness.dispose()
+  }
+})

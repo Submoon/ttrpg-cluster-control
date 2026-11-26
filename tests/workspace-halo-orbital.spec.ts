@@ -18,6 +18,7 @@ import {
   hideWorkspaceInspector,
   resolveJumpClusterRestoreReview,
   reviewJumpClusterBackup,
+  selectInspectorOption,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
@@ -257,7 +258,7 @@ test('transferring a hosted branch reviews its route attachment and retains its 
       const matrix = path.getScreenCTM()!
       const length = path.getTotalLength()
       for (const fraction of [0.5, 0.4, 0.6, 0.3, 0.7]) {
-        const point = path.getPointAtLength(fraction * length).matrixTransform(matrix)
+        const point: DOMPoint = path.getPointAtLength(fraction * length).matrixTransform(matrix)
         if (document.elementsFromPoint(point.x, point.y).includes(path)) return { x: point.x, y: point.y }
       }
       return null

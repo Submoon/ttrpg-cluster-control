@@ -2732,6 +2732,7 @@ function openPlayerPreview(focusMapFiles: () => void): void {
 readEditorHistoryBlockReason = () => {
   if (standaloneImportPlacement.value) return 'Finish or cancel standalone system placement before using Undo or Redo.'
   if (historyOpen.value) return 'Close History before using Undo or Redo.'
+  if (routeDetach.value) return 'Finish or cancel the current detachment before using Undo or Redo.'
   if (helpOpen.value) return 'Close Help before using Undo or Redo.'
   if (searchOpen.value) return 'Close Search before using Undo or Redo.'
   if (mapTypeFiltersOpen.value) return 'Close Filters before using Undo or Redo.'

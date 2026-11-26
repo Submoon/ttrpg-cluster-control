@@ -241,8 +241,8 @@ export function prepareCatalogueObjectTransfer(
   }
   const movedObjects = source.objects.filter(object => branchObjectIds.has(object.id)).map(object => {
     const moved = clearStationLink(object)
-    if (moved.id !== rootObjectId) return moved
-    const relocated = { ...moved, placement }
+    if (moved.id !== rootObjectId && moved.legacyZonePlacement === undefined) return moved
+    const relocated = { ...moved, placement: moved.id === rootObjectId ? placement : moved.placement }
     delete relocated.legacyZonePlacement
     return relocated
   })

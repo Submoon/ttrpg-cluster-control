@@ -6,9 +6,14 @@
     @update:open="open => { if (!open) emit('cancel') }"
   >
     <template #body>
-      <ul v-if="props.review" class="grid list-disc gap-2 pl-5" aria-label="Transfer consequences">
-        <li v-for="effect in effects" :key="effect">{{ effect }}</li>
-      </ul>
+      <div v-if="props.review" class="grid gap-3">
+        <ul class="grid list-disc gap-2 pl-5" aria-label="Transfer consequences">
+          <li v-for="effect in effects" :key="effect">{{ effect }}</li>
+        </ul>
+        <p v-if="staleReview" class="feedback error-text" role="alert">
+          The workspace changed. Start the transfer again to review the current landing.
+        </p>
+      </div>
       <div v-else-if="props.detach" class="grid gap-3">
         <UFormField label="Destination Zone">
           <USelect v-model="zoneId" class="w-full" :items="destinationZones" placeholder="Choose a Zone" />
@@ -30,7 +35,7 @@
     <template #footer>
       <div class="flex w-full flex-wrap justify-end gap-2">
         <UButton color="neutral" variant="ghost" @click="emit('cancel')">Cancel</UButton>
-        <UButton v-if="props.review" @click="emit('confirm')">Apply transfer</UButton>
+        <UButton v-if="props.review" :disabled="staleReview" @click="emit('confirm')">Apply transfer</UButton>
         <UButton v-else :disabled="!proposal" @click="applyDetach">Detach to Zone</UButton>
       </div>
     </template>
@@ -38,7 +43,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, toRaw, watch } from 'vue'
 import { catalogueBranches, type CatalogueObjectTransferReview, type LocalWorkspace } from '../domain/workspace'
 import { prepareFittedCatalogueObjectTransfer } from '../utils/zone-object-branch'
 
@@ -50,8 +55,8 @@ const props = defineProps<{
 const emit = defineEmits<{ cancel: []; confirm: []; detach: [proposal: CatalogueObjectTransferReview] }>()
 
 const zoneId = ref<string>()
-const x = ref<string | number>('0.5')
-const y = ref<string | number>('0.5')
+const x = ref('0.5')
+const y = ref('0.5')
 watch(() => props.detach, () => {
   zoneId.value = undefined
   x.value = '0.5'
@@ -67,7 +72,7 @@ const landing = computed(() => {
   if (!detach) return null
   if (detach.workspace !== props.workspace) return { error: 'The workspace changed. Open Detach again to choose a current landing.' }
   if (!zoneId.value) return null
-  if (String(x.value).trim() === '' || String(y.value).trim() === '') {
+  if (x.value.trim() === '' || y.value.trim() === '') {
     return { error: 'Enter both local coordinates.' }
   }
   try {
@@ -83,6 +88,8 @@ const landing = computed(() => {
 const proposal = computed(() => landing.value?.proposal)
 const geometryError = computed(() => landing.value?.error)
 
+const staleReview = computed(() => props.review !== null && toRaw(props.review.sourceWorkspace) !== toRaw(props.workspace))
+
 const effects = computed(() => {
   const { review } = props
   if (!review) return []
@@ -92,7 +99,7 @@ const effects = computed(() => {
     ...review.detachedRouteAttachments.map(({ routeId, pointId, end }) => {
       const route = cluster.routes.find(candidate => candidate.id === routeId)
       const name = route?.name || `Jump Route (Level ${route?.jumpLevel})`
-      return `Clear ${objects.get(pointId)} from the ${end === 'from' ? 'departure' : 'arrival'} of ${name}. The endpoint Zones stay the same.`
+      return `Clear ${objects.get(pointId)} from the ${end === 'from' ? 'departure' : 'arrival'} of ${name}.`
     }),
     ...review.clearedStationLinks.map(({ objectId, stationId }) =>
       `Clear the Station link from ${objects.get(objectId)} to ${objects.get(stationId)}.`),

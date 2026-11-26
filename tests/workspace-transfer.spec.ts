@@ -364,7 +364,7 @@ test('prototype-looking legacy entity IDs remain map keys through branch angle c
   expect(sourceAfter.get('constructor')).toEqual(sourceBefore.get('constructor'))
 })
 
-test('a Zone Orbit occupant carries its complete branch to a Jump Route and back @pure', () => {
+test('a Zone Orbit occupant carries its complete branch across Jump Routes and back @pure', () => {
   const workspace = nestedBranchWorkspace()
   const [source, destination] = workspace.cluster.systems
   const route = createJumpRoute(workspace.cluster, {
@@ -387,14 +387,29 @@ test('a Zone Orbit occupant carries its complete branch to a Jump Route and back
   expect(routeContentsFor(inTransit.cluster, route.id)?.objects[0]?.placement).toEqual({ kind: 'route', progression: 1 })
   expect(objectPositions(inTransit.cluster.systems[0]!, geometryOf(inTransit)).get('source-survivor'))
     .toEqual(before.get('source-survivor'))
-  const arrival = prepareCatalogueObjectTransfer(inTransit, {
+  const relay = createJumpRoute(inTransit.cluster, {
+    jumpLevel: 3,
+    fromSystemId: destination!.id,
+    fromPointId: null,
+    toSystemId: source!.id,
+    toPointId: null,
+  })
+  const relaySource = { ...inTransit, cluster: { ...inTransit.cluster, routes: [...inTransit.cluster.routes, relay] } }
+  const transferred = prepareCatalogueObjectTransfer(relaySource, {
     source: { kind: 'route', routeId: route.id },
+    rootObjectId: 'root',
+    landing: { kind: 'route', routeId: relay.id, progression: 0.32 },
+  }).previewWorkspace
+  expect(routeContentsFor(transferred.cluster, route.id)).toBeUndefined()
+  expect(routeContentsFor(transferred.cluster, relay.id)?.objects[0]?.placement).toEqual({ kind: 'route', progression: 0.32 })
+  const arrival = prepareCatalogueObjectTransfer(transferred, {
+    source: { kind: 'route', routeId: relay.id },
     rootObjectId: 'root',
     landing: { kind: 'system', systemId: destination!.id, placement: { kind: 'system', x: 0.61, y: 0.35 } },
   })
   const landed = arrival.previewWorkspace
   const after = objectPositions(landed.cluster.systems[1]!, geometryOf(landed))
-  expect(routeContentsFor(landed.cluster, route.id)?.objects ?? []).toEqual([])
+  expect(routeContentsFor(landed.cluster, relay.id)).toBeUndefined()
   expect(landed.cluster.systems[1]?.orbits.map(orbit => orbit.id)).toEqual([
     'destination-ring', 'root-ring', 'root-empty', 'moon-ring',
   ])
