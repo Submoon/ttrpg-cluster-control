@@ -1,6 +1,6 @@
 ---
 title: Bound Zone placement with full-branch ghosts
-status: in-progress
+status: closed
 assignee: codex/issue-60-ticket-03
 type: implementation
 specification: ../spec.md
@@ -40,6 +40,10 @@ Implementation started from c925e1a10e63969f1b2184121fdf3a8d8365dde5, which adds
 - [ ] An existing object released over empty space applies its bounded ghost position; new creation with no valid support creates nothing. Valid Zone targets retain current guarded transfer behavior.
 - [ ] Retain old out-of-frame positions on opening, unrelated edits and round trips. Persist the specific compatibility information without making new outliers valid.
 - [ ] Cancellation, touch/pinch takeover and stale input preserve source data. One accepted move includes frame growth and relationship consequences in one history action.
+
+## Resolution
+
+8c063cdc was integrated in 7c971b05. The bounded landing preview shows the complete hosted branch, shares geometry with the applied operation, preserves legacy outliers and rejects invalid new placements. The candidate passed 48 focused checks, changed-file lint and Vue typecheck. The two maintained browser journeys covered hosted-branch landing and compact pinch takeover. The wider pure run passed 714 checks and the two environment-blocked checks passed on targeted rerun.
 
 ## Verification
 

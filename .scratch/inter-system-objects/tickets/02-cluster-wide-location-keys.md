@@ -1,6 +1,6 @@
 ---
 title: Assign Cluster-wide Location keys
-status: in-progress
+status: closed
 assignee: Codex ticket 02
 type: implementation
 specification: ../spec.md
@@ -39,6 +39,10 @@ Implementation started from integration candidate c925e1a1, which adds the appro
 - [ ] Compatibility information survives serialization and distinguishes retained assignments from new duplicates or malformed current data. A changed key must satisfy the global rule.
 - [ ] Review necessary key replacements for newly copied objects without modifying destination objects or silently rewriting notes. Complete restore retains saved assignments.
 - [ ] Expose useful validation through the actual object and copy-import workflows, not only a schema validator.
+
+## Resolution
+
+443a94b7 was integrated in 1d31002d. New key assignments and reviewed copies use the whole Cluster; existing duplicate assignments survive transfers and backups. The initial integration candidate passed 44 focused checks and typecheck. The hosted-transfer browser case passed in the candidate containing ticket 03. Integrated browser coverage of the standalone import review remains part of cumulative verification.
 
 ## Verification
 

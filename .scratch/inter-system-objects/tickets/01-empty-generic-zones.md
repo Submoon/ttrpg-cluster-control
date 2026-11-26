@@ -1,6 +1,6 @@
 ---
 title: Create empty generic Zones
-status: in-progress
+status: closed
 type: implementation
 specification: ../spec.md
 baseline: c649b576f1636c8ffec57da6b6112b6316bee882
@@ -37,6 +37,10 @@ Claimed on 2026-11-26 on codex/issue-60-ticket-01 from integration revision c925
 - [ ] Existing names, stars, Orbits, publication and saved layout survive reading and restoring supported files. Retain at least one source Zone and the current route endpoint rules.
 - [ ] Use the existing creation, writer and history flows. Treat old persisted terminology as a compatibility concern rather than requiring a sweeping internal-symbol rename.
 - [ ] Existing test fixtures that require a star establish it explicitly; do not remove assertions or skip coverage to accommodate the new empty default.
+
+## Resolution
+
+936e28aa was integrated in 3c4d4925. Empty Zone creation, catalogue star placement, and preservation of older authored maps are complete. The candidate containing ticket 02 passed 713 pure checks and four existing Chrome cases, including creation and reopening. The final scoped lint and typecheck passed.
 
 ## Verification
 
