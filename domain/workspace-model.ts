@@ -310,6 +310,7 @@ export type MapDeletionTarget =
   | { kind: 'system'; systemId: string }
   | { kind: 'object'; systemId: string; objectId: string }
   | { kind: 'orbit'; systemId: string; orbitId: string }
+  | { kind: 'route-object'; routeId: string; objectId: string }
   | { kind: 'route'; routeId: string }
 
 export interface MapDeletionPlan {

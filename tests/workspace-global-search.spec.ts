@@ -6,11 +6,14 @@ import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 import { expectPaintedInsideUsableMap } from './scenarios/search-assertions'
 import {
   centerWorkspaceSelection,
+  deletionReviewDialog,
   downloadJson,
   fitWorkspaceMap,
   hideWorkspaceInspector,
   openWorkspaceHierarchy,
   openWorkspaceZoomNavigation,
+  resolveDeletionReview,
+  waitForWorkspaceSaved,
   wardenMap,
   wardenObjectMark,
 } from './helpers'
@@ -106,5 +109,22 @@ test('global Search reveals an exact Location key independently of the map filte
   await expect(routeRow).toHaveAttribute('aria-level', '4')
   await expect(routeRow).toHaveAttribute('aria-selected', 'true')
   await fitWorkspaceMap(page)
+  await expect(routeMark).toHaveAttribute('aria-pressed', 'true')
+
+  const deletion = deletionReviewDialog(page)
+  await routeMark.press('Delete')
+  await expect(deletion).toContainText('Captured echo')
+  await resolveDeletionReview(deletion, 'cancel')
+  await expect(routeMark).toHaveAttribute('aria-pressed', 'true')
+
+  await inspectToggle.click()
+  await page.getByRole('button', { name: 'Delete Captured echo', exact: true }).click()
+  await resolveDeletionReview(deletion, 'confirm')
+  await waitForWorkspaceSaved(page)
+  await expect(routeMark).toHaveCount(0)
+  await expect(map.locator(`[data-route-object-id="${root.id}"]`)).toBeVisible()
+
+  await page.getByRole('button', { name: /^Undo: Delete Captured echo/ }).click()
+  await waitForWorkspaceSaved(page)
   await expect(routeMark).toHaveAttribute('aria-pressed', 'true')
 })

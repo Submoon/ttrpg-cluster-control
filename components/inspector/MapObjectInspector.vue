@@ -325,7 +325,7 @@
         </fieldset>
       </section>
 
-      <section v-if="!props.routeObjectContext" class="entity-inspector-delete">
+      <section class="entity-inspector-delete">
         <UButton
           class="workspace-control entity-inspector-delete-button"
           color="error"

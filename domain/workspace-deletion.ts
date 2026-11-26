@@ -9,7 +9,6 @@ import type {
   MapDeletionTarget,
   Orbit,
   StarSystem,
-  SystemObject,
   CatalogueObject,
 } from './workspace-model'
 
@@ -106,7 +105,7 @@ function routeEffectSignature(workspace: LocalWorkspace, route: LocalWorkspace['
 }
 
 /** Reindexes surviving Orbits independently within each host group while preserving their relative order. */
-function normalizeOrbitOrders(orbits: Orbit[]): Orbit[] {
+function normalizeOrbitOrders<T extends Orbit>(orbits: T[]): T[] {
   const byHost = new Map<string | null, Orbit[]>()
   for (const orbit of orbits) {
     const hosted = byHost.get(orbit.hostId) ?? []
@@ -126,7 +125,7 @@ function normalizeOrbitOrders(orbits: Orbit[]): Orbit[] {
 }
 
 /**
- * Plans the dependent cleanup for deleting a system, object, Orbit, or route without mutating the input.
+ * Plans the dependent cleanup for deleting a Zone, catalogue object, Orbit, or route without mutating the input.
  * Nested object/Orbit branches cascade; surviving sibling orders and durable layout are updated.
  * Routes detach removed Jump Points and cascade to their contents when either endpoint Zone is deleted.
  * @param workspace Current workspace snapshot.
@@ -138,12 +137,14 @@ export function planMapEntityDeletion(
   workspace: LocalWorkspace,
   target: MapDeletionTarget,
 ): MapDeletionPlan {
-  const system = target.kind === 'route'
-    ? undefined
-    : workspace.cluster.systems.find(candidate => candidate.id === target.systemId)
-  if (target.kind !== 'route' && !system) {
+  const system = 'systemId' in target
+    ? workspace.cluster.systems.find(candidate => candidate.id === target.systemId)
+    : undefined
+  if ('systemId' in target && !system) {
     throw new Error('The selected Zone no longer exists.')
   }
+  const routeBranch = target.kind === 'route-object' ? routeContentsFor(workspace.cluster, target.routeId) : undefined
+  const branch = system ?? routeBranch
 
   const removedSystemIds = new Set<string>()
   const removedObjectIds = new Set<string>()
@@ -168,17 +169,17 @@ export function planMapEntityDeletion(
     if (!system) throw new Error('The selected Zone no longer exists.')
     return system
   }
-  const objectsById = new Map<string, SystemObject>()
+  const objectsById = new Map<string, CatalogueObject>()
   const orbitsByHost = new Map<string, Orbit[]>()
-  const objectsByOrbit = new Map<string, SystemObject[]>()
-  for (const object of system?.objects ?? []) {
+  const objectsByOrbit = new Map<string, CatalogueObject[]>()
+  for (const object of branch?.objects ?? []) {
     objectsById.set(object.id, object)
     if (object.placement.kind !== 'orbit') continue
     const children = objectsByOrbit.get(object.placement.orbitId) ?? []
     children.push(object)
     objectsByOrbit.set(object.placement.orbitId, children)
   }
-  for (const orbit of system?.orbits ?? []) {
+  for (const orbit of branch?.orbits ?? []) {
     if (orbit.hostId === null) continue
     const hosted = orbitsByHost.get(orbit.hostId) ?? []
     hosted.push(orbit)
@@ -205,7 +206,7 @@ export function planMapEntityDeletion(
   function collectOrbitBranch(orbit: Orbit, includeOrbit: boolean): void {
     if (removedOrbitIds.has(orbit.id)) return
     removedOrbitIds.add(orbit.id)
-    if (includeOrbit) addEffect(orbitLabel(requireSystem(), orbit))
+    if (includeOrbit && branch) addEffect(orbitLabel(branch, orbit))
     for (const child of objectsByOrbit.get(orbit.id) ?? []) {
       collectObjectBranch(child.id, true)
     }
@@ -232,9 +233,8 @@ export function planMapEntityDeletion(
     if (!route) throw new Error('The selected Jump Route no longer exists.')
     entityLabel = routeReviewLabel(route)
     removedRouteIds.add(route.id)
-  } else if (target.kind === 'object') {
-    const selectedSystem = requireSystem()
-    const object = selectedSystem.objects.find(candidate => candidate.id === target.objectId)
+  } else if (target.kind === 'object' || target.kind === 'route-object') {
+    const object = objectsById.get(target.objectId)
     if (!object) throw new Error('The selected map object no longer exists.')
     entityLabel = mapObjectLabel(object)
     collectObjectBranch(object.id, false)
@@ -246,20 +246,19 @@ export function planMapEntityDeletion(
     collectOrbitBranch(orbit, false)
   }
 
-  if (target.kind !== 'route') {
-    const selectedSystem = requireSystem()
-    const removedStations = new Set(selectedSystem.objects
+  if (branch) {
+    const removedStations = new Set(branch.objects
       .filter(object => removedObjectIds.has(object.id)
         && object.family === 'Installation'
         && object.subtype === 'station')
       .map(object => object.id))
-    for (const object of selectedSystem.objects) {
+    for (const object of branch.objects) {
       if (
         !removedObjectIds.has(object.id)
         && object.jumpStationId
         && removedStations.has(object.jumpStationId)
       ) {
-        const station = selectedSystem.objects.find(candidate => candidate.id === object.jumpStationId)
+        const station = objectsById.get(object.jumpStationId)
         clearedStationLinks.push({ objectId: object.id, stationId: object.jumpStationId })
         addEffect(`Clear physical Station link from ${mapObjectLabel(object)}${station ? ` to ${mapObjectLabel(station)}` : ''}`)
       }
@@ -300,28 +299,37 @@ export function planMapEntityDeletion(
     if (nextRoute !== route) routeUpdates.set(route.id, nextRoute)
   }
 
+  const retainedObjects = <T extends CatalogueObject>(objects: T[]): T[] => objects
+    .filter(object => !removedObjectIds.has(object.id))
+    .map(object => object.jumpStationId && removedObjectIds.has(object.jumpStationId)
+      ? { ...object, jumpStationId: null }
+      : object)
+  const retainedOrbits = <T extends Orbit>(orbits: T[]): T[] =>
+    normalizeOrbitOrders(orbits.filter(orbit => !removedOrbitIds.has(orbit.id)))
   const systems = workspace.cluster.systems
     .filter(candidate => !removedSystemIds.has(candidate.id))
     .map(candidate => {
       if (candidate.id !== system?.id) return candidate
-      const objects = candidate.objects
-        .filter(object => !removedObjectIds.has(object.id))
-        .map(object => object.jumpStationId && removedObjectIds.has(object.jumpStationId)
-          ? { ...object, jumpStationId: null }
-          : object)
-      const orbits = normalizeOrbitOrders(candidate.orbits
-        .filter(orbit => !removedOrbitIds.has(orbit.id)))
-      return { ...candidate, objects, orbits }
+      return { ...candidate, objects: retainedObjects(candidate.objects), orbits: retainedOrbits(candidate.orbits) }
     })
 
-  const reorderedOrbits = workspace.cluster.systems
-    .flatMap(candidate => candidate.orbits.flatMap(orbit => {
-      const nextOrbit = systems.find(systemCandidate => systemCandidate.id === candidate.id)
-        ?.orbits.find(remaining => remaining.id === orbit.id)
-      return nextOrbit && nextOrbit.order !== orbit.order
-        ? [{ orbitId: orbit.id, label: orbitLabel(candidate, orbit), fromOrder: orbit.order, toOrder: nextOrbit.order }]
-        : []
-    }))
+  const routeContents = Object.fromEntries(Object.entries(workspace.cluster.routeContents)
+    .filter(([routeId]) => !removedRouteIds.has(routeId)))
+  if (target.kind === 'route-object' && routeBranch) {
+    const objects = retainedObjects(routeBranch.objects)
+    const orbits = retainedOrbits(routeBranch.orbits)
+    if (objects.length) routeContents[target.routeId] = { objects, orbits }
+    else delete routeContents[target.routeId]
+  }
+  const nextBranch = target.kind === 'route-object'
+    ? routeContentsFor({ routeContents }, target.routeId)
+    : systems.find(candidate => candidate.id === system?.id)
+  const reorderedOrbits = branch ? branch.orbits.flatMap(orbit => {
+    const nextOrbit = nextBranch?.orbits.find(remaining => remaining.id === orbit.id)
+    return nextOrbit && nextOrbit.order !== orbit.order
+      ? [{ orbitId: orbit.id, label: orbitLabel(branch, orbit), fromOrder: orbit.order, toOrder: nextOrbit.order }]
+      : []
+  }) : []
   for (const change of reorderedOrbits) {
     addEffect(`${change.label} changes order from ${change.fromOrder} to ${change.toOrder}`)
   }
@@ -374,8 +382,7 @@ export function planMapEntityDeletion(
       cluster: {
         ...workspace.cluster,
         systems,
-        routeContents: Object.fromEntries(Object.entries(workspace.cluster.routeContents)
-          .filter(([routeId]) => !removedRouteIds.has(routeId))),
+        routeContents,
         routes: workspace.cluster.routes
           .filter(route => !removedRouteIds.has(route.id))
           .map(route => routeUpdates.get(route.id) ?? route),

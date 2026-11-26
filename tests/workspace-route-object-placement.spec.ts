@@ -3,8 +3,11 @@ import {
   catalogueTypes,
   createSystemObject,
   createWorkspaceRouteObject,
+  isLocalWorkspace,
+  planMapEntityDeletion,
   replaceWorkspaceSystem,
   routeContentsFor,
+  type LocalWorkspace,
 } from '../domain/workspace'
 import { projectPointOntoRoute } from '../utils/continuous-map-route-hit'
 import { workspaceWithRouteObjects } from './support/route-objects-fixture'
@@ -57,4 +60,41 @@ test('projection resolves the actual cubic progression and clamps to the route e
   const arched = { ...curve, control1: { x: 0, y: 64 }, control2: { x: 64, y: 64 } }
   expect(projectPointOntoRoute({ x: 32, y: 72 }, arched)).toBeCloseTo(0.5, 5)
   expect(projectPointOntoRoute({ x: NaN, y: 10 }, curve)).toBeNull()
+})
+
+test('route object deletion reviews and removes a hosted branch while keeping its route and other roots @pure', () => {
+  const fixture = workspaceWithRouteObjects()
+  const { route, root, orbit, occupant } = fixture
+  const workspace: LocalWorkspace = fixture.workspace
+  const zone = workspace.cluster.systems[0]!
+  const station = { ...createSystemObject(zone, 'station'), id: root.id, placement: root.placement }
+  const point = {
+    ...createSystemObject(zone, 'jump-point'),
+    placement: { kind: 'route', progression: 0.75 } as const,
+    jumpStationId: station.id,
+  }
+  workspace.cluster.routeContents[route.id] = { objects: [station, occupant, point], orbits: [orbit] }
+  expect(isLocalWorkspace(workspace)).toBe(true)
+
+  const plan = planMapEntityDeletion(workspace, { kind: 'route-object', routeId: route.id, objectId: station.id })
+  expect(plan.removedObjectIds).toEqual([station.id, occupant.id])
+  expect(plan.removedOrbitIds).toEqual([orbit.id])
+  expect(plan.affectedEntities).toEqual(expect.arrayContaining([
+    expect.stringContaining(occupant.name),
+    expect.stringContaining('Clear physical Station link'),
+  ]))
+  expect(plan.workspace.cluster.routes).toEqual([route])
+  expect(routeContentsFor(plan.workspace.cluster, route.id)).toEqual({
+    objects: [{ ...point, jumpStationId: null }], orbits: [],
+  })
+  expect(plan.workspace.layout.orbitRadii).toEqual({})
+  expect(plan.workspace.layout.orbitRotations).toEqual({})
+  expect(plan.workspace.layout.objectAngles).toEqual({})
+  expect(isLocalWorkspace(plan.workspace)).toBe(true)
+  expect(workspace.cluster.routeContents[route.id]!.objects).toEqual([station, occupant, point])
+
+  const empty = planMapEntityDeletion(plan.workspace, { kind: 'route-object', routeId: route.id, objectId: point.id })
+  expect(empty.workspace.cluster.routes).toEqual([route])
+  expect(routeContentsFor(empty.workspace.cluster, route.id)).toBeUndefined()
+  expect(isLocalWorkspace(empty.workspace)).toBe(true)
 })
