@@ -14,6 +14,21 @@ import {
 import type { SvgViewportRect } from './map-zoom'
 
 export const CONTINUOUS_MAP_DETAIL_MOTION_MS = 200
+export const WARDEN_DETAIL_ZOOM_DEFAULT = 75
+export const WARDEN_DETAIL_ZOOM_MIN = 25
+export const WARDEN_DETAIL_ZOOM_MAX = 200
+
+/** Warden Cluster zoom is displayed relative to the Zone scale. */
+export function wardenMapDetailScale(
+  envelope: Pick<SvgViewportRect, 'width' | 'height'>,
+  svgPixelScale: number,
+  isDetailed: boolean,
+  zoomPercent = WARDEN_DETAIL_ZOOM_DEFAULT,
+): number {
+  const displayedFloor = isDetailed ? zoomPercent - 10 : zoomPercent
+  return Math.max(displayedFloor / (100 * CONTINUOUS_MAP_SYSTEM_SCALE),
+    continuousMapDetailScale(envelope, svgPixelScale, isDetailed))
+}
 
 export function continuousMapDetailMotionEase(fraction: number): number {
   const t = Math.max(0, Math.min(1, fraction))

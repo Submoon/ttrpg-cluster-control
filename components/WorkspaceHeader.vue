@@ -185,10 +185,10 @@ const mobileOptions = computed<NavigationMenuItem[]>(() => [
     onClick: () => emit('open-help'),
   },
   {
-    label: 'Fields',
-    icon: 'i-lucide-list',
+    label: 'Settings',
+    icon: 'i-lucide-settings',
     badge: props.hasFieldDraft ? { label: 'Draft', color: 'warning', variant: 'subtle' } : undefined,
-    'aria-label': 'Open field definitions',
+    'aria-label': 'Open settings',
     'aria-haspopup': 'dialog',
     onClick: () => emit('open-fields'),
   },

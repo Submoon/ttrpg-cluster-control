@@ -35,6 +35,7 @@
       ref="continuousWardenMapRef"
       :cluster="props.workspace.cluster"
       :workspace="props.workspace"
+      :detail-zoom-percent="props.detailZoomPercent"
       :system-positions="props.workspace.layout.systemPositions"
       :unresolved-exit-positions="props.workspace.layout.unresolvedExitPositions"
       :dimmed-object-ids="props.dimmedObjectIds ?? []"
@@ -256,6 +257,7 @@ const props = defineProps<{
   workspace: LocalWorkspace
   /** Validated Warden edit projection used only to paint the visible map scene. */
   draftWorkspace?: LocalWorkspace | null
+  detailZoomPercent?: number
   system: StarSystem | undefined
   selectedSystemId: string | null
   selectedObjectId: string | null

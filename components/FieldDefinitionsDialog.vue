@@ -10,13 +10,13 @@
     aria-haspopup="dialog"
     aria-controls="field-definitions-dialog"
     :aria-expanded="props.session.open"
-    aria-label="Open field definitions"
+    aria-label="Open settings"
     :aria-description="props.hasModifiedDraft ? 'An unsaved field draft is retained.' : undefined"
-    :title="props.hasModifiedDraft ? 'An unsaved field draft is retained.' : 'Manage native and custom field definitions'"
+    :title="props.hasModifiedDraft ? 'An unsaved field draft is retained.' : 'Map settings'"
     @click="open"
   >
-    <UIcon name="i-lucide-list" aria-hidden="true" />
-    Fields
+    <UIcon name="i-lucide-settings" aria-hidden="true" />
+    Settings
     <UBadge v-if="props.hasModifiedDraft" color="warning" variant="subtle">Draft</UBadge>
   </UButton>
 
@@ -26,8 +26,8 @@
     :fullscreen="isCompact"
     :dismissible="true"
     :unmount-on-hide="false"
-    title="Field definitions"
-    description="Manage native and custom Field definitions for this map."
+    title="Map settings"
+    description="Adjust map detail zoom and manage Field definitions."
     :content="modalContentProps"
     :ui="{ content: `field-definitions-modal ${isCompact ? 'field-definitions-modal--compact' : ''}` }"
     @update:open="onOpenChange"
@@ -49,15 +49,14 @@
             >
               ← Back
             </UButton>
-            <span class="section-kicker">MAP DATA / REUSABLE DEFINITIONS</span>
-            <h2 id="field-definitions-title">Field definitions</h2>
+            <h2 id="field-definitions-title">Map settings</h2>
           </div>
           <UButton
             class="field-definitions-close"
             color="neutral"
             variant="ghost"
             size="sm"
-            aria-label="Close field definitions"
+            aria-label="Close settings"
             @click="close"
           >
             Close
@@ -71,6 +70,26 @@
           role="alert"
           :description="visibleError"
         />
+
+        <section
+          v-if="props.session.screen === 'list' && !props.session.review && !props.session.pendingGuard"
+          class="flex shrink-0 flex-col gap-2"
+          aria-labelledby="map-detail-zoom-label"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <h3 id="map-detail-zoom-label" class="m-0 text-sm font-medium">Minimum zoom for map details</h3>
+            <output class="text-sm tabular-nums">{{ props.detailZoomPercent }}%</output>
+          </div>
+          <USlider
+            :model-value="props.detailZoomPercent"
+            :min="WARDEN_DETAIL_ZOOM_MIN"
+            :max="WARDEN_DETAIL_ZOOM_MAX"
+            :step="5"
+            aria-label="Minimum zoom for map details"
+            :aria-valuetext="`${props.detailZoomPercent}%`"
+            @update:model-value="value => typeof value === 'number' && emit('detail-zoom-change', value)"
+          />
+        </section>
 
         <div class="field-definitions-workspace">
           <FieldDefinitionList
@@ -271,10 +290,12 @@ import {
 } from './field-definitions/model'
 import FieldDefinitionEditor from './field-definitions/FieldDefinitionEditor.vue'
 import FieldDefinitionList from './field-definitions/FieldDefinitionList.vue'
+import { WARDEN_DETAIL_ZOOM_MAX, WARDEN_DETAIL_ZOOM_MIN } from '../utils/continuous-map-projection'
 
 const props = defineProps<{
   session: FieldDefinitionsSessionState
   workspace: LocalWorkspace
+  detailZoomPercent: number
   saving: boolean
   saveError?: string
   inspectorConflict?: boolean
@@ -286,6 +307,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   intent: [intent: FieldDefinitionsIntent]
+  'detail-zoom-change': [percent: number]
 }>()
 
 const contentRoot = ref<HTMLElement | null>(null)

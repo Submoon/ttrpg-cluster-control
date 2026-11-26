@@ -69,6 +69,16 @@ test('viewport export follows route detail, selected-object reveal and applied f
   expect(branch?.orbits[0]?.horizontal).toBeCloseTo(18.4)
   expect(branch?.objects[1]?.point.y).toBeCloseTo(branch!.objects[0]!.point.y + 18.4)
 
+  const beforeReveal = prepareContinuousWardenImageScene({
+    ...request, viewport: { ...request.viewport, k: 3 }, svgPixelScale: 1.5,
+  }, measurements)
+  expect(beforeReveal.routes[0]?.branch?.detailed).toBe(false)
+  expect(beforeReveal.routes[0]?.branch?.objects.map(({ object }) => object.id)).toEqual([root.id])
+  const loweredThreshold = prepareContinuousWardenImageScene({
+    ...request, viewport: { ...request.viewport, k: 3 }, svgPixelScale: 1.5, detailZoomPercent: 55,
+  }, measurements)
+  expect(loweredThreshold.routes[0]?.branch?.detailed).toBe(true)
+
   const overview = { ...request, svgPixelScale: .5 }
   const overviewScene = prepareContinuousWardenImageScene(overview, measurements)
   expect(overviewScene.routes[0]?.branch?.detailed).toBe(false)

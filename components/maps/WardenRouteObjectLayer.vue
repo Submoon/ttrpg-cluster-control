@@ -75,7 +75,7 @@ import type { ContinuousMapRouteGeometry } from '../../utils/continuous-map-rout
 import type { MapViewport } from '../../utils/map-zoom'
 import {
   projectRouteObjects,
-  routeBranchShowsDetail,
+  wardenRouteBranchShowsDetail,
   routeObjectIsVisible,
   routeObjectMarkerRadiusPixels,
 } from '../../utils/route-object-geometry'
@@ -90,6 +90,7 @@ const props = defineProps<{
   layout: SystemMapGeometry
   viewport: MapViewport
   svgPixelScale: number
+  detailZoomPercent?: number
   selectedObjectId?: string
   dimmedObjectIds?: ReadonlySet<string>
   searchLocatorObjectId?: string
@@ -103,7 +104,7 @@ const props = defineProps<{
 const focusedObjectId = ref<string>()
 const pixelsPerSceneUnit = computed(() => props.viewport.k * props.svgPixelScale)
 const markerScale = computed(() => 1 / Math.max(pixelsPerSceneUnit.value, Number.EPSILON))
-const showDetail = computed(() => routeBranchShowsDetail(props.viewport.k, props.svgPixelScale))
+const showDetail = computed(() => wardenRouteBranchShowsDetail(props.viewport.k, props.svgPixelScale, props.detailZoomPercent))
 const showOrbits = computed(() => props.preview === 'landing' || showDetail.value)
 const rootContents = computed(() => ({
   objects: props.contents.objects.filter(object => object.placement.kind === 'route'),

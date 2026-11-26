@@ -1424,8 +1424,8 @@ export async function downloadJson(
 export async function openFieldDefinitionDialog(
   page: import('@playwright/test').Page,
 ): Promise<import('@playwright/test').Locator> {
-  await page.getByRole('button', { name: 'Open field definitions' }).click()
-  return page.getByRole('dialog', { name: 'Field definitions' })
+  await page.getByRole('button', { name: 'Open settings' }).click()
+  return page.getByRole('dialog', { name: 'Map settings' })
 }
 
 export async function editFieldDefinition(dialog: import('@playwright/test').Locator): Promise<void> {
@@ -1522,7 +1522,7 @@ export async function addCustomFieldThroughDialog(
     await dialog.getByLabel('New field choices').fill(options)
   }
   await dialog.getByRole('button', { name: 'Add custom field', exact: true }).click()
-  await dialog.getByRole('button', { name: 'Close field definitions' }).click()
+  await dialog.getByRole('button', { name: 'Close settings' }).click()
 }
 
 export type DownloadedImage = {

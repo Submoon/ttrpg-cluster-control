@@ -1,7 +1,7 @@
 import type { Point, RouteContents, RouteObjectPlacement } from '../domain/workspace'
 import type { ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
 import { catalogueObjectPositions, orbitCenter, orbitRadii, orbitRotation, type SystemMapGeometry } from './system-map-geometry'
-import { CONTINUOUS_MAP_SYSTEM_SCALE } from './continuous-map-projection'
+import { CONTINUOUS_MAP_SYSTEM_SCALE, WARDEN_DETAIL_ZOOM_DEFAULT } from './continuous-map-projection'
 import { MAP_ZOOM_MAX_SCALE } from './map-zoom'
 
 type RouteCurve = Pick<ContinuousMapRouteGeometry, 'start' | 'control1' | 'control2' | 'end'>
@@ -11,6 +11,15 @@ export const routeObjectMarkerRadiusPixels = 14
 export function routeBranchShowsDetail(cameraScale: number, svgPixelScale: number): boolean {
   const detailScale = 0.65 / (svgPixelScale * CONTINUOUS_MAP_SYSTEM_SCALE)
   return cameraScale >= Math.min(MAP_ZOOM_MAX_SCALE, detailScale)
+}
+
+export function wardenRouteBranchShowsDetail(
+  cameraScale: number,
+  svgPixelScale: number,
+  zoomPercent = WARDEN_DETAIL_ZOOM_DEFAULT,
+): boolean {
+  return cameraScale * (100 * CONTINUOUS_MAP_SYSTEM_SCALE) >= zoomPercent
+    && routeBranchShowsDetail(cameraScale, svgPixelScale)
 }
 
 export function routeObjectIsVisible(

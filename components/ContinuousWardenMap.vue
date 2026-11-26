@@ -316,6 +316,7 @@
         :key="id"
         :route-id="id"
         :contents="contents"
+        :detail-zoom-percent="props.detailZoomPercent"
         :geometry="geometry"
         :layout="workspace.layout"
         :viewport="viewport"
@@ -329,6 +330,7 @@
         v-if="routeLandingPreview"
         :route-id="routeLandingPreview.routeId"
         :contents="routeLandingPreview.contents"
+        :detail-zoom-percent="props.detailZoomPercent"
         :geometry="routeLandingPreview.geometry"
         :layout="routeLandingPreview.layout"
         :projected="routeLandingPreview.projected"
@@ -342,6 +344,7 @@
         <WardenRouteObjectLayer
           :route-id="routeMovePreview.routeId"
           :contents="routeMovePreview.pointer"
+          :detail-zoom-percent="props.detailZoomPercent"
           :geometry="routeMovePreview.geometry"
           :layout="workspace.layout"
           :viewport="{ x: viewport.x + routeMovePreview.offset.x * viewport.k, y: viewport.y + routeMovePreview.offset.y * viewport.k, k: viewport.k }"
@@ -549,7 +552,7 @@ import {
 } from '../utils/map-zoom'
 import {
   clampWardenClusterAnchor,
-  continuousMapDetailScale,
+  wardenMapDetailScale,
   continuousMapTextScale,
   CONTINUOUS_MAP_LOCAL_ORIGIN,
   moveWardenClusterAnchorBySceneDelta,
@@ -640,6 +643,7 @@ const OVERVIEW_DETAIL_SYSTEM_IDS: ReadonlySet<string> = new Set()
 const props = defineProps<{
   cluster: JumpCluster
   workspace: LocalWorkspace
+  detailZoomPercent?: number
   systemPositions: Readonly<Record<string, Point>>
   unresolvedExitPositions?: Readonly<Record<string, Point>>
   dimmedObjectIds?: readonly string[]
@@ -762,6 +766,7 @@ let pendingWheelZoom: {
   target: MapViewport
   expectedCurrent: MapViewport
   startedAt: number
+  durationMs: number
 } | null = null
 let cameraInitialized = false
 let searchInteractionGeneration = 0
@@ -1254,7 +1259,22 @@ function routesAtDetail(detail: ReadonlySet<string>, pixelsPerSceneUnit?: number
   })
 }
 
-const routeGeometries = computed(() => routesAtDetail(detailSystemIds.value, routePixelScale.value))
+const routeGeometries = computed<ReadonlyMap<string, ContinuousMapRouteGeometry>>((previous) => {
+  const next = routesAtDetail(detailSystemIds.value, routePixelScale.value)
+  if (!previous) return next
+  let changed = next.size !== previous.size
+  const retained = new Map<string, ContinuousMapRouteGeometry>()
+  for (const [id, geometry] of next) {
+    const old = previous.get(id)
+    if (old && old.path === geometry.path && old.sharesDisplayedEndpoints === geometry.sharesDisplayedEndpoints) {
+      retained.set(id, old)
+    } else {
+      retained.set(id, geometry)
+      changed = true
+    }
+  }
+  return changed ? retained : previous
+})
 const overviewRoutes = computed(() => buildContinuousWardenRouteGeometries({
   routes: props.cluster.routes,
   projections: projections.value,
@@ -1816,25 +1836,34 @@ function orbitLabel(systemId: string, orbitId: string): string {
   return orbit ? `Select Orbit ${orbit.order}` : 'Select Orbit'
 }
 
-function detailSystemIdsAtScale(cameraScale: number): Set<string> {
-  const current = detailSystemIds.value
+function detailSystemIdsAtScale(cameraScale: number, current = detailSystemIds.value): Set<string> {
   const next = new Set<string>()
-  for (const projection of presentationProjections.value) {
-    const minimumScale = Math.min(
-      MAP_ZOOM_MAX_SCALE,
-      continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, current.has(projection.id)),
-    )
+  for (const [systemId, thresholds] of detailScaleBySystem.value) {
+    const minimumScale = current.has(systemId) ? thresholds.exit : thresholds.enter
     if (cameraScale >= minimumScale) {
-      next.add(projection.id)
+      next.add(systemId)
     }
   }
   return next
 }
 
-function updateDetailReveal(cameraScale: number): void {
+function systemDetailScale(projection: ContinuousWardenSystemProjection, isDetailed: boolean): number {
+  return Math.min(MAP_ZOOM_MAX_SCALE, wardenMapDetailScale(
+    semanticEnvelopeFor(projection), svgPixelScale.value, isDetailed, props.detailZoomPercent,
+  ))
+}
+
+const detailScaleBySystem = computed(() => new Map(presentationProjections.value.map(projection => [projection.id, {
+  enter: systemDetailScale(projection, false),
+  exit: systemDetailScale(projection, true),
+}])))
+
+watch(() => props.detailZoomPercent, () => updateDetailReveal(viewport.value.k, true))
+
+function updateDetailReveal(cameraScale: number, resetHysteresis = false): void {
   if (!cameraInitialized) return
   const current = detailSystemIds.value
-  const next = detailSystemIdsAtScale(cameraScale)
+  const next = detailSystemIdsAtScale(cameraScale, resetHysteresis ? OVERVIEW_DETAIL_SYSTEM_IDS : current)
   if (next.size !== current.size || [...next].some(id => !current.has(id))) {
     preserveFocusBeforeDetailCollapse(next)
     detailSystemIds.value = next
@@ -1948,7 +1977,7 @@ function animateWheelZoom(frameTime: number): void {
   }
 
   const elapsed = Math.max(0, frameTime - pending.startedAt)
-  const progress = Math.min(1, elapsed / WHEEL_ZOOM_DURATION_MS)
+  const progress = pending.durationMs === 0 ? 1 : Math.min(1, elapsed / pending.durationMs)
   const easedProgress = 1 - (1 - progress) ** 3
   const target = pending.target
   const next = progress >= 1
@@ -1967,19 +1996,21 @@ function animateWheelZoom(frameTime: number): void {
   }
 }
 
-function scheduleWheelZoom(target: MapViewport, current: MapViewport): void {
+function scheduleWheelZoom(target: MapViewport, current: MapViewport, durationMs: number): void {
   const startedAt = window.performance.now()
   if (pendingWheelZoom) {
     pendingWheelZoom.start = current
     pendingWheelZoom.target = target
     pendingWheelZoom.expectedCurrent = current
     pendingWheelZoom.startedAt = startedAt
+    pendingWheelZoom.durationMs = durationMs
   } else {
     pendingWheelZoom = {
       start: current,
       target,
       expectedCurrent: current,
       startedAt,
+      durationMs,
     }
   }
   if (wheelZoomFrame === undefined) {
@@ -2046,16 +2077,12 @@ function frameSystem(systemId: string, usableRect?: SvgViewportRect, centerTarge
     x: projection.envelope.x + delta.x,
     y: projection.envelope.y + delta.y,
   }
-  const detailScaleFloor = continuousMapDetailScale(
-    semanticEnvelopeFor(projection),
-    svgPixelScale.value,
-    detailSystemIds.value.has(projection.id),
-  )
+  const detailScaleFloor = systemDetailScale(projection, detailSystemIds.value.has(projection.id))
   const next = centerMapTargetViewport({
     current,
     targetBounds,
     usableRect: rect,
-    minimumScale: Math.min(MAP_ZOOM_MAX_SCALE, detailScaleFloor),
+    minimumScale: detailScaleFloor,
     maximumScale: MAP_ZOOM_MAX_SCALE,
     prioritizeMinimumScale: true,
     oversizedTargetAnchor: { x: projection.anchor.x + delta.x, y: projection.anchor.y + delta.y },
@@ -2164,7 +2191,7 @@ function frameEntityTarget(
   const current = getViewport()
   const minimumScale = detailSystemIds.value.has(projection.id)
     ? undefined
-    : Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, false))
+    : systemDetailScale(projection, false)
   const next = centerTarget
     ? centerMapTargetViewport({
         current,
@@ -2247,11 +2274,7 @@ function frameSearchObjectBranch(systemId: string, objectId: string, usableRect?
   if (!fitted) return false
 
   const current = getViewport()
-  const minimumScale = Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(
-    semanticEnvelopeFor(projection),
-    svgPixelScale.value,
-    detailSystemIds.value.has(systemId),
-  ))
+  const minimumScale = systemDetailScale(projection, detailSystemIds.value.has(systemId))
   const branchFrame = centerMapTargetViewport({
     current,
     targetBounds,
@@ -2415,7 +2438,7 @@ function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportR
     const halfWidth = Math.max(18, object.name.length * 3.6, object.locationKey.length * 2.8)
     bounds = { x: center.x - halfWidth, y: center.y - 27, width: halfWidth * 2, height: 54 }
     if (!detailSystemIds.value.has(projection.id)) {
-      minimumScale = Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, false))
+      minimumScale = systemDetailScale(projection, false)
     }
   } else if (target.kind === 'orbit') {
     const orbit = projection.orbits.find(candidate => candidate.id === target.id)
@@ -2425,7 +2448,7 @@ function revealHistoryTarget(target: MapHistoryTarget, usableRect?: SvgViewportR
     if (!orbitBounds) return false
     bounds = orbitBounds
     if (!detailSystemIds.value.has(projection.id)) {
-      minimumScale = Math.min(MAP_ZOOM_MAX_SCALE, continuousMapDetailScale(semanticEnvelopeFor(projection), svgPixelScale.value, false))
+      minimumScale = systemDetailScale(projection, false)
     }
   } else {
     return false
@@ -2834,14 +2857,15 @@ function onWheelCapture(event: WheelEvent): void {
   event.stopPropagation()
   event.stopImmediatePropagation()
 
-  // Small pixel deltas are already continuous trackpad input, so keep them immediate.
+  // Coalesce precise input into one paint without adding an easing animation.
   const preciseInput = event.deltaMode === 0 && Math.abs(event.deltaY) < PRECISE_WHEEL_DELTA_THRESHOLD
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
   const direct = preciseInput || reducedMotion
-  if (direct) cancelWheelZoom()
+  if (direct && pendingWheelZoom && pendingWheelZoom.durationMs > 0) cancelWheelZoom()
 
   const current = getViewport()
-  const base = direct ? current : (pendingWheelZoom?.target ?? current)
+  const base = pendingWheelZoom?.target ?? current
+  const anchorViewport = direct ? base : current
   const [anchorX, anchorY] = wheelAnchorPoint(event, element)
   const deltaUnit = event.deltaMode === 1 ? 0.05 : event.deltaMode === 2 ? 1 : 0.002
   const scaleDelta = event.deltaY * deltaUnit * (event.ctrlKey ? 10 : 1)
@@ -2849,21 +2873,20 @@ function onWheelCapture(event: WheelEvent): void {
   const maximumExponent = Math.log2(MAP_ZOOM_MAX_SCALE)
   const nextExponent = Math.max(minimumExponent, Math.min(maximumExponent, Math.log2(base.k) - scaleDelta))
   const nextScale = 2 ** nextExponent
-  const sceneAnchorX = (anchorX - current.x) / current.k
-  const sceneAnchorY = (anchorY - current.y) / current.k
+  const sceneAnchorX = (anchorX - anchorViewport.x) / anchorViewport.k
+  const sceneAnchorY = (anchorY - anchorViewport.y) / anchorViewport.k
   const target = clampMapViewport({
     x: anchorX - sceneAnchorX * nextScale,
     y: anchorY - sceneAnchorY * nextScale,
     k: nextScale,
   }, minimumZoomScale.value)
   if (!target) return
-  if (target.k === current.k) {
+  if (target.k === current.k && target.x === current.x && target.y === current.y) {
     cancelWheelZoom()
     return
   }
 
-  if (direct) applyViewport(target, 'coalesced')
-  else scheduleWheelZoom(target, current)
+  scheduleWheelZoom(target, current, direct ? 0 : WHEEL_ZOOM_DURATION_MS)
 }
 
 function invalidateWheelAnchorTransform(): void {
@@ -4688,6 +4711,7 @@ function exportImage(
     viewport: getViewport(),
     viewportRect: { ...svgViewport.value },
     svgPixelScale: svgPixelScale.value,
+    detailZoomPercent: props.detailZoomPercent,
     detailSystemIds: new Set(detailSystemIds.value),
     isCurrent: options.isCurrent,
   })

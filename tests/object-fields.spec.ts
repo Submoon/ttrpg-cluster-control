@@ -40,7 +40,7 @@ test('removing an assigned Field choice clears the reviewed value', async ({ pag
   await expect(review).toContainText('Done')
   await expect(review).toContainText('Clear this value')
   await apply.click()
-  await definitions.getByRole('button', { name: 'Close field definitions' }).click()
+  await definitions.getByRole('button', { name: 'Close settings' }).click()
   await waitForWorkspaceSaved(page)
   await expect(status).toHaveText('Not recorded')
 })

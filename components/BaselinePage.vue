@@ -125,6 +125,7 @@
                   ref="fieldDefinitionsDialog"
                   v-if="workspace"
                   :session="fieldDefinitionsSession"
+                  :detail-zoom-percent="mapDetailZoomPercent"
                   :workspace="workspace"
                   :saving="saveState === 'saving'"
                   :save-error="fieldDefinitionError"
@@ -134,6 +135,7 @@
                   :hide-trigger="isCompactViewport"
                   :focus-fallback="focusMobileWorkspaceMenu"
                   @intent="handleFieldDefinitionsIntent"
+                  @detail-zoom-change="setMapDetailZoomPercent"
                 />
                 <WorkspaceMapHelp
                   v-model:open="helpOpen"
@@ -452,6 +454,7 @@
                     :applied-dimmed-object-ids="dimmedAppliedObjectIds"
                     :map-key="activeMapKey ?? ''"
                     :initial-viewport="initialViewport"
+                    :detail-zoom-percent="mapDetailZoomPercent"
                     :workspace="workspace"
                     :draft-workspace="wardenDraftWorkspace"
                     :system="selectedSystem"
@@ -747,6 +750,7 @@
  * Sole page owner of workspace hydration and durable commits, composed with cluster/system workflows and children.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch, type Ref } from 'vue'
+import { WARDEN_DETAIL_ZOOM_DEFAULT, WARDEN_DETAIL_ZOOM_MAX, WARDEN_DETAIL_ZOOM_MIN } from '../utils/continuous-map-projection'
 import type { DropdownMenuItem } from '@nuxt/ui'
 import { catalogueTypes, projectPlayerCluster, routeContentsFor, type CatalogueObjectTransferReview, type CatalogueTransferSource, type CatalogueSubtype, type JumpRoute, type LocalWorkspace, type ObjectFamily, type Point, type SystemFrameInsets } from '../domain/workspace'
 import { validName } from '../domain/workspace-validation'
@@ -848,6 +852,22 @@ watch(dropboxBackup.lastSaved, receipt => {
 const runtimeConfig = useRuntimeConfig()
 const editorUi = useEditorUiStore()
 const continuousMap = computed(() => true)
+const mapDetailZoomStorageKey = 'ttrpg-cluster-control:map-detail-zoom'
+const mapDetailZoomPercent = ref(WARDEN_DETAIL_ZOOM_DEFAULT)
+
+function validMapDetailZoomPercent(percent: number): boolean {
+  return Number.isInteger(percent) && percent >= WARDEN_DETAIL_ZOOM_MIN && percent <= WARDEN_DETAIL_ZOOM_MAX
+}
+
+function setMapDetailZoomPercent(percent: number): void {
+  if (!validMapDetailZoomPercent(percent) || mapDetailZoomPercent.value === percent) return
+  mapDetailZoomPercent.value = percent
+  try {
+    window.localStorage.setItem(mapDetailZoomStorageKey, String(percent))
+  } catch {
+    // The preference still applies in this tab if storage is unavailable.
+  }
+}
 
 let readEditorHistoryBlockReason: () => string | null = () => 'The editor is opening.'
 let endCleanHistorySessions: () => void = () => undefined
@@ -2867,6 +2887,12 @@ function warnBeforeLeaving(event: BeforeUnloadEvent): void {
 }
 
 onMounted(() => {
+  try {
+    const storedZoom = Number(window.localStorage.getItem(mapDetailZoomStorageKey))
+    if (validMapDetailZoomPercent(storedZoom)) mapDetailZoomPercent.value = storedZoom
+  } catch {
+    // Keep the default if preferences cannot be read.
+  }
   window.addEventListener('beforeunload', warnBeforeLeaving)
   window.addEventListener('keydown', handleAddEscape)
   void hydrate()

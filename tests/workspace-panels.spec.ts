@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures'
-import { createSingleSystemWorkspace } from './helpers'
+import { createSingleSystemWorkspace, waitForWorkspaceStartup } from './helpers'
 
-test('compact landscape workspace menu keeps Help, Fields, theme, privacy, and focus usable @ui-smoke', async ({ page }) => {
+test('compact landscape workspace menu keeps Help, Settings, theme, privacy, and focus usable @ui-smoke', async ({ page }) => {
   const clusterName = 'Vesper Observatory and the Outer Beacon of the Meridian Expanse'
   await createSingleSystemWorkspace(page, {
     clusterName,
@@ -31,11 +31,15 @@ test('compact landscape workspace menu keeps Help, Fields, theme, privacy, and f
   await theme.click()
   await expect(theme).not.toHaveText(themeBefore)
 
-  await options.getByRole('button', { name: 'Open field definitions', exact: true }).click()
-  const fields = page.getByRole('dialog', { name: 'Field definitions', exact: true })
-  await expect(fields).toBeVisible()
-  await fields.getByRole('button', { name: 'Close field definitions', exact: true }).click()
-  await expect(fields).toBeHidden()
+  await options.getByRole('button', { name: 'Open settings', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: 'Map settings', exact: true })
+  await expect(settings).toBeVisible()
+  const threshold = settings.getByRole('slider', { name: 'Minimum zoom for map details' })
+  await expect(threshold).toHaveAttribute('aria-valuetext', '75%')
+  await threshold.press('ArrowRight')
+  await expect(threshold).toHaveAttribute('aria-valuetext', '80%')
+  await settings.getByRole('button', { name: 'Close settings', exact: true }).click()
+  await expect(settings).toBeHidden()
   await expect(menu).toBeHidden()
   await expect(menuButton).toBeFocused()
 
@@ -56,4 +60,10 @@ test('compact landscape workspace menu keeps Help, Fields, theme, privacy, and f
   await expect(menuButton).toBeFocused()
   await expect(toolbar).toBeInViewport({ ratio: 1 })
   await expect(toolbar.getByRole('button', { name: 'Map files', exact: true })).toBeInViewport({ ratio: 1 })
+
+  await page.reload()
+  await waitForWorkspaceStartup(page)
+  await menuButton.click()
+  await options.getByRole('button', { name: 'Open settings', exact: true }).click()
+  await expect(threshold).toHaveAttribute('aria-valuetext', '80%')
 })

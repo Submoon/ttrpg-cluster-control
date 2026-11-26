@@ -26,7 +26,7 @@ import { clusterRoutePresentationLabel } from './cluster-route-presentation'
 import { continuousSystemRouteCaptionLayouts, type ContinuousSystemRouteCaptionLayout } from './continuous-system-route-caption'
 import {
   projectRouteObjects,
-  routeBranchShowsDetail,
+  wardenRouteBranchShowsDetail,
   routeObjectIsVisible,
   routeObjectMarkerRadiusPixels,
 } from './route-object-geometry'
@@ -56,6 +56,7 @@ export interface ContinuousWardenImageSceneRequest {
   viewport: MapViewport
   viewportRect: SvgViewportRect
   svgPixelScale: number
+  detailZoomPercent?: number
   detailSystemIds: ReadonlySet<string>
 }
 
@@ -177,7 +178,7 @@ export function prepareContinuousWardenImageScene(
     ? incidentRoutesForMapImage(request.cluster.routes, selected!.id)
     : request.cluster.routes
   const routeBranchDetail = request.scope === 'viewport'
-    && routeBranchShowsDetail(request.viewport.k, request.svgPixelScale)
+    && wardenRouteBranchShowsDetail(request.viewport.k, request.svgPixelScale, request.detailZoomPercent)
   const routes = sourceRoutes.map((route): PreparedImageSceneRoute => {
     const geometry = allRouteGeometries.get(route.id)
     const incident = request.scope === 'system'
