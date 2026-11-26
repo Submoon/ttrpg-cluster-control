@@ -39,7 +39,7 @@
         <header class="field-definitions-header">
           <div class="field-definitions-title">
             <UButton
-              v-if="props.tab === 'fields' && props.session.screen !== 'list'"
+              v-if="isCompact && props.tab === 'fields' && props.session.screen === 'detail' && !props.session.review && !props.session.pendingGuard"
               class="field-definitions-back"
               color="neutral"
               variant="ghost"
@@ -47,7 +47,7 @@
               aria-label="Back to definitions"
               @click="goBack"
             >
-              ← Back
+              ← Field list
             </UButton>
             <h2 id="field-definitions-title">Map settings</h2>
           </div>

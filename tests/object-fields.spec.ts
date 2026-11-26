@@ -28,6 +28,7 @@ test('removing an assigned Field choice clears the reviewed value', async ({ pag
 
   const definitions = await openFieldDefinitionDialog(page)
   await definitions.getByRole('button', { name: /Survey status/ }).click()
+  await expect(definitions.getByRole('button', { name: 'Back to definitions' })).toHaveCount(0)
   await editFieldDefinition(definitions)
   const applicability = definitions.getByRole('group', { name: 'Field applicability', exact: true })
   await applicability.getByRole('checkbox', { name: /all catalogue objects/i }).uncheck()
