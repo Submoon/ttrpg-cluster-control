@@ -282,6 +282,7 @@ test('a legacy share exports only the retained route and never infers an attachm
   const current = publicDocument()
   const restored = parsePlayerJson(JSON.stringify({
     ...current,
+    routeBranches: undefined,
     version: 1,
     routes: [
       current.routes[0],

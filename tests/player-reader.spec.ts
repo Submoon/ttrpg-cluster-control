@@ -466,6 +466,7 @@ test('the default player reader opens shared links and files with one camera and
   const legacyShareUrl = new URL(readerUrl)
   legacyShareUrl.hash = `player=1.gzip.${gzipSync(Buffer.from(JSON.stringify({
     ...document,
+    routeBranches: undefined,
     version: 1,
     routes: [legacyLoop, sharedRoute],
   }), 'utf8')).toString('base64url')}`

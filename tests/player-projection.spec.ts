@@ -203,11 +203,10 @@ test('a shared route publishes only admitted branch content and reorients progre
   workspace.cluster.systems[0]!.publication = 'hidden'
   workspace.cluster.systems[1]!.publication = 'revealed'
   const branch = workspace.cluster.routeContents[route.id]!
-  const atRoute = { kind: 'route', progression: 0.75 } as const
   branch.objects = [
     { ...root, publication: 'known-type' },
     { ...occupant, publication: 'unknown' },
-    { ...root, id: 'private-cargo', name: 'Secret cargo', placement: atRoute, publication: 'hidden' },
+    { ...root, id: 'private-cargo', name: 'Secret cargo', publication: 'hidden' },
   ]
   const document = projectPlayerCluster(workspace)
   expect(document.routes).toMatchObject([{
