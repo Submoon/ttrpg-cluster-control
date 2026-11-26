@@ -1,8 +1,7 @@
-import { PLAYER_ROUTE_BRANCH_IMAGES_UNAVAILABLE } from '../domain/player-scene'
 import { getCurrentScope, onScopeDispose, ref } from 'vue'
 import type { PlayerClusterDocument } from '../domain/player-projection'
 import { PlayerDocumentError, serializePlayerJson } from '../domain/player-codec'
-import type { CurrentPlayerMapScene } from '../domain/player-scene'
+import { playerClusterHasPublicFeatures, type CurrentPlayerMapScene } from '../domain/player-scene'
 import { rasterizeMapSvg, type MapImageFormat, type MapImagePalette } from '../utils/map-image-export'
 import type { MapImageScope } from '../utils/map-image-scope'
 import { downloadBlob, exportFileName } from '../utils/browser-download'
@@ -87,7 +86,7 @@ export function usePlayerFileExports({ prepare, prepareImage, onPlayerLinkReady,
 
   function sceneHasPublicFeatures(scene: CurrentPlayerMapScene): boolean {
     return scene.kind === 'jump-cluster'
-      ? scene.document.systems.length > 0 || scene.document.routes.length > 0
+      ? playerClusterHasPublicFeatures(scene.document)
       : scene.document.objects.length > 0
   }
 
@@ -144,10 +143,6 @@ export function usePlayerFileExports({ prepare, prepareImage, onPlayerLinkReady,
         publishFixedError(activeOperation, SYSTEM_NOT_REVEALED_ERROR, prepared)
         return
       }
-      if (prepared.scene.kind === 'jump-cluster' && prepared.document.routeBranches.length) {
-        publishFixedError(activeOperation, PLAYER_ROUTE_BRANCH_IMAGES_UNAVAILABLE, prepared)
-        return
-      }
       if (!sceneHasPublicFeatures(prepared.scene)) {
         publishFixedError(activeOperation, EMPTY_IMAGE_ERROR, prepared)
         return
@@ -179,11 +174,7 @@ export function usePlayerFileExports({ prepare, prepareImage, onPlayerLinkReady,
       prepared = await capture()
       if (!prepared || !isCurrent(activeOperation, prepared)) return
       const { document, image } = prepared
-      if (image.scope !== 'system' && document.routeBranches.length) {
-        publishFixedError(activeOperation, PLAYER_ROUTE_BRANCH_IMAGES_UNAVAILABLE, prepared)
-        return
-      }
-      if (document.systems.length === 0) {
+      if (!playerClusterHasPublicFeatures(document)) {
         publishFixedError(activeOperation, EMPTY_IMAGE_ERROR, prepared)
         return
       }

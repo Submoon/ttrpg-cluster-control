@@ -1,6 +1,7 @@
 ---
 title: Export Warden maps with route objects
-status: open
+status: in-progress
+assignee: codex
 type: implementation
 specification: ../spec.md
 baseline: c649b576f1636c8ffec57da6b6112b6316bee882
@@ -29,7 +30,7 @@ Use origin/main at c649b576f1636c8ffec57da6b6112b6316bee882, verified on 2026-11
 
 Use the accepted specification's whole-Cluster key policy and explicit legacy exceptions. Route objects include stationary obstacles, anomalies, derelicts and ships; position is manual. Keep one guarded mutation/writer/history path and exclude unapplied previews from saved or public data.
 
-This ticket is planned and unclaimed. Its ready-for-agent role means the brief is specified; unresolved blockers still prevent execution. Intermediate consumers must preserve admitted data or explicitly reject an unsupported operation, never silently drop records.
+Implementation starts at `14e13d7bee9f0b3704066e90bb568f32bc48fd29`, the issue integration branch with the completed route navigation and filtering prerequisite. The original comparison baseline stays at `c649b576f1636c8ffec57da6b6112b6316bee882`.
 
 ## Acceptance criteria
 
@@ -46,3 +47,9 @@ Cover scope/bounds/serialization and async ownership with existing pure/controll
 Prefer existing domain, geometry, codec/projection and real controller seams. A ticket does not imply a new browser journey. Extend the maintained owning journey with the smallest useful assertion; a new browser scenario requires a distinct important native-input, data-loss or disclosure failure that cheaper checks cannot observe. Follow repository artifact ownership, source-freeze and first-failure evidence rules.
 
 Record the checked candidate, command/scope, result and evidence location. This brief does not authorize merge, release or modification/closure of the GitHub source.
+
+## Implementation evidence
+
+- The Warden image scene projects applied route branches on the exported route curve. Overview keeps roots, viewport uses the shared branch detail threshold and applied filters, and a selected-Zone image uses bounded incident stubs.
+- SVG rebuilds the visible layers from the applied scene and carries only static paint definitions from the live SVG. PNG uses the same scene and existing raster limits. A selected route object participates in the viewport export context check when it can affect the scene.
+- The 31 targeted pure tests for Warden image scenes, image scopes, export preflight, and the workspace codec passed on the ticket candidate. Playwright evidence is under the ticket worktree at `test-results/playwright-1795691714976-9276-7532c3b6/`. The maintained SVG and PNG download journey is ready for the frozen integration candidate.

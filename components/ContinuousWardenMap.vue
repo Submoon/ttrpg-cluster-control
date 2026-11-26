@@ -4609,12 +4609,14 @@ function exportImage(
   return exportContinuousWardenMapImage({
     source: element,
     cluster: props.cluster,
+    layout: props.workspace.layout,
     projections: projections.value,
     unresolvedExitPositions: props.unresolvedExitPositions,
     dimmedObjectIds: props.appliedDimmedObjectIds ?? props.dimmedObjectIds,
     scope: options.scope ?? 'viewport',
     selectedSystemId: options.selectedSystemId,
     selectedRouteId: props.selectedRouteId,
+    selectedRouteObjectId: props.inspectedTarget?.kind === 'route-object' ? props.inspectedTarget.objectId : undefined,
     format,
     palette,
     viewport: getViewport(),
@@ -4634,6 +4636,7 @@ function getImageContextKey(scope: MapImageScope | null = 'viewport'): string {
     detailSystemIds: [...detailSystemIds.value],
     dimmedObjectIds: [...(props.appliedDimmedObjectIds ?? dimmedObjectIds.value)],
     selectedRouteId: props.selectedRouteId,
+    selectedRouteObjectId: props.inspectedTarget?.kind === 'route-object' ? props.inspectedTarget.objectId : undefined,
   })
 }
 

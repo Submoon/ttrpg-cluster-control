@@ -1,6 +1,6 @@
-import { PLAYER_ROUTE_BRANCH_IMAGES_UNAVAILABLE } from '../domain/player-scene'
 /** Serializes continuous map images exclusively from a detached player document and public view state. */
 import type { PlayerClusterDocument, PlayerObjectMarker, PlayerSystemMarker } from '../domain/player-projection'
+import { playerClusterHasPublicFeatures } from '../domain/player-scene'
 import type { MapImagePalette } from './map-image-export'
 import type { MapViewport, SvgViewportRect } from './map-zoom'
 import {
@@ -12,7 +12,7 @@ import {
   type MapImageRoutePrefix,
 } from './map-image-scope'
 import { rotatedEllipseBounds } from './continuous-map-history-reveal'
-import { playerMapPaint, type PlayerMapPaint } from './player-map-image-export'
+import { playerMapPaint, type PlayerMapPaint } from './player-map-image-paint'
 import {
   layoutPlayerContinuousNameLabels,
   playerContinuousTargetBounds,
@@ -31,6 +31,8 @@ import { CLUSTER_ROUTE_PRESENTATION } from './cluster-route-presentation'
 import { continuousSystemRouteCaptionLayouts } from './continuous-system-route-caption'
 import { PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS } from './cluster-system-presentation'
 import { playerObjectPresentation } from './player-object-presentation'
+import type { PlayerInspectionTarget } from './player-inspection'
+import { playerRouteBranchShowsDetail, projectPlayerRouteBranch } from './player-route-branch-geometry'
 
 const exportPadding = 24
 const routeStubLength = 60
@@ -54,6 +56,8 @@ export interface PlayerImageViewportSnapshot {
   detailSystemIds: readonly string[]
   dimmedObjects: { systemId: string; ids: readonly string[] } | null
   selectedRouteId: string | null
+  selectedBranchTarget?: { branchId: string; target: PlayerInspectionTarget } | null
+  dimmedBranchObjects?: readonly { branchId: string; ids: readonly string[] }[]
 }
 
 export type ContinuousPlayerImageScope =
@@ -66,8 +70,8 @@ export function serializeContinuousPlayerMapImage(
   image: ContinuousPlayerImageScope,
   palette: MapImagePalette,
 ): { svg: string; width: number; height: number } {
-  if (image.scope !== 'system' && document.routeBranches.length) {
-    throw new Error(PLAYER_ROUTE_BRANCH_IMAGES_UNAVAILABLE)
+  if (image.scope !== 'system' && !playerClusterHasPublicFeatures(document)) {
+    throw new Error('This player map has no public features to export as an image.')
   }
   const paint = playerMapPaint(palette)
   const { systems } = projectPlayerContinuousMap(document)
@@ -104,10 +108,17 @@ export function serializeContinuousPlayerMapImage(
       : undefined
     return [{ ...route, geometry, ...(stub ? { stub } : {}) }]
   })
+  const routeBranches = selected ? [] : document.routeBranches.flatMap(branch => {
+    const geometry = projectPlayerRouteBranch(branch, geometries)
+    return geometry ? [{ branchId: branch.id, geometry }] : []
+  })
   const baseGeometryCandidates = [
     ...(selected
       ? [selectedContentBounds, ...routes.map(route => routeStubBounds(route.stub!))]
       : displayedSystems.map(systemImageBounds)),
+    ...routeBranches.map(({ geometry: { anchor } }) => ({
+      x: anchor.x - 14, y: anchor.y - 14, width: 28, height: 28,
+    })),
     ...(selected ? [] : routes.flatMap(route => [
       route.geometry.bounds,
       route.unresolved ? {
@@ -226,11 +237,22 @@ export function serializeContinuousPlayerMapImage(
   ].join('')
   const destinations = selected ? '' : routes.filter(route => route.unresolved)
     .map(route => anonymousExitSvg(route.geometry.end, scenePixelScale, paint)).join('')
+  const branchDetail = !!snapshot && playerRouteBranchShowsDetail(scenePixelScale)
+  const branchFilters = new Map(snapshot?.dimmedBranchObjects?.map(({ branchId, ids }) => [branchId, new Set(ids)]))
+  const branches = routeBranches.map(({ branchId, geometry }) => routeBranchSvg(
+    geometry,
+    scenePixelScale,
+    paint,
+    branchDetail,
+    snapshot?.selectedBranchTarget?.branchId === branchId ? snapshot.selectedBranchTarget.target : undefined,
+    branchFilters.get(branchId),
+  )).join('')
   const body = [
     worldLayer(scene, snapshot?.camera),
     ...names.map(name => nameSvg(name, svgPixelScale, paint)),
     // Keep anonymous exits in front of opaque system marks even when their published coordinates coincide.
     worldLayer(destinations, snapshot?.camera),
+    worldLayer(branches, snapshot?.camera),
   ].join('')
   const title = selected
     ? `${selected.label} player map`
@@ -396,6 +418,51 @@ function objectSvg(
     transform: `translate(${position.x} ${position.y})`,
     opacity: dimmed ? '.14' : undefined,
   }, mark + text)
+}
+
+function routeBranchSvg(
+  geometry: NonNullable<ReturnType<typeof projectPlayerRouteBranch>>,
+  pixelScale: number,
+  paint: PlayerMapPaint,
+  detailed: boolean,
+  selection: PlayerInspectionTarget | undefined,
+  dimmedObjectIds: ReadonlySet<string> | undefined,
+): string {
+  const orbits = geometry.orbits.flatMap((orbit) => {
+    const selected = selection?.kind === 'orbit' && selection.id === orbit.id
+    return detailed || selected ? [svgElement('ellipse', {
+      cx: orbit.center.x,
+      cy: orbit.center.y,
+      rx: orbit.radii.horizontal,
+      ry: orbit.radii.vertical,
+      transform: `rotate(${orbit.rotation} ${orbit.center.x} ${orbit.center.y})`,
+      fill: 'none',
+      stroke: selected ? paint.mapSelected : paint.mapRoute,
+      'stroke-width': selected ? 3 : 2,
+      'stroke-dasharray': '4 4',
+      ...fixedStroke,
+    })] : []
+  })
+  const objects = geometry.objects.flatMap(({ object, point }) => {
+    const selected = selection?.kind === 'object' && selection.id === object.id
+    if (!detailed && !selected && object.placement.kind !== 'branch-root') return []
+    const { glyph } = playerObjectPresentation(object)
+    const mark = svgElement('circle', {
+      r: 12, fill: paint.mapBackground,
+      stroke: selected ? paint.mapSelected : paint.mapText,
+      'stroke-width': selected ? 3 : 1.5,
+    })
+    const symbol = object.disclosure !== 'unknown' && glyph ? svgElement('text', {
+      y: 4, 'text-anchor': 'middle', fill: object.markerColor ?? paint.mapText,
+      'font-family': 'Consolas, monospace', 'font-size': 14,
+    }, xml(glyph)) : ''
+    return [svgElement('g', {
+      class: 'player-branch-marker',
+      transform: `translate(${point.x} ${point.y}) scale(${1 / pixelScale})`,
+      opacity: dimmedObjectIds?.has(object.id) ? '.4' : undefined,
+    }, svgElement('title', {}, xml(object.label)) + mark + symbol)]
+  })
+  return [...orbits, ...objects].join('')
 }
 
 function routeStubSvg(

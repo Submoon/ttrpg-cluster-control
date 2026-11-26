@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { effectScope } from 'vue'
 import type { PlayerClusterDocument, PlayerSystemMarker } from '../domain/player-projection'
-import { type CurrentPlayerMapScene, PLAYER_ROUTE_BRANCH_IMAGES_UNAVAILABLE } from '../domain/player-scene'
+import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import { projectPlayerCluster } from '../domain/player-projection'
 import { parsePlayerJson } from '../domain/player-codec'
 import { decodePlayerShareFragment } from '../utils/player-share-link'
@@ -250,7 +250,7 @@ test('empty and ineligible image scenes are refused while an empty Revealed syst
   })
 })
 
-test('the export controller distributes an object-only snapshot as JSON and a link and refuses incomplete images @pure', async () => {
+test('the export controller distributes an object-only snapshot as JSON, a link and a public image @pure', async () => {
   const { workspace, route } = workspaceWithRouteObjects()
   for (const system of workspace.cluster.systems) system.publication = 'hidden'
   workspace.cluster.routeContents[route.id]!.objects[0]!.publication = 'revealed'
@@ -262,7 +262,10 @@ test('the export controller distributes an object-only snapshot as JSON and a li
   }
 
   await withDownloadBoundary(async (downloads) => {
-    const owner = usePlayerFileExports({ prepare: async () => prepared })
+    const owner = usePlayerFileExports({
+      prepare: async () => prepared,
+      prepareImage: () => ({ document, image: { scope: 'cluster' }, isCurrent: () => true }),
+    })
     await owner.downloadPlayerJson()
     expect(downloads).toHaveLength(1)
     const downloaded = parsePlayerJson(await downloads[0]!.blob.text())
@@ -276,7 +279,14 @@ test('the export controller distributes an object-only snapshot as JSON and a li
     expect(await decodePlayerShareFragment(new URL(url).hash)).toEqual(downloaded)
 
     await owner.downloadPlayerImage('svg', 'print-light')
-    expect(downloads).toHaveLength(1)
-    expect(owner.playerExportError.value).toBe(PLAYER_ROUTE_BRANCH_IMAGES_UNAVAILABLE)
+    await owner.downloadPlayerImage('svg', 'print-light', 'cluster')
+    expect(owner.playerExportError.value).toBe('')
+    expect(downloads).toHaveLength(3)
+    for (const { filename, blob } of downloads.slice(1)) {
+      expect(filename).toBe(`${document.title}-player-jump-cluster.svg`)
+      const svg = await blob.text()
+      expect(svg).toContain('Survey vessel')
+      expect(svg).not.toMatch(/Vesper|Aster|Private expedition log|Survey in progress|route-vessel/)
+    }
   })
 })
