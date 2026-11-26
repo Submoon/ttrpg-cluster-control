@@ -158,7 +158,7 @@
             :disabled="props.saving || props.transferBusy"
             @click="emit('detach-route-object')"
           >
-            Detach…
+            Detachâ€¦
           </UButton>
         </div>
         <p v-if="props.routeObjectContext" class="entity-inspector-subtitle m-0">

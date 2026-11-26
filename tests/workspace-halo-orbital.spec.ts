@@ -287,7 +287,7 @@ test('transferring a hosted branch reviews its route attachment and retains its 
   await waitForWorkspaceSaved(page)
   await routeRoot.press('Enter')
   const routeObjectInspector = page.getByRole('complementary', { name: 'Object inspector' })
-  await routeObjectInspector.getByRole('button', { name: 'Detach…' }).click()
+  await routeObjectInspector.getByRole('button', { name: 'Detachâ€¦' }).click()
   const detach = page.getByRole('dialog', { name: 'Detach from Jump Route' })
   await expect(detach.getByRole('button', { name: 'Detach to Zone' })).toBeDisabled()
   await selectInspectorOption(detach.getByLabel('Destination Zone'), 'Helion')
