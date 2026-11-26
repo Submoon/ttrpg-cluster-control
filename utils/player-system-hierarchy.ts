@@ -57,7 +57,7 @@ export function buildPlayerSystemHierarchy(document: PlayerSystemDocument): Play
   }
 
   const systemLevelObjects = document.objects
-    .filter(object => object.placement.kind === 'system')
+    .filter(object => object.placement.kind !== 'orbit')
     .flatMap(object => objectNodes.get(object.id) ?? [])
   const unoccupiedOrbits = document.orbits
     .filter(orbit => orbit.hostId === null)

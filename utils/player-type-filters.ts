@@ -1,3 +1,4 @@
+import { playerObjectMaps } from '../domain/player-projection'
 import type { PlayerClusterDocument, PlayerObjectMarker } from '../domain/player-projection'
 import { mapObjectTypeKey, mapObjectTypeOption, type MapObjectTypeOption } from './map-type-filters'
 
@@ -13,9 +14,8 @@ export function playerTypeFilterOptions(
   const options = new Map<string, MapObjectTypeOption>()
   let hasUnknownObjects = false
 
-  for (const system of document.systems) {
-    if (system.disclosure !== 'revealed') continue
-    for (const object of system.map.objects) {
+  for (const map of playerObjectMaps(document)) {
+    for (const object of map.objects) {
       if (object.disclosure === 'unknown') {
         hasUnknownObjects = true
         continue

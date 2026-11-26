@@ -2,7 +2,7 @@
  * Coordinates object membership changes with the durable angles that keep unaffected Orbit occupants in place.
  */
 import { replaceWorkspaceSystem } from './workspace-cluster'
-import type { LocalWorkspace, StarSystem, SystemObject, SystemObjectChanges } from './workspace-model'
+import type { CatalogueObject, LocalWorkspace, SystemObject, SystemObjectChanges } from './workspace-model'
 import { updateSystemObject } from './workspace-system-objects'
 import { clusterObjects } from './workspace-location-keys'
 
@@ -17,11 +17,11 @@ export function defaultObjectOrbitAngle(index: number, siblingCount: number): nu
  */
 export function captureEffectiveObjectAngles(
   workspace: LocalWorkspace,
-  system: StarSystem,
+  system: { objects: readonly CatalogueObject[] },
   orbitIds: Iterable<string>,
 ): Record<string, number> {
   const requestedOrbits = new Set(orbitIds)
-  const occupants = new Map<string, SystemObject[]>()
+  const occupants = new Map<string, CatalogueObject[]>()
   for (const object of system.objects) {
     if (object.placement.kind !== 'orbit' || !requestedOrbits.has(object.placement.orbitId)) continue
     const siblings = occupants.get(object.placement.orbitId) ?? []

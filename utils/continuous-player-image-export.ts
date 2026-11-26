@@ -1,3 +1,4 @@
+import { PLAYER_ROUTE_BRANCH_IMAGES_UNAVAILABLE } from '../domain/player-scene'
 /** Serializes continuous map images exclusively from a detached player document and public view state. */
 import type { PlayerClusterDocument, PlayerObjectMarker, PlayerSystemMarker } from '../domain/player-projection'
 import type { MapImagePalette } from './map-image-export'
@@ -65,6 +66,9 @@ export function serializeContinuousPlayerMapImage(
   image: ContinuousPlayerImageScope,
   palette: MapImagePalette,
 ): { svg: string; width: number; height: number } {
+  if (image.scope !== 'system' && document.routeBranches.length) {
+    throw new Error(PLAYER_ROUTE_BRANCH_IMAGES_UNAVAILABLE)
+  }
   const paint = playerMapPaint(palette)
   const { systems } = projectPlayerContinuousMap(document)
   const selected = image.scope === 'system' ? systems.find(system => system.id === image.systemId) : undefined

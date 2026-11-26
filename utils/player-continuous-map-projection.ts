@@ -8,6 +8,10 @@ import {
   type ContinuousWardenSystemProjection,
 } from './continuous-map-projection'
 import { playerClusterGeometry, type PlayerRouteGeometry } from './player-cluster-geometry'
+import { buildContinuousMapRouteGeometries } from './continuous-map-route-geometry'
+import { projectPlayerContinuousRouteEndpoints } from './player-continuous-route-projection'
+import { playerRouteBranchBounds, projectPlayerRouteBranch } from './player-route-branch-geometry'
+import { mapImageBounds } from './map-image-scope'
 import { CLUSTER_ROUTE_PRESENTATION, clusterRoutePresentationLabel, clusterRoutePresentationLabelWidth } from './cluster-route-presentation'
 
 export interface PlayerContinuousSystemProjection {
@@ -125,6 +129,21 @@ export function projectPlayerContinuousMap(document: PlayerClusterDocument): Pla
     top = Math.min(top, envelope.y)
     right = Math.max(right, envelope.x + envelope.width)
     bottom = Math.max(bottom, envelope.y + envelope.height)
+  }
+
+  if (document.routeBranches.length) {
+    const overviewRoutes = buildContinuousMapRouteGeometries(
+      projectPlayerContinuousRouteEndpoints(renderableDocument, systems, new Set()),
+    )
+    const branchBounds = document.routeBranches.map(branch => {
+      const branchGeometry = projectPlayerRouteBranch(branch, overviewRoutes)
+      return branchGeometry ? playerRouteBranchBounds(branchGeometry) : null
+    })
+    const bounds = mapImageBounds([
+      ...(systems.length ? [{ x: left, y: top, width: right - left, height: bottom - top }] : []),
+      ...branchBounds,
+    ])
+    if (bounds) return { systems, routes, bounds }
   }
 
   if (![left, top, right, bottom].every(Number.isFinite) || right <= left || bottom <= top) {

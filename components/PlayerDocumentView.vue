@@ -31,6 +31,8 @@
             :document="props.document"
             :selected-system-id="selectedSystemId"
             :selected-route-id="selectedRouteId"
+            :selected-branch-id="selectedBranchId"
+            :dimmed-branch-objects="dimmedBranchObjects"
             :selected-object-id="selectedObjectId"
             :selected-orbit-id="selectedOrbitId"
             :search-locator-object-id="searchLocatorObjectId"
@@ -42,6 +44,7 @@
             @inspect-object="inspectContinuousObject"
             @inspect-orbit="inspectContinuousOrbit"
             @inspect-route="inspectContinuousRoute"
+            @inspect-branch="inspectBranch"
             @map-interaction="handlePlayerMapInteraction"
           />
         </section>
@@ -50,7 +53,7 @@
         <UDashboardToolbar class="player-workspace-toolbar" role="toolbar" aria-label="Player map navigation" data-player-map-obstruction>
           <div class="player-workspace-map-context">
             <UButton
-              v-if="selectedSystemMarker || selectedRoute"
+              v-if="selectedSystemMarker || selectedRoute || selectedBranch"
               class="player-workspace-clear-selection"
               color="neutral"
               variant="outline"
@@ -131,7 +134,12 @@
           v-else
           :document="props.document"
           :selected-system-id="selectedSystemId"
+          :selected-branch-id="selectedBranchId"
+          :branch-selection="selectedTarget"
+          :dimmed-branch-objects="dimmedBranchObjects"
           @open-system="selectPublicSystem"
+          @inspect-branch="inspectBranch"
+          @inspect-route="inspectContinuousRoute"
         />
       </template>
       <template #inspector>
@@ -141,14 +149,14 @@
             :route="selectedRoute"
             @center="centerSelectedRoute"
           />
-          <template v-else-if="selectedSystem">
-            <header class="player-workspace-inspector-heading">
+          <template v-else-if="selectedCatalogue">
+            <header v-if="selectedSystem" class="player-workspace-inspector-heading">
               <span class="section-kicker">PLAYER-VISIBLE SYSTEM</span>
               <h2>{{ selectedSystem.label }}</h2>
             </header>
             <PlayerObjectInspector
               v-if="selectedTarget?.kind === 'object' || !selectedTarget"
-              :document="selectedSystem.map"
+              :document="selectedCatalogue"
               :object="selectedObject"
               workspace-presentation
               show-empty-prompt
@@ -157,12 +165,21 @@
             />
             <PlayerOrbitInspector
               v-else
-              :document="selectedSystem.map"
+              :document="selectedCatalogue"
               :orbit="selectedOrbit"
               workspace-presentation
               show-empty-prompt
               @inspect-object="inspectObject"
             />
+            <section v-if="selectedBranchAssociation" aria-label="Public Jump Route association">
+              <h3>Jump Route</h3>
+              <p>{{ (selectedBranchAssociation.progression * 100).toLocaleString('en', { maximumFractionDigits: 2 }) }}% from the public origin</p>
+              <UButton
+                color="neutral"
+                variant="link"
+                @click="inspectContinuousRoute(selectedBranchAssociation.routeId)"
+              >Inspect Jump Route</UButton>
+            </section>
           </template>
           <section v-else-if="selectedSystemMarker" class="player-workspace-inspector-empty" aria-label="Published Zone marker details">
             <span class="section-kicker">PLAYER-VISIBLE SYSTEM MARKER</span>
@@ -171,7 +188,7 @@
             <p v-else>Only the presence and type of this Zone are shared.</p>
           </section>
           <section v-else class="player-workspace-inspector-empty" aria-label="Jump Cluster details">
-            <p>Select a Revealed Zone to inspect its shared map.</p>
+            <p>Select a visible location to inspect its shared details.</p>
           </section>
         </div>
       </template>
@@ -187,7 +204,7 @@
       <UDashboardToolbar as="nav" class="player-embedded-toolbar" role="toolbar" aria-label="Player map navigation" data-player-map-obstruction>
         <div class="player-workspace-map-context">
           <UButton
-            v-if="selectedSystemMarker || selectedRoute"
+            v-if="selectedSystemMarker || selectedRoute || selectedBranch"
             class="player-workspace-clear-selection"
             color="neutral"
             variant="outline"
@@ -252,6 +269,8 @@
             :document="props.document"
             :selected-system-id="selectedSystemId"
             :selected-route-id="selectedRouteId"
+            :selected-branch-id="selectedBranchId"
+            :dimmed-branch-objects="dimmedBranchObjects"
             :selected-object-id="selectedObjectId"
             :selected-orbit-id="selectedOrbitId"
             :search-locator-object-id="searchLocatorObjectId"
@@ -262,6 +281,7 @@
             @inspect-object="inspectContinuousObject"
             @inspect-orbit="inspectContinuousOrbit"
             @inspect-route="inspectContinuousRoute"
+            @inspect-branch="inspectBranch"
             @map-interaction="handlePlayerMapInteraction"
           />
         </div>
@@ -280,7 +300,12 @@
               v-else
               :document="props.document"
               :selected-system-id="selectedSystemId"
+              :selected-branch-id="selectedBranchId"
+              :branch-selection="selectedTarget"
+              :dimmed-branch-objects="dimmedBranchObjects"
               @open-system="selectPublicSystem"
+              @inspect-branch="inspectBranch"
+              @inspect-route="inspectContinuousRoute"
             />
           </section>
           <section v-show="inspectorVisible" class="player-inline-panel" aria-label="Player details">
@@ -289,14 +314,14 @@
               :route="selectedRoute"
               @center="centerSelectedRoute"
             />
-            <template v-else-if="selectedSystem">
-              <header class="player-workspace-inspector-heading">
+            <template v-else-if="selectedCatalogue">
+              <header v-if="selectedSystem" class="player-workspace-inspector-heading">
                 <span class="section-kicker">PLAYER-VISIBLE SYSTEM</span>
                 <h2>{{ selectedSystem.label }}</h2>
               </header>
               <PlayerObjectInspector
                 v-if="selectedTarget?.kind === 'object' || !selectedTarget"
-                :document="selectedSystem.map"
+                :document="selectedCatalogue"
                 :object="selectedObject"
                 workspace-presentation
                 show-empty-prompt
@@ -305,12 +330,21 @@
               />
               <PlayerOrbitInspector
                 v-else
-                :document="selectedSystem.map"
+                :document="selectedCatalogue"
                 :orbit="selectedOrbit"
                 workspace-presentation
                 show-empty-prompt
                 @inspect-object="inspectObject"
               />
+              <section v-if="selectedBranchAssociation" aria-label="Public Jump Route association">
+                <h3>Jump Route</h3>
+                <p>{{ (selectedBranchAssociation.progression * 100).toLocaleString('en', { maximumFractionDigits: 2 }) }}% from the public origin</p>
+                <UButton
+                  color="neutral"
+                  variant="link"
+                  @click="inspectContinuousRoute(selectedBranchAssociation.routeId)"
+                >Inspect Jump Route</UButton>
+              </section>
             </template>
             <template v-else-if="selectedSystemMarker">
               <span class="section-kicker">PLAYER-VISIBLE SYSTEM MARKER</span>
@@ -319,7 +353,7 @@
               <p v-else>Only the presence and type of this Zone are shared.</p>
             </template>
             <template v-else>
-              <p>Select a Revealed Zone to inspect its shared map.</p>
+              <p>Select a visible location to inspect its shared details.</p>
             </template>
           </section>
         </aside>
@@ -376,6 +410,7 @@ interface PlayerMapHandle {
   captureImageViewport(expectedDocument: PlayerClusterDocument): PlayerImageViewportSnapshot | null
   fitPlayerMap(): boolean
   centerSystem(systemId: string, expectedClusterDocument: PlayerClusterDocument): boolean
+  centerBranch(branchId: string, expectedClusterDocument: PlayerClusterDocument): boolean
   centerRoute(routeId: string, expectedClusterDocument: PlayerClusterDocument): boolean
 }
 interface PendingReveal {
@@ -407,6 +442,7 @@ const selectedFieldConditions = ref<FieldCondition[]>([])
 const selectedSystemId = ref<string | null>(null)
 const selectedTarget = shallowRef<PlayerInspectionTarget | null>(null)
 const selectedRouteId = ref<string | null>(null)
+const selectedBranchId = ref<string | null>(null)
 const selectedRouteDocument = shallowRef<PlayerClusterDocument | null>(null)
 const systemMapHandle = ref<PlayerMapHandle | null>(null)
 const isCompactViewport = ref(false)
@@ -421,6 +457,12 @@ const isActive = computed(() => props.active)
 const selectedSystem = computed<RevealedSystem | null>(() =>
   props.document.systems.find(isSelectedRevealedSystem) ?? null,
 )
+const selectedBranch = computed(() => props.document.routeBranches.find(branch => branch.id === selectedBranchId.value) ?? null)
+const selectedBranchAssociation = computed(() => {
+  const anchor = selectedBranch.value?.anchor
+  return anchor?.kind === 'route' ? anchor : null
+})
+const selectedCatalogue = computed(() => selectedBranch.value?.map ?? selectedSystem.value?.map ?? null)
 const selectedSystemMarker = computed(() => props.document.systems.find(system => system.id === selectedSystemId.value) ?? null)
 const selectedRoute = computed<PlayerContinuousRouteDescriptor | null>(() => {
   const routeId = selectedRouteId.value
@@ -432,13 +474,17 @@ const selectedRoute = computed<PlayerContinuousRouteDescriptor | null>(() => {
 const searchResults = computed(() => searchPlayerDocument(props.document, searchQuery.value))
 const typeFilterOptions = computed(() => playerTypeFilterOptions(props.document))
 const fieldFilterOptions = computed(() => playerFieldFilterOptions(props.document))
-const dimmedObjectIds = computed<ReadonlySet<string>>(() => {
-  const objects = selectedSystem.value?.map.objects ?? []
-  return new Set(objects
-    .filter(object => !playerObjectMatchesTypeFilters(object, selectedTypeFilters.value)
-      || !playerObjectMatchesFieldFilters(object, selectedFieldConditions.value))
-    .map(object => object.id))
-})
+function matchesMapFilters(object: PlayerObjectMarker): boolean {
+  return playerObjectMatchesTypeFilters(object, selectedTypeFilters.value)
+    && playerObjectMatchesFieldFilters(object, selectedFieldConditions.value)
+}
+const dimmedObjectIds = computed<ReadonlySet<string>>(() => new Set((selectedSystem.value?.map.objects ?? [])
+  .filter(object => !matchesMapFilters(object))
+  .map(object => object.id)))
+const dimmedBranchObjects = computed(() => new Map(props.document.routeBranches.map(branch => [
+  branch.id,
+  new Set(branch.map.objects.filter(object => !matchesMapFilters(object)).map(object => object.id)),
+])))
 const { playerExportError, downloadPlayerImage } = usePlayerFileExports({
   prepare: async () => null,
   prepareImage: prepareScopedPlayerImage,
@@ -458,10 +504,10 @@ const searchLocatorObjectId = computed(() => {
     : null
 })
 const selectedObject = computed<PlayerObjectMarker | null>(() => selectedObjectId.value
-  ? selectedSystem.value?.map.objects.find(object => object.id === selectedObjectId.value) ?? null
+  ? selectedCatalogue.value?.objects.find(object => object.id === selectedObjectId.value) ?? null
   : null)
 const selectedOrbit = computed<PlayerOrbit | null>(() => selectedOrbitId.value
-  ? selectedSystem.value?.map.orbits.find(orbit => orbit.id === selectedOrbitId.value) ?? null
+  ? selectedCatalogue.value?.orbits.find(orbit => orbit.id === selectedOrbitId.value) ?? null
   : null)
 const compactModalOpen = computed(() => props.workspacePresentation
   && isCompactViewport.value && compactPanel.value !== null)
@@ -670,6 +716,7 @@ function resetDocumentView(): void {
   selectedSystemId.value = null
   selectedTarget.value = null
   clearSelectedRoute()
+  selectedBranchId.value = null
 }
 
 function getShortcutOwningDialog(): HTMLElement | null {
@@ -695,8 +742,10 @@ async function revealSearchTarget(target: PlayerSearchTarget): Promise<
   const unavailable = { status: 'rejected', reason: 'unavailable' } as const
   if (!tools || !searchOpen.value || target.document !== source || !ownsSearch()) return stale
 
-  const destination = target.kind === 'cluster' ? null : source.systems.find(system => system.id === target.systemId)
-  if (target.kind !== 'cluster' && destination?.disclosure !== 'revealed') return unavailable
+  const destination = 'systemId' in target ? source.systems.find(system => system.id === target.systemId) : null
+  if ('systemId' in target && destination?.disclosure !== 'revealed') return unavailable
+  if (target.kind === 'branch-object' && !source.routeBranches.find(branch => branch.id === target.branchId)
+    ?.map.objects.some(object => object.id === target.objectId)) return unavailable
   if (target.kind === 'object' && destination?.disclosure === 'revealed'
     && !destination.map.objects.some(object => object.id === target.objectId)) return unavailable
 
@@ -711,6 +760,14 @@ async function revealSearchTarget(target: PlayerSearchTarget): Promise<
     await nextTick()
     if (!ownsSearch() || searchOpen.value) return stale
     systemMapHandle.value?.fitPlayerMap()
+  } else if (target.kind === 'branch-object') {
+    inspectBranch(target.branchId, { kind: 'object', id: target.objectId })
+    navigationRequest = requestNonce
+    if (!compactPanel.value) {
+      await nextTick()
+      if (!ownsSearch()) return stale
+      systemMapHandle.value?.centerBranch(target.branchId, source)
+    }
   } else {
     if (selectedSystemId.value !== target.systemId) {
       selectPublicSystem(target.systemId)
@@ -769,6 +826,7 @@ function selectPublicSystem(publicSystemId: string): void {
   pendingReveal.value = null
   searchLocator.value = null
   clearSelectedRoute()
+  selectedBranchId.value = null
   selectedSystemId.value = system.id
   selectedTarget.value = null
   if (props.workspacePresentation && isCompactViewport.value) compactPanel.value = null
@@ -792,6 +850,7 @@ function inspectContinuousRoute(publicRouteId: string): void {
   searchLocator.value = null
   selectedSystemId.value = null
   selectedTarget.value = null
+  selectedBranchId.value = null
   selectedRouteDocument.value = props.document
   selectedRouteId.value = publicRouteId
   if (props.workspacePresentation && isCompactViewport.value) compactPanel.value = 'inspector'
@@ -829,6 +888,7 @@ function clearInspection(): void {
   invalidatePendingReveal()
   searchLocator.value = null
   clearSelectedRoute()
+  selectedBranchId.value = null
   selectedSystemId.value = null
   selectedTarget.value = null
   if (props.workspacePresentation && isCompactViewport.value) compactPanel.value = null
@@ -842,8 +902,23 @@ async function clearInspectionFromToolbar(): Promise<void> {
   if (!isDisposed && isActive.value && props.document === document && request === requestNonce) focusCurrentMap()
 }
 
+function inspectBranch(branchId: string, target: PlayerInspectionTarget): void {
+  const branch = props.document.routeBranches.find(branch => branch.id === branchId)
+  if (!isActive.value || !branch || !targetExists(target, branch.map)) return
+  invalidatePendingReveal()
+  searchLocator.value = null
+  clearSelectedRoute()
+  selectedSystemId.value = null
+  selectedBranchId.value = branchId
+  selectedTarget.value = target
+  if (props.workspacePresentation && isCompactViewport.value) compactPanel.value = 'inspector'
+  else desktopInspectorVisible.value = true
+}
+
 function inspectObject(publicObjectId: string): void {
-  void inspectTarget({ kind: 'object', id: publicObjectId })
+  const target = { kind: 'object', id: publicObjectId } as const
+  if (selectedBranchId.value) inspectBranch(selectedBranchId.value, target)
+  else void inspectTarget(target)
 }
 
 function inspectObjectFromSearch(publicObjectId: string): Promise<number | null> {
@@ -851,7 +926,9 @@ function inspectObjectFromSearch(publicObjectId: string): Promise<number | null>
 }
 
 function inspectOrbit(publicOrbitId: string): void {
-  void inspectTarget({ kind: 'orbit', id: publicOrbitId })
+  const target = { kind: 'orbit', id: publicOrbitId } as const
+  if (selectedBranchId.value) inspectBranch(selectedBranchId.value, target)
+  else void inspectTarget(target)
 }
 
 async function inspectTarget(target: PlayerInspectionTarget, fromSearch = false): Promise<number | null> {
@@ -865,6 +942,7 @@ async function inspectTarget(target: PlayerInspectionTarget, fromSearch = false)
   const request = ++requestNonce
   searchLocator.value = null
   clearSelectedRoute()
+  selectedBranchId.value = null
   const nextPending: PendingReveal = {
     clusterDocument,
     system,

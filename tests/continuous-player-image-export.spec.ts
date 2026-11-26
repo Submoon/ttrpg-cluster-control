@@ -30,7 +30,8 @@ function publicJumpPoint(label: string, x: number, y: number): PlayerObjectMarke
 function publicDocument(): PlayerClusterDocument {
   return {
     format: 'ttrpg-cluster-control-player',
-    version: 2,
+    version: 3,
+    routeBranches: [],
     title: 'Public <Reach>',
     systems: [
       {
@@ -281,6 +282,7 @@ test('a legacy share exports only the retained route and never infers an attachm
   const current = publicDocument()
   const restored = parsePlayerJson(JSON.stringify({
     ...current,
+    routeBranches: undefined,
     version: 1,
     routes: [
       current.routes[0],

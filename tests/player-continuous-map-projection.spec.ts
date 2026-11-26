@@ -16,7 +16,8 @@ import { fitMapViewport } from '../utils/map-zoom'
 function publicDocument(): PlayerClusterDocument {
   return {
     format: 'ttrpg-cluster-control-player',
-    version: 2,
+    version: 3,
+    routeBranches: [],
     title: 'Pilgrim Reach',
     systems: [
       {

@@ -66,3 +66,13 @@ The GM composition captures the requested map, workspace identity and renderer b
 An entirely empty player cluster cannot be distributed. A Revealed system with an empty internal map remains a valid JSON document and can be entered in the reader, while a featureless current-map image is refused. These are different artifact eligibility rules, not competing publication projections.
 
 This decision covers tickets 01–07.
+
+## Route object branch publication
+
+The public JSON shape advances to version 3 and requires a `routeBranches` array. Versions 1 and 2 continue to open. Fragment transport retains its independent version and carries the same validated JSON as a file.
+
+Each admitted branch has document-local identity and branch-local Object and Orbit references. Resolve effective Orbit angles and geometry on the complete applied branch before retaining visible objects and required ancestors. An otherwise Hidden host is a generic Unknown presence. Branch members use the same publication-mode, player-text, marker-color and Field policies as Zone objects.
+
+When a public route exists, the branch root uses its public identity and progression. Complement progression when publication reorients the route from its visible endpoint. The renderer resolves this anchor on the current public curve. For a private or omitted route, take a detached point from the applied Warden overview and share the retained branch relative to that point. Its public record has no route reference, progression, curve, destination metadata or source identities. Detached points and their branches are independently consultable in the Cluster.
+
+A public document can consist solely of route objects. The reader, Warden preview, files and links use the same allowlisted snapshot. Cluster and viewport image export refuse documents with route branches until their exporters render the full permitted scope. Selected-Zone images retain the local scope defined for those exports.

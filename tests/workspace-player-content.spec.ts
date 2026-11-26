@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { parsePlayerJson } from '../domain/workspace'
+import { exportJumpCluster, parsePlayerJson, restoreJumpClusterBackup } from '../domain/workspace'
 import { expect, test } from './fixtures'
 import {
   editMapObject,
@@ -12,15 +12,24 @@ import {
   waitForWorkspaceSaved,
   wardenMap,
 } from './helpers'
+import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 
 test('published player content opens in a separate browser context and survives reload @preview-smoke', async ({
   page, browser, previewCookies,
 }) => {
+  test.setTimeout(60_000)
   const publicText = 'A sheltered landing basin.'
   const privateNotes = 'GM ONLY: smuggler entrance'
   const publicTitle = 'Survey chart'
-  await importCampaignWorkspace(page, undefined, { width: 1440, height: 900 })
+  const { root } = workspaceWithRouteObjects()
+  const campaign = restoreJumpClusterBackup(campaignBaselineFixture)
+  campaign.cluster.routeContents[campaign.cluster.routes[0]!.id] = {
+    objects: [{ ...root, publication: 'revealed' }],
+    orbits: [],
+  }
+  await importCampaignWorkspace(page, exportJumpCluster(campaign), { width: 1440, height: 900 })
   const hierarchy = await openWorkspaceHierarchy(page)
   await hierarchy.getByRole('treeitem', { name: 'Vesper Prime', exact: true }).click()
 
@@ -71,6 +80,10 @@ test('published player content opens in a separate browser context and survives 
   const publicInspector = preview.getByRole('region', { name: 'Player object details', exact: true })
   await expect(publicInspector).toContainText(publicText)
   await expect(publicInspector).not.toContainText(privateNotes)
+  await previewMap.getByRole('button', { name: `Inspect ${root.name}`, exact: true }).press('Enter')
+  await expect(publicInspector).toContainText(root.playerText)
+  await expect(preview.getByRole('region', { name: 'Public Jump Route association', exact: true }))
+    .toContainText('25% from the public origin')
   await preview.getByRole('button', { name: 'Close player preview', exact: true }).click()
 
   const share = await openMapFilesSection(page, 'Share with players')
@@ -79,6 +92,8 @@ test('published player content opens in a separate browser context and survives 
   const json = await readFile(await (await pending).path(), 'utf8')
   const document = parsePlayerJson(json)
   expect(document.routes).toHaveLength(1)
+  expect(document.routeBranches[0]?.anchor).toEqual({ kind: 'route', routeId: document.routes[0]!.id, progression: 0.25 })
+  expect(json).not.toContain(root.description)
   expect(json).toContain(publicText)
   expect(json).not.toContain(privateNotes)
 
@@ -93,12 +108,13 @@ test('published player content opens in a separate browser context and survives 
     if (previewCookies.length) await context.addCookies(previewCookies)
     const player = await context.newPage()
     await player.goto(url)
-    await expect(player.getByRole('heading', { name: publicTitle, exact: true })).toBeVisible()
+    await expect(player.getByRole('heading', { name: publicTitle, exact: true })).toBeVisible({ timeout: 30_000 })
     await player.reload()
     const map = player.getByRole('region', { name: 'Player-visible continuous map', exact: true })
     await expect(map.locator('.player-continuous-name-target')
       .and(map.getByRole('button', { name: 'Inspect Vesper Prime', exact: true }))).toBeVisible()
     await expect(map.getByRole('button', { name: /Jump Level 1 from/ })).toBeVisible()
+    await expect(map.getByRole('button', { name: `Inspect ${root.name}`, exact: true })).toBeVisible()
   } finally {
     await context.close()
   }

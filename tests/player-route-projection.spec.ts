@@ -138,7 +138,7 @@ test('player routes publish only independently Revealed Jump Points in their own
       const document = projectPlayerCluster(workspace)
       const projectedRoute = document.routes[0]
 
-      expect(document.version).toBe(2)
+      expect(document.version).toBe(3)
       expect(projectedRoute?.fromPointId).toBe(originMode === 'revealed' ? 'object-2' : undefined)
       expect(projectedRoute?.destination).toEqual({
         kind: 'system',

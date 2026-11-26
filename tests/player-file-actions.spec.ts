@@ -1,7 +1,11 @@
 import { expect, test } from '@playwright/test'
 import { effectScope } from 'vue'
 import type { PlayerClusterDocument, PlayerSystemMarker } from '../domain/player-projection'
-import type { CurrentPlayerMapScene } from '../domain/player-scene'
+import { type CurrentPlayerMapScene, PLAYER_ROUTE_BRANCH_IMAGES_UNAVAILABLE } from '../domain/player-scene'
+import { projectPlayerCluster } from '../domain/player-projection'
+import { parsePlayerJson } from '../domain/player-codec'
+import { decodePlayerShareFragment } from '../utils/player-share-link'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 import { usePlayerFileExports } from '../composables/usePlayerFileExports'
 
 const genericExportError = 'The player export could not be completed.'
@@ -21,7 +25,8 @@ function deferred<T>() {
 function playerDocument(marker: PlayerSystemMarker | null = revealedSystem()): PlayerClusterDocument {
   return {
     format: 'ttrpg-cluster-control-player',
-    version: 2,
+    version: 3,
+    routeBranches: [],
     title: 'Pilgrim Reach',
     systems: marker ? [marker] : [],
     routes: [],
@@ -242,5 +247,36 @@ test('empty and ineligible image scenes are refused while an empty Revealed syst
     expect(downloads[0]!.filename).toBe('Pilgrim Reach-player-jump-cluster.json')
     await expect(downloads[0]!.blob.text()).resolves.toContain('"objects":[]')
     expect(revoked).toEqual(['blob:player-test-1'])
+  })
+})
+
+test('the export controller distributes an object-only snapshot as JSON and a link and refuses incomplete images @pure', async () => {
+  const { workspace, route } = workspaceWithRouteObjects()
+  for (const system of workspace.cluster.systems) system.publication = 'hidden'
+  workspace.cluster.routeContents[route.id]!.objects[0]!.publication = 'revealed'
+  const document = projectPlayerCluster(workspace)
+  const prepared = {
+    document,
+    scene: { kind: 'jump-cluster' as const, document },
+    isCurrent: () => true,
+  }
+
+  await withDownloadBoundary(async (downloads) => {
+    const owner = usePlayerFileExports({ prepare: async () => prepared })
+    await owner.downloadPlayerJson()
+    expect(downloads).toHaveLength(1)
+    const downloaded = parsePlayerJson(await downloads[0]!.blob.text())
+    expect(downloaded).toEqual(document)
+    expect(downloaded.routeBranches[0]?.anchor.kind).toBe('detached')
+    expect(downloaded.systems).toHaveLength(0)
+
+    const result = await owner.generatePlayerLink('http://localhost/player')
+    expect(result.status).toBe('ready')
+    const url = owner.generatedPlayerUrl.value
+    expect(await decodePlayerShareFragment(new URL(url).hash)).toEqual(downloaded)
+
+    await owner.downloadPlayerImage('svg', 'print-light')
+    expect(downloads).toHaveLength(1)
+    expect(owner.playerExportError.value).toBe(PLAYER_ROUTE_BRANCH_IMAGES_UNAVAILABLE)
   })
 })
