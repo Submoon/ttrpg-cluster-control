@@ -60,7 +60,7 @@ const emit = defineEmits<{
 }>()
 
 let dialogOpener: HTMLElement | null = null
-let suppressReturnFocus = false
+let returnFocusSuppressedForOpening = false
 
 function focusableElement(active: Element | null): HTMLElement | null {
   if (active instanceof HTMLElement) return active
@@ -77,7 +77,7 @@ function isVisibleFocusTarget(element: HTMLElement): boolean {
 
 function focusAfterDialogClose(event: Event): void {
   event.preventDefault()
-  if (open.value || suppressReturnFocus) {
+  if (open.value || returnFocusSuppressedForOpening) {
     dialogOpener = null
     closeFocus.settleClosingFocus()
     return
@@ -93,7 +93,7 @@ function focusAfterDialogClose(event: Event): void {
 function captureDialogOpener(): void {
   const active = document.activeElement
   dialogOpener = focusableElement(active)
-  suppressReturnFocus = props.suppressReturnFocus === true
+  returnFocusSuppressedForOpening = props.suppressReturnFocus === true
 }
 
 defineExpose({ whenClosingFocusSettled: closeFocus.whenClosingFocusSettled })
