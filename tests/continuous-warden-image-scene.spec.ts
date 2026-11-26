@@ -58,7 +58,7 @@ test('viewport export follows route detail, selected-object reveal and applied f
     dimmedObjectIds: [occupant.id],
   }
   const detail = prepareContinuousWardenImageScene(request, measurements)
-  expect(detail.frame).toMatchObject(request.viewportRect)
+  expect(detail.frame).toMatchObject({ ...request.viewportRect })
   expect(detail.sceneViewport).toEqual(request.viewport)
   expect(detail.dimmedObjectIds).toEqual(new Set([occupant.id]))
   const branch = detail.routes[0]?.branch
