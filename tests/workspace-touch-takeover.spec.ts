@@ -203,6 +203,8 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
       document.elementFromPoint(x, y)?.closest('.continuous-warden-object') === mark, origin)).toBe(true)
     await dispatchTouch(cdp, 'touchStart', [origin])
     await dispatchTouch(cdp, 'touchMove', [firstMove])
+    const landingGhost = map.locator('.continuous-warden-branch-landing')
+    await expect(landingGhost).toBeVisible()
     await expect.poll(() => star.getAttribute('transform')).not.toBe(objectTransformBefore)
     await exitStyle.evaluate(element => { element.parentNode?.removeChild(element) })
 
@@ -213,6 +215,7 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
       y: Math.min(bounds.y + bounds.height - 24, firstMove.y + 36),
     }
     await dispatchTouch(cdp, 'touchStart', [firstMove, secondStart])
+    await expect(landingGhost).toBeHidden()
     await expect.poll(async () => (await wardenObjectLocalPosition(star)).x).toBeCloseTo(objectPositionBefore.x, 2)
     await expect.poll(async () => (await wardenObjectLocalPosition(star)).y).toBeCloseTo(objectPositionBefore.y, 2)
 

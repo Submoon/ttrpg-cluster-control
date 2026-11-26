@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import {
   continuousMapRoundedFrameContains,
   planContinuousMapElasticPlacement,
+  planBoundedZoneLanding,
 } from '../utils/continuous-map-elastic-placement'
 
 const anchor = { x: 100, y: 60 }
@@ -205,4 +206,43 @@ test('elastic contour sampling stays bounded for enormous frames and ignores zer
 
   expect(preview).not.toBeNull()
   expect(preview?.path.length).toBeLessThan(20_000)
+})
+
+test('a far pointer lands a complete branch against a fixed neighboring frame @pure', () => {
+  const fixed = { id: 'east', anchor: { x: 370, y: 60 }, envelope: { x: 320, y: 0, width: 100, height: 120 } }
+  const request = {
+    systemId: 'source',
+    anchor,
+    displayedFrame: frame,
+    target: { x: 600, y: 60 },
+    origin: { x: 100, y: 60 },
+    fixedFrames: [fixed],
+    pixelsPerSceneUnit: 1,
+    relativeBounds: { x: -20, y: -10, width: 85, height: 20 },
+  }
+  const landing = planBoundedZoneLanding(request)
+
+  expect(landing?.root.x).toBeCloseTo(255, 2)
+  expect(landing?.root.y).toBe(60)
+  expect(landing?.frame).toEqual(expect.objectContaining({ x: 0, y: 0, height: 120 }))
+  expect(landing!.frame.x + landing!.frame.width).toBeLessThanOrEqual(320)
+  expect(planBoundedZoneLanding({ ...request, origin: undefined })).toBeNull()
+  expect(fixed.envelope).toEqual({ x: 320, y: 0, width: 100, height: 120 })
+})
+
+test('growing a clipped Zone keeps its authored side and every displayed neighbor fixed @pure', () => {
+  const north = { id: 'source', anchor, envelope: frame }
+  const east = { id: 'east', anchor: { x: 250, y: 60 }, envelope: { x: 150, y: 0, width: 200, height: 120 } }
+  const landing = planBoundedZoneLanding({
+    systemId: north.id,
+    anchor,
+    displayedFrame: { x: 0, y: 0, width: 175, height: 120 },
+    target: { x: 100, y: 110 },
+    relativeBounds: { x: -10, y: -10, width: 20, height: 50 },
+    fixedFrames: [{ ...east, envelope: { x: 175, y: 0, width: 175, height: 120 } }],
+    authoredFrames: [north, east],
+  })
+  expect(landing?.frame.width).toBe(175)
+  expect(landing?.frame.height).toBeGreaterThan(150)
+  expect(landing?.authoredFrame.width).toBe(200)
 })

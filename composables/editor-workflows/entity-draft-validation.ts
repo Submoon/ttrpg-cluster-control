@@ -1,3 +1,4 @@
+import { fitZoneObjectWorkspace } from '../../utils/zone-object-branch'
 /** Pure object-draft parsing and validation, separate from session identity and async guards. */
 import {
   canPlaceObjectInOrbit,
@@ -205,8 +206,11 @@ export function validateObjectDraft(
   const parsed = parseObjectDraft(workspace, system, object, initial, draft)
   if (Object.keys(parsed.errors).length) return { workspace: null, errors: parsed.errors }
   try {
+    const candidate = updateWorkspaceObject(workspace, system.id, object.id, parsed.changes)
     return {
-      workspace: updateWorkspaceObject(workspace, system.id, object.id, parsed.changes),
+      workspace: parsed.changes.placement
+        ? fitZoneObjectWorkspace(workspace, candidate, system.id, object.id)
+        : candidate,
       errors: parsed.errors,
     }
   } catch (error) {
@@ -232,7 +236,8 @@ export function projectObjectDraft(
   let projected = workspace
   const apply = (candidate: SystemObjectChanges): boolean => {
     try {
-      projected = updateWorkspaceObject(projected, system.id, object.id, candidate)
+      const next = updateWorkspaceObject(projected, system.id, object.id, candidate)
+      projected = candidate.placement ? fitZoneObjectWorkspace(projected, next, system.id, object.id) : next
       return true
     } catch {
       return false

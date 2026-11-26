@@ -9,6 +9,7 @@ import type {
   JumpRoute,
   JsonImportSummary,
   LocalWorkspace,
+  ObjectFieldSettings,
   Orbit,
   Point,
   PreparedJsonImport,
@@ -19,7 +20,6 @@ import type {
 import { initialClusterSystemPosition } from './workspace-cluster'
 import {
   clusterObjects,
-  migrateLegacyWorkspaceLocationKeys,
   nextLocationKey,
   objectLocationKeyPrefix,
   validLocationKeyAssignments,
@@ -30,6 +30,7 @@ import {
   isStarSystem,
   migrateLegacyWorkspaceRouteShape,
   remapLegacyReservedCustomFieldIds,
+  restoreLocalWorkspace,
   withDefaultJumpLevels,
   withoutLegacyObjectApplicabilityTargets,
 } from './workspace-schema'
@@ -65,30 +66,10 @@ function isImportedMap(value: unknown): value is ImportableMap {
     if (value.version !== 6) return false
     const cluster = value.cluster
     if (!isRecord(cluster)) return false
-    const validationIds = new Set<string>([cluster.id as string])
-    for (const system of Array.isArray(cluster.systems) ? cluster.systems : []) {
-      if (isRecord(system) && typeof system.id === 'string') validationIds.add(system.id)
-      if (isRecord(system) && Array.isArray(system.objects)) {
-        for (const object of system.objects) {
-          if (isRecord(object) && typeof object.id === 'string') validationIds.add(object.id)
-        }
-      }
-      if (isRecord(system) && Array.isArray(system.orbits)) {
-        for (const orbit of system.orbits) {
-          if (isRecord(orbit) && typeof orbit.id === 'string') validationIds.add(orbit.id)
-        }
-      }
-    }
-    for (const route of Array.isArray(cluster.routes) ? cluster.routes : []) {
-      if (isRecord(route) && typeof route.id === 'string') validationIds.add(route.id)
-    }
-    for (const field of settings.customFields) validationIds.add(field.id)
-    let validationId = crypto.randomUUID()
-    while (validationIds.has(validationId)) validationId = crypto.randomUUID()
 
     const candidate = {
       version: 6,
-      id: validationId,
+      id: clusterValidationId(cluster, settings),
       cluster,
       objectFieldSettings: settings,
       layout: {
@@ -110,6 +91,7 @@ function isImportedMap(value: unknown): value is ImportableMap {
 
   const system = value.system
   if (value.type !== 'system' || value.version === 6 || layout.systemFrames !== undefined || !isStarSystem(system)) return false
+  if (system.objects.some(object => Object.hasOwn(object, 'legacyZonePlacement'))) return false
   if (!validLocationKeyAssignments(system.objects)
     || (value.version !== 5 && system.objects.some(object => Object.hasOwn(object, 'legacyLocationKey')))) return false
   if (!isRecord(layout.orbitRadii) || !isRecord(layout.objectAngles)
@@ -135,6 +117,31 @@ function isImportedMap(value: unknown): value is ImportableMap {
     && system.objects.every(object =>
       objectFieldValidationError(object, settings) === null,
     )
+}
+
+function clusterValidationId(cluster: Record<string, unknown>, settings: ObjectFieldSettings): string {
+  const validationIds = new Set<string>()
+  if (typeof cluster.id === 'string') validationIds.add(cluster.id)
+  for (const system of Array.isArray(cluster.systems) ? cluster.systems : []) {
+    if (isRecord(system) && typeof system.id === 'string') validationIds.add(system.id)
+    if (isRecord(system) && Array.isArray(system.objects)) {
+      for (const object of system.objects) {
+        if (isRecord(object) && typeof object.id === 'string') validationIds.add(object.id)
+      }
+    }
+    if (isRecord(system) && Array.isArray(system.orbits)) {
+      for (const orbit of system.orbits) {
+        if (isRecord(orbit) && typeof orbit.id === 'string') validationIds.add(orbit.id)
+      }
+    }
+  }
+  for (const route of Array.isArray(cluster.routes) ? cluster.routes : []) {
+    if (isRecord(route) && typeof route.id === 'string') validationIds.add(route.id)
+  }
+  for (const field of settings.customFields) validationIds.add(field.id)
+  let validationId = crypto.randomUUID()
+  while (validationIds.has(validationId)) validationId = crypto.randomUUID()
+  return validationId
 }
 
 /**
@@ -225,13 +232,21 @@ function prepareImportedMap(value: unknown): unknown {
   }
   if (!isRecord(normalized) || normalized.type !== 'cluster' || normalized.version !== 5) return normalized
   const layout = normalized.layout
-  if (!isRecord(layout)) return null
+  const cluster = normalized.cluster
+  const settings = normalized.objectFieldSettings
+  if (!isRecord(layout) || !isRecord(cluster) || !isObjectFieldSettings(settings)) return null
   const orbitRadii = normalizeOrbitRadii(layout.orbitRadii ?? {}, layout.orbitEllipseRadii ?? {})
   const orbitRotations = normalizeOrbitRotations(layout.orbitRotations ?? {})
   if (!orbitRadii || !orbitRotations) return null
   const legacyLayout: Record<string, unknown> = { ...layout, orbitRadii, orbitRotations, objectAngles: layout.objectAngles ?? {} }
   delete legacyLayout.orbitEllipseRadii
-  return migrateLegacyWorkspaceLocationKeys({ ...normalized, layout: legacyLayout })
+  const restored = restoreLocalWorkspace({
+    ...normalized,
+    id: clusterValidationId(cluster, settings),
+    layout: legacyLayout,
+  })
+  if (!restored) return null
+  return { ...normalized, version: restored.version, cluster: restored.cluster, layout: legacyLayout }
 }
 
 /**
@@ -347,6 +362,14 @@ function remapImportedSystem(
         ),
       }
       delete copy.legacyLocationKey
+      if (object.legacyZonePlacement) {
+        const retained = object.legacyZonePlacement
+        copy.legacyZonePlacement = {
+          ...retained,
+          systemId: ids.get(retained.systemId)!,
+          orbitId: retained.orbitId === null ? null : ids.get(retained.orbitId)!,
+        }
+      }
       return copy
     }),
     orbits: system.orbits.map((orbit): Orbit => orbit.hostId === null

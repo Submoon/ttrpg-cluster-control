@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
-import type { Point, StarSystem, SystemObject } from '../domain/workspace'
+import { createLocalWorkspace, setWorkspaceSystemFrame, updateWorkspaceObject, type LocalWorkspace, type Point, type StarSystem, type SystemObject } from '../domain/workspace'
+import { hasValidZonePlacements, retainLegacyZonePlacements, withoutChangedLegacyZonePlacements } from '../domain/workspace-zone-placement-compatibility'
 import {
   CONTINUOUS_MAP_LOCAL_ORIGIN,
   CONTINUOUS_MAP_SYSTEM_SCALE,
@@ -215,4 +216,28 @@ test('the shared projection accepts resolved detached geometry without a source 
   expect(projected.anchor).toEqual({ x: 300, y: 200 })
   expect(projected.objects[0]?.scenePosition).toEqual({ x: 410, y: 130 })
   expect(projected.orbits[0]?.sceneRadii).toEqual({ horizontal: 45, vertical: 17.5 })
+})
+
+test('legacy exceptions apply to the same effective Orbit placement and survive JSON persistence @pure', () => {
+  const initial = createLocalWorkspace('Legacy cluster', 'Aster Reach')
+  const system = { ...systemWithContents(), id: initial.cluster.systems[0]!.id }
+  const withFrame = setWorkspaceSystemFrame({
+    ...initial,
+    cluster: { ...initial.cluster, systems: [system] },
+    layout: { ...initial.layout, ...layout, orbitRadii: { ...layout.orbitRadii, inner: { horizontal: 400, vertical: 72 } } },
+  }, system.id, { left: 48, top: 48, right: 48, bottom: 48 })
+  const legacy = retainLegacyZonePlacements(withFrame)
+  const roundTrip = JSON.parse(JSON.stringify(legacy)) as LocalWorkspace
+  const outer = roundTrip.cluster.systems[0]!.objects.find(object => object.id === offCenterStar.id)
+  expect(outer?.legacyZonePlacement).toMatchObject({ systemId: system.id, orbitId: null })
+  expect(roundTrip.cluster.systems[0]!.objects.some(object => object.legacyZonePlacement?.orbitId)).toBe(true)
+  expect(hasValidZonePlacements(roundTrip)).toBe(true)
+  expect(hasValidZonePlacements(withFrame)).toBe(false)
+  const changed = updateWorkspaceObject(roundTrip, system.id, offCenterStar.id, {
+    placement: { kind: 'system', x: 2.4, y: -0.35 },
+  })
+  const adjusted = withoutChangedLegacyZonePlacements(changed)
+  const moved = adjusted.cluster.systems[0]!.objects.find(object => object.id === offCenterStar.id)
+  expect(moved).not.toHaveProperty('legacyZonePlacement')
+  expect(hasValidZonePlacements(adjusted)).toBe(false)
 })

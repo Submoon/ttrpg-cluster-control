@@ -1,3 +1,4 @@
+import { fitZoneObjectWorkspace } from '../../utils/zone-object-branch'
 /** Owns persistent Add intent and one transient, single-use completion token. */
 import { computed, ref, shallowRef, watch, type Ref } from 'vue'
 import {
@@ -1228,7 +1229,7 @@ export function useSystemCreationWorkflows({
               }
               candidate = { ...candidate, layout: { ...candidate.layout, objectAngles } }
             }
-            return candidate
+            return fitZoneObjectWorkspace(latestWorkspace, candidate, latestSystem.id, object.id)
           }
 
           const rotation = preview.rotation

@@ -45,7 +45,15 @@ export function exportStarSystem(workspace: LocalWorkspace, systemId: string): S
     format: 'ttrpg-cluster-control-map',
     version: 5,
     type: 'system',
-    system,
+    system: {
+      ...system,
+      objects: system.objects.map(object => {
+        if (object.legacyZonePlacement === undefined) return object
+        const copy = { ...object }
+        delete copy.legacyZonePlacement
+        return copy
+      }),
+    },
     objectFieldSettings: workspace.objectFieldSettings,
     layout: {
       version: 1,

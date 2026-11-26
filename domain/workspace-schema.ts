@@ -27,6 +27,7 @@ import {
 } from './workspace-orbits'
 import { jumpPointsInCluster } from './workspace-cluster'
 import { clusterObjects, migrateLegacyWorkspaceLocationKeys, validLocationKeyAssignments } from './workspace-location-keys'
+import { hasValidZonePlacements, retainLegacyZonePlacements } from './workspace-zone-placement-compatibility'
 import {
   CLUSTER_SCENE_COORDINATE_LIMIT,
   clusterSystemPosition,
@@ -524,7 +525,9 @@ function isCurrentOrbitRotations(value: unknown): boolean {
  * @returns True only when objectFieldSettings is present and the stored workspace validation succeeds.
  */
 export function isLocalWorkspace(value: unknown): value is LocalWorkspace {
-  return isStoredLocalWorkspace(value) && value.objectFieldSettings !== undefined
+  if (!isStoredLocalWorkspace(value) || value.objectFieldSettings === undefined) return false
+  const workspace = normalizedWorkspaceLayout(value)
+  return workspace !== null && hasValidZonePlacements(workspace)
 }
 
 /**
@@ -833,6 +836,15 @@ export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
     return null
   }
 
+  const workspace = normalizedWorkspaceLayout(current)
+  if (!workspace) return null
+  if (version === 6) return hasValidZonePlacements(workspace) ? workspace : null
+  if (clusterObjects(workspace.cluster).some(object => Object.hasOwn(object, 'legacyZonePlacement'))) return null
+  const migrated = retainLegacyZonePlacements(workspace)
+  return hasValidZonePlacements(migrated) ? migrated : null
+}
+
+function normalizedWorkspaceLayout(current: StoredLocalWorkspace): LocalWorkspace | null {
   const orbitRadii = normalizeOrbitRadii(
     current.layout.orbitRadii ?? {},
     current.layout.orbitEllipseRadii ?? {},

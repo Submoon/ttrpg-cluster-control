@@ -1,4 +1,5 @@
 import type { LocalWorkspace } from '../../domain/workspace'
+import { withoutChangedLegacyZonePlacements } from '../../domain/workspace-zone-placement-compatibility'
 import { createWorkspaceSnapshot } from '../../utils/workspace-storage'
 import {
   createEmptyWorkspaceHistory,
@@ -177,7 +178,7 @@ function createWorkspaceMutationPipeline({
         let after: LocalWorkspace
         try {
           before = createWorkspaceSnapshot(current)
-          after = createWorkspaceSnapshot(request.prepare(before))
+          after = createWorkspaceSnapshot(withoutChangedLegacyZonePlacements(request.prepare(before)))
         } catch (error) {
           return rejected('invalid', errorText(error))
         }
