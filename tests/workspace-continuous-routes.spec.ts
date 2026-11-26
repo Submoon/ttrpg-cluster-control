@@ -226,9 +226,10 @@ test('continuous routes support clipped selection, guarded inspection and author
   await test.info().attach('route-object-landing', { body: await map.screenshot(), contentType: 'image/png' })
   await page.mouse.up()
   await expect(ghost).toHaveCount(0)
-  await waitForWorkspaceSaved(page)
-  const accepted = await existing.boundingBox()
-  if (!accepted) throw new Error('The moved route object needs a visible mark.')
   // The preview and the accepted mark share the same map framing and should align within a CSS pixel.
-  expect(Math.hypot(accepted.x - proposed.x, accepted.y - proposed.y)).toBeLessThan(1)
+  await expect.poll(async () => {
+    const accepted = await existing.boundingBox()
+    return accepted ? Math.hypot(accepted.x - proposed.x, accepted.y - proposed.y) : Number.POSITIVE_INFINITY
+  }).toBeLessThan(1)
+  await waitForWorkspaceSaved(page)
 })

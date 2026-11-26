@@ -3642,8 +3642,12 @@ function beginSingleObjectDrag(
 }
 
 function canDragRouteObject(target: RouteDragSource): boolean {
+  return !props.keyboardOwnedOverlayOpen && hasRouteObjectDragContext(target)
+}
+
+function hasRouteObjectDragContext(target: RouteDragSource): boolean {
   if (props.presentation || props.standaloneImportPlacementEnabled || props.moveTargeting || props.clusterMoveTargeting
-    || props.clusterAddType || props.creationType || props.clusterChooserOpen || props.keyboardOwnedOverlayOpen
+    || props.clusterAddType || props.creationType || props.clusterChooserOpen
     || props.routeObjectEditingId === target.objectId) return false
   const inspected = props.inspectedTarget
   const ownsSelection = props.mode === 'move' || (props.mode === 'select' && inspected?.kind === 'route-object'
@@ -3730,7 +3734,8 @@ function finishRouteObjectDrag(cancelled: boolean): void {
     kind: 'move',
     objectId: drag.objectId,
     workspaceSnapshot: drag.workspaceSnapshot,
-  }, () => generation === routeDragGeneration && props.mode === drag.mode && canDragRouteObject(drag))
+  // The live drag and a history capacity confirmation both suppress map keyboard input.
+  }, () => generation === routeDragGeneration && props.mode === drag.mode && hasRouteObjectDragContext(drag))
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
@@ -4673,7 +4678,7 @@ watch(() => props.inspectedTarget, () => {
   if ((activeAnchorDrag && !isSelectedSystem(activeAnchorDrag.systemId))
     || (activeSystemFrameResize && !canResizeSystemFrame(activeSystemFrameResize.systemId))
     || (activeOrbitGesture && !canEditOrbit(activeOrbitGesture.systemId, activeOrbitGesture.orbitId))
-    || (activeRouteObjectDrag && !canDragRouteObject(activeRouteObjectDrag))) {
+    || (activeRouteObjectDrag && !hasRouteObjectDragContext(activeRouteObjectDrag))) {
     cancelActiveGesture()
   }
 }, { flush: 'sync' })
