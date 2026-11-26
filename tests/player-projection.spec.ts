@@ -7,6 +7,7 @@ import {
   addStarSystem,
   createLocalWorkspace,
   replaceWorkspaceSystem,
+  restoreLocalWorkspace,
   updateChartDetails,
 } from '../domain/workspace'
 import { projectPlayerContinuousMap } from '../utils/player-continuous-map-projection'
@@ -206,7 +207,7 @@ test('a shared route publishes only admitted branch content and reorients progre
   branch.objects = [
     { ...root, publication: 'known-type' },
     { ...occupant, publication: 'unknown' },
-    { ...root, id: 'private-cargo', name: 'Secret cargo', publication: 'hidden' },
+    { ...root, id: 'private-cargo', locationKey: 'VE-77', name: 'Secret cargo', publication: 'hidden' },
   ]
   const document = projectPlayerCluster(workspace)
   expect(document.routes).toMatchObject([{
@@ -236,10 +237,11 @@ test('a shared route publishes only admitted branch content and reorients progre
   const variant = privateVariant.cluster.routeContents[route.id]!
   variant.orbits.push({ id: 'hidden-orbit', order: 1, hostId: 'private-cargo' })
   variant.objects.push({
-    ...occupant, id: 'hidden-occupant', placement: { kind: 'orbit', orbitId: 'hidden-orbit' }, publication: 'hidden',
+    ...occupant, id: 'hidden-occupant', locationKey: 'AN-77', placement: { kind: 'orbit', orbitId: 'hidden-orbit' }, publication: 'hidden',
   })
   privateVariant.layout.orbitRadii['hidden-orbit'] = { horizontal: 80_000, vertical: 50_000 }
   privateVariant.layout.systemFrames = { [workspace.cluster.systems[0]!.id]: { left: 1024, right: 1024, top: 1024, bottom: 1024 } }
+  expect(restoreLocalWorkspace(privateVariant)).not.toBeNull()
   const projectedVariant = projectPlayerCluster(privateVariant)
   expect(serializePlayerJson(projectedVariant)).toBe(json)
   expect(projectPlayerContinuousMap(projectedVariant).bounds).toEqual(projectPlayerContinuousMap(document).bounds)

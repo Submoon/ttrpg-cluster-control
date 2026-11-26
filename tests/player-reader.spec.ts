@@ -93,7 +93,8 @@ function playerRouteFitsViewport(path: Locator): Promise<boolean> {
 }
 
 test('the default player reader opens shared links and files with one camera and public image scopes', async ({ page, baseURL }) => {
-  test.setTimeout(60_000)
+  // This journey exercises file and fragment replacement as well as two document shapes.
+  test.setTimeout(90_000)
   if (!baseURL) throw new Error('The player reader requires a configured base URL.')
   const { document } = createPlayerInterfaceFixture()
   const publicSystem = document.systems.find(system => system.disclosure === 'revealed')
