@@ -1,10 +1,11 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { createLocalWorkspace, createSystemObject, updateWorkspaceObject } from '../domain/workspace'
 import { objectDraftValuesFor } from '../composables/editor-workflows/entity-draft-values'
 import { projectObjectDraft, validateObjectDraft } from '../composables/editor-workflows/entity-draft-validation'
 
 test('draft projection includes current custom definitions and retained orphan values @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const system = workspace.cluster.systems[0]!
   const star = system.objects[0]!
   const object = {
@@ -38,7 +39,7 @@ test('draft projection includes current custom definitions and retained orphan v
 })
 
 test('applying an object draft keeps a separately committed free-map position @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const system = workspace.cluster.systems[0]!
   const object = system.objects[0]!
   const initial = objectDraftValuesFor(object, workspace.objectFieldSettings)
@@ -63,7 +64,7 @@ test('applying an object draft keeps a separately committed free-map position @p
 })
 
 test('object draft applies a marker color and reset removes the override @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const system = workspace.cluster.systems[0]!
   const object = system.objects[0]!
   const initial = objectDraftValuesFor(object, workspace.objectFieldSettings)

@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import {
-  createLocalWorkspace,
   createOrbit,
   createSystemObject,
   exportStarSystem,
@@ -27,7 +27,7 @@ function incomingSystem(): {
   objectIds: string[]
   orbitId: string
 } {
-  const source = createLocalWorkspace('Incoming Reach', 'Incoming Vesper')
+  const source = createWorkspaceWithPrimaryStar('Incoming Reach', 'Incoming Vesper')
   const sourceSystem = source.cluster.systems[0]
   if (!sourceSystem) throw new Error('The import fixture needs its initial star system.')
 

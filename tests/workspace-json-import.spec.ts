@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import {
   addStarSystem,
   createJumpRoute,
@@ -212,7 +213,7 @@ function importedCopyEntityIds(prepared: ReturnType<typeof prepareJsonImport>): 
 }
 
 function workspaceWithOriginalRecords(): LocalWorkspace {
-  const workspace = createLocalWorkspace('Local Reach', 'Home System')
+  const workspace = createWorkspaceWithPrimaryStar('Local Reach', 'Home System')
   const home = workspace.cluster.systems[0]
   if (!home) throw new Error('The local workspace is missing its initial system.')
   const primaryStar = home.objects.find(object => object.subtype === 'star')

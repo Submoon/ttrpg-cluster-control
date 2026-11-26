@@ -1,6 +1,7 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { ref, shallowRef } from 'vue'
-import { createLocalWorkspace, type LocalWorkspace } from '../domain/workspace'
+import { type LocalWorkspace } from '../domain/workspace'
 import { resolveSystemObjectHistoryTarget } from '../domain/workspace'
 import { useSystemObjectTransferWorkflow } from '../composables/editor-workflows/useSystemObjectTransferWorkflow'
 import {
@@ -9,7 +10,7 @@ import {
 } from '../composables/editor-workflows/workspace-mutations'
 
 function transferWorkspace(): { workspace: LocalWorkspace; sourceSystemId: string; destinationSystemId: string; rootObjectId: string } {
-  const base = createLocalWorkspace('Kestrel Reach', 'Source')
+  const base = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Source')
   const source = base.cluster.systems[0]!
   const root = source.objects[0]!
   const destination = { ...source, id: 'destination', name: 'Destination', objects: [], orbits: [] }

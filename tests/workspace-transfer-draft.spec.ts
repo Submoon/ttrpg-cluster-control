@@ -1,10 +1,11 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { ref } from 'vue'
-import { createLocalWorkspace, type LocalWorkspace, type SystemObject } from '../domain/workspace'
+import { type LocalWorkspace, type SystemObject } from '../domain/workspace'
 import { useSystemObjectTransferDraft } from '../composables/useSystemObjectTransferDraft'
 
 function transferWorkspace(): { workspace: LocalWorkspace; sourceId: string; destinationId: string; rootId: string } {
-  const base = createLocalWorkspace('Kestrel Reach', 'Source')
+  const base = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Source')
   const sourceBase = base.cluster.systems[0]!
   const root = sourceBase.objects[0]!
   const source = { ...sourceBase, objects: [{ ...root, locationKey: 'STAR-01' }] }

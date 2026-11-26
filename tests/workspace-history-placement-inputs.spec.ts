@@ -1,3 +1,4 @@
+import { addZoneWithPrimaryStar, createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { computed, effectScope, ref, shallowRef, watchEffect } from 'vue'
@@ -274,6 +275,7 @@ test('armed Cluster Add System stays history-safe across Undo and Redo without d
   const nearbyOpenPoint = { x: existing.x + 0.08, y: existing.y }
   expect(await placement.addSystemAt(nearbyOpenPoint)).toBe(true)
   expect(harness.workspace.value?.cluster.systems).toHaveLength(2)
+  expect(harness.workspace.value?.cluster.systems[1]).toMatchObject({ name: 'New Zone 2', objects: [], orbits: [] })
   expect(placement.clusterAddType.value).toBe('system')
   expect(placement.hasPendingHistoryInput.value).toBe(false)
   expect(await harness.history.undo()).toMatchObject({ status: 'applied' })
@@ -329,7 +331,7 @@ test('armed object Add blocks dirty inputs and unresolved candidate choices but 
 
 test('automatic Orbit Add uses the nearest compact radius around implicit and custom rings @pure', async () => {
   setActivePinia(createPinia())
-  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const system = initial.cluster.systems[0]!
   const hostId = system.objects[0]!.id
   const first = createOrbit(system, hostId)
@@ -364,7 +366,7 @@ test('automatic Orbit Add uses the nearest compact radius around implicit and cu
 
 test('automatic Orbit Add rounds a fractional gap outward before saving @pure', async () => {
   setActivePinia(createPinia())
-  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const system = initial.cluster.systems[0]!
   const hostId = system.objects[0]!.id
   const existing = createOrbit(system, hostId)
@@ -394,7 +396,7 @@ test('automatic Orbit Add rounds a fractional gap outward before saving @pure', 
 
 test('Orbit Add validates blank form inputs and restores their defaults on a map click @pure', async () => {
   setActivePinia(createPinia())
-  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const hostId = initial.cluster.systems[0]!.objects[0]!.id
   const harness = createHistoryHarness(initial)
   const controller = createSystemCreationController(harness.workspace, harness.history)
@@ -430,7 +432,7 @@ test('Orbit Add validates blank form inputs and restores their defaults on a map
 
 test('repeating unchanged numeric Orbit Placement rejects duplicates without altering displayed values @pure', async () => {
   setActivePinia(createPinia())
-  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const hostId = initial.cluster.systems[0]!.objects[0]!.id
   const harness = createHistoryHarness(initial)
   const controller = createSystemCreationController(harness.workspace, harness.history)
@@ -480,7 +482,7 @@ test('Orbit drag radius snapping merges overlapping open gaps and favors the out
 
 test('Add Orbit drag reserves the nearest frontmost host and commits its exact circular preview once @pure', async () => {
   setActivePinia(createPinia())
-  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const sourceSystem = initial.cluster.systems[0]!
   const frontmost = createSystemObject(sourceSystem, 'planet')
   frontmost.placement = { ...sourceSystem.objects[0]!.placement }
@@ -546,7 +548,7 @@ test('Add Orbit drag reserves the nearest frontmost host and commits its exact c
 
 test('adding an Orbit on the Cluster map uses the chosen system without changing the inspected system @pure', async () => {
   setActivePinia(createPinia())
-  const initial = addStarSystem(createLocalWorkspace('Kestrel Reach', 'Vesper')).workspace
+  const initial = addZoneWithPrimaryStar(createLocalWorkspace('Kestrel Reach', 'Vesper')).workspace
   const [inspected, owner] = initial.cluster.systems
   const host = owner!.objects[0]!
   const harness = createHistoryHarness(initial)
@@ -576,7 +578,7 @@ test('adding an Orbit on the Cluster map uses the chosen system without changing
 
 test('Orbit drag cancellation and workspace changes discard the captured preview @pure', async () => {
   setActivePinia(createPinia())
-  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const system = initial.cluster.systems[0]!
   const host = system.objects[0]!
   const geometry = {
@@ -622,7 +624,7 @@ test('Orbit drag cancellation and workspace changes discard the captured preview
 
 test('a clicked Orbit owner inherits edited geometry and calculates untouched radii from that system @pure', async () => {
   setActivePinia(createPinia())
-  const initial = addStarSystem(createLocalWorkspace('Kestrel Reach', 'Vesper')).workspace
+  const initial = addZoneWithPrimaryStar(createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')).workspace
   const [inspected, owner] = initial.cluster.systems
   const host = owner!.objects[0]!
   owner!.orbits.push(createOrbit(owner!, host.id))

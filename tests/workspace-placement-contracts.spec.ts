@@ -1,6 +1,6 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import {
-  createLocalWorkspace,
   replaceWorkspaceSystem,
   updateWorkspaceObject,
   type LocalWorkspace,
@@ -19,7 +19,7 @@ interface PlacementFixture {
 }
 
 function createPlacementFixture(): PlacementFixture {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const baseSystem = workspace.cluster.systems[0]!
   const host = baseSystem.objects[0]!
   const sourceOrbitId = 'orbit-source'

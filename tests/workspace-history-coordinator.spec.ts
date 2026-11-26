@@ -1,3 +1,4 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { createLocalWorkspace, type LocalWorkspace } from '../domain/workspace'
 import { createWorkspaceSnapshot } from '../utils/workspace-storage'
@@ -81,7 +82,7 @@ async function applyRename(
 }
 
 test('saved snapshot traversal restores exact identities and a new accepted edit drops Redo @pure', async () => {
-  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const systemId = initial.cluster.systems[0]?.id
   const objectId = initial.cluster.systems[0]?.objects[0]?.id
   if (!systemId || !objectId) throw new Error('The workspace fixture is missing its initial system and object.')

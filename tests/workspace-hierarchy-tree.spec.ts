@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test as freshTest, type Locator } from './fixtures'
 import {
-  createSingleSystemWorkspace,
+  createSingleSystemWorkspaceWithPrimaryStar,
   type DownloadWindow,
   editMapObject,
   exposedContinuousObjectHitPoint,
@@ -48,7 +48,7 @@ async function downloadJsonFromFile(
 }
 
 freshTest('Select distinguishes a single object drag from a selection click', async ({ page }) => {
-  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspaceWithPrimaryStar(page, {
     viewport: { width: 1440, height: 900 },
   })
   const star = wardenObjectMark(page, systemId, primaryObjectId)

@@ -1,5 +1,5 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
-import { createLocalWorkspace } from '../domain/workspace'
 import { fromNormalizedMapPoint } from '../domain/workspace-map-coordinates'
 import { resolveSystemObjectTransferMapPlacement } from '../utils/system-object-transfer-map-placement'
 import {
@@ -12,7 +12,7 @@ import {
 } from '../utils/system-map-geometry'
 
 test('map placement retains the selected destination Orbit and derives its elliptical angle from the pointer @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Source')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Source')
   const source = workspace.cluster.systems[0]!
   const destination = {
     ...source,
@@ -53,7 +53,7 @@ test('map placement retains the selected destination Orbit and derives its ellip
 })
 
 test('map placement keeps a chosen Free destination and accepts finite off-envelope coordinates @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Source')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Source')
   const source = workspace.cluster.systems[0]!
   const pointerPoint = { x: 1.08, y: -0.12 }
   const placement = resolveSystemObjectTransferMapPlacement(

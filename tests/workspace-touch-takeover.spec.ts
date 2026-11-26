@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from './fixtures'
 import {
   captureMapExportBlobs,
   centerWorkspaceSelection,
-  createSingleSystemWorkspace,
+  createSingleSystemWorkspaceWithPrimaryStar,
   dockAction,
   downloadJson,
   exposedContinuousObjectHitPoint,
@@ -142,7 +142,7 @@ async function readWorkspaceRecords(page: Page): Promise<StoredWorkspaceRecords>
 
 test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and pans only the view', async ({ page }) => {
   await captureMapExportBlobs(page)
-  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspaceWithPrimaryStar(page, {
     viewport: { width: 390, height: 844 },
   })
   await waitForWorkspaceSaved(page)

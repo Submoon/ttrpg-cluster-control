@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { createWorkspaceSnapshot } from '../utils/workspace-storage'
 import {
   addStarSystem,
@@ -21,7 +22,7 @@ test('new systems start with known-type publication and a generic player title @
 })
 
 test('version 5 workspaces reject missing publication fields and unsupported versions @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const missingMode = structuredClone(workspace) as unknown as Record<string, unknown>
   const cluster = missingMode.cluster as { systems: Array<Record<string, unknown>> }
   delete cluster.systems[0]?.publication
@@ -62,7 +63,7 @@ test('version 5 workspaces reject missing publication fields and unsupported ver
 })
 
 test('version 5 cluster exports and v4 standalone exports preserve publication while v1/v2 imports use safe object defaults @pure', () => {
-  const source = createLocalWorkspace('Source Reach', 'Iria')
+  const source = createWorkspaceWithPrimaryStar('Source Reach', 'Iria')
   const sourceSystem = source.cluster.systems[0]!
   const published = updateChartDetails(source, sourceSystem.id, {
     clusterName: source.cluster.name,

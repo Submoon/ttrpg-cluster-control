@@ -13,6 +13,8 @@ async function expectOpenedWorkspace(
   const system = map.getByRole('button', { name: `Select ${systemName}`, exact: true })
   await expect(system).toHaveAccessibleName(`Select ${systemName}`)
   await expect(system).toBeVisible()
+  const hierarchy = page.getByRole('complementary', { name: 'Jump Cluster contents', exact: true })
+  await expect(hierarchy.getByText('0 records', { exact: true })).toBeVisible()
 }
 test('the product root creates and resumes a saved local workspace @preview-smoke', async ({ page }) => {
   await page.goto('/')

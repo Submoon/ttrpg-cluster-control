@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import {
   addCustomFieldDefinition,
-  createLocalWorkspace,
   createSystemObject,
   projectPlayerCluster,
   replaceWorkspaceSystem,
@@ -13,7 +13,7 @@ import type { FieldCondition } from '../utils/field-filter-matching'
 import { playerFieldFilterId, playerFieldFilterOptions, playerObjectMatchesFieldFilters } from '../utils/player-field-filters'
 
 test('revealed player objects contain only player text and permitted Field values @pure', () => {
-  const initial = createLocalWorkspace('Private Cluster Notes', 'Aster Reach')
+  const initial = createWorkspaceWithPrimaryStar('Private Cluster Notes', 'Aster Reach')
   const factionWorkspace = addCustomFieldDefinition(
     initial,
     'Faction',

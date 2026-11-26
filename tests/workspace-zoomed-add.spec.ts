@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures'
 import {
   centerWorkspaceSelection,
-  createSingleSystemWorkspace,
+  createSingleSystemWorkspaceWithPrimaryStar,
   hideWorkspaceInspector,
   selectCatalogueObjectButton,
   waitForWorkspaceSaved,
@@ -10,7 +10,7 @@ import {
 } from './helpers'
 
 test('zoom keeps the visibility badge close and Add accepts clear space beside an object @preview-smoke', async ({ page }) => {
-  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspaceWithPrimaryStar(page, {
     viewport: { width: 1440, height: 900 },
   })
   const map = wardenMap(page)
@@ -59,7 +59,7 @@ test('zoom keeps the visibility badge close and Add accepts clear space beside a
 })
 
 test('the Warden selection rings stay proportional to the star glyph at high zoom', async ({ page }) => {
-  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspaceWithPrimaryStar(page, {
     viewport: { width: 1440, height: 900 },
   })
   const star = wardenObjectMark(page, systemId, primaryObjectId)

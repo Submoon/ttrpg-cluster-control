@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import {
   captureMapExportBlobs,
@@ -319,7 +320,7 @@ test('workspace snapshots reject stale legacy routes instead of migrating the de
 })
 
 test('restoring a workspace removes legacy object targets without deleting values @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const system = workspace.cluster.systems[0]!
   const object = system.objects[0]!
   const fieldId = 'legacy-field'

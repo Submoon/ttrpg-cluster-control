@@ -1,7 +1,8 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRenderer, nextTick, ref } from 'vue'
-import { applySystemObjectTransfer, createLocalWorkspace, createOrbit, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
+import { applySystemObjectTransfer, createOrbit, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
 import type { MapNavigationHandle, SaveState, SearchPresentationSettlement, SystemMapHandle } from '../composables/editor-workflows/types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
@@ -86,7 +87,7 @@ function createSearchHarness(
 ) {
   const restoreBrowserBoundary = installBrowserLifecycleBoundary(compact)
   setActivePinia(createPinia())
-  const initialWorkspace = createLocalWorkspace(clusterName, systemName)
+  const initialWorkspace = createWorkspaceWithPrimaryStar(clusterName, systemName)
   if (additionalSystemName) {
     const firstSystem = initialWorkspace.cluster.systems[0]
     if (!firstSystem) throw new Error('The local workspace did not create its first system.')

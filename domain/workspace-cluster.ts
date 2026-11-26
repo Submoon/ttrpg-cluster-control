@@ -24,28 +24,17 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 type JumpRouteDetails = DistributiveOmit<JumpRoute, 'id' | 'name' | 'playerShared'>
 
 /**
- * Builds a named system with its generated identity and one centered primary star.
- * @param name Name to validate for the new system.
- * @returns New system data; the caller supplies its cluster membership and layout position.
+ * Builds an empty Zone with its generated identity.
+ * @param name Name to validate for the new Zone.
+ * @returns An empty Zone ready for the caller to place in the Cluster.
  * @throws If the name is blank or exceeds the domain name limit.
  */
-function initialStarSystem(name: string): StarSystem {
+function initialZone(name: string): StarSystem {
   return {
     id: crypto.randomUUID(),
     name: validName(name, 'Star system name'),
     publication: 'known-type',
-    objects: [{
-      id: crypto.randomUUID(),
-      publication: 'known-type',
-      family: 'CelestialBody',
-      subtype: 'star',
-      locationKey: 'A',
-      name: 'Primary Star',
-      description: '',
-      playerText: '',
-      playerFieldMasks: [],
-      placement: { kind: 'system', x: 0.5, y: 0.5 },
-    }],
+    objects: [],
     orbits: [],
   }
 }
@@ -72,7 +61,7 @@ export function initialClusterSystemPosition(index: number): Point {
  * @throws If either name is blank or exceeds the domain name limit.
  */
 export function createLocalWorkspace(clusterName: string, systemName: string): LocalWorkspace {
-  const system = initialStarSystem(systemName)
+  const system = initialZone(systemName)
 
   return {
     version: 5,
@@ -104,9 +93,9 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
  */
 export function addStarSystem(
   workspace: LocalWorkspace,
-  name = `New System ${workspace.cluster.systems.length + 1}`,
+  name = `New Zone ${workspace.cluster.systems.length + 1}`,
 ): { workspace: LocalWorkspace; system: StarSystem } {
-  const system = initialStarSystem(name)
+  const system = initialZone(name)
   const index = workspace.cluster.systems.length
   return {
     system,

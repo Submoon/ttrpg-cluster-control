@@ -1037,7 +1037,7 @@ export type SingleSystemWorkspaceOptions = {
 export async function createSingleSystemWorkspace(
   page: import('@playwright/test').Page,
   options: SingleSystemWorkspaceOptions = {},
-): Promise<{ clusterName: string; systemName: string; systemId: string; primaryObjectId: string }> {
+): Promise<{ clusterName: string; systemName: string; systemId: string }> {
   const clusterName = options.clusterName ?? 'Kestrel Reach'
   const systemName = options.systemName ?? 'Vesper'
   if (options.viewport) await page.setViewportSize(options.viewport)
@@ -1075,11 +1075,26 @@ export async function createSingleSystemWorkspace(
 
   await expect(page.getByRole('group', { name: 'Map interaction mode' })
     .getByRole('button', { name: 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  return { clusterName, systemName, systemId }
+}
+
+/** Creates and places the Star required by a browser fixture through the catalogue. */
+export async function createSingleSystemWorkspaceWithPrimaryStar(
+  page: import('@playwright/test').Page,
+  options: SingleSystemWorkspaceOptions = {},
+): Promise<{ clusterName: string; systemName: string; systemId: string; primaryObjectId: string }> {
+  const workspace = await createSingleSystemWorkspace(page, options)
+  const { systemId } = workspace
+  await (await selectCatalogueObjectButton(page, 'star')).click()
+  await dismissAddChooser(page)
+  await clickWardenSystemPoint(page, systemId, { x: 0.5, y: 0.5 })
+  const map = wardenMap(page)
   const primaryObjects = map.locator(`.continuous-warden-object${domainIdentitySelector('data-system-id', systemId)}`)
   await expect(primaryObjects).toHaveCount(1)
   const primaryObjectId = await primaryObjects.first().getAttribute('data-object-id')
   if (!primaryObjectId) throw new Error('The primary Star is missing its domain identity.')
-  return { clusterName, systemName, systemId, primaryObjectId }
+  await quitSystemAdd(page)
+  return { ...workspace, primaryObjectId }
 }
 
 /** Reaches the public minimum zoom without assuming a particular starting level. */

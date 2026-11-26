@@ -6,6 +6,7 @@ import {
   createSystemObject,
   exportJumpCluster,
 } from '../domain/workspace'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from './fixtures'
 import {
   addClusterSystem,
@@ -114,7 +115,7 @@ test('create, name, move, resize, and reload a Warden system', async ({ page }) 
 })
 
 function createTransferWorkspace() {
-  const initial = createLocalWorkspace('Halo Transfer', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Halo Transfer', 'Vesper')
   const source = initial.cluster.systems[0]!
   const root = { ...createSystemObject(source, 'planet'), name: 'Herma' }
   const sourceWithRoot = { ...source, objects: [...source.objects, root] }
