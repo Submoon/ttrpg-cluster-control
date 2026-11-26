@@ -100,6 +100,8 @@ export interface SystemObject {
   family: ObjectFamily
   subtype: string
   locationKey: string
+  /** Exact assignment kept from a campaign that admitted the same key on several objects. */
+  legacyLocationKey?: { objectId: string; key: string }
   name: string
   description: string
   playerText: string
@@ -197,7 +199,7 @@ export interface JumpPointReference {
  * Durable local campaign map; temporary view/zoom state is intentionally kept outside this shape.
  */
 export interface LocalWorkspace {
-  version: 5
+  version: 6
   id: string
   cluster: JumpCluster
   layout: {
@@ -232,7 +234,7 @@ export interface ExportedLayout {
 
 export type JumpClusterExport = {
   format: 'ttrpg-cluster-control-map'
-  version: 5
+  version: 6
   type: 'cluster'
   cluster: JumpCluster
   objectFieldSettings: ObjectFieldSettings
@@ -241,7 +243,7 @@ export type JumpClusterExport = {
 
 export type StarSystemExport = {
   format: 'ttrpg-cluster-control-map'
-  version: 4
+  version: 5
   type: 'system'
   system: StarSystem
   objectFieldSettings: ObjectFieldSettings
@@ -256,6 +258,7 @@ export interface JsonImportSummary {
   orbits: number
   routes: number
   customFields: number
+  locationKeyReplacements: Array<{ name: string; system: string; originalKey: string; replacementKey: string }>
   idCollisions: Array<{ entity: string; name: string; id: string }>
   possibleMatches: Array<{ entity: string; name: string; existingSystem: string; reason: string }>
 }

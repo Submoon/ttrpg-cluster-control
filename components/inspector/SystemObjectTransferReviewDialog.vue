@@ -2,7 +2,7 @@
   <UModal
     v-model:open="dialogOpen"
     title="Change system"
-    description="Choose the destination, placement, keys, and relationship changes for this hosted branch."
+    description="Choose the destination and placement, then review relationship changes for this hosted branch."
     :dismissible="!props.session?.confirming && !props.session?.placingOnMap"
     :content="{ onOpenAutoFocus: focusFirstControl, onCloseAutoFocus: restoreFocus }"
     :ui="{
@@ -108,29 +108,7 @@
           <ul class="m-0 grid gap-2 pl-5">
             <li v-for="objectId in props.session.movedObjectIds" :key="objectId" class="grid gap-1 break-words">
               <template v-if="objectById.get(objectId)">
-                <span>
-                  {{ objectById.get(objectId)?.name }}
-                  <span v-if="!conflictById.has(objectId)"> · {{ props.session.locationKeys.get(objectId) }} (kept)</span>
-                </span>
-                <label v-if="conflictById.has(objectId)" class="grid gap-1 text-sm">
-                  Replacement Location key for {{ objectById.get(objectId)?.name }}
-                  <input
-                    class="workspace-control min-h-10 rounded-md px-3"
-                    :aria-invalid="props.session.validationErrors.has(objectId)"
-                    :value="props.session.locationKeys.get(objectId) ?? ''"
-                    :disabled="props.session.confirming || props.session.stale"
-                    @input="updateLocationKey(objectId, $event)"
-                  >
-                </label>
-                <p v-if="conflictById.has(objectId)" class="inspector-intro m-0">
-                  Current key: {{ conflictById.get(objectId)?.currentKey }}
-                </p>
-                <p v-if="props.session.validationErrors.get(objectId)" class="m-0 text-sm text-[var(--status-error)]" role="alert">
-                  {{ props.session.validationErrors.get(objectId) }}
-                </p>
-                <p v-else-if="conflictById.has(objectId)" class="inspector-intro m-0">
-                  Suggested: {{ conflictById.get(objectId)!.suggestedKey }}
-                </p>
+                <span>{{ objectById.get(objectId)?.name }} · {{ objectById.get(objectId)?.locationKey }}</span>
               </template>
               <span v-else>{{ objectId }} (object no longer available)</span>
             </li>
@@ -168,7 +146,7 @@
           v-else-if="props.session.stale"
           color="warning"
           variant="subtle"
-          description="The workspace changed after this review. Close this review and start again to confirm the current placement, keys, and relationships."
+          description="The workspace changed after this review. Close this review and start again to confirm the current placement and relationships."
           role="status"
         />
         <UAlert
@@ -239,8 +217,6 @@ const eligibleDestinationOrbits = computed(() => {
   if (!system || !rootObjectId) return []
   return system.orbits.filter(orbit => canPlaceObjectInOrbit(system, rootObjectId, orbit.id))
 })
-const conflictById = computed(() => new Map((props.session?.review?.keyConflicts ?? [])
-  .map(conflict => [conflict.objectId, conflict])))
 const objectById = computed(() => new Map((props.session?.previewWorkspace?.cluster.systems
   .find(system => system.id === props.session?.destinationSystemId)?.objects ?? [])
   .map(object => [object.id, object])))
@@ -380,16 +356,6 @@ function updateOrbitAngle(event: Event): void {
       angle: parseNumberInput(event),
     })
   }
-}
-
-function updateLocationKey(objectId: string, event: Event): void {
-  if (!props.session) return
-  emit('intent', {
-    kind: 'set-location-key',
-    sessionId: props.session.sessionId,
-    objectId,
-    value: (event.target as HTMLInputElement).value,
-  })
 }
 
 function orbitHostName(orbit: Orbit): string {

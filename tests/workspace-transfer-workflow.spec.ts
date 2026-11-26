@@ -153,15 +153,28 @@ test('a drop in another system publishes the transfer and starting frame as one 
   }
 })
 
-test('a drop with a conflicting key keeps its chosen location in review until accepted @pure', async () => {
+test('a drop that clears a Jump Route attachment keeps its chosen location in review until accepted @pure', async () => {
   const harness = transferHarness()
   const workspace = harness.workspace.value
   const [source, destination] = workspace.cluster.systems
   if (!source || !destination || !source.objects[0]) throw new Error('Expected a source object and two systems.')
-  const existing = { ...source.objects[0], id: 'destination-occupant' }
+  const root = { ...source.objects[0], family: 'JumpPoint' as const, subtype: 'jump-point' }
+  const route = {
+    id: 'transfer-route',
+    jumpLevel: 1,
+    fromSystemId: source.id,
+    fromPointId: root.id,
+    toSystemId: destination.id,
+    toPointId: null,
+    playerShared: false,
+  }
   const before = {
     ...workspace,
-    cluster: { ...workspace.cluster, systems: [source, { ...destination, objects: [existing] }] },
+    cluster: {
+      ...workspace.cluster,
+      systems: [{ ...source, objects: [root, ...source.objects.slice(1)] }, destination],
+      routes: [route],
+    },
   }
   harness.workspace.value = before
   const placement = { kind: 'system' as const, x: 0.61, y: 0.39 }
@@ -176,10 +189,10 @@ test('a drop with a conflicting key keeps its chosen location in review until ac
     const review = harness.workflow.session.value
     expect(review?.open).toBe(true)
     expect(review?.placement).toEqual(placement)
-    expect(review?.review?.keyConflicts).toHaveLength(1)
+    expect(review?.review?.detachedRouteAttachments).toHaveLength(1)
     expect(harness.publishCount).toBe(0)
     expect(harness.workspace.value).toBe(before)
-    if (!review) throw new Error('The conflict needs an explicit transfer review.')
+    if (!review) throw new Error('The route change needs an explicit transfer review.')
     const result = await harness.workflow.handleIntent({ kind: 'apply', sessionId: review.sessionId })
     expect(result?.status).toBe('applied')
     expect(harness.publishCount).toBe(1)

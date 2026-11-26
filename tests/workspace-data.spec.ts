@@ -215,7 +215,7 @@ test('version 4 route restoration infers systems and preserves route identity an
   const restored = restoreLocalWorkspace(legacy)
 
   expect(restored).toMatchObject({
-    version: 5,
+    version: 6,
     cluster: {
       routes: [
         {
