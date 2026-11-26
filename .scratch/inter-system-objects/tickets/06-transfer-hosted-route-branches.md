@@ -1,6 +1,6 @@
 ---
 title: Transfer hosted branches between Zones and routes
-status: in-progress
+status: closed
 assignee: Codex
 type: implementation
 specification: ../spec.md
@@ -42,6 +42,8 @@ Implementation started at 14e13d7bee9f0b3704066e90bb568f32bc48fd29, the integrat
 - [x] Apply context, branch, frame and link changes atomically in one Undo/Redo action. Cancelled or stale review cannot consume a preview or partially publish data.
 
 ## Verification
+
+361eeae8 was integrated in 9d28c8d0. The runtime candidate passed 64 focused checks, lint and typecheck. The maintained Chromium journey verified the full branch ghost, matching applied route landing, explicit Detach and the hosted Orbit in the saved export.
 
 Extend existing hosted-transfer and main-history integration checks with route context and deep branches. Reuse the maintained transfer/gesture journey for pointer-to-ghost agreement and save/reopen evidence already owned by the workspace journey.
 
