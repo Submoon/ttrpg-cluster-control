@@ -15,7 +15,7 @@ import {
   wardenObjectMark,
 } from './helpers'
 test('global Search reveals an exact Location key independently of the map filter', async ({ page }) => {
-  const campaign = restoreJumpClusterBackup(campaignFixture)
+  const campaign = restoreJumpClusterBackup(structuredClone(campaignFixture))
   const route = campaign.cluster.routes[0]!
   const { branch, root, occupant, workspace } = workspaceWithRouteObjects()
   const routeObject = { ...occupant, locationKey: 'TRANSIT-HAZARD' }
