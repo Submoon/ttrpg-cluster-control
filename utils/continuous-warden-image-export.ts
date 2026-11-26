@@ -106,6 +106,7 @@ export async function exportContinuousWardenMapImage(
           preparedRoute.renderGeometry,
           preparedRoute.incident,
           preparedRoute.routeLabelWidthPixels,
+          preparedRoute.routeLabelPosition,
           scene.sceneViewport,
           scene.routeSvgPixelScale,
           scene.includeUnresolvedCaption,
@@ -333,6 +334,7 @@ function appendRoute(
   geometry: ExportRouteGeometry,
   incident: boolean,
   routeLabelWidthPixels: number | null,
+  routeLabelPosition: { x: number; y: number } | undefined,
   viewport: MapViewport,
   svgPixelScale: number,
   includeUnresolvedCaption: boolean,
@@ -346,13 +348,10 @@ function appendRoute(
   if (incident) path.setAttribute('stroke-dasharray', '8 7')
   routeMark.append(path)
 
-  const midpoint = geometry.midpoint
-    ? geometry.midpoint
-    : { x: (geometry.start.x + geometry.end.x) / 2, y: (geometry.start.y + geometry.end.y) / 2 }
-  if (routeLabelWidthPixels !== null) {
+  if (routeLabelWidthPixels !== null && routeLabelPosition) {
     const sceneScale = viewport.k * svgPixelScale
     const badge = createScopedElement(parent, 'g', 'continuous-warden-route-badge')
-    badge.setAttribute('transform', `translate(${midpoint.x} ${midpoint.y}) scale(${1 / Math.max(0.0001, sceneScale)})`)
+    badge.setAttribute('transform', `translate(${routeLabelPosition.x} ${routeLabelPosition.y}) scale(${1 / Math.max(0.0001, sceneScale)})`)
     const background = createScopedElement(parent, 'rect', 'cluster-route-label-bg')
     background.setAttribute('x', String(-routeLabelWidthPixels / 2))
     background.setAttribute('y', String(-CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS / 2))

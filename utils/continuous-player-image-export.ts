@@ -26,7 +26,7 @@ import { projectPlayerContinuousMap, type PlayerContinuousSystemProjection } fro
 import { projectPlayerContinuousRouteEndpoints, type PlayerContinuousRouteDescriptor } from './player-continuous-route-projection'
 import { buildContinuousMapRouteGeometries, type ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
 import { continuousSystemFrames } from './continuous-system-frames'
-import { CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS, placeContinuousMapRouteLabels } from './continuous-map-route-labels'
+import { CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS, placeContinuousMapRouteLabels, type ContinuousMapRouteLabel } from './continuous-map-route-labels'
 import { CLUSTER_ROUTE_PRESENTATION } from './cluster-route-presentation'
 import { continuousSystemRouteCaptionLayouts } from './continuous-system-route-caption'
 import { PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS } from './cluster-system-presentation'
@@ -552,7 +552,7 @@ function nameSvg(name: PlayerContinuousNameLabel, svgPixelScale: number, paint: 
 
 function routeSvg(
   route: ImageRoute,
-  label: { text: string; widthPixels: number } | undefined,
+  label: ContinuousMapRouteLabel | undefined,
   scale: number,
   paint: PlayerMapPaint,
 ): string {
@@ -566,7 +566,7 @@ function routeSvg(
     'stroke-dasharray': unresolved ? CLUSTER_ROUTE_PRESENTATION.line.unresolvedDashArray : undefined,
     ...fixedStroke,
   })
-  const badge = label ? routeBadgeSvg(geometry.midpoint, label, scale, paint) : ''
+  const badge = label ? routeBadgeSvg(label.position, label, scale, paint) : ''
   return svgElement('g', { class: 'cluster-route' }, line + badge)
 }
 

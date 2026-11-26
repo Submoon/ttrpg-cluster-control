@@ -48,12 +48,12 @@
           aria-hidden="true"
         >{{ objectMark(object) }}</text>
         <template v-if="showDetail">
-          <text v-if="!props.compactLabels || object.id === selectedObjectId" class="warden-route-object-key" text-anchor="middle" y="27" aria-hidden="true">
-            {{ object.locationKey }}
-          </text>
-          <text v-if="!props.compactLabels || object.id === selectedObjectId" class="warden-route-object-name" text-anchor="middle" y="41" aria-hidden="true">
-            {{ object.name }}
-          </text>
+          <g v-if="props.captionOffsets ? props.captionOffsets.has(continuousMapObjectCaptionId(routeId, object.id)) : !props.compactLabels || object.id === selectedObjectId"
+            :transform="captionTransform(object.id)"
+          >
+            <text class="warden-route-object-key" text-anchor="middle" y="-14" aria-hidden="true">{{ object.locationKey }}</text>
+            <text class="warden-route-object-name" text-anchor="middle" aria-hidden="true">{{ object.name }}</text>
+          </g>
           <WardenObjectPublicationBadge
             v-if="!preview"
             :identity="`route-object-${routeId}-${object.id}`"
@@ -72,6 +72,7 @@ import type { Point, RouteContents } from '../../domain/workspace'
 import { catalogueObjectLabel } from '../../utils/catalogue-labels'
 import { objectMark } from '../../utils/catalogue-marks'
 import type { ContinuousMapRouteGeometry } from '../../utils/continuous-map-route-geometry'
+import { continuousMapObjectCaptionId } from '../../utils/continuous-map-caption-layout'
 import type { MapViewport } from '../../utils/map-zoom'
 import {
   projectRouteObjects,
@@ -99,12 +100,20 @@ const props = defineProps<{
   hiddenBranch?: SystemObjectBranch
   visibleBranch?: SystemObjectBranch
   projected?: ReturnType<typeof projectRouteObjects>
+  captionOffsets?: ReadonlyMap<string, Point>
   offset?: Point
 }>()
 
 const focusedObjectId = ref<string>()
 const pixelsPerSceneUnit = computed(() => props.viewport.k * props.svgPixelScale)
 const markerScale = computed(() => 1 / Math.max(pixelsPerSceneUnit.value, Number.EPSILON))
+
+function captionTransform(id: string): string {
+  const offset = props.captionOffsets?.get(continuousMapObjectCaptionId(props.routeId, id))
+  return offset
+    ? `translate(${offset.x * props.svgPixelScale} ${offset.y * props.svgPixelScale})`
+    : 'translate(0 41)'
+}
 const showDetail = computed(() => wardenRouteBranchShowsDetail(props.viewport.k, props.svgPixelScale, props.detailZoomPercent))
 const showOrbits = computed(() => props.preview === 'landing' || showDetail.value)
 const rootContents = computed(() => ({

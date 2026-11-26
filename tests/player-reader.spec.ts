@@ -407,6 +407,7 @@ test('the default player reader opens shared links and files with one camera and
   await expect(crossSystemInspector).toBeHidden()
   const remoteMarker = system.getByRole('button', { name: 'Inspect Remote Echo', exact: true })
   await expect(remoteMarker).toHaveClass(/player-continuous-object--dimmed/)
+  await expect(remoteMarker.locator('.player-continuous-object-label')).toHaveText('Remote Echo')
   await expect(searchLocator).toBeVisible()
 
   await page.getByRole('button', { name: 'Filters (2 active criteria)', exact: true }).click()

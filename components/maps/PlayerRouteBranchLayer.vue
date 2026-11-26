@@ -42,6 +42,14 @@
           y="4"
           aria-hidden="true"
         >{{ playerObjectPresentation(object).glyph }}</text>
+        <text
+          v-if="props.captionOffsets.has(continuousMapObjectCaptionId(branchId, object.id))"
+          class="player-branch-caption"
+          :x="props.captionOffsets.get(continuousMapObjectCaptionId(branchId, object.id))!.x * props.svgPixelScale"
+          :y="props.captionOffsets.get(continuousMapObjectCaptionId(branchId, object.id))!.y * props.svgPixelScale"
+          text-anchor="middle"
+          aria-hidden="true"
+        >{{ object.label }}</text>
       </g>
     </g>
   </g>
@@ -49,16 +57,16 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { PlayerRouteBranch } from '../../domain/player-projection'
-import type { ContinuousMapRouteGeometry } from '../../utils/continuous-map-route-geometry'
+import type { Point } from '../../domain/workspace'
+import { continuousMapObjectCaptionId } from '../../utils/continuous-map-caption-layout'
 import type { PlayerInspectionTarget } from '../../utils/player-inspection'
 import { playerObjectPresentation } from '../../utils/player-object-presentation'
-import { projectPlayerRouteBranch } from '../../utils/player-route-branch-geometry'
+import type { projectPlayerRouteBranch } from '../../utils/player-route-branch-geometry'
 import { routeBranchShowsDetail } from '../../utils/route-object-geometry'
 
 const props = defineProps<{
-  branches: readonly PlayerRouteBranch[]
-  curves: ReadonlyMap<string, ContinuousMapRouteGeometry>
+  layers: readonly { branchId: string; geometry: NonNullable<ReturnType<typeof projectPlayerRouteBranch>> }[]
+  captionOffsets: ReadonlyMap<string, Point>
   sceneTransform: string
   cameraScale: number
   svgPixelScale: number
@@ -69,10 +77,6 @@ const props = defineProps<{
 const emit = defineEmits<{ inspect: [branchId: string, target: PlayerInspectionTarget] }>()
 const showDetail = computed(() => routeBranchShowsDetail(props.cameraScale, props.svgPixelScale))
 const markerScale = computed(() => 1 / Math.max(props.cameraScale * props.svgPixelScale, Number.EPSILON))
-const layers = computed(() => props.branches.flatMap(branch => {
-  const geometry = projectPlayerRouteBranch(branch, props.curves)
-  return geometry ? [{ branchId: branch.id, geometry }] : []
-}))
 
 function isSelected(branchId: string, kind: PlayerInspectionTarget['kind'], entityId: string): boolean {
   return props.selectedBranchId === branchId && props.selection?.kind === kind && props.selection.id === entityId
@@ -91,6 +95,7 @@ function orbitLabel(geometry: NonNullable<ReturnType<typeof projectPlayerRouteBr
   stroke-width: 1.5;
 }
 .player-branch-marker text { font-size: 14px; pointer-events: none; }
+.player-branch-marker .player-branch-caption { fill: var(--map-text); font: 12px Georgia, serif; }
 .player-branch-marker--dimmed { opacity: .4; }
 .player-branch-orbit {
   fill: none;

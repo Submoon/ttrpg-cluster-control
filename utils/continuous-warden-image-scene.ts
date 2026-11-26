@@ -101,6 +101,7 @@ export interface ContinuousWardenImageSceneRoute {
     & Partial<Pick<ContinuousMapRouteGeometry, 'midpoint'>>
   incident: boolean
   routeLabelWidthPixels: number | null
+  routeLabelPosition?: Point
   systemCaption?: ContinuousSystemRouteCaptionLayout
 }
 
@@ -322,6 +323,7 @@ export function prepareContinuousWardenImageScene(
     renderGeometry: route.renderGeometry,
     incident: route.incident,
     routeLabelWidthPixels: (overviewRouteLabels ?? viewportRouteLabels)?.get(route.route.id)?.widthPixels ?? null,
+    routeLabelPosition: (overviewRouteLabels ?? viewportRouteLabels)?.get(route.route.id)?.position,
     ...(finalCalculation.captions.get(route.route.id)
       ? { systemCaption: finalCalculation.captions.get(route.route.id)! }
       : {}),

@@ -15,7 +15,7 @@
       <path class="cluster-route-hit-target" :d="mark.paintedGeometry.path" aria-hidden="true" />
       <g
         v-if="mark.label"
-        :transform="`translate(${mark.paintedGeometry.midpoint.x} ${mark.paintedGeometry.midpoint.y}) scale(${1 / svgPixelScale})`"
+        :transform="`translate(${mark.label.point.x} ${mark.label.point.y}) scale(${1 / svgPixelScale})`"
         aria-hidden="true"
       >
         <rect
@@ -29,11 +29,12 @@
         <text class="cluster-route-label" dy="0.34em">{{ mark.label.text }}</text>
       </g>
       <text
-        v-if="mark.destinationCaption && !destinationsInForeground"
+        v-if="mark.destinationCaption && !destinationsInForeground && destinationOffset(mark.id)"
         class="cluster-route-destination-caption"
         :transform="`translate(${mark.paintedGeometry.end.x} ${mark.paintedGeometry.end.y}) scale(${1 / svgPixelScale})`"
-        x="8"
-        y="4"
+        :x="destinationOffset(mark.id)!.x * svgPixelScale"
+        :y="destinationOffset(mark.id)!.y * svgPixelScale"
+        text-anchor="middle"
         aria-hidden="true"
       >{{ mark.destinationCaption }}</text>
       <template v-if="mark.unresolved && !destinationsInForeground">
@@ -61,6 +62,7 @@ import { computed, onBeforeUnmount, shallowRef, useTemplateRef, watch } from 'vu
 import type { Point } from '../../domain/workspace'
 import { continuousMapRouteCurve, type ContinuousMapRouteGeometry } from '../../utils/continuous-map-route-geometry'
 import { CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS, placeContinuousMapRouteLabels } from '../../utils/continuous-map-route-labels'
+import { continuousMapDestinationCaptionId } from '../../utils/continuous-map-caption-layout'
 import { nearestContinuousMapRouteHit } from '../../utils/continuous-map-route-hit'
 import { CONTINUOUS_MAP_DETAIL_MOTION_MS, continuousMapDetailMotionEase } from '../../utils/continuous-map-projection'
 import type { MapViewport, SvgViewportRect } from '../../utils/map-zoom'
@@ -83,6 +85,7 @@ const props = defineProps<{
   viewportRect: SvgViewportRect
   svgPixelScale: number
   labelObstacles?: readonly SvgViewportRect[]
+  captionOffsets?: ReadonlyMap<string, Point>
   moveEnabled?: boolean
   moveSelectedExit?: boolean
   destinationsInForeground?: boolean
@@ -105,13 +108,20 @@ const paintedMarks = computed(() => {
     svgPixelScale: props.svgPixelScale,
     obstacles: props.labelObstacles,
   })
-  return marks.value.map(mark => ({
-    ...mark,
-    paintedGeometry: projectGeometry(mark.geometry),
-    label: labels.get(mark.id),
-  }))
+  return marks.value.map(mark => {
+    const label = labels.get(mark.id)
+    return {
+      ...mark,
+      paintedGeometry: projectGeometry(mark.geometry),
+      label: label ? { ...label, point: toViewport(label.position) } : undefined,
+    }
+  })
 })
 const svgPixelScale = computed(() => props.svgPixelScale > 0 ? props.svgPixelScale : 1)
+
+function destinationOffset(routeId: string): Point | undefined {
+  return props.captionOffsets?.get(continuousMapDestinationCaptionId(routeId))
+}
 
 function toViewport(point: Point): Point {
   return {

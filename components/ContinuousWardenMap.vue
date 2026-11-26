@@ -42,7 +42,8 @@
         :viewport="viewport"
         :viewport-rect="svgViewport"
         :svg-pixel-scale="svgPixelScale"
-        :label-obstacles="routeLabelObstacles"
+        :label-obstacles="objectCaptionLayout.obstacles"
+        :caption-offsets="objectCaptionLayout.offsets"
         :move-enabled="mode === 'move' && !moveTargeting && !clusterMoveTargeting && !creationType && clusterAddType === null"
         :move-selected-exit="mode === 'select' && !moveTargeting && !clusterMoveTargeting && !creationType && clusterAddType === null"
       />
@@ -271,12 +272,14 @@
                     >
                       {{ objectGlyph(projection.id, object.id) }}
                     </text>
-                    <text v-if="!props.compactLabels || isSelectedObject(projection.id, object.id)" class="continuous-warden-object-key" :y="31 * detailTextPaintScale(projection)" text-anchor="middle">
-                      {{ object.locationKey }}
-                    </text>
-                    <text v-if="!props.compactLabels || isSelectedObject(projection.id, object.id)" class="continuous-warden-object-name" :y="46 * detailTextPaintScale(projection)" text-anchor="middle">
-                      {{ object.name }}
-                    </text>
+                    <g v-if="objectCaptionLayout.offsets.has(continuousMapObjectCaptionId(projection.id, object.id))"
+                      :transform="captionTransform(objectCaptionLayout.offsets.get(continuousMapObjectCaptionId(projection.id, object.id))!)"
+                    >
+                      <text class="continuous-warden-object-key" :y="-14 * detailTextPaintScale(projection)" text-anchor="middle">
+                        {{ object.locationKey }}
+                      </text>
+                      <text class="continuous-warden-object-name" text-anchor="middle">{{ object.name }}</text>
+                    </g>
                   </g>
                 </g>
               </g>
@@ -313,13 +316,15 @@
           </g>
       </g>
       <WardenRouteObjectLayer
-        v-for="{ id, contents, geometry } in displayedRouteBranches"
+        v-for="{ id, contents, geometry, projected } in displayedRouteBranches"
         :key="id"
         :route-id="id"
         :contents="contents"
         :detail-zoom-percent="props.detailZoomPercent"
         :compact-labels="props.compactLabels"
         :geometry="geometry"
+        :projected="projected"
+        :caption-offsets="objectCaptionLayout.offsets"
         :layout="workspace.layout"
         :viewport="viewport"
         :svg-pixel-scale="svgPixelScale"
@@ -617,7 +622,8 @@ import { useContinuousMapDetailMotion } from '../composables/useContinuousMapDet
 import type { WardenMapMotion } from '../composables/useWardenDisplayPreferences'
 import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
 import WardenRouteObjectLayer from './maps/WardenRouteObjectLayer.vue'
-import { pointOnRoute, projectRouteObjects, routeObjectMarkerRadiusPixels } from '../utils/route-object-geometry'
+import { pointOnRoute, projectRouteObjects, routeObjectMarkerRadiusPixels, wardenRouteBranchShowsDetail } from '../utils/route-object-geometry'
+import { continuousMapDestinationCaptionId, continuousMapObjectCaptionId, layoutContinuousMapObjectCaptions, type ContinuousMapObjectCaption } from '../utils/continuous-map-caption-layout'
 import { routeObjectTargetAt } from './maps/route-object-target'
 import { nearestContinuousMapRouteHit, projectPointOntoRoute } from '../utils/continuous-map-route-hit'
 import type { SystemObjectBranch } from '../domain/workspace-object-branch'
@@ -1012,9 +1018,12 @@ const transferBranchPreview = computed(() => {
 })
 const landingBranchPreview = computed(() => draggedBranchPreview.value ?? transferBranchPreview.value)
 const sceneCluster = computed(() => props.presentation?.cluster ?? props.cluster)
+const showRouteDetail = computed(() => wardenRouteBranchShowsDetail(viewport.value.k, svgPixelScale.value, props.detailZoomPercent))
 const displayedRouteBranches = computed(() => (routeLayer.value?.displayedMarks ?? []).flatMap(({ id, geometry }) => {
   const contents = routeContentsFor(sceneCluster.value, id)
-  return contents?.objects.length ? [{ id, contents, geometry }] : []
+  if (!contents?.objects.length) return []
+  const projected = showRouteDetail.value ? projectRouteObjects(contents, geometry, props.workspace.layout) : undefined
+  return [{ id, contents, geometry, projected }]
 }))
 const presentationProjections = computed(() => {
   const draft = props.presentation
@@ -1216,12 +1225,19 @@ function isGroupObjectDeparting(objectId: string): boolean {
   return selectedObjectDragPreview.value?.departingObjectIds.has(objectId) ?? false
 }
 
-function objectTransform(
+function objectPaintPoint(
   projection: ContinuousWardenSystemProjection,
   object: ContinuousWardenSystemProjection['objects'][number],
-): string {
+): Point {
   const position = groupObjectPreview(projection.id, object.id)?.positions.get(object.id) ?? object.position
-  const point = detailPaintPoint(projection, position)
+  return detailPaintPoint(projection, position)
+}
+
+function objectTransform(projection: ContinuousWardenSystemProjection, object: ContinuousWardenSystemProjection['objects'][number]): string {
+  return captionTransform(objectPaintPoint(projection, object))
+}
+
+function captionTransform(point: Point): string {
   return `translate(${point.x} ${point.y})`
 }
 
@@ -1718,15 +1734,58 @@ function localObject(projectionId: string, objectId: string): StarSystem['object
   return sceneObjects.value.get(projectionId)?.get(objectId)
 }
 
-const routeLabelObstacles = computed(() => nameLabelLayout.value.map(label => {
-  const positioned = positionNameLabel(label, Number(detailSystemIds.value.has(label.id)))
-  return {
-    x: positioned.x - positioned.width / 2,
-    y: positioned.y,
-    width: positioned.width,
-    height: positioned.height,
+const objectCaptionLayout = computed(() => {
+  const obstacles = nameLabels.value.map(label => ({
+    x: label.x - label.width / 2, y: label.y, width: label.width, height: label.height,
+  }))
+  const objects: ContinuousMapObjectCaption[] = []
+  const camera = viewport.value
+  const unit = 1 / svgPixelScale.value
+  const reservePublication = (point: Point) => {
+    obstacles.push({ x: point.x + 14 * unit, y: point.y - 23 * unit, width: 20 * unit, height: 20 * unit })
   }
-}))
+  for (const projection of renderedProjections.value) {
+    if (!mountedDetailSystemIds.value.has(projection.id)) continue
+    const textUnit = detailTextPaintScale(projection)
+    for (const object of projection.objects) {
+      const point = objectPaintPoint(projection, object)
+      const selected = isSelectedObject(projection.id, object.id)
+      const showsCaption = !props.compactLabels || selected
+      reservePublication(point)
+      objects.push({
+        id: continuousMapObjectCaptionId(projection.id, object.id), point, radius: 19 * textUnit, unit: textUnit, selected,
+        name: showsCaption ? object.name : undefined, key: object.locationKey,
+      })
+    }
+  }
+  for (const { id, contents, geometry, projected } of displayedRouteBranches.value) {
+    const hidden = routeMovePreview.value?.routeId === id ? new Set(routeMovePreview.value.branch.objectIds) : undefined
+    for (const object of contents.objects) {
+      if (hidden?.has(object.id)) continue
+      const scenePoint = projected?.positions.get(object.id)
+        ?? (object.placement.kind === 'route' ? pointOnRoute(geometry, object.placement.progression) : undefined)
+      if (!scenePoint) continue
+      const point = { x: camera.x + scenePoint.x * camera.k, y: camera.y + scenePoint.y * camera.k }
+      const target = props.inspectedTarget
+      const selected = target?.kind === 'route-object' && target.objectId === object.id
+      const showsCaption = showRouteDetail.value && (!props.compactLabels || selected)
+      if (showRouteDetail.value) reservePublication(point)
+      objects.push({
+        id: continuousMapObjectCaptionId(id, object.id), point, radius: (routeObjectMarkerRadiusPixels + 1) * unit, unit, selected,
+        name: showsCaption ? object.name : undefined, key: object.locationKey,
+      })
+    }
+  }
+  for (const { id, destinationCaption, geometry } of routeLayer.value?.displayedMarks ?? []) {
+    if (!destinationCaption) continue
+    const point = { x: camera.x + geometry.end.x * camera.k, y: camera.y + geometry.end.y * camera.k }
+    objects.push({
+      id: continuousMapDestinationCaptionId(id), point, radius: 8 * unit, unit,
+      name: destinationCaption, selected: id === props.selectedRouteId, preferRight: true,
+    })
+  }
+  return layoutContinuousMapObjectCaptions(objects, obstacles, svgViewport.value, svgPixelScale.value)
+})
 
 const objectGlyphs: Readonly<Record<string, string>> = {
   star: '✦', planet: '◉', moon: '☾', asteroid: '◆', belt: '⋯', station: '⌂', base: '▤', colony: '⚑',
