@@ -28,12 +28,12 @@ import type { HistoryCapacityRequest } from '../composables/useWorkspaceHistory'
 
 const props = defineProps<{ request: HistoryCapacityRequest | null; suppressReturnFocus?: boolean }>()
 const emit = defineEmits<{ resolve: [accepted: boolean] }>()
-let suppressReturnFocus = false
+let returnFocusSuppressedForOpening = false
 function onOpenAutoFocus(): void {
-  suppressReturnFocus = props.suppressReturnFocus === true
+  returnFocusSuppressedForOpening = props.suppressReturnFocus === true
 }
 
 function onCloseAutoFocus(event: Event): void {
-  if (suppressReturnFocus) event.preventDefault()
+  if (returnFocusSuppressedForOpening) event.preventDefault()
 }
 </script>

@@ -1,5 +1,6 @@
 import { toRaw, type Ref } from 'vue'
 import { createWorkspaceRouteObject, updateWorkspaceRouteObject, type CatalogueObjectTransferReview, type CatalogueSubtype, type LocalWorkspace, type RouteLanding } from '../../domain/workspace'
+import { prepareFittedCatalogueObjectTransfer } from '../../utils/zone-object-branch'
 import type { WorkspaceMutationExecutor } from './workspace-mutations'
 
 export type RouteObjectPlacementRequest = { kind: 'transfer'; proposal: CatalogueObjectTransferReview } | (RouteLanding & {
@@ -15,7 +16,11 @@ interface RouteObjectPlacementOptions {
   mutations: WorkspaceMutationExecutor
   beforeWorkspaceOperation(): Promise<boolean>
   editorError: Ref<string>
-  resolveBeforeTransfer?(proposal: CatalogueObjectTransferReview, ownsRequest: () => boolean): Promise<boolean>
+  resolveBeforeTransfer?(
+    proposal: CatalogueObjectTransferReview,
+    ownsRequest: () => boolean,
+    onDraftApplied: () => void,
+  ): Promise<boolean>
   reviewTransfer?(proposal: CatalogueObjectTransferReview): Promise<boolean>
   onTransferred?(proposal: CatalogueObjectTransferReview): void
 }
@@ -29,17 +34,29 @@ export function useRouteObjectPlacement({
     request: RouteObjectPlacementRequest,
     ownsRequest: () => boolean,
   ): Promise<boolean> {
-    const revision = getRevision()
     const current = workspace.value
-    const isCurrent = () => ownsRequest() && current === workspace.value && getRevision() === revision
+    let admittedWorkspace = current
+    let admittedRevision = getRevision()
+    const isCurrent = () => ownsRequest() && admittedWorkspace === workspace.value && getRevision() === admittedRevision
     const snapshot = request.kind === 'transfer' ? request.proposal.sourceWorkspace : request.workspaceSnapshot
     if (!current || toRaw(current) !== toRaw(snapshot) || !isCurrent()) return false
     if (!await beforeWorkspaceOperation() || !isCurrent()) return false
 
     try {
       if (request.kind === 'transfer') {
-        const { proposal } = request
-        if (resolveBeforeTransfer && (!await resolveBeforeTransfer(proposal, isCurrent) || !isCurrent())) return false
+        const onDraftApplied = (): void => {
+          const appliedWorkspace = workspace.value
+          const revision = getRevision()
+          if (!ownsRequest() || appliedWorkspace?.id !== current.id || appliedWorkspace.cluster.id !== current.cluster.id
+            || appliedWorkspace === admittedWorkspace || revision !== admittedRevision + 1) return
+          admittedWorkspace = appliedWorkspace
+          admittedRevision = revision
+        }
+        if (resolveBeforeTransfer && !await resolveBeforeTransfer(request.proposal, isCurrent, onDraftApplied)) return false
+        if (!isCurrent() || !admittedWorkspace) return false
+        // Only the guard's own publication may change which landing and consequences are reviewed.
+        const proposal = admittedWorkspace === current ? request.proposal
+          : prepareFittedCatalogueObjectTransfer(admittedWorkspace, request.proposal.request)
         const needsReview = proposal.detachedRouteAttachments.length > 0 || proposal.clearedStationLinks.length > 0
         if (needsReview && (!reviewTransfer || !await reviewTransfer(proposal) || !isCurrent())) return false
         const { landing, rootObjectId } = proposal.request

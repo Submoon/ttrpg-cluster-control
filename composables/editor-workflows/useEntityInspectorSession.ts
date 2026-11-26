@@ -1187,7 +1187,7 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
    * ordered save; a clean draft finishes after the same target and dependency guards without publishing.
    * A true result means this exact draft was applied or validated unchanged; durability is tracked separately.
    */
-  async function applyEntitySession(expectedId?: number): Promise<boolean> {
+  async function applyEntitySession(expectedId?: number, onApplied?: () => void): Promise<boolean> {
     const session = entitySession.value
     if (!session || (expectedId !== undefined && session.id !== expectedId)) return false
     const currentWorkspace = workspace.value
@@ -1308,6 +1308,7 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
         action: { kind: 'update', label: actionLabel, target },
         prepare: () => nextWorkspace,
         isCurrent: isSubmittedMutationCurrent,
+        onApplied,
       })
       if (result.status === 'rejected') {
         if (isSubmittedDraftCurrent()) session.error = result.message

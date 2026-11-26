@@ -363,7 +363,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
     if (session.value?.routeId === null) session.value = null
   }
 
-  async function applyRouteSession(id: number): Promise<boolean> {
+  async function applyRouteSession(id: number, onApplied?: () => void): Promise<boolean> {
     const active = session.value
     const current = workspace.value
     if (!active || active.id !== id) return false
@@ -479,6 +479,7 @@ export function useRouteInspectorSession({ workspace, mutations }: RouteInspecto
           return replaceRouteInWorkspace(latest, updatedRoute)
         },
         isCurrent: isSubmittedSessionCurrent,
+        onApplied,
       })
       if (result.status === 'rejected') {
         if (isSubmittedSessionCurrent()) active.error = result.message

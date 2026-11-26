@@ -12,7 +12,7 @@ import type {
   PublicationMode,
   StarSystem,
 } from './workspace-model'
-import { clusterRouteGeometry, clusterSystemPosition } from '../utils/cluster-map-geometry'
+import { clusterAutomaticExitPosition, clusterRouteGeometry, clusterSystemPosition } from '../utils/cluster-map-geometry'
 import { catalogueSubtypeLabel } from '../utils/catalogue-labels'
 import {
   objectPositions,
@@ -23,12 +23,10 @@ import {
 } from '../utils/system-map-geometry'
 import { captureEffectiveObjectAngles } from './workspace-placement'
 import { isCustomFieldApplicableToObject } from './workspace-fields'
-import { initialClusterSystemPosition, jumpPointsInCluster } from './workspace-cluster'
+import { jumpPointsInCluster } from './workspace-cluster'
 import { isMarkerColor } from './marker-color'
 import { routeContentsFor } from './workspace-route-objects'
-import { workspaceSystemFrame } from './workspace-system-frames'
-import { projectWardenSystem } from '../utils/continuous-map-projection'
-import { buildContinuousWardenRouteGeometries } from '../utils/continuous-warden-routes'
+import { buildContinuousMapRouteGeometries } from '../utils/continuous-map-route-geometry'
 import { pointOnRoute, projectRouteObjects } from '../utils/route-object-geometry'
 
 export type PlayerSystemMarker = {
@@ -417,12 +415,11 @@ function projectRouteBranches(
   publicRoutes: ReadonlyMap<string, RoutePublication>,
 ): PlayerRouteBranch[] {
   const result: PlayerRouteBranch[] = []
-  let detachedCurves: ReturnType<typeof buildContinuousWardenRouteGeometries> | undefined
   for (const route of workspace.cluster.routes) {
     const contents = routeContentsFor(workspace.cluster, route.id)
     if (!contents?.objects.some(object => object.publication !== 'hidden')) continue
     const association = publicRoutes.get(route.id)
-    if (!association) detachedCurves ??= committedRouteCurves(workspace)
+    const detachedCurve = association ? undefined : detachedRouteCurve(route, workspace.layout)
     const angles = captureEffectiveObjectAngles(workspace, contents, contents.orbits.map(orbit => orbit.id))
     // Each root is projected at the same local origin. Its branch offset and effective angle
     // are resolved against the complete inventory before Hidden siblings are removed.
@@ -469,7 +466,7 @@ function projectRouteBranches(
       const progression = root.placement.progression
       const anchor: PlayerRouteBranch['anchor'] = association
         ? { kind: 'route', routeId: association.route.id, progression: association.reversed ? 1 - progression : progression }
-        : { kind: 'detached', position: pointOnRoute(detachedCurves!.get(route.id)!, progression) }
+        : { kind: 'detached', position: pointOnRoute(detachedCurve!, progression) }
       const orbits = orbitsByRoot.get(root) ?? []
       const objectIds = new Map(members.map((object, index) => [object.id, `object-${index + 1}`]))
       const orbitIds = new Map(orbits.map((orbit, index) => [orbit.id, `orbit-${index + 1}`]))
@@ -508,23 +505,14 @@ function projectRouteBranches(
   return result
 }
 
-function committedRouteCurves(workspace: LocalWorkspace) {
-  const { cluster, layout } = workspace
-  return buildContinuousWardenRouteGeometries({
-    routes: cluster.routes,
-    projections: cluster.systems.map((system, index) => projectWardenSystem(
-      system,
-      Object.hasOwn(layout.systemPositions, system.id)
-        ? layout.systemPositions[system.id]!
-        : initialClusterSystemPosition(index),
-      layout,
-      undefined,
-      workspaceSystemFrame(workspace, system.id),
-    )),
-    detailSystemIds: new Set(),
-    independentCurves: true,
-    unresolvedExitPositions: layout.unresolvedExitPositions,
-  })
+function detachedRouteCurve(route: JumpRoute, layout: LocalWorkspace['layout']) {
+  const { id, fromSystemId, toSystemId } = route
+  const { systemPositions, unresolvedExitPositions: exits } = layout
+  const start = clusterSystemPosition(systemPositions, fromSystemId)
+  const end = toSystemId !== null ? clusterSystemPosition(systemPositions, toSystemId)
+    : exits && Object.hasOwn(exits, id) ? exits[id]!
+      : clusterAutomaticExitPosition(start, 0)
+  return buildContinuousMapRouteGeometries([{ id, fromSystemId, toSystemId, start, end }]).get(id)!
 }
 
 function projectPlayerFields(

@@ -22,8 +22,6 @@ interface WardenRouteOptions {
   unresolvedExitPositions?: Readonly<Record<string, Point>>
   exitPositionOverrides?: ReadonlyMap<string, Point>
   display?: ContinuousMapRouteDisplayScale
-  /** Place each route on its own canonical curve for detached publication. */
-  independentCurves?: boolean
 }
 
 /** Resolves each route end against the independently displayed state of its owning system. */
@@ -37,7 +35,6 @@ export function buildContinuousWardenRouteGeometries(
     unresolvedExitPositions,
     exitPositionOverrides,
     display,
-    independentCurves = false,
   }: WardenRouteOptions,
 ): ReadonlyMap<string, ContinuousMapRouteGeometry> {
   const projectionsById = new Map(projections.map(projection => [projection.id, projection]))
@@ -93,7 +90,7 @@ export function buildContinuousWardenRouteGeometries(
     if (!source) continue
     const sourceEnd = attachedEnd(source, fromPointId)
     if (toSystemId === null) {
-      const ordinal = independentCurves ? 0 : exitOrdinals.get(fromSystemId) ?? 0
+      const ordinal = exitOrdinals.get(fromSystemId) ?? 0
       exitOrdinals.set(fromSystemId, ordinal + 1)
       const end = exitPositionOverrides?.get(id)
         ?? unresolvedExitPositions?.[id]
@@ -131,9 +128,6 @@ export function buildContinuousWardenRouteGeometries(
       end = separated.end
     }
     endpoints.push({ id, fromSystemId, toSystemId, start, end })
-  }
-  if (independentCurves) {
-    return new Map(endpoints.flatMap(endpoint => [...buildContinuousMapRouteGeometries([endpoint], display)]))
   }
   return buildContinuousMapRouteGeometries(endpoints, display)
 }

@@ -69,7 +69,7 @@ export function useRouteObjectInspectorSession({ workspace, mutations, isSelecte
     initial.value = null
   }
 
-  async function apply(id: number): Promise<boolean> {
+  async function apply(id: number, onApplied?: () => void): Promise<boolean> {
     const active = session.value
     const original = initial.value
     const current = workspace.value
@@ -106,6 +106,7 @@ export function useRouteObjectInspectorSession({ workspace, mutations, isSelecte
         return prepared.workspace
       },
       isCurrent,
+      onApplied,
     })
     if (result.status === 'rejected') {
       if (session.value === active) active.error = result.message
