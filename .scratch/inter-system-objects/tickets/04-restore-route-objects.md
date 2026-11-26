@@ -1,6 +1,6 @@
 ---
 title: Restore and preserve route objects
-status: in-progress
+status: closed
 assignee: codex/issue-60-ticket-04
 type: implementation
 specification: ../spec.md
@@ -49,6 +49,10 @@ The implementation at `d6b4c877b0044ec573f9f560764fb6adc923aa71` includes the in
 - Changed source and test files passed ESLint with zero warnings. Vue typecheck passed.
 - The pure selection passed 723 tests. The remaining Markdown verification case could not create a Windows junction inside the sandbox and passed on an authorized focused rerun. The first run and rerun are retained in `test-results/playwright-1795688077469-16924-c9d7ceb5/` and `test-results/playwright-1795688200821-17216-f3e50641/` in the ticket worktree.
 - The single maintained browser journey in `tests/workspace-data.spec.ts` passed. It restored a complete backup, verified the rendered route anchor against the SVG path, edited the route object, reloaded the saved workspace and checked the downloaded branch. The launcher session is retained in `test-results/local-test-1795688312498-40748-d350901b/` in the ticket worktree.
+
+## Resolution
+
+The verified runtime d6b4c877 and its evidence were integrated in 1a0d4719. Complete v7 backups retain route objects and hosted branches. The Warden can inspect and edit a route object through the mounted continuous map and reopen the committed result. The maintained backup browser journey, typecheck and lint passed. The pure suite had 723 passing checks, and the Windows junction check passed on a focused authorized rerun.
 
 ## Verification
 
