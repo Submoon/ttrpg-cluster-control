@@ -420,8 +420,11 @@ test('route retargeting preserves fixed and moving objects at both progression e
     ...branch,
     objects: [{ ...root, placement: { kind: 'route', progression: 0 } as const }, fixed, occupant],
   }
-  workspace.cluster.routeContents[route.id] = contents
-  const harness = makeHistory(workspace)
+  const original: LocalWorkspace = {
+    ...workspace,
+    cluster: { ...workspace.cluster, routeContents: { [route.id]: contents } },
+  }
+  const harness = makeHistory(original)
   const inspector = useRouteInspectorSession({ workspace: harness.workspace, mutations: harness.history })
   try {
     const first = inspector.beginRouteSession(route.id)!
@@ -441,7 +444,7 @@ test('route retargeting preserves fixed and moving objects at both progression e
     expect(harness.history.getEntries()).toHaveLength(1)
     inspector.updateRouteInput(second, 'toSystemId', route.toSystemId!)
     expect(await inspector.applyRouteSession(second)).toBe(true)
-    expect(harness.current).toEqual(workspace)
+    expect(harness.current).toEqual(original)
   } finally {
     harness.dispose()
   }
@@ -455,7 +458,7 @@ for (const kind of ['route', 'system'] as const) {
       jumpLevel: 5,
       fromSystemId: neighbor.id,
       fromPointId: null,
-      toSystemId: route.toSystemId,
+      toSystemId: route.toSystemId!,
       toPointId: null,
     })
     const hazard = {
