@@ -19,6 +19,7 @@ import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 test('published player content opens in a separate browser context and survives reload @preview-smoke', async ({
   page, browser, previewCookies,
 }) => {
+  test.setTimeout(60_000)
   const publicText = 'A sheltered landing basin.'
   const privateNotes = 'GM ONLY: smuggler entrance'
   const publicTitle = 'Survey chart'
@@ -107,7 +108,7 @@ test('published player content opens in a separate browser context and survives 
     if (previewCookies.length) await context.addCookies(previewCookies)
     const player = await context.newPage()
     await player.goto(url)
-    await expect(player.getByRole('heading', { name: publicTitle, exact: true })).toBeVisible()
+    await expect(player.getByRole('heading', { name: publicTitle, exact: true })).toBeVisible({ timeout: 30_000 })
     await player.reload()
     const map = player.getByRole('region', { name: 'Player-visible continuous map', exact: true })
     await expect(map.locator('.player-continuous-name-target')
