@@ -26,6 +26,7 @@ import {
   orbitRadiiMeetMinimum,
 } from './workspace-orbits'
 import { jumpPointsInCluster } from './workspace-cluster'
+import { clusterObjects, migrateLegacyWorkspaceLocationKeys, validLocationKeyAssignments } from './workspace-location-keys'
 import {
   CLUSTER_SCENE_COORDINATE_LIMIT,
   clusterSystemPosition,
@@ -38,7 +39,7 @@ import {
 /**
  * Checks references and cross-entity invariants that cannot be verified by individual object guards.
  * @param system Structurally shaped system candidate.
- * @returns False for duplicate IDs/keys, invalid hosts or station links, bad sibling orders, or cyclic placement.
+ * @returns False for duplicate IDs, invalid hosts or station links, bad sibling orders, or cyclic placement.
  */
 function isSystemStructureValid(system: StarSystem): boolean {
   const objectIds = new Set(system.objects.map(object => object.id))
@@ -47,11 +48,6 @@ function isSystemStructureValid(system: StarSystem): boolean {
   }
 
   const ids = new Set(objectIds)
-  const locationKeys = new Set(system.objects.map(object => object.locationKey))
-  if (locationKeys.size !== system.objects.length) {
-    return false
-  }
-
   const ordersByHost = new Map<string | null, number[]>()
   for (const orbit of system.orbits) {
     if (
@@ -323,7 +319,7 @@ function isStoredLocalWorkspace(
 ): value is StoredLocalWorkspace {
   if (
     !isRecord(value)
-    || value.version !== 5
+    || value.version !== 6
     || typeof value.id !== 'string'
     || !value.id
     || (!allowLegacyLayout && value.objectFieldSettings === undefined)
@@ -357,12 +353,7 @@ function isStoredLocalWorkspace(
     || systems.length === 0
     || !isArrayOf(routes, isJumpRoute)
     || !isRecord(layout)
-    || (!allowLegacyLayout && (
-      !isCurrentOrbitRadii(layout.orbitRadii)
-      || layout.orbitEllipseRadii !== undefined
-      || !isCurrentOrbitRotations(layout.orbitRotations)
-      || !isRecord(layout.objectAngles)
-    ))
+    || (!allowLegacyLayout && !hasCurrentOrbitLayout(layout))
     || !isPointRecord(systemPositionsValue)
     || (unresolvedExitPositionsValue !== undefined && !isPointRecord(unresolvedExitPositionsValue))
     || (systemFramesValue !== undefined && !isSystemFrameInsetsRecord(systemFramesValue))
@@ -444,6 +435,7 @@ function isStoredLocalWorkspace(
     systems,
     routes,
   }
+  if (!validLocationKeyAssignments(clusterObjects(validatedCluster))) return false
   const jumpPoints = new Map(jumpPointsInCluster(validatedCluster).map(reference => [reference.point.id, reference]))
   const orbitRadii = normalizeOrbitRadii(
     layout.orbitRadii ?? {},
@@ -499,6 +491,14 @@ function isStoredLocalWorkspace(
       isPoint(positions[system.id])
       && system.objects.every(object => objectFieldValidationError(object, objectFieldSettings) === null),
     )
+}
+
+/** Checks the complete Orbit layout fields written by current source formats. */
+export function hasCurrentOrbitLayout(layout: Record<string, unknown>): boolean {
+  return isCurrentOrbitRadii(layout.orbitRadii)
+    && layout.orbitEllipseRadii === undefined
+    && isCurrentOrbitRotations(layout.orbitRotations)
+    && isRecord(layout.objectAngles)
 }
 
 function isCurrentOrbitRadii(value: unknown): boolean {
@@ -816,7 +816,7 @@ export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
           : system),
       },
     }
-  } else if (!isVersionThree && version !== 4 && version !== 5) {
+  } else if (!isVersionThree && version !== 4 && version !== 5 && version !== 6) {
     return null
   }
 
@@ -827,7 +827,8 @@ export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
   const restored = isUnversionedLegacy
     ? withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(currentValue))
     : currentValue
-  const current = version === 5 ? restored : migrateLegacyWorkspaceRouteShape(restored)
+  const routeShape = version === 5 || version === 6 ? restored : migrateLegacyWorkspaceRouteShape(restored)
+  const current = version === 6 ? routeShape : migrateLegacyWorkspaceLocationKeys(routeShape)
   if (!current || !isStoredLocalWorkspace(current, isUnversionedLegacy)) {
     return null
   }

@@ -3,6 +3,7 @@ import {
   createLocalWorkspace,
   createOrbit,
   createSystemObject,
+  exportJumpCluster,
   exportStarSystem,
 } from '../domain/workspace'
 import {
@@ -17,6 +18,8 @@ import {
   openChartDetailsEditor,
   fitWorkspaceMap,
   resolveImportReview,
+  resolveJumpClusterRestoreReview,
+  reviewJumpClusterBackup,
   setJsonFile,
   setHeaderMapActionsOpen,
 } from './helpers'
@@ -72,6 +75,12 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   await page.getByLabel('First star system').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
+  const destination = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const zone = destination.cluster.systems[0]!
+  zone.objects.push(createSystemObject(zone, 'planet'))
+  const destinationReview = await reviewJumpClusterBackup(page, 'destination.json', JSON.stringify(exportJumpCluster(destination)))
+  await resolveJumpClusterRestoreReview(destinationReview, 'confirm')
+  await waitForWorkspaceSaved(page)
   await fitWorkspaceMap(page)
 
   const context = page.getByRole('region', { name: 'Current Jump Cluster', exact: true })
@@ -124,6 +133,8 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   await expect(review).toContainText('Map objects: 2')
   await expect(review).toContainText('Orbits: 1')
   await expect(review).toContainText('Jump Routes: 0')
+  await expect(review.getByRole('heading', { name: 'Location key replacements' })).toBeVisible()
+  await expect(review).toContainText('PL-01 → PL-02')
   await expect(page.getByRole('dialog', { name: 'Edit Jump Cluster details', exact: true })).toHaveCount(0)
   await resolveImportReview(review, 'cancel')
   await expect(review).toBeHidden()
@@ -156,6 +167,7 @@ test('standalone system review preserves an unrelated chart draft and adds an in
   expect(exported.cluster?.systems.map(system => system.name)).toEqual(['Vesper', 'Incoming Vesper'])
   const importedSystem = exported.cluster?.systems.find(system => system.name === 'Incoming Vesper')
   expect(importedSystem?.id).not.toBe(incoming.systemId)
+  expect(importedSystem?.objects.some(object => object.locationKey === 'PL-02')).toBe(true)
   expect(importedSystem && exported.layout.systemPositions?.[importedSystem.id]).toEqual(acceptedPlacement.anchor)
   const importedOrbit = importedSystem?.orbits[0]
   expect(importedOrbit).toBeDefined()

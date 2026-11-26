@@ -2,6 +2,7 @@
  * Cluster operations keep route references and workspace layout aligned with system changes.
  */
 import { defaultObjectFieldSettings } from './workspace-model'
+import { clusterObjects, nextLocationKey } from './workspace-location-keys'
 import type {
   JumpCluster,
   JumpPointReference,
@@ -29,7 +30,7 @@ type JumpRouteDetails = DistributiveOmit<JumpRoute, 'id' | 'name' | 'playerShare
  * @returns New system data; the caller supplies its cluster membership and layout position.
  * @throws If the name is blank or exceeds the domain name limit.
  */
-function initialStarSystem(name: string): StarSystem {
+function initialStarSystem(name: string, locationKey = 'A'): StarSystem {
   return {
     id: crypto.randomUUID(),
     name: validName(name, 'Star system name'),
@@ -39,7 +40,7 @@ function initialStarSystem(name: string): StarSystem {
       publication: 'known-type',
       family: 'CelestialBody',
       subtype: 'star',
-      locationKey: 'A',
+      locationKey,
       name: 'Primary Star',
       description: '',
       playerText: '',
@@ -75,7 +76,7 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
   const system = initialStarSystem(systemName)
 
   return {
-    version: 5,
+    version: 6,
     id: crypto.randomUUID(),
     cluster: {
       id: crypto.randomUUID(),
@@ -106,7 +107,8 @@ export function addStarSystem(
   workspace: LocalWorkspace,
   name = `New System ${workspace.cluster.systems.length + 1}`,
 ): { workspace: LocalWorkspace; system: StarSystem } {
-  const system = initialStarSystem(name)
+  const keys = new Set(clusterObjects(workspace.cluster).map(object => object.locationKey))
+  const system = initialStarSystem(name, nextLocationKey('STAR', keys))
   const index = workspace.cluster.systems.length
   return {
     system,

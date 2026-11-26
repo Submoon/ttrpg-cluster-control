@@ -14,9 +14,18 @@ import type {
   PreparedJsonImport,
   StarSystem,
   StarSystemExport,
+  SystemObject,
 } from './workspace-model'
 import { initialClusterSystemPosition } from './workspace-cluster'
 import {
+  clusterObjects,
+  migrateLegacyWorkspaceLocationKeys,
+  nextLocationKey,
+  objectLocationKeyPrefix,
+  validLocationKeyAssignments,
+} from './workspace-location-keys'
+import {
+  hasCurrentOrbitLayout,
   isLocalWorkspace,
   isStarSystem,
   migrateLegacyWorkspaceRouteShape,
@@ -27,12 +36,14 @@ import {
 import { minimumOrbitRadius, normalizeOrbitRadii, normalizeOrbitRotations, orbitRadiiMeetMinimum } from './workspace-orbits'
 import { isObjectFieldSettings, isPoint, isRecord, objectFieldValidationError } from './workspace-validation'
 
+const invalidMapMessage = 'Choose a valid version 1 through 6 Jump Cluster or version 1 through 5 star system JSON export.'
+
 type ImportableMap =
-  | (Omit<JumpClusterExport, 'version'> & { version: 1 | 2 | 3 | 4 | 5 })
-  | (Omit<StarSystemExport, 'version'> & { version: 1 | 2 | 3 | 4 })
+  | (Omit<JumpClusterExport, 'version'> & { version: 6 })
+  | (Omit<StarSystemExport, 'version'> & { version: 1 | 2 | 3 | 4 | 5 })
 
 /**
- * Validates a supported version 1 through 5 Cluster or version 1 through 4 standalone-system export.
+ * Validates a supported version 1 through 6 Cluster or version 1 through 5 standalone-system export.
  * @param value Unknown parsed JSON value.
  * @returns True only when the export and every saved map-specific value satisfy current domain rules.
  */
@@ -42,7 +53,7 @@ function isImportedMap(value: unknown): value is ImportableMap {
   const layout = value.layout
   if (
     value.format !== 'ttrpg-cluster-control-map'
-    || (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4 && value.version !== 5)
+    || (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4 && value.version !== 5 && value.version !== 6)
     || !isObjectFieldSettings(settings)
     || !isRecord(layout)
     || layout.version !== 1
@@ -51,15 +62,9 @@ function isImportedMap(value: unknown): value is ImportableMap {
   }
 
   if (value.type === 'cluster') {
+    if (value.version !== 6) return false
     const cluster = value.cluster
     if (!isRecord(cluster)) return false
-    const orbitRadii = normalizeOrbitRadii(
-      layout.orbitRadii ?? {},
-      layout.orbitEllipseRadii ?? {},
-    )
-    if (!orbitRadii) return false
-    const orbitRotations = normalizeOrbitRotations(layout.orbitRotations ?? {})
-    if (!orbitRotations) return false
     const validationIds = new Set<string>([cluster.id as string])
     for (const system of Array.isArray(cluster.systems) ? cluster.systems : []) {
       if (isRecord(system) && typeof system.id === 'string') validationIds.add(system.id)
@@ -82,7 +87,7 @@ function isImportedMap(value: unknown): value is ImportableMap {
     while (validationIds.has(validationId)) validationId = crypto.randomUUID()
 
     const candidate = {
-      version: 5,
+      version: 6,
       id: validationId,
       cluster,
       objectFieldSettings: settings,
@@ -90,9 +95,10 @@ function isImportedMap(value: unknown): value is ImportableMap {
         systemPositions: layout.systemPositions,
         unresolvedExitPositions: layout.unresolvedExitPositions,
         systemFrames: layout.systemFrames,
-        orbitRadii,
-        orbitRotations,
-        objectAngles: layout.objectAngles ?? {},
+        orbitRadii: layout.orbitRadii,
+        orbitEllipseRadii: layout.orbitEllipseRadii,
+        orbitRotations: layout.orbitRotations,
+        objectAngles: layout.objectAngles,
       },
     }
     if (!isLocalWorkspace(candidate)) return false
@@ -103,8 +109,11 @@ function isImportedMap(value: unknown): value is ImportableMap {
   }
 
   const system = value.system
-  if (value.type !== 'system' || value.version === 5 || layout.systemFrames !== undefined || !isStarSystem(system)) return false
-  if (!isRecord(layout.orbitRadii) || !isRecord(layout.objectAngles)) return false
+  if (value.type !== 'system' || value.version === 6 || layout.systemFrames !== undefined || !isStarSystem(system)) return false
+  if (!validLocationKeyAssignments(system.objects)
+    || (value.version !== 5 && system.objects.some(object => Object.hasOwn(object, 'legacyLocationKey')))) return false
+  if (!isRecord(layout.orbitRadii) || !isRecord(layout.objectAngles)
+    || (value.version === 5 && !hasCurrentOrbitLayout(layout))) return false
 
   const orbitIds = new Set(system.orbits.map(orbit => orbit.id))
   const orbitRadii = normalizeOrbitRadii(layout.orbitRadii, layout.orbitEllipseRadii ?? {})
@@ -214,7 +223,15 @@ function prepareImportedMap(value: unknown): unknown {
       normalized = remapLegacyReservedCustomFieldIds(normalized, 'system-export')
     }
   }
-  return normalized
+  if (!isRecord(normalized) || normalized.type !== 'cluster' || normalized.version !== 5) return normalized
+  const layout = normalized.layout
+  if (!isRecord(layout)) return null
+  const orbitRadii = normalizeOrbitRadii(layout.orbitRadii ?? {}, layout.orbitEllipseRadii ?? {})
+  const orbitRotations = normalizeOrbitRotations(layout.orbitRotations ?? {})
+  if (!orbitRadii || !orbitRotations) return null
+  const legacyLayout: Record<string, unknown> = { ...layout, orbitRadii, orbitRotations, objectAngles: layout.objectAngles ?? {} }
+  delete legacyLayout.orbitEllipseRadii
+  return migrateLegacyWorkspaceLocationKeys({ ...normalized, layout: legacyLayout })
 }
 
 /**
@@ -292,39 +309,46 @@ function unionCustomFieldApplicability(
  * @param system Validated source system.
  * @param ids New IDs for system, object, Orbit, and host/placement references.
  * @param fieldIds New or reused IDs for custom-field definitions.
+ * @param replacementKeys Reviewed changes to copied objects' keys.
  * @returns A detached system copy whose internal references target the imported copy.
  */
 function remapImportedSystem(
   system: StarSystem,
   ids: Map<string, string>,
   fieldIds: Map<string, string>,
+  replacementKeys: ReadonlyMap<string, string>,
 ): StarSystem {
   return {
     ...system,
     id: ids.get(system.id)!,
-    objects: system.objects.map(object => ({
-      ...object,
-      id: ids.get(object.id)!,
-      placement: object.placement.kind === 'orbit'
-        ? { kind: 'orbit', orbitId: ids.get(object.placement.orbitId)! }
-        : object.placement,
-      ...(object.jumpStationId
-        ? { jumpStationId: ids.get(object.jumpStationId)! }
-        : {}),
-      ...(object.customFieldValues
-        ? {
-            customFieldValues: Object.fromEntries(
-              Object.entries(object.customFieldValues)
-                .map(([fieldId, value]) => [fieldIds.get(fieldId)!, value]),
-            ),
-          }
-        : {}),
-      playerFieldMasks: object.playerFieldMasks.map(fieldId =>
-        fieldId === nativePlayerFieldIds.atmosphere || fieldId === nativePlayerFieldIds.portClass
-          ? fieldId
-          : fieldIds.get(fieldId)!,
-      ),
-    })),
+    objects: system.objects.map(object => {
+      const copy: SystemObject = {
+        ...object,
+        id: ids.get(object.id)!,
+        locationKey: replacementKeys.get(object.id) ?? object.locationKey,
+        placement: object.placement.kind === 'orbit'
+          ? { kind: 'orbit', orbitId: ids.get(object.placement.orbitId)! }
+          : object.placement,
+        ...(object.jumpStationId
+          ? { jumpStationId: ids.get(object.jumpStationId)! }
+          : {}),
+        ...(object.customFieldValues
+          ? {
+              customFieldValues: Object.fromEntries(
+                Object.entries(object.customFieldValues)
+                  .map(([fieldId, value]) => [fieldIds.get(fieldId)!, value]),
+              ),
+            }
+          : {}),
+        playerFieldMasks: object.playerFieldMasks.map(fieldId =>
+          fieldId === nativePlayerFieldIds.atmosphere || fieldId === nativePlayerFieldIds.portClass
+            ? fieldId
+            : fieldIds.get(fieldId)!,
+        ),
+      }
+      delete copy.legacyLocationKey
+      return copy
+    }),
     orbits: system.orbits.map((orbit): Orbit => orbit.hostId === null
       ? { ...orbit, id: ids.get(orbit.id)! }
       : { ...orbit, id: ids.get(orbit.id)!, hostId: ids.get(orbit.hostId)! }),
@@ -341,7 +365,7 @@ function remapImportedSystem(
 export function restoreJumpClusterBackup(value: unknown): LocalWorkspace {
   const map = prepareImportedMap(value)
   if (!isImportedMap(map) || map.type !== 'cluster') {
-    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster JSON backup.')
+    throw new Error('Choose a valid version 1 through 6 Jump Cluster JSON backup.')
   }
 
   const entityIds = new Set<string>([
@@ -358,7 +382,7 @@ export function restoreJumpClusterBackup(value: unknown): LocalWorkspace {
   while (entityIds.has(localId)) localId = crypto.randomUUID()
 
   const workspace: LocalWorkspace = {
-    version: 5,
+    version: 6,
     id: localId,
     cluster: map.cluster,
     objectFieldSettings: map.objectFieldSettings,
@@ -395,7 +419,7 @@ export function prepareJsonImport(
 ): PreparedJsonImport {
   const map = prepareImportedMap(value)
   if (!isImportedMap(map)) {
-    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
+    throw new Error(invalidMapMessage)
   }
 
   const sourceSystems = map.type === 'cluster' ? map.cluster.systems : [map.system]
@@ -458,6 +482,25 @@ export function prepareJsonImport(
     }
   }
 
+  const locationKeyReplacements: JsonImportSummary['locationKeyReplacements'] = []
+  const usedKeys = new Set(clusterObjects(workspace.cluster).map(object => object.locationKey))
+  // Reserve source keys before allocating replacements so an earlier conflict cannot take a later free key.
+  const reservedKeys = new Set([...usedKeys, ...sourceSystems.flatMap(system => system.objects.map(object => object.locationKey))])
+  const replacementKeys = new Map<string, string>()
+  for (const system of sourceSystems) {
+    for (const object of system.objects) {
+      const key = object.locationKey
+      if (!usedKeys.has(key)) {
+        usedKeys.add(key)
+        continue
+      }
+      const replacementKey = nextLocationKey(objectLocationKeyPrefix(object), reservedKeys)
+      reservedKeys.add(replacementKey)
+      replacementKeys.set(object.id, replacementKey)
+      locationKeyReplacements.push({ name: object.name, system: system.name, originalKey: key, replacementKey })
+    }
+  }
+
   const summary: JsonImportSummary = {
     type: map.type,
     systems: sourceSystems.length,
@@ -466,6 +509,7 @@ export function prepareJsonImport(
     routes: sourceRoutes.length,
     customFields: sourceSettings.customFields.length,
     idCollisions,
+    locationKeyReplacements,
     possibleMatches,
   }
 
@@ -518,7 +562,7 @@ export function prepareJsonImport(
     customFields.push({ ...sourceField, id })
   }
 
-  const importedSystems = sourceSystems.map(system => remapImportedSystem(system, ids, fieldIds))
+  const importedSystems = sourceSystems.map(system => remapImportedSystem(system, ids, fieldIds, replacementKeys))
   const importedRoutes: JumpRoute[] = sourceRoutes.map((route): JumpRoute =>
     route.toSystemId === null
       ? {
@@ -578,14 +622,14 @@ export function prepareJsonImport(
     map.layout.orbitEllipseRadii ?? {},
   )
   if (!importedOrbitRadii) {
-    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
+    throw new Error(invalidMapMessage)
   }
   for (const [sourceId, radii] of Object.entries(importedOrbitRadii)) {
     layout.orbitRadii[ids.get(sourceId)!] = radii
   }
   const importedOrbitRotations = normalizeOrbitRotations(map.layout.orbitRotations ?? {})
   if (!importedOrbitRotations) {
-    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
+    throw new Error(invalidMapMessage)
   }
   for (const [sourceId, rotation] of Object.entries(importedOrbitRotations)) {
     layout.orbitRotations[ids.get(sourceId)!] = rotation
@@ -636,7 +680,7 @@ export function jsonImportReviewEffects(
 ): { signature: string; existingFieldIds: string[] } {
   const map = prepareImportedMap(value)
   if (!isImportedMap(map)) {
-    throw new Error('Choose a valid version 1, version 2, version 3, version 4, or version 5 Jump Cluster or version 1 through 4 star system JSON export.')
+    throw new Error(invalidMapMessage)
   }
 
   const fieldState = (field: CustomFieldDefinition, includeId: boolean): object => ({

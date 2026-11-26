@@ -293,7 +293,7 @@ function makeCascadeWorkspace(): LocalWorkspace {
   }
   system = { ...system, objects: [...system.objects, survivingPoint] }
 
-  const destination = { ...createSystemObject(systemB, 'jump-point'), name: 'B Gate' }
+  const destination = { ...createSystemObject(systemB, 'jump-point'), name: 'B Gate', locationKey: 'JP-03' }
   systemB.objects.push(destination)
   const systemsWithEntities = workspace.cluster.systems.map(candidate =>
     candidate.id === system.id ? system : candidate.id === systemB.id ? systemB : candidate)
@@ -493,7 +493,7 @@ test('cluster import keeps its remapped copy and shared options on one exact his
     name: 'Relay Station',
     customFieldValues: { 'incoming-notes': 'Arrived with the copy.' },
   }
-  const sourceJumpPoint = { ...createSystemObject({ ...sourceSystem, objects: [...sourceSystem.objects, sourceStation] }, 'jump-point'), name: 'Beta Gate' }
+  const sourceJumpPoint = { ...createSystemObject({ ...sourceSystem, objects: [...sourceSystem.objects, sourceStation] }, 'jump-point'), name: 'Beta Gate', locationKey: 'JP-02' }
   const sourceCluster = {
     ...source.cluster,
     systems: source.cluster.systems.map(system => system.id === sourceSystem.id

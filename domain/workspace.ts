@@ -76,13 +76,11 @@ export {
   applySystemObjectTransfer,
   prepareSystemObjectTransfer,
   resolveSystemObjectHistoryTarget,
-  validateSystemObjectTransferKeys,
 } from './workspace-transfer'
 export type {
   SystemObjectTransferPlacement,
   SystemObjectTransferRequest,
   SystemObjectTransferReview,
-  SystemObjectTransferKeyConflict,
   SystemObjectTransferRouteAttachment,
   SystemObjectTransferStationLink,
 } from './workspace-transfer'

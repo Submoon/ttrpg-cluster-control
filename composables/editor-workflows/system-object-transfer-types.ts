@@ -38,8 +38,6 @@ export interface SystemObjectTransferReviewState {
   readonly previewWorkspace: DeepReadonly<LocalWorkspace> | null
   readonly movedObjectIds: readonly string[]
   readonly movedOrbitIds: readonly string[]
-  readonly locationKeys: ReadonlyMap<string, string>
-  readonly validationErrors: ReadonlyMap<string, string>
   readonly canAccept: boolean
   readonly stale: boolean
 }
@@ -49,7 +47,6 @@ export type SystemObjectTransferIntent =
   | { kind: 'select-destination'; sessionId: number; systemId: string }
   | { kind: 'choose-free-placement'; sessionId: number; point: Point }
   | { kind: 'choose-orbit-placement'; sessionId: number; orbitId: string; angle: number }
-  | { kind: 'set-location-key'; sessionId: number; objectId: string; value: string }
   | { kind: 'place-on-map'; sessionId: number }
   | { kind: 'cancel-map-placement'; sessionId: number; lease: SystemObjectTransferMapPlacementLease }
   | { kind: 'apply'; sessionId: number }
