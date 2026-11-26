@@ -334,6 +334,8 @@ test('Warden image scope falls back without an owner and viewport requests fence
   expect(mapImageContextKey('viewport', movedContext)).not.toBe(mapImageContextKey('viewport', snapshot))
   expect(mapImageContextKey('viewport', { ...snapshot, selectedRouteId: 'route' }))
     .not.toBe(mapImageContextKey('viewport', snapshot))
+  expect(mapImageContextKey('viewport', { ...snapshot, selectedRouteObjectId: 'occupant' }))
+    .not.toBe(mapImageContextKey('viewport', snapshot))
   expect(mapImageContextKey('viewport', { ...snapshot, viewportRect: { ...snapshot.viewportRect, width: 800 } }))
     .not.toBe(mapImageContextKey('viewport', snapshot))
 })
