@@ -465,4 +465,11 @@ test('a player viewport keeps branch selection and dimming local and renders ord
   expect(detail.svg.match(/<ellipse/g)).toHaveLength(2)
   expect(detail.svg).toContain('translate(350 420) scale(0.25)')
   expect(detail.svg).not.toContain('route-vessel-orbit')
+
+  const compactDetail = serializeContinuousPlayerMapImage(document, {
+    scope: 'viewport',
+    snapshot: { ...snapshot, camera: { ...snapshot.camera, k: 16 }, svgPixelScale: 0.15, selectedBranchTarget: null },
+  }, 'print-light')
+  expect(compactDetail.svg.match(/<title>Captured echo<\/title>/g)).toHaveLength(2)
+  expect(compactDetail.svg.match(/<ellipse/g)).toHaveLength(2)
 })

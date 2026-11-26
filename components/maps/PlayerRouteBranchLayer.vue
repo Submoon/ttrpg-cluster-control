@@ -53,20 +53,22 @@ import type { PlayerRouteBranch } from '../../domain/player-projection'
 import type { ContinuousMapRouteGeometry } from '../../utils/continuous-map-route-geometry'
 import type { PlayerInspectionTarget } from '../../utils/player-inspection'
 import { playerObjectPresentation } from '../../utils/player-object-presentation'
-import { playerRouteBranchShowsDetail, projectPlayerRouteBranch } from '../../utils/player-route-branch-geometry'
+import { projectPlayerRouteBranch } from '../../utils/player-route-branch-geometry'
+import { routeBranchShowsDetail } from '../../utils/route-object-geometry'
 
 const props = defineProps<{
   branches: readonly PlayerRouteBranch[]
   curves: ReadonlyMap<string, ContinuousMapRouteGeometry>
   sceneTransform: string
-  scenePixelScale: number
+  cameraScale: number
+  svgPixelScale: number
   selectedBranchId?: string | null
   selection?: PlayerInspectionTarget | null
   dimmedObjects: ReadonlyMap<string, ReadonlySet<string>>
 }>()
 const emit = defineEmits<{ inspect: [branchId: string, target: PlayerInspectionTarget] }>()
-const showDetail = computed(() => playerRouteBranchShowsDetail(props.scenePixelScale))
-const markerScale = computed(() => 1 / Math.max(props.scenePixelScale, Number.EPSILON))
+const showDetail = computed(() => routeBranchShowsDetail(props.cameraScale, props.svgPixelScale))
+const markerScale = computed(() => 1 / Math.max(props.cameraScale * props.svgPixelScale, Number.EPSILON))
 const layers = computed(() => props.branches.flatMap(branch => {
   const geometry = projectPlayerRouteBranch(branch, props.curves)
   return geometry ? [{ branchId: branch.id, geometry }] : []

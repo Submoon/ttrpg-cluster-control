@@ -32,7 +32,8 @@ import { continuousSystemRouteCaptionLayouts } from './continuous-system-route-c
 import { PLAYER_CLUSTER_UNKNOWN_MARKER_RADIUS } from './cluster-system-presentation'
 import { playerObjectPresentation } from './player-object-presentation'
 import type { PlayerInspectionTarget } from './player-inspection'
-import { playerRouteBranchShowsDetail, projectPlayerRouteBranch } from './player-route-branch-geometry'
+import { projectPlayerRouteBranch } from './player-route-branch-geometry'
+import { routeBranchShowsDetail } from './route-object-geometry'
 
 const exportPadding = 24
 const routeStubLength = 60
@@ -237,7 +238,7 @@ export function serializeContinuousPlayerMapImage(
   ].join('')
   const destinations = selected ? '' : routes.filter(route => route.unresolved)
     .map(route => anonymousExitSvg(route.geometry.end, scenePixelScale, paint)).join('')
-  const branchDetail = !!snapshot && playerRouteBranchShowsDetail(scenePixelScale)
+  const branchDetail = !!snapshot && routeBranchShowsDetail(camera.k, svgPixelScale)
   const branchFilters = new Map(snapshot?.dimmedBranchObjects?.map(({ branchId, ids }) => [branchId, new Set(ids)]))
   const branches = routeBranches.map(({ branchId, geometry }) => routeBranchSvg(
     geometry,

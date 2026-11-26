@@ -47,6 +47,18 @@
           y="5"
           aria-hidden="true"
         >{{ objectMark(object) }}</text>
+        <text class="warden-route-object-key" text-anchor="middle" y="27" aria-hidden="true">
+          {{ object.locationKey }}
+        </text>
+        <text class="warden-route-object-name" text-anchor="middle" y="41" aria-hidden="true">
+          {{ object.name }}
+        </text>
+        <WardenObjectPublicationBadge
+          v-if="!preview"
+          :identity="`route-object-${routeId}-${object.id}`"
+          :mode="object.publication"
+          transform="translate(24 -13) scale(1.5)"
+        />
       </g>
     </g>
   </g>
@@ -67,6 +79,7 @@ import {
 } from '../../utils/route-object-geometry'
 import type { SystemMapGeometry } from '../../utils/system-map-geometry'
 import type { SystemObjectBranch } from '../../domain/workspace-object-branch'
+import WardenObjectPublicationBadge from './WardenObjectPublicationBadge.vue'
 
 const props = defineProps<{
   routeId: string
@@ -87,7 +100,7 @@ const focusedObjectId = ref<string>()
 const projection = computed(() => projectRouteObjects(props.contents, props.geometry, props.layout))
 const pixelsPerSceneUnit = computed(() => props.viewport.k * props.svgPixelScale)
 const markerScale = computed(() => 1 / Math.max(pixelsPerSceneUnit.value, Number.EPSILON))
-const showDetail = computed(() => routeBranchShowsDetail(pixelsPerSceneUnit.value))
+const showDetail = computed(() => routeBranchShowsDetail(props.viewport.k, props.svgPixelScale))
 const visibleOrbits = computed(() => props.preview === 'landing' || showDetail.value
   ? projection.value.orbits.filter(orbit => !props.hiddenBranch?.orbitIds.includes(orbit.id)
     && (!props.visibleBranch || props.visibleBranch.orbitIds.includes(orbit.id))) : [])
@@ -138,5 +151,15 @@ const marks = computed(() => props.contents.objects.flatMap(object => {
 .continuous-warden-map-svg .warden-route-object-glyph {
   pointer-events: none;
   font-size: 16px;
+}
+.continuous-warden-map-svg .warden-route-object-key {
+  fill: var(--map-unresolved);
+  font: 9px Consolas, monospace;
+  pointer-events: none;
+}
+.continuous-warden-map-svg .warden-route-object-name {
+  fill: var(--map-text);
+  font: 12px Georgia, serif;
+  pointer-events: none;
 }
 </style>

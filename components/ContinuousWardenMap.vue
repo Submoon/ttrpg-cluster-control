@@ -375,10 +375,10 @@
                 :key="object.id"
                 class="continuous-warden-transfer-object"
                 :class="{ 'is-root': object.id === landingBranchPreview.rootObjectId }"
-                :transform="`translate(${object.position.x} ${object.position.y})`"
+                :transform="`translate(${object.position.x} ${object.position.y}) scale(${detailTextScale(systemScreenScale(landingBranchPreview.projection))})`"
               >
-                <circle class="continuous-warden-transfer-object-mark" r="12" />
-                <text class="continuous-warden-object-glyph" y="5" text-anchor="middle">
+                <circle class="continuous-warden-transfer-object-mark" r="17" />
+                <text class="continuous-warden-object-glyph" y="8" text-anchor="middle">
                   {{ landingObjectGlyph(object) }}
                 </text>
                 <text class="continuous-warden-object-key" y="31" text-anchor="middle">
@@ -1748,12 +1748,16 @@ function systemScreenScale(projection: ContinuousWardenSystemProjection): number
   return projection.scale * viewport.value.k * svgPixelScale.value
 }
 
+function detailTextScale(pixelsPerLocalUnit: number): number {
+  return continuousMapTextScale(pixelsPerLocalUnit, 20, 28)
+}
+
 const detailTextPaintScales = computed(() => {
   const k = viewport.value.k
   const pixelScale = svgPixelScale.value
   return new Map(renderedProjections.value.map(projection => {
     const paintScale = projection.scale * k
-    return [projection.id, paintScale * continuousMapTextScale(paintScale * pixelScale, 20, 28)] as const
+    return [projection.id, paintScale * detailTextScale(paintScale * pixelScale)] as const
   }))
 })
 

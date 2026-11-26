@@ -176,7 +176,7 @@ export function prepareContinuousWardenImageScene(
     ? incidentRoutesForMapImage(request.cluster.routes, selected!.id)
     : request.cluster.routes
   const routeBranchDetail = request.scope === 'viewport'
-    && routeBranchShowsDetail(request.viewport.k * request.svgPixelScale)
+    && routeBranchShowsDetail(request.viewport.k, request.svgPixelScale)
   const routes = sourceRoutes.map((route): PreparedImageSceneRoute => {
     const geometry = allRouteGeometries.get(route.id)
     const incident = request.scope === 'system'

@@ -1,18 +1,12 @@
 import type { PlayerRouteBranch } from '../domain/player-projection'
 import type { Point } from '../domain/workspace-model'
 import type { ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
-import { CONTINUOUS_MAP_SYSTEM_SCALE } from './continuous-map-projection'
 import { rotatedEllipseBounds } from './continuous-map-history-reveal'
 import { mapImageBounds } from './map-image-scope'
 import { pointOnRoute } from './route-object-geometry'
 
 export function playerRouteBranchRoot(branch: PlayerRouteBranch) {
   return branch.map.objects.find(object => object.placement.kind === 'branch-root')!
-}
-
-/** Branch markers use the same geometric detail threshold as route-owned Warden branches. */
-export function playerRouteBranchShowsDetail(scenePixelScale: number): boolean {
-  return scenePixelScale * CONTINUOUS_MAP_SYSTEM_SCALE >= 0.65
 }
 
 /** Reads only public document geometry and the actual (possibly animated) public route curves. */

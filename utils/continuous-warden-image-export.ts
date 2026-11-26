@@ -172,7 +172,15 @@ function appendRouteBranch(
     glyph.setAttribute('text-anchor', 'middle')
     glyph.setAttribute('y', '5')
     glyph.textContent = objectMark(object)
-    mark.append(title, marker, glyph)
+    const key = createScopedElement(parent, 'text', 'warden-route-object-key')
+    key.setAttribute('text-anchor', 'middle')
+    key.setAttribute('y', '27')
+    key.textContent = object.locationKey
+    const name = createScopedElement(parent, 'text', 'warden-route-object-name')
+    name.setAttribute('text-anchor', 'middle')
+    name.setAttribute('y', '41')
+    name.textContent = object.name
+    mark.append(title, marker, glyph, key, name)
     parent.append(mark)
   }
 }
