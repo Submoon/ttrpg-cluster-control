@@ -1,6 +1,6 @@
 ---
 title: Qualify the complete Zone and route-placement workflow
-status: in-progress
+status: closed
 assignee: codex/issue-60-ticket-12
 type: implementation
 specification: ../spec.md
@@ -44,6 +44,12 @@ All prerequisite tickets are closed. Qualification began on 1c0cf5b2f90ecf185e8c
 - [x] Reuse relevant successful evidence for unchanged code; run cumulative qualification on the frozen candidate according to repository guidance.
 - [x] Keep most coverage in domain/controller tests. Reuse maintained browser journeys; a new browser scenario requires a distinct documented native-input, data-loss or disclosure risk.
 - [x] Record candidate revision, checks, first-run failures and artifact locations. Do not merge, release or close the GitHub parent as part of this ticket.
+
+## Resolution
+
+Qualification evidence was integrated in 8489c1dc. The delivered runtime passed lint, typecheck, production build, 754 pure checks, the browser-storage check and four smoke cases. The complete browser run passed 22 of 23 cases. The shared-fixture correction in b1c87b2d was verified by passing Search and Warden image export consecutively in the same worker. All 23 existing browser cases have passing evidence. Standards and specification reviewers confirmed closure of their findings.
+
+Local qualification artifacts are archived under `test-results/issue-60-evidence/12/`. References below beginning with `test-results/` are relative to the original qualification worktree and resolve within that archive after removing the prefix.
 
 ## Verification
 

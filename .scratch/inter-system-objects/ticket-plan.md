@@ -1,6 +1,6 @@
 ---
 title: Zone and route-object implementation ticket plan
-status: open
+status: closed
 approval_status: approved
 approved_on: 2026-11-26
 ---
@@ -80,4 +80,8 @@ Use temporary artifacts for incidental visual inspection, retain first-failure e
 
 ## Publication record
 
-The approved granularities and edges are the graph above. Detailed acceptance criteria and focused verification obligations live only in the linked ticket briefs. All 72 specification stories are assigned to delivery tickets before the cumulative qualification ticket. Implementation has not started; no merge, release or source closure is authorized by this plan.
+The approved granularities and edges are the graph above. Detailed acceptance criteria and focused verification obligations live in the linked ticket briefs. All 72 specification stories are assigned to delivery tickets before cumulative qualification.
+
+## Resolution
+
+All twelve local implementation tickets are closed. The [qualification record](tickets/12-integrated-zone-route-qualification.md) covers the integrated candidate on `codex/issue-60-zones-route-objects`. Its evidence includes the production build, the current and legacy data checks, the complete maintained browser coverage and independent review against the specification.

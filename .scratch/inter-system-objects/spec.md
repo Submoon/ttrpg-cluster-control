@@ -1,9 +1,10 @@
 ---
 title: Zones and catalogue objects on routes
-status: open
+status: closed
 framing_status: approved
 specification_status: ready
 verification_plan_status: approved
+implementation_status: complete
 triage_labels:
   - enhancement
   - ready-for-agent
@@ -242,3 +243,7 @@ The [approved framing](framing.md) is the retained decision record for this spec
 This is a multi-session feature touching domain ownership, geometry, persistence, public disclosure and destructive consequences. Split work into dependency-aware vertical slices from this specification, keeping existing acceptance evidence for unchanged areas. Each slice must preserve coherent current/legacy admission and the single mutation/persistence path.
 
 Publishing this specification means updating the local planning artifact under this repository's tracker policy. The enhancement and ready-for-agent roles are recorded on this local plan. The GitHub source remains the intake request; this drafting task does not update its body, labels or completion state.
+
+## Resolution
+
+All twelve local tickets are resolved on `codex/issue-60-zones-route-objects`. The [qualification ticket](tickets/12-integrated-zone-route-qualification.md) records the candidate, passing checks, review corrections and first-failure evidence. The source issue remains the tracker for delivery outside the integration branch.
