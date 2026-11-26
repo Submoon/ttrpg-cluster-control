@@ -947,3 +947,29 @@ test('a continuous direct resize cannot overwrite an Orbit adjustment published 
   orbitAdjustments.dispose()
   harness.dispose()
 })
+
+test('Add allocates a Location key across systems and retains it through Undo and Redo @pure', async () => {
+  setActivePinia(createPinia())
+  const initial = addStarSystem(createLocalWorkspace('Kestrel Reach', 'Vesper'), 'Harrow').workspace
+  const remoteSystem = initial.cluster.systems[1]!
+  remoteSystem.objects.push({ ...createSystemObject(remoteSystem, 'planet'), locationKey: 'PL-01' })
+  const harness = createHistoryHarness(initial)
+  const controller = createSystemCreationController(harness.workspace, harness.history)
+
+  try {
+    expect(await controller.creation.chooseCreationType({ kind: 'object', subtype: 'planet' })).toBe(true)
+    expect(await controller.creation.offerCreationCandidates([{
+      key: 'free', label: 'Free position', target: { kind: 'free', point: { x: 0.7, y: 0.7 } }, error: null,
+    }])).toBe(true)
+
+    const added = harness.workspace.value?.cluster.systems[0]?.objects.find(object => object.subtype === 'planet')
+    expect(added?.locationKey).toBe('PL-02')
+    expect((await harness.history.undo()).status).toBe('applied')
+    expect(harness.workspace.value?.cluster.systems[0]?.objects.some(object => object.id === added?.id)).toBe(false)
+    expect((await harness.history.redo()).status).toBe('applied')
+    expect(harness.workspace.value?.cluster.systems[0]?.objects.find(object => object.id === added?.id)).toEqual(added)
+  } finally {
+    controller.dispose()
+    harness.dispose()
+  }
+})

@@ -48,6 +48,19 @@
             </ul>
           </div>
 
+          <div v-if="props.summary.locationKeyReplacements.length" class="grid gap-1">
+            <h3 class="m-0 text-sm font-semibold">Location key replacements</h3>
+            <ul class="m-0 grid gap-1 pl-5">
+              <li
+                v-for="replacement in props.summary.locationKeyReplacements"
+                :key="replacement.replacementKey"
+                class="break-words"
+              >
+                {{ replacement.name }} in {{ replacement.system }} · {{ replacement.originalKey }} → {{ replacement.replacementKey }}
+              </li>
+            </ul>
+          </div>
+
           <p class="inspector-intro m-0">
             The system and its entities get new IDs. Compatible custom field definitions are reused, and their applicability targets are combined.
           </p>

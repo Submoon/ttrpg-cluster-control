@@ -38,7 +38,7 @@ A player link contains compressed public data in its URL fragment and does not r
 
 Applied changes save automatically in IndexedDB, separately for each browser profile and site origin. The app keeps a last-valid snapshot for recovery if the current workspace cannot load. Unapplied drafts and map view state are temporary. Clearing browser site data can erase the local workspace.
 
-Complete Jump Cluster backups contain editable Warden data. Current complete Cluster exports use format version 5; standalone Zone exports use version 4. Supported earlier backup versions remain importable. Player JSON uses a separate public document format, and player links contain a snapshot of that public document.
+Complete Jump Cluster backups contain editable Warden data. Current complete Cluster exports use format version 6. Standalone Zone exports use version 5. Complete backups keep legacy Location key assignments, and standalone imports review any key replacements before creating an independent copy. Supported earlier backup versions remain importable. Player JSON uses a separate public document format, and player links contain a snapshot of that public document.
 
 See [Google Drive setup](docs/google-drive-backups.md) and [Dropbox setup](docs/dropbox-setup.md) for provider configuration and backup behavior.
 

@@ -8,7 +8,7 @@ function transferWorkspace(): { workspace: LocalWorkspace; sourceId: string; des
   const base = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Source')
   const sourceBase = base.cluster.systems[0]!
   const root = sourceBase.objects[0]!
-  const source = { ...sourceBase, objects: [{ ...root, locationKey: 'STAR-01' }] }
+  const source = { ...sourceBase, objects: [{ ...root, locationKey: 'STAR-01', legacyLocationKey: { objectId: root.id, key: 'STAR-01' } }] }
   const destination = {
     ...source,
     id: 'destination',
@@ -17,6 +17,7 @@ function transferWorkspace(): { workspace: LocalWorkspace; sourceId: string; des
       ...root,
       id: 'destination-host',
       locationKey: 'STAR-01',
+      legacyLocationKey: { objectId: 'destination-host', key: 'STAR-01' },
       name: 'Destination Star',
     }, {
       ...root,
@@ -46,7 +47,7 @@ function transferWorkspace(): { workspace: LocalWorkspace; sourceId: string; des
   }
 }
 
-test('transfer draft keeps consequence review available while key edits block acceptance @pure', () => {
+test('transfer draft preserves a retained key in preview and acceptance @pure', () => {
   const { workspace, sourceId, destinationId, rootId } = transferWorkspace()
   const currentWorkspace = ref(workspace)
   const draft = useSystemObjectTransferDraft(() => currentWorkspace.value, sourceId, rootId)
@@ -57,24 +58,13 @@ test('transfer draft keeps consequence review available while key edits block ac
   expect(draft.status.value).toBe('choose-placement')
   draft.chooseOrbitPlacement('destination-ring', 1.3)
 
-  expect(draft.review.value?.keyConflicts).toEqual([
-    { objectId: rootId, currentKey: 'STAR-01', suggestedKey: 'STAR-02' },
-  ])
   expect(draft.review.value?.previewWorkspace.cluster.systems[0]!.objects.map(object => object.id))
     .not.toContain(rootId)
   expect(draft.canAccept.value).toBe(true)
 
-  draft.setLocationKey(rootId, 'PL-01')
-  expect(draft.review.value).not.toBeNull()
-  expect(draft.validationErrors.value.get(rootId)).toContain('already used')
-  expect(draft.canAccept.value).toBe(false)
-  expect(() => draft.accept()).toThrow()
-
-  draft.setLocationKey(rootId, ' TRANSFERRED ')
-  expect(draft.canAccept.value).toBe(true)
   const accepted = draft.accept()
   expect(accepted.cluster.systems[1]!.objects.find(object => object.id === rootId)?.locationKey)
-    .toBe('TRANSFERRED')
+    .toBe('STAR-01')
   expect(currentWorkspace.value).toEqual(workspace)
 })
 

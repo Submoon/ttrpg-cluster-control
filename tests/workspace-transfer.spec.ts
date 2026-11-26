@@ -6,7 +6,6 @@ import {
   prepareSystemObjectTransfer,
   resolveSystemObjectHistoryTarget,
   restoreJumpClusterBackup,
-  validateSystemObjectTransferKeys,
   type LocalWorkspace,
   type StarSystem,
   type SystemObject,
@@ -99,7 +98,7 @@ function nestedBranchWorkspace(): LocalWorkspace {
     ],
   }
   const destination = secondSystem(base, [
-    object('destination-host', { kind: 'system', x: 0.25, y: 0.35 }, { subtype: 'star', locationKey: 'STAR-01' }),
+    object('destination-host', { kind: 'system', x: 0.25, y: 0.35 }, { subtype: 'star', locationKey: 'STAR-02' }),
     object('destination-inherited', { kind: 'orbit', orbitId: 'destination-ring' }, { locationKey: 'PL-03' }),
     object('destination-explicit', { kind: 'orbit', orbitId: 'destination-ring' }, { locationKey: 'PL-04' }),
   ], [{ id: 'destination-ring', hostId: 'destination-host', order: 1 }])
@@ -191,79 +190,6 @@ test('history reveal resolves the transferred root to its actual owner in each s
   expect(resolveSystemObjectHistoryTarget(after, 'root'))
     .toEqual({ kind: 'object', id: 'root', systemId: destinationId })
   expect(resolveSystemObjectHistoryTarget(after, 'missing')).toBeNull()
-})
-
-test('key suggestions skip destination keys and every retained moved key, then reject unavailable edits @pure', () => {
-  const base = createLocalWorkspace('Kestrel Reach', 'Source')
-  const sourceBase = base.cluster.systems[0]!
-  const source: StarSystem = {
-    ...sourceBase,
-    objects: [
-      object('key-root', { kind: 'system', x: 0.5, y: 0.5 }, { subtype: 'star', locationKey: 'STAR-01' }),
-      object('collision-a', { kind: 'orbit', orbitId: 'key-ring-a' }, { locationKey: 'PL-01' }),
-      object('collision-b', { kind: 'orbit', orbitId: 'key-ring-b' }, { locationKey: 'PL-02' }),
-      object('retained-key', { kind: 'orbit', orbitId: 'key-ring-retained' }, { locationKey: 'PL-03' }),
-    ],
-    orbits: [
-      { id: 'key-ring-a', hostId: 'key-root', order: 1 },
-      { id: 'key-ring-b', hostId: 'key-root', order: 2 },
-      { id: 'key-ring-retained', hostId: 'key-root', order: 3 },
-    ],
-  }
-  const destination = secondSystem(base, [
-    object('used-pl-01', { kind: 'system', x: 0.2, y: 0.3 }, { locationKey: 'PL-01' }),
-    object('used-pl-02', { kind: 'system', x: 0.8, y: 0.3 }, { locationKey: 'PL-02' }),
-  ])
-  const workspace = workspaceWithSystems(base, source, destination)
-  const request = {
-    sourceSystemId: source.id,
-    rootObjectId: 'key-root',
-    destinationSystemId: destination.id,
-    placement: { kind: 'system' as const, x: 0.61, y: 0.42 },
-  }
-  const review = prepareSystemObjectTransfer(workspace, request)
-  expect(review.suggestedLocationKeys).toEqual(new Map([
-    ['key-root', 'STAR-01'],
-    ['collision-a', 'PL-04'],
-    ['collision-b', 'PL-05'],
-    ['retained-key', 'PL-03'],
-  ]))
-  expect(review.keyConflicts).toEqual([
-    { objectId: 'collision-a', currentKey: 'PL-01', suggestedKey: 'PL-04' },
-    { objectId: 'collision-b', currentKey: 'PL-02', suggestedKey: 'PL-05' },
-  ])
-
-  const changedAvailableKey = new Map(review.suggestedLocationKeys)
-  changedAvailableKey.set('retained-key', 'PL-20')
-  expect(validateSystemObjectTransferKeys(review, changedAvailableKey).get('retained-key'))
-    .toContain('must stay unchanged')
-  expect(() => applySystemObjectTransfer(workspace, request, changedAvailableKey)).toThrow()
-
-  const invalidKeys = new Map(review.suggestedLocationKeys)
-  invalidKeys.set('collision-a', '   ')
-  invalidKeys.set('collision-b', 'PL-01')
-  const errors = validateSystemObjectTransferKeys(review, invalidKeys)
-  expect(errors.get('collision-a')).toContain('required')
-  expect(errors.get('collision-b')).toContain('already used')
-  expect(() => applySystemObjectTransfer(workspace, request, invalidKeys)).toThrow()
-
-  const duplicateKeys = new Map(review.suggestedLocationKeys)
-  duplicateKeys.set('collision-a', 'SHARED')
-  duplicateKeys.set('collision-b', ' SHARED ')
-  const duplicateErrors = validateSystemObjectTransferKeys(review, duplicateKeys)
-  expect(duplicateErrors.get('collision-a')).toContain('duplicated')
-  expect(duplicateErrors.get('collision-b')).toContain('duplicated')
-  expect(() => applySystemObjectTransfer(workspace, request, duplicateKeys)).toThrow()
-
-  invalidKeys.set('collision-a', ' CUSTOM-A ')
-  invalidKeys.set('collision-b', 'CUSTOM-B')
-  const next = applySystemObjectTransfer(workspace, request, invalidKeys)
-  expect(next.cluster.systems[1]!.objects.slice(-4).map(candidate => candidate.locationKey)).toEqual([
-    'STAR-01', 'CUSTOM-A', 'CUSTOM-B', 'PL-03',
-  ])
-  expect(workspace.cluster.systems[0]!.objects.map(candidate => candidate.locationKey)).toEqual([
-    'STAR-01', 'PL-01', 'PL-02', 'PL-03',
-  ])
 })
 
 test('transfer clears only cross-owner route attachments and Station links in both directions @pure', () => {
@@ -378,7 +304,7 @@ test('the accepted transfer is a complete backup round trip with the original sn
   expect(accepted.cluster.systems[1]!.objects.map(candidate => candidate.id)).toContain('root')
 })
 
-test('prototype-looking legacy entity IDs remain map keys through branch angles and key edits @pure', () => {
+test('prototype-looking legacy entity IDs remain map keys through branch angle changes @pure', () => {
   const base = createLocalWorkspace('Kestrel Reach', 'Source')
   const sourceBase = base.cluster.systems[0]!
   const source: StarSystem = {
@@ -416,15 +342,11 @@ test('prototype-looking legacy entity IDs remain map keys through branch angles 
     destinationSystemId: destination.id,
     placement: { kind: 'orbit' as const, orbitId: 'legacy-destination-ring', angle: 2.3 },
   }
-  const review = prepareSystemObjectTransfer(workspace, request)
-  expect(review.suggestedLocationKeys.get('__proto__')).toBe('PL-02')
-  const next = applySystemObjectTransfer(workspace, request, new Map([
-    ['__proto__', ' TRANSFERRED '],
-  ]))
+  const next = applySystemObjectTransfer(workspace, request)
   const sourceAfter = objectPositions(next.cluster.systems[0]!, geometryOf(next))
 
   expect(next.cluster.systems[1]!.objects.find(candidate => candidate.id === '__proto__')?.locationKey)
-    .toBe('TRANSFERRED')
+    .toBe('PL-01')
   expect(Object.hasOwn(next.layout.objectAngles, '__proto__')).toBe(true)
   expect(next.layout.objectAngles['__proto__']).toBe(2.3)
   expect(Object.hasOwn(next.layout.objectAngles, 'constructor')).toBe(true)

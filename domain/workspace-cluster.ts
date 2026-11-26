@@ -53,10 +53,10 @@ export function initialClusterSystemPosition(index: number): Point {
 }
 
 /**
- * Creates an in-memory workspace containing one cluster and its initial star system.
+ * Creates an in-memory workspace containing one cluster and its initial Zone.
  * This does not persist anything; callers own the save boundary.
  * @param clusterName Name validated for the new Jump Cluster.
- * @param systemName Name validated for the initial star system.
+ * @param systemName Name validated for the initial Zone.
  * @returns A new workspace with default field settings and initial layout.
  * @throws If either name is blank or exceeds the domain name limit.
  */
@@ -64,7 +64,7 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
   const system = initialZone(systemName)
 
   return {
-    version: 5,
+    version: 6,
     id: crypto.randomUUID(),
     cluster: {
       id: crypto.randomUUID(),
@@ -85,11 +85,11 @@ export function createLocalWorkspace(clusterName: string, systemName: string): L
 }
 
 /**
- * Adds a new system and its initial cluster position without changing existing systems.
+ * Adds an empty Zone and its initial Cluster position.
  * @param workspace Current immutable workspace.
  * @param name Optional name; defaults to the next "New System" label.
  * @returns Both the added system and the resulting workspace.
- * @throws If the supplied system name is invalid.
+ * @throws If the supplied Zone name is invalid.
  */
 export function addStarSystem(
   workspace: LocalWorkspace,

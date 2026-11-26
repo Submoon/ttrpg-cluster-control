@@ -1629,12 +1629,12 @@ test('continuous Search rollback keeps selected members whose original focused o
     const [focusedSystem, memberSystem] = harness.workspace.value.cluster.systems
     const focusedObject = focusedSystem?.objects[0]
     if (!focusedSystem || !memberSystem || !focusedObject) throw new Error('Expected a focused system and a group member owner.')
-    const memberB = { ...focusedObject, id: 'search-rollback-group-b', name: 'Member B' }
+    const memberB = { ...focusedObject, id: 'search-rollback-group-b', name: 'Member B', locationKey: 'GROUP-B' }
     const thirdSystem = {
       ...focusedSystem,
       id: 'search-rollback-third-system',
       name: 'Rigel',
-      objects: [{ ...focusedObject, id: 'search-rollback-group-c', name: 'Member C' }],
+      objects: [{ ...focusedObject, id: 'search-rollback-group-c', name: 'Member C', locationKey: 'GROUP-C' }],
       orbits: [],
     }
     memberSystem.objects = [memberB]
@@ -1694,8 +1694,8 @@ test('continuous membership survives deletion of the focused owner @pure', async
     const [focusedSystem, remainingSystem] = harness.workspace.value.cluster.systems
     const focusedObject = focusedSystem?.objects[0]
     if (!focusedSystem || !remainingSystem || !focusedObject) throw new Error('Expected two systems and a focused object.')
-    const memberB = { ...focusedObject, id: 'deleted-focus-member-b', name: 'Member B' }
-    const memberC = { ...focusedObject, id: 'deleted-focus-member-c', name: 'Member C', locationKey: 'B' }
+    const memberB = { ...focusedObject, id: 'deleted-focus-member-b', name: 'Member B', locationKey: 'GROUP-B' }
+    const memberC = { ...focusedObject, id: 'deleted-focus-member-c', name: 'Member C', locationKey: 'GROUP-C' }
     remainingSystem.objects = [memberB, memberC]
     harness.store.setSelection({ activeView: 'cluster' })
     expect(await harness.workflows.navigation.inspectContinuousTarget({

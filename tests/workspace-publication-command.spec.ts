@@ -76,7 +76,7 @@ function createHarness(options: {
         const destination = initial.cluster.systems[1]
         if (!destination) throw new Error('The route workflow needs a second system.')
         const point = createSystemObject(first, 'jump-point')
-        const destinationPoint = createSystemObject(destination, 'jump-point')
+        const destinationPoint = { ...createSystemObject(destination, 'jump-point'), locationKey: 'JP-02' }
         first.objects.push(point)
         destination.objects.push(destinationPoint)
         const created = createJumpRoute(initial.cluster, {

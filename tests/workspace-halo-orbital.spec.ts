@@ -120,19 +120,33 @@ function createTransferWorkspace() {
   const sourceWithRoot = { ...source, objects: [...source.objects, root] }
   const orbit = createOrbit(sourceWithRoot, root.id)
   const sourceWithOrbit = { ...sourceWithRoot, orbits: [...sourceWithRoot.orbits, orbit] }
-  const child = { ...createSystemObject(sourceWithOrbit, 'moon', orbit.id), name: 'Nix' }
-  const sourceWithBranch = { ...sourceWithOrbit, objects: [...sourceWithOrbit.objects, child] }
+  const child = { ...createSystemObject(sourceWithOrbit, 'jump-point', orbit.id), name: 'Nix' }
+  const sourceWithBranch = { ...sourceWithOrbit, objects: sourceWithOrbit.objects.map(object => object.id === root.id
+    ? { ...object, legacyLocationKey: { objectId: root.id, key: root.locationKey } }
+    : object).concat(child) }
   const added = addStarSystem(initial, 'Helion')
   const destination = added.system
   const conflict = { ...createSystemObject(destination, 'planet'), name: 'Existing Planet' }
-  const destinationWithConflict = { ...destination, objects: [...destination.objects, conflict] }
+  const destinationWithConflict = { ...destination, objects: [...destination.objects, { ...conflict, legacyLocationKey: { objectId: conflict.id, key: conflict.locationKey } }] }
   const systems = added.workspace.cluster.systems.map(system => system.id === source.id
     ? sourceWithBranch
     : system.id === destination.id ? destinationWithConflict : system)
   return {
     workspace: {
       ...added.workspace,
-      cluster: { ...added.workspace.cluster, systems },
+      cluster: {
+        ...added.workspace.cluster,
+        systems,
+        routes: [{
+          id: 'halo-transfer-route',
+          jumpLevel: 1,
+          fromSystemId: source.id,
+          fromPointId: child.id,
+          toSystemId: destination.id,
+          toPointId: null,
+          playerShared: false,
+        }],
+      },
       layout: {
         ...added.workspace.layout,
         systemPositions: {
@@ -151,7 +165,7 @@ function createTransferWorkspace() {
   }
 }
 
-test('transferring a hosted branch reviews and resolves a destination Location key conflict', async ({ page }) => {
+test('transferring a hosted branch reviews its route attachment and retains its Location keys', async ({ page }) => {
   test.setTimeout(60_000)
   await captureMapExportBlobs(page)
   await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 900 } })
@@ -197,9 +211,7 @@ test('transferring a hosted branch reviews and resolves a destination Location k
   await expect(review).toContainText('2 objects and 1 hosted Orbits will move together.')
   await expect(review).toContainText('Herma')
   await expect(review).toContainText('Nix')
-  const replacementKey = review.getByLabel('Replacement Location key for Herma', { exact: true })
-  await expect(replacementKey).not.toHaveValue(fixture.root.locationKey)
-  const appliedRootKey = await replacementKey.inputValue()
+  await expect(review.getByRole('heading', { name: 'Jump Route attachments that will clear' })).toBeVisible()
   await review.getByRole('button', { name: 'Apply transfer', exact: true }).click()
   await expect(review).toBeHidden()
   await waitForWorkspaceSaved(page)
@@ -213,8 +225,7 @@ test('transferring a hosted branch reviews and resolves a destination Location k
   expect(sourceAfter.orbits).toEqual([])
   const movedRoot = destinationAfter.objects.find(object => object.id === fixture.root.id)
   const movedChild = destinationAfter.objects.find(object => object.id === fixture.child.id)
-  expect(movedRoot?.locationKey).toBe(appliedRootKey)
-  expect(movedRoot?.locationKey).not.toBe(fixture.root.locationKey)
+  expect(movedRoot?.locationKey).toBe(fixture.root.locationKey)
   expect(movedChild?.placement).toEqual({ kind: 'orbit', orbitId: fixture.orbit.id })
   expect(destinationAfter.orbits).toContainEqual({ ...fixture.orbit, hostId: fixture.root.id })
   expect(destinationAfter.objects.find(object => object.id === fixture.conflict.id)?.locationKey)

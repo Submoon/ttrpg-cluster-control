@@ -98,7 +98,7 @@ function workspaceForPortableExports(): LocalWorkspace {
     id: 'portable-beta-star',
     family: 'CelestialBody',
     subtype: 'star',
-    locationKey: 'A',
+    locationKey: 'STAR-02',
     name: 'Beta Star',
     description: '',
     publication: 'known-type',
@@ -123,7 +123,7 @@ function workspaceForPortableExports(): LocalWorkspace {
     id: 'portable-beta-planet',
     family: 'CelestialBody',
     subtype: 'planet',
-    locationKey: 'PL-01',
+    locationKey: 'PL-02',
     name: 'Harrow',
     description: '',
     publication: 'known-type',
@@ -203,7 +203,7 @@ test('Cluster JSON export contains the complete portable campaign projection @pu
 
   expect(exported).toEqual({
     format: 'ttrpg-cluster-control-map',
-    version: 5,
+    version: 6,
     type: 'cluster',
     cluster: workspace.cluster,
     objectFieldSettings: workspace.objectFieldSettings,
@@ -343,7 +343,7 @@ test('standalone JSON export carries shared definitions and only its system layo
 
   expect(exported).toEqual({
     format: 'ttrpg-cluster-control-map',
-    version: 4,
+    version: 5,
     type: 'system',
     system,
     objectFieldSettings: workspace.objectFieldSettings,
