@@ -98,7 +98,7 @@ test('global Search reveals an exact Location key independently of the map filte
   await searchDialog.getByRole('button', { name: 'Close filters', exact: true }).click()
   await searchDialog.getByRole('option', { name: /Captured echo.*Jump Route.*TRANSIT-HAZARD/ }).click()
 
-  const routeMark = map.getByRole('button', { name: 'Select TRANSIT-HAZARD, Captured echo', exact: true })
+  const routeMark = map.getByRole('button', { name: 'Select TRANSIT-HAZARD, Captured echo (Anomaly)', exact: true })
   await expect(routeMark).toHaveAttribute('aria-pressed', 'true')
   await expect(routeMark).toHaveClass(/is-dimmed/)
   await expect(routeMark.locator('[data-map-search-locator]')).toBeVisible()

@@ -1,6 +1,6 @@
 ---
 title: Export Warden maps with route objects
-status: in-progress
+status: closed
 assignee: codex
 type: implementation
 specification: ../spec.md
@@ -41,6 +41,8 @@ Implementation starts at `14e13d7bee9f0b3704066e90bb568f32bc48fd29`, the issue i
 - [ ] Use applied source data and operation-owned preflight/context checks so cancellation or a stale asynchronous result cannot download an unrelated scene.
 
 ## Verification
+
+70f5e84b was integrated in a5fa7ecf. It passed 31 focused checks, lint and typecheck. The maintained Warden download journey passed on integrated revision a22b4077, including the complete Cluster SVG and the named Zone SVG/PNG. The exact browser evidence is retained under the qualification worktree's `test-results/local-test-1795692251299-14188-c87d49e0/playwright-run-1`.
 
 Cover scope/bounds/serialization and async ownership with existing pure/controller seams. Extend the maintained private-file/download journey with targeted SVG/PNG content assertions, not a new export journey for every scope.
 
