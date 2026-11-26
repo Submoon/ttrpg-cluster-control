@@ -64,6 +64,7 @@ export function useEditorNavigation(options: {
     resolveTransition: transitions.resolveTransition,
     getChartSession: () => chart.session.value,
     getEntitySession: () => entity.entitySession.value,
+    selectRouteObjectInCluster,
     compactViewport: viewport.isCompactViewport,
     editorError,
     setSelection,

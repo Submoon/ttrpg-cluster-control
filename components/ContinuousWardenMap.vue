@@ -321,6 +321,8 @@
         :viewport="viewport"
         :svg-pixel-scale="svgPixelScale"
         :selected-object-id="inspectedTarget?.kind === 'route-object' ? inspectedTarget.objectId : undefined"
+        :dimmed-object-ids="dimmedObjectIds"
+        :search-locator-object-id="searchLocatorTarget?.ownerId === id ? searchLocatorTarget.objectId : undefined"
       />
       <g class="cluster-map-content" :transform="cameraTransform">
         <g class="cluster-map-items">
@@ -584,6 +586,7 @@ import type { SelectedObjectDrag, SelectedObjectDragPreview } from '../composabl
 import { useContinuousMapDetailMotion } from '../composables/useContinuousMapDetailMotion'
 import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
 import WardenRouteObjectLayer from './maps/WardenRouteObjectLayer.vue'
+import { projectRouteObjects } from '../utils/route-object-geometry'
 import { routeObjectTargetAt } from './maps/route-object-target'
 import ContinuousWardenOrbitLayer from './maps/ContinuousWardenOrbitLayer.vue'
 import WardenObjectPublicationBadge from './maps/WardenObjectPublicationBadge.vue'
@@ -713,7 +716,7 @@ const minimumZoomScale = ref(MAP_ZOOM_MIN_SCALE)
 const svgPixelScale = ref(1)
 const svgViewport = ref<SvgViewportRect>({ x: 0, y: 0, width: 960, height: 560 })
 const ready = ref(false)
-const searchLocatorTarget = shallowRef<{ clusterId: string; systemId: string; objectId: string } | null>(null)
+const searchLocatorTarget = shallowRef<{ clusterId: string; ownerId: string; objectId: string } | null>(null)
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | undefined
 let resizeObserver: ResizeObserver | undefined
 let viewportFeedbackTimer: ReturnType<typeof setTimeout> | undefined
@@ -2205,6 +2208,7 @@ function frameSearchTarget(target: import('../utils/workspace-search').SearchTar
     return true
   }
   if (target.kind === 'system') return frameSystem(target.systemId, usableRect)
+  if (target.routeId !== undefined) return frameRouteObject(target.routeId, target.objectId, usableRect)
   return frameSearchObjectBranch(target.systemId, target.objectId, usableRect)
 }
 
@@ -2215,6 +2219,7 @@ function centerInspectedTarget(target: InspectedMapTarget, usableRect?: SvgViewp
   }
   if (target.kind === 'system') return frameSystem(target.systemId, usableRect, true)
   if (target.kind === 'route') return frameRoute(target.routeId, usableRect, true)
+  if (target.kind === 'route-object') return frameRouteObject(target.routeId, target.objectId, usableRect)
   if (target.kind === 'object' || target.kind === 'orbit') {
     return frameEntityTarget(
       target.systemId,
@@ -2225,6 +2230,24 @@ function centerInspectedTarget(target: InspectedMapTarget, usableRect?: SvgViewp
     )
   }
   return false
+}
+
+function frameRouteObject(routeId: string, objectId: string, usableRect?: SvgViewportRect): boolean {
+  const branch = displayedRouteBranches.value.find(candidate => candidate.id === routeId)
+  const element = svgElement.value
+  if (!branch || !element || !zoomBehavior) return false
+  const point = projectRouteObjects(branch.contents, branch.geometry, props.workspace.layout).positions.get(objectId)
+  const rect = normalizeSvgViewportRect(usableRect ?? getSvgViewportRect(element))
+  if (!point || !rect) return false
+  const next = centerMapTargetViewport({
+    current: getViewport(),
+    usableRect: rect,
+    targetBounds: { x: point.x, y: point.y, width: 0, height: 0 },
+    maximumScale: MAP_ZOOM_MAX_SCALE,
+  })
+  if (!next) return false
+  setViewport(next)
+  return true
 }
 
 function frameRoute(routeId: string, usableRect: SvgViewportRect | undefined, center: boolean): boolean {
@@ -2255,23 +2278,24 @@ function prepareSearchLocator(objectId: string): () => void {
   const generation = searchInteractionGeneration
   const clusterId = props.cluster.id
   const target = props.inspectedTarget
+  const ownerId = searchLocatorOwner(target, objectId)
   return () => {
-    const currentTarget = props.inspectedTarget
-    if (generation !== searchInteractionGeneration
+    if (ownerId === undefined || generation !== searchInteractionGeneration
       || props.cluster.id !== clusterId
-      || currentTarget?.kind !== 'object'
-      || target?.kind !== 'object'
-      || target.objectId !== objectId
-      || currentTarget.systemId !== target.systemId
-      || currentTarget.objectId !== objectId
+      || searchLocatorOwner(props.inspectedTarget, objectId) !== ownerId
       || !dimmedObjectIds.value.has(objectId)) return
-    searchLocatorTarget.value = { clusterId, systemId: target.systemId, objectId }
+    searchLocatorTarget.value = { clusterId, ownerId, objectId }
   }
 }
 
-function isSearchLocatorFor(systemId: string, objectId: string): boolean {
+function searchLocatorOwner(target: InspectedMapTarget | null | undefined, objectId: string): string | undefined {
+  if (target?.kind === 'object' && target.objectId === objectId) return target.systemId
+  if (target?.kind === 'route-object' && target.objectId === objectId) return target.routeId
+}
+
+function isSearchLocatorFor(ownerId: string, objectId: string): boolean {
   const locator = searchLocatorTarget.value
-  return locator?.systemId === systemId && locator.objectId === objectId
+  return locator?.ownerId === ownerId && locator.objectId === objectId
 }
 
 function dismissSearchLocator(): void {
@@ -2282,8 +2306,7 @@ function dismissSearchLocator(): void {
 watch([() => props.cluster.id, () => props.inspectedTarget, dimmedObjectIds], ([clusterId, target, dimmed]) => {
   const locator = searchLocatorTarget.value
   if (locator && (locator.clusterId !== clusterId
-    || target?.kind !== 'object'
-    || !isSearchLocatorFor(target.systemId, target.objectId)
+    || searchLocatorOwner(target, locator.objectId) !== locator.ownerId
     || !dimmed.has(locator.objectId))) dismissSearchLocator()
 }, { flush: 'sync' })
 

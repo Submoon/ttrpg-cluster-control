@@ -1,4 +1,5 @@
 import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRenderer, nextTick, ref } from 'vue'
@@ -322,6 +323,41 @@ test('continuous Search reveals an object through the existing Cluster map handl
     expect(harness.store.selectedObjectIds).toEqual([object.id])
     expect(framedTargets).toEqual([result.target])
     expect(search.open.value).toBe(false)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('continuous Search frames a route occupant without assigning it a Zone or changing campaign history @pure', async () => {
+  const harness = createSearchHarness('Kestrel Reach', 'Vesper', Promise.resolve(), undefined, undefined, false, true)
+  try {
+    const { workspace, route, occupant } = workspaceWithRouteObjects()
+    harness.workspace.value = workspace
+    await nextTick()
+    const framed: Parameters<NonNullable<MapNavigationHandle['frameSearchTarget']>>[0][] = []
+    const located: string[] = []
+    harness.workflows.mapControls.clusterMapRef.value = {
+      ...createMapHandle({
+        whenReady: async () => true,
+        frameSearchTarget: target => { framed.push(target); return true },
+        focusMap: () => undefined,
+      }),
+      prepareSearchLocator: id => () => { located.push(id) },
+    }
+    const search = harness.workflows.search
+    search.open.value = true
+    search.query.value = occupant.locationKey
+    const result = search.results.value[0]!
+
+    expect(await search.reveal(result.target)).toEqual({ status: 'revealed' })
+    expect(harness.store.inspectedTarget).toEqual({ kind: 'route-object', routeId: route.id, objectId: occupant.id })
+    expect(harness.store.activeView).toBe('cluster')
+    expect(harness.store.selectedObjectIds).toEqual([])
+    expect(harness.store.clusterSelectedSystemId).toBeNull()
+    expect(framed).toEqual([result.target])
+    expect(located).toEqual([occupant.id])
+    expect(harness.history.getEntries()).toHaveLength(0)
+    expect(harness.workspace.value).toEqual(workspace)
   } finally {
     harness.dispose()
   }
