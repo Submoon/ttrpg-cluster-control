@@ -128,13 +128,14 @@ function sourceClusterExport(options: {
 
   return {
     format: 'ttrpg-cluster-control-map',
-    version: 6,
+    version: 7,
     type: 'cluster',
     cluster: {
       id: 'source-cluster',
       name: 'Imported Reach',
       playerTitle: 'Public Reach',
       systems: [alpha, beta],
+      routeContents: {},
       routes: [
         {
           id: 'source-known-route',
@@ -649,10 +650,10 @@ test('invalid version and foreign layout reject without changing the destination
   }
 
   expect(() => prepareJsonImport(destination, invalidVersion))
-    .toThrow('Choose a valid version 1 through 6 Jump Cluster or version 1 through 5 Zone JSON export.')
+    .toThrow('Choose a valid version 1 through 7 Jump Cluster or version 1 through 5 Zone JSON export.')
   expect(destination).toEqual(before)
   expect(() => prepareJsonImport(destination, foreignSystemLayout))
-    .toThrow('Choose a valid version 1 through 6 Jump Cluster or version 1 through 5 Zone JSON export.')
+    .toThrow('Choose a valid version 1 through 7 Jump Cluster or version 1 through 5 Zone JSON export.')
   expect(destination).toEqual(before)
 })
 

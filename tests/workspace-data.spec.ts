@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import {
@@ -20,7 +21,7 @@ import {
   waitForWorkspaceStartup,
   wardenMap,
 } from './helpers'
-import { addStarSystem, createLocalWorkspace, createSystemObject, restoreLocalWorkspace } from '../domain/workspace'
+import { addStarSystem, createLocalWorkspace, createSystemObject, exportJumpCluster, restoreJumpClusterBackup, restoreLocalWorkspace } from '../domain/workspace'
 import { createWorkspaceSnapshot } from '../utils/workspace-storage'
 
 async function readWorkspaceRecoveryRecords(page: import('@playwright/test').Page): Promise<{ current: unknown; backup: unknown }> {
@@ -216,7 +217,7 @@ test('version 4 route restoration infers systems and preserves route identity an
   const restored = restoreLocalWorkspace(legacy)
 
   expect(restored).toMatchObject({
-    version: 6,
+    version: 7,
     cluster: {
       routes: [
         {
@@ -361,7 +362,7 @@ test('restoring a workspace removes legacy object targets without deleting value
 })
 
 
-test('the default Warden map restores a legacy backup with retained layout and valid route attachments', async ({ page }) => {
+test('the default Warden map restores complete backups with retained layout and a hosted route object', async ({ page }) => {
   test.setTimeout(90_000)
   await captureMapExportBlobs(page)
   await page.goto('/')
@@ -459,7 +460,15 @@ test('the default Warden map restores a legacy backup with retained layout and v
     await expect(draftAfterFailedReplacement.getByLabel('Zone', { exact: true })).toHaveValue('Unapplied Vesper')
     await hideWorkspaceInspector(page)
 
-    const retryPreview = await reviewJumpClusterBackup(page, 'campaign-baseline.json', legacyBackupText)
+    const migrated = restoreJumpClusterBackup(incoming)
+    const { workspace: routeWorkspace, root, orbit } = workspaceWithRouteObjects()
+    const routeId = 'campaign-baseline-route'
+    const routeBranch = Object.values(routeWorkspace.cluster.routeContents)[0]!
+    migrated.cluster.routeContents = { [routeId]: routeBranch }
+    Object.assign(migrated.layout.orbitRadii, routeWorkspace.layout.orbitRadii)
+    Object.assign(migrated.layout.orbitRotations, routeWorkspace.layout.orbitRotations)
+    Object.assign(migrated.layout.objectAngles, routeWorkspace.layout.objectAngles)
+    const retryPreview = await reviewJumpClusterBackup(page, 'route-campaign.json', JSON.stringify(exportJumpCluster(migrated)))
     await resolveJumpClusterRestoreReview(retryPreview, 'confirm', true)
     await expect(retryPreview).toBeHidden()
     await waitForWorkspaceSaved(page)
@@ -492,6 +501,34 @@ test('the default Warden map restores a legacy backup with retained layout and v
     const recordsAfterStaleSave = await readWorkspaceRecoveryRecords(page)
     expect((recordsAfterStaleSave.current as { cluster: { name: string } }).cluster.name).toBe('Kestrel Reach Prime')
     expect((recordsAfterStaleSave.backup as { cluster: { name: string } }).cluster.name).toBe('Active Reach')
+
+    await fitWorkspaceMap(page)
+    const restoredMap = wardenMap(page)
+    const mark = restoredMap.getByRole('button', { name: /Select VES-01, Survey vessel/ })
+    const path = restoredMap.locator(`.cluster-route[data-route-id="${routeId}"] .cluster-route-line`)
+    const cubic = (await path.getAttribute('d'))!.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi)!.map(Number)
+    const routePoint = {
+      x: (27 * cubic[0]! + 27 * cubic[2]! + 9 * cubic[4]! + cubic[6]!) / 64,
+      y: (27 * cubic[1]! + 27 * cubic[3]! + 9 * cubic[5]! + cubic[7]!) / 64,
+    }
+    const expected = await path.evaluate((element, point) =>
+      new DOMPoint(point.x, point.y).matrixTransform((element as SVGPathElement).getScreenCTM()!).toJSON(), routePoint)
+    const actual = await mark.evaluate(element =>
+      new DOMPoint(0, 0).matrixTransform((element as SVGGraphicsElement).getScreenCTM()!).toJSON())
+    expect(Math.hypot(expected.x - actual.x, expected.y - actual.y)).toBeLessThan(2)
+
+    await mark.click()
+    const routeInspector = page.getByRole('region', { name: 'Object inspector' })
+    await expect(routeInspector.getByRole('heading', { name: root.name })).toBeVisible()
+    await expect(routeInspector.getByText(/25%/)).toBeVisible()
+    await routeInspector.getByRole('button', { name: 'Edit map object' }).click()
+    await routeInspector.getByLabel('Name', { exact: true }).fill('Patrol vessel')
+    await routeInspector.getByRole('button', { name: /apply changes/i }).click()
+    await waitForWorkspaceSaved(page)
+    await expect(restoredMap.getByRole('button', { name: /Select VES-01, Patrol vessel/ })).toBeVisible()
+    expect((await readWorkspaceRecoveryRecords(page)).current).toMatchObject({
+      layout: { orbitRadii: { [orbit.id]: { horizontal: 92, vertical: 45 } } },
+    })
   } finally {
     await staleTab.close()
   }
@@ -502,6 +539,7 @@ test('the default Warden map restores a legacy backup with retained layout and v
   await expect(map).toHaveAccessibleName('Kestrel Reach Prime continuous map')
   await expect(map.locator('.cluster-route[data-route-id="campaign-baseline-route"]')).toBeVisible()
   await expect(map.locator('.cluster-route[data-route-id="legacy-loop-route"]')).toHaveCount(0)
+  await expect(map.getByRole('button', { name: /Select VES-01, Patrol vessel/ })).toBeVisible()
 
   const importedExport = await downloadJson(page, 'Export Jump Cluster JSON')
   expect(importedExport.cluster?.id).toBe(campaignBaselineFixture.cluster.id)
@@ -529,7 +567,14 @@ test('the default Warden map restores a legacy backup with retained layout and v
   expect(importedVesper.objects.map(object => object.id)).toContain('legacy-loop-point')
   expect(importedExport.layout.systemPositions).toEqual(campaignBaselineFixture.layout.systemPositions)
   expect(importedExport.layout.orbitRadii).toMatchObject(campaignBaselineFixture.layout.orbitRadii)
-  expect(importedExport.layout.objectAngles).toEqual(campaignBaselineFixture.layout.objectAngles)
+  expect(importedExport.layout.objectAngles).toMatchObject(campaignBaselineFixture.layout.objectAngles)
+  expect(importedExport.cluster?.routeContents?.['campaign-baseline-route']).toMatchObject({
+    objects: [
+      { id: 'route-vessel', name: 'Patrol vessel', placement: { kind: 'route', progression: 0.25 } },
+      { id: 'route-anomaly', placement: { kind: 'orbit', orbitId: 'route-vessel-orbit' } },
+    ],
+    orbits: [{ id: 'route-vessel-orbit', hostId: 'route-vessel' }],
+  })
 
   const importedHierarchy = await openWorkspaceHierarchy(page)
   await importedHierarchy.getByRole('treeitem', { name: 'Vesper Prime', exact: true }).click()

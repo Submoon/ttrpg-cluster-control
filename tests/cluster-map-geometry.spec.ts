@@ -20,6 +20,7 @@ function clusterForRoutes(
     playerTitle: 'Player Jump Cluster',
     systems,
     routes: [...routes],
+    routeContents: {},
   }
 }
 
@@ -355,6 +356,7 @@ test('scene geometry accepts distant points but rejects renderer-clamped coordin
     playerTitle: 'Player Jump Cluster',
     systems: [fromSystem],
     routes: [firstRoute, secondRoute],
+    routeContents: {},
   }
   const systemPositions = { [fromSystem.id]: { x: 0.5, y: 0.5 } }
   const oneDistantExit = { [firstRoute.id]: { x: 8_500_000, y: 900 } }

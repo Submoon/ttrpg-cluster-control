@@ -92,7 +92,7 @@ export type ObjectPlacement =
  * Catalogue entity with stable ID/key, domain values, and either system-level or Orbit placement.
  * A Jump Point's optional physical Station link is separate from logical route endpoints.
  */
-export interface SystemObject {
+export interface SystemObject<P extends CataloguePlacement = ObjectPlacement> {
   id: string
   publication: PublicationMode
   /** Optional per-object glyph fill; absence retains the map's current theme and type styling. */
@@ -106,7 +106,7 @@ export interface SystemObject {
   description: string
   playerText: string
   playerFieldMasks: string[]
-  placement: ObjectPlacement
+  placement: P
   /** Exact effective position retained from an older Zone frame. */
   legacyZonePlacement?: { systemId: string; orbitId: string | null; x: number; y: number }
   atmosphere?: string
@@ -183,6 +183,20 @@ export interface ChartDetailsChanges {
   publication: PublicationMode
 }
 
+/** A route root's owner is the route containing this branch; Orbit occupants inherit that owner. */
+export type RouteObjectPlacement =
+  | { kind: 'route'; progression: number }
+  | Extract<ObjectPlacement, { kind: 'orbit' }>
+
+export type CataloguePlacement = ObjectPlacement | RouteObjectPlacement
+export type RouteObject = Omit<SystemObject<RouteObjectPlacement>, 'legacyZonePlacement'>
+export type CatalogueObject = SystemObject<CataloguePlacement>
+
+export interface RouteContents {
+  objects: RouteObject[]
+  orbits: Array<Extract<Orbit, { hostId: string }>>
+}
+
 export interface JumpCluster {
   id: string
   name: string
@@ -190,6 +204,8 @@ export interface JumpCluster {
   playerTitle: string
   systems: StarSystem[]
   routes: JumpRoute[]
+  /** Sparse contents indexed by Jump Route ID. */
+  routeContents: Record<string, RouteContents>
 }
 
 export interface JumpPointReference {
@@ -201,7 +217,7 @@ export interface JumpPointReference {
  * Durable local campaign map; temporary view/zoom state is intentionally kept outside this shape.
  */
 export interface LocalWorkspace {
-  version: 6
+  version: 7
   id: string
   cluster: JumpCluster
   layout: {
@@ -236,7 +252,7 @@ export interface ExportedLayout {
 
 export type JumpClusterExport = {
   format: 'ttrpg-cluster-control-map'
-  version: 6
+  version: 7
   type: 'cluster'
   cluster: JumpCluster
   objectFieldSettings: ObjectFieldSettings

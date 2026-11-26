@@ -1,3 +1,5 @@
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
+import { useRouteObjectInspectorSession } from '../composables/editor-workflows/useRouteObjectInspectorSession'
 import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
@@ -866,4 +868,37 @@ test('a blank route-creation session blocks Undo while a clean armed system Add 
       harness.dispose()
     }
   })
+})
+
+test('a route object Inspector edit saves through the history writer and keeps its hosted branch @pure', async () => {
+  const { workspace, route, root, occupant, orbit } = workspaceWithRouteObjects()
+  const harness = createHistoryHarness(workspace)
+  const session = useRouteObjectInspectorSession({
+    workspace: harness.workspace,
+    mutations: harness.history,
+    isSelected: () => true,
+  })
+  try {
+    expect(session.begin(route.id, root.id)).toBe(true)
+    const draft = session.session.value!
+    draft.draft.name = 'Patrol vessel'
+    draft.draft.description = 'Revised orders'
+    expect(await session.apply(draft.id)).toBe(true)
+    expect(harness.publicationCount).toBe(1)
+    const changed = harness.workspace.value?.cluster.routeContents[route.id]
+    expect(changed?.objects[0]).toMatchObject({
+      id: root.id, name: 'Patrol vessel', description: 'Revised orders', placement: { kind: 'route', progression: 0.25 },
+    })
+    expect(changed?.objects[1]).toEqual(occupant)
+    expect(changed?.orbits).toEqual([orbit])
+    expect(harness.history.getEntries()[0]?.action.target).toEqual({ kind: 'route-object', id: root.id, routeId: route.id })
+    const undo = await harness.history.undo()
+    expect(undo.status).toBe('applied')
+    expect(harness.workspace.value?.cluster.routeContents[route.id]?.objects[0]).toEqual(root)
+    const redo = await harness.history.redo()
+    expect(redo.status).toBe('applied')
+    expect(harness.workspace.value?.cluster.routeContents[route.id]).toEqual(changed)
+  } finally {
+    harness.dispose()
+  }
 })

@@ -1,7 +1,7 @@
 /**
  * Pure projections for the field-definition UI; stored workspace values remain owned by the domain model.
  */
-import {
+import { catalogueBranches,
   catalogueTypes,
   customFieldApplicabilityTargetKey,
   type CustomFieldApplicabilityTarget,
@@ -161,7 +161,7 @@ export function fieldValueAssignments(
   definition: FieldDefinitionSummary,
 ): FieldValueAssignment[] {
   const assignments: FieldValueAssignment[] = []
-  for (const system of workspace.cluster.systems) {
+  for (const system of catalogueBranches(workspace.cluster)) {
     for (const object of system.objects) {
       const value = definition.kind === 'native'
         ? object[definition.nativeField]

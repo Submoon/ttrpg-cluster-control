@@ -2,7 +2,7 @@
  * Prepares field-definition consequences before applying memory and acknowledging a session mutation.
  */
 import { computed, reactive, shallowRef, watch, type Ref } from 'vue'
-import {
+import { catalogueBranches, type CatalogueObject,
   addCustomFieldDefinition,
   customFieldApplicabilityTargetKey,
   isCustomFieldValueCompatible,
@@ -494,7 +494,7 @@ export function useFieldDefinitionWorkflows({
     fieldDefinitionsSession.review = null
   }
 
-  function assignedValue(object: LocalWorkspace['cluster']['systems'][number]['objects'][number], fieldId: string): CustomFieldValue | undefined {
+  function assignedValue(object: CatalogueObject, fieldId: string): CustomFieldValue | undefined {
     if (fieldId === 'native:atmosphere') return object.atmosphere
     if (fieldId === 'native:port-class') return object.portClass
     return object.customFieldValues?.[fieldId]
@@ -508,7 +508,7 @@ export function useFieldDefinitionWorkflows({
     operation: 'update' | 'remove',
   ): FieldDefinitionReviewImpact[] {
     const impacts: FieldDefinitionReviewImpact[] = []
-    for (const system of currentWorkspace.cluster.systems) {
+    for (const system of catalogueBranches(currentWorkspace.cluster)) {
       for (const object of system.objects) {
         const value = assignedValue(object, fieldId)
         if (value === undefined) continue

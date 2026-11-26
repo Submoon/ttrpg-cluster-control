@@ -1,6 +1,6 @@
 ---
 title: Restore and preserve route objects
-status: open
+status: in-progress
 type: implementation
 specification: ../spec.md
 baseline: c649b576f1636c8ffec57da6b6112b6316bee882
@@ -30,7 +30,7 @@ Use origin/main at c649b576f1636c8ffec57da6b6112b6316bee882, verified on 2026-11
 
 Use the accepted specification's whole-Cluster key policy and explicit legacy exceptions. Route objects include stationary obstacles, anomalies, derelicts and ships; position is manual. Keep one guarded mutation/writer/history path and exclude unapplied previews from saved or public data.
 
-This ticket is planned and unclaimed. Its ready-for-agent role means the brief is specified; unresolved blockers still prevent execution. Intermediate consumers must preserve admitted data or explicitly reject an unsupported operation, never silently drop records.
+Claimed on 2026-11-26 from integrated prerequisite revision `642f64eb`, based on the original comparison baseline above. Intermediate consumers must preserve admitted data or explicitly reject an unsupported operation, never silently drop records.
 
 ## Acceptance criteria
 
@@ -48,4 +48,3 @@ Prove restore/edit/save/export/restore through codecs and real editor/writer sea
 Prefer existing domain, geometry, codec/projection and real controller seams. A ticket does not imply a new browser journey. Extend the maintained owning journey with the smallest useful assertion; a new browser scenario requires a distinct important native-input, data-loss or disclosure failure that cheaper checks cannot observe. Follow repository artifact ownership, source-freeze and first-failure evidence rules.
 
 Record the checked candidate, command/scope, result and evidence location. This brief does not authorize merge, release or modification/closure of the GitHub source.
-

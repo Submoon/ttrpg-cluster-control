@@ -1,4 +1,5 @@
 /** Pure whole-workspace proposal and immutable application for transferring one hosted object branch. */
+import { routeContentsFor } from './workspace-route-objects'
 import type { LocalWorkspace, StarSystem, SystemObject } from './workspace-model'
 import { canPlaceObjectInOrbit } from './workspace-orbits'
 import { captureEffectiveObjectAngles } from './workspace-placement'
@@ -242,6 +243,9 @@ function applyTransfer(
     const detachFrom = detachedEnds?.has('from') ?? false
     const detachTo = detachedEnds?.has('to') ?? false
     if (!detachFrom && !detachTo) return route
+    if (routeContentsFor(workspace.cluster, route.id)?.objects.length) {
+      throw new Error('The transfer would detach a Jump Point from a route containing route objects.')
+    }
     if (detachFrom && detachTo && route.toSystemId !== null) {
       return { ...route, fromPointId: null, toPointId: null }
     }

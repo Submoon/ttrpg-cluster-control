@@ -2,7 +2,7 @@
  * Validate workspace structure and normalize supported legacy layouts and field formats on restore.
  */
 import { defaultObjectFieldSettings, nativePlayerFieldIds } from './workspace-model'
-import type { JumpCluster, JumpRoute, LocalWorkspace, ObjectFieldSettings, Point, StarSystem, SystemFrameInsets } from './workspace-model'
+import type { CatalogueObject, RouteContents, Orbit, JumpCluster, JumpRoute, LocalWorkspace, ObjectFieldSettings, Point, StarSystem, SystemFrameInsets } from './workspace-model'
 import {
   isArrayOf,
   isJumpRoute,
@@ -14,6 +14,7 @@ import {
   isPublicationMode,
   isRecord,
   isSystemObject,
+  isRouteObject,
   maxNameLength,
   objectFieldValidationError,
 } from './workspace-validation'
@@ -42,7 +43,7 @@ import {
  * @param system Structurally shaped system candidate.
  * @returns False for duplicate IDs, invalid hosts or station links, bad sibling orders, or cyclic placement.
  */
-function isSystemStructureValid(system: StarSystem): boolean {
+function isBranchStructureValid(system: { objects: CatalogueObject[]; orbits: Orbit[] }): boolean {
   const objectIds = new Set(system.objects.map(object => object.id))
   if (objectIds.size !== system.objects.length) {
     return false
@@ -86,7 +87,7 @@ function isSystemStructureValid(system: StarSystem): boolean {
     }
 
     const placement = object.placement
-    return placement.kind === 'system'
+    return placement.kind !== 'orbit'
       || (system.orbits.some(orbit => orbit.id === placement.orbitId)
         && canPlaceObjectInOrbit(system, object.id, placement.orbitId))
   })
@@ -139,7 +140,21 @@ export function isStarSystem(value: unknown): value is StarSystem {
     return false
   }
 
-  return isSystemStructureValid({ id: value.id, name, publication, objects, orbits })
+  return !Object.hasOwn(value, 'routeContents') && isBranchStructureValid({ objects, orbits })
+}
+
+function isRouteContents(value: unknown): value is RouteContents {
+  return isRecord(value) && Object.keys(value).length === 2
+    && isArrayOf(value.objects, isRouteObject)
+    && isArrayOf(value.orbits, (orbit): orbit is RouteContents['orbits'][number] =>
+      isOrbit(orbit) && orbit.hostId !== null)
+    && isBranchStructureValid({ objects: value.objects, orbits: value.orbits })
+}
+
+function isRouteContentsRecord(value: unknown): value is JumpCluster['routeContents'] {
+  return isRecord(value)
+    && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
+    && Object.values(value).every(isRouteContents)
 }
 
 type StoredWorkspaceLayout = Pick<LocalWorkspace['layout'], 'systemPositions'>
@@ -320,7 +335,7 @@ function isStoredLocalWorkspace(
 ): value is StoredLocalWorkspace {
   if (
     !isRecord(value)
-    || value.version !== 6
+    || value.version !== 7
     || typeof value.id !== 'string'
     || !value.id
     || (!allowLegacyLayout && value.objectFieldSettings === undefined)
@@ -335,6 +350,7 @@ function isStoredLocalWorkspace(
   const playerTitle = cluster.playerTitle
   const systems = cluster.systems
   const routes = cluster.routes
+  const routeContents = cluster.routeContents
   const layout = value.layout
   const systemPositionsValue = isRecord(layout) ? layout.systemPositions : undefined
   const unresolvedExitPositionsValue = isRecord(layout) ? layout.unresolvedExitPositions : undefined
@@ -353,6 +369,7 @@ function isStoredLocalWorkspace(
     || !isArrayOf(systems, isStarSystem)
     || systems.length === 0
     || !isArrayOf(routes, isJumpRoute)
+    || !isRouteContentsRecord(routeContents)
     || !isRecord(layout)
     || (!allowLegacyLayout && !hasCurrentOrbitLayout(layout))
     || !isPointRecord(systemPositionsValue)
@@ -426,6 +443,14 @@ function isStoredLocalWorkspace(
     routeIds.add(route.id)
   }
 
+  for (const [routeId, contents] of Object.entries(routeContents)) {
+    if (!routeIds.has(routeId)) return false
+    for (const entity of [...contents.objects, ...contents.orbits]) {
+      if (entityIds.has(entity.id)) return false
+      entityIds.add(entity.id)
+    }
+  }
+
   const positions = systemPositionsValue
   const unresolvedExitPositions = unresolvedExitPositionsValue ?? {}
   const systemFrames = systemFramesValue ?? {}
@@ -435,6 +460,7 @@ function isStoredLocalWorkspace(
     playerTitle,
     systems,
     routes,
+    routeContents,
   }
   if (!validLocationKeyAssignments(clusterObjects(validatedCluster))) return false
   const jumpPoints = new Map(jumpPointsInCluster(validatedCluster).map(reference => [reference.point.id, reference]))
@@ -446,11 +472,12 @@ function isStoredLocalWorkspace(
   const orbitRotations = normalizeOrbitRotations(layout.orbitRotations ?? {})
   if (!orbitRotations) return false
   const objectAngles = layout.objectAngles ?? {}
-  const orbits = systems.flatMap(system =>
-    system.orbits.map(orbit => ({ orbit, system })),
+  const branches = [...systems, ...Object.values(routeContents)]
+  const orbits = branches.flatMap(branch =>
+    branch.orbits.map(orbit => ({ orbit, branch })),
   )
   const orbitIds = new Set(orbits.map(({ orbit }) => orbit.id))
-  const orbitObjects = new Set(systems.flatMap(system =>
+  const orbitObjects = new Set(branches.flatMap(system =>
     system.objects
       .filter(object => object.placement.kind === 'orbit')
       .map(object => object.id),
@@ -483,15 +510,15 @@ function isStoredLocalWorkspace(
     && Object.entries(orbitRadii).every(([orbitId, radii]) => {
       const entry = orbits.find(candidate => candidate.orbit.id === orbitId)
       return entry !== undefined
-        && orbitRadiiMeetMinimum(radii, minimumOrbitRadius(entry.system, entry.orbit))
+        && orbitRadiiMeetMinimum(radii, minimumOrbitRadius(entry.branch, entry.orbit))
     })
     && Object.keys(orbitRotations).every(orbitId => orbitIds.has(orbitId))
     && Object.values(objectAngles).every(value => typeof value === 'number' && Number.isFinite(value))
     && Object.keys(objectAngles).every(objectId => orbitObjects.has(objectId))
-    && systems.every(system =>
-      isPoint(positions[system.id])
-      && system.objects.every(object => objectFieldValidationError(object, objectFieldSettings) === null),
-    )
+    && systems.every(system => isPoint(positions[system.id]))
+    && branches.every(branch => branch.objects.every(object =>
+      objectFieldValidationError(object, objectFieldSettings) === null,
+    ))
 }
 
 /** Checks the complete Orbit layout fields written by current source formats. */
@@ -819,7 +846,7 @@ export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
           : system),
       },
     }
-  } else if (!isVersionThree && version !== 4 && version !== 5 && version !== 6) {
+  } else if (!isVersionThree && version !== 4 && version !== 5 && version !== 6 && version !== 7) {
     return null
   }
 
@@ -830,18 +857,27 @@ export function restoreLocalWorkspace(value: unknown): LocalWorkspace | null {
   const restored = isUnversionedLegacy
     ? withDefaultJumpLevels(withoutLegacyObjectApplicabilityTargets(currentValue))
     : currentValue
-  const routeShape = version === 5 || version === 6 ? restored : migrateLegacyWorkspaceRouteShape(restored)
-  const current = version === 6 ? routeShape : migrateLegacyWorkspaceLocationKeys(routeShape)
+  const routeShape = version === 5 || version === 6 || version === 7
+    ? restored : migrateLegacyWorkspaceRouteShape(restored)
+  const keyShape = version === 6 || version === 7 ? routeShape : migrateLegacyWorkspaceLocationKeys(routeShape)
+  const current = version === 7 ? keyShape : addLegacyRouteContents(keyShape)
   if (!current || !isStoredLocalWorkspace(current, isUnversionedLegacy)) {
     return null
   }
 
   const workspace = normalizedWorkspaceLayout(current)
   if (!workspace) return null
-  if (version === 6) return hasValidZonePlacements(workspace) ? workspace : null
+  if (version === 6 || version === 7) return hasValidZonePlacements(workspace) ? workspace : null
   if (clusterObjects(workspace.cluster).some(object => Object.hasOwn(object, 'legacyZonePlacement'))) return null
   const migrated = retainLegacyZonePlacements(workspace)
   return hasValidZonePlacements(migrated) ? migrated : null
+}
+
+function addLegacyRouteContents(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.cluster)) return null
+  const contents = value.cluster.routeContents
+  if (contents !== undefined && (!isRecord(contents) || Object.keys(contents).length > 0)) return null
+  return { ...value, version: 7, cluster: { ...value.cluster, routeContents: {} } }
 }
 
 function normalizedWorkspaceLayout(current: StoredLocalWorkspace): LocalWorkspace | null {

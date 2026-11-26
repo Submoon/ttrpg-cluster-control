@@ -11,6 +11,11 @@ export type {
   Point,
   SystemFrameInsets,
   CatalogueSubtype,
+  CatalogueObject,
+  CataloguePlacement,
+  RouteContents,
+  RouteObject,
+  RouteObjectPlacement,
   ObjectFamily,
   CustomFieldType,
   CustomFieldValue,
@@ -120,3 +125,8 @@ export type {
   PlayerOrbit,
   PlayerRoute,
 } from './player-projection'
+export {
+  routeContentsFor,
+  updateWorkspaceRouteObject,
+  catalogueBranches,
+} from './workspace-route-objects'

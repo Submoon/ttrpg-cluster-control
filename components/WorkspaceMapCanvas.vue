@@ -70,6 +70,7 @@
       touch-navigation
       @activate-system="handleSystemActivation"
       @select-object="(systemId, objectId) => emit('select-continuous-object', systemId, objectId, props.mode !== 'move')"
+      @select-route-object="(routeId, objectId) => emit('select-route-object', routeId, objectId)"
       @select-orbit="(systemId, orbitId) => emit('select-continuous-orbit', systemId, orbitId, props.mode !== 'move')"
       @select-route="handleRouteSelection"
       @cluster-target="forwardClusterTarget"
@@ -186,6 +187,7 @@
 </template>
 
 <script setup lang="ts">
+import { routeObjectTargetAt } from './maps/route-object-target'
 /** Owns pointer arbitration around one stable map surface and forwards validated renderer commands. */
 import { computed, onBeforeUnmount, onMounted, nextTick, shallowRef, watch } from 'vue'
 import type {
@@ -317,6 +319,7 @@ const emit = defineEmits<{
   'select-cluster-system': [id: string]
   'move-select-cluster-system': [id: string]
   'select-route': [id: string]
+  'select-route-object': [routeId: string, objectId: string]
   'move-select-route': [id: string]
   'select-object': [id: string]
   'move-select-object': [id: string]
@@ -785,12 +788,14 @@ function isMapEntityTarget(target: EventTarget | null): boolean {
       '.cluster-system-node, .cluster-route, .system-object, .orbit-mark, .orbit-hit-target, .orbit-edit-control, '
       + '.continuous-warden-object, .continuous-warden-orbit-target, .continuous-warden-orbit-hit-target, '
       + '.continuous-warden-orbit-visible-arc, .continuous-warden-orbit-edit-handle, '
-      + '[data-system-resize-handle]',
+      + '.warden-route-object, [data-system-resize-handle]',
     )
 }
 
 function longPressInspection(target: EventTarget | null): (() => void) | null {
   if (!(target instanceof Element)) return null
+  const routeObject = routeObjectTargetAt(target)
+  if (routeObject) return () => emit('select-route-object', routeObject.routeId, routeObject.objectId)
   const objectTarget = target.closest<SVGGElement>('.continuous-warden-object[data-system-id][data-object-id]')
   const objectSystemId = objectTarget?.getAttribute('data-system-id')
   const continuousObjectId = objectTarget?.getAttribute('data-object-id')

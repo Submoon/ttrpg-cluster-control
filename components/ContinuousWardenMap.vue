@@ -311,6 +311,17 @@
             </g>
           </g>
       </g>
+      <WardenRouteObjectLayer
+        v-for="{ id, contents, geometry } in displayedRouteBranches"
+        :key="id"
+        :route-id="id"
+        :contents="contents"
+        :geometry="geometry"
+        :layout="workspace.layout"
+        :viewport="viewport"
+        :svg-pixel-scale="svgPixelScale"
+        :selected-object-id="inspectedTarget?.kind === 'route-object' ? inspectedTarget.objectId : undefined"
+      />
       <g class="cluster-map-content" :transform="cameraTransform">
         <g class="cluster-map-items">
           <g
@@ -486,7 +497,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, useId, watch } from 'vue'
 import type { DeepReadonly } from 'vue'
 import { pointer, select, zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3'
-import { prepareSystemObjectTransfer, jumpPointsInCluster, minimumOrbitRadius, workspaceSystemFrame, type CatalogueSubtype, type JumpCluster, type JumpRoute, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem, type SystemFrameInsets, type SystemObjectTransferPlacement } from '../domain/workspace'
+import { prepareSystemObjectTransfer, jumpPointsInCluster, routeContentsFor, minimumOrbitRadius, workspaceSystemFrame, type CatalogueSubtype, type JumpCluster, type JumpRoute, type LocalWorkspace, type Orbit, type OrbitRadii, type Point, type StarSystem, type SystemFrameInsets, type SystemObjectTransferPlacement } from '../domain/workspace'
 import { normalizeOrbitRotation } from '../domain/workspace-orbits'
 import { getDetachedOrbitCenter, objectPositions, objectsMovedWithOrbit, orbitCenter, orbitPlacementHitsAtPoint, orbitPointAtAngle, orbitRadii as readOrbitRadii, orbitRotation, orbitRotationHandlePoint, rotatePoint, requiredPosition } from '../utils/system-map-geometry'
 import { orbitGeometrySource } from '../utils/orbit-geometry-source'
@@ -572,6 +583,8 @@ import { canStartSelectedObjectDrag } from './maps/select-object-drag-input'
 import type { SelectedObjectDrag, SelectedObjectDragPreview } from '../composables/editor-workflows/selected-object-drag'
 import { useContinuousMapDetailMotion } from '../composables/useContinuousMapDetailMotion'
 import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
+import WardenRouteObjectLayer from './maps/WardenRouteObjectLayer.vue'
+import { routeObjectTargetAt } from './maps/route-object-target'
 import ContinuousWardenOrbitLayer from './maps/ContinuousWardenOrbitLayer.vue'
 import WardenObjectPublicationBadge from './maps/WardenObjectPublicationBadge.vue'
 
@@ -638,6 +651,7 @@ const emit = defineEmits<{
   'select-object': [systemId: string, objectId: string]
   'select-orbit': [systemId: string, orbitId: string]
   'select-route': [routeId: string]
+  'select-route-object': [routeId: string, objectId: string]
   'cluster-target': [point: Point, systemIds: string[]]
   'continuous-object-add-target': [request: ContinuousObjectAddTarget]
   'continuous-orbit-add-target': [owners: readonly OrbitAddOwner[], requiresOwnerChoice: boolean, workspace: LocalWorkspace]
@@ -911,6 +925,10 @@ const transferBranchPreview = computed(() => {
 })
 const landingBranchPreview = computed(() => draggedBranchPreview.value ?? transferBranchPreview.value)
 const sceneCluster = computed(() => props.presentation?.cluster ?? props.cluster)
+const displayedRouteBranches = computed(() => (routeLayer.value?.displayedMarks ?? []).flatMap(({ id, geometry }) => {
+  const contents = routeContentsFor(sceneCluster.value, id)
+  return contents?.objects.length ? [{ id, contents, geometry }] : []
+}))
 const presentationProjections = computed(() => {
   const draft = props.presentation
   if (!draft) return projections.value
@@ -3557,6 +3575,7 @@ function onPointerDownCapture(event: PointerEvent): void {
   }
   clearOwnedGestureClickSuppression()
   takePendingMapClickTarget()
+  if (routeObjectTargetAt(event.target)) return
   const resizeTarget = systemFrameResizeTarget(event.target)
   const element = svgElement.value
   if (resizeTarget && element) {
@@ -3886,6 +3905,13 @@ function onClickCapture(event: MouseEvent): void {
     return
   }
   const pendingTarget = takePendingMapClickTarget()
+  const routeObjectTarget = routeObjectTargetAt(event.target)
+  if (routeObjectTarget) {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('select-route-object', routeObjectTarget.routeId, routeObjectTarget.objectId)
+    return
+  }
   const objectTarget = objectTargetAtTarget(event.target)
     ?? (pendingTarget?.kind === 'object' ? pendingTarget : null)
   if (objectTarget) {
@@ -3953,6 +3979,14 @@ function onKeydownCapture(event: KeyboardEvent): void {
     return
   }
   if (onOrbitAdjustmentKeydown(event)) return
+  const routeObject = routeObjectTargetAt(event.target)
+  if (routeObject && isActivation && !event.repeat && !props.keyboardOwnedOverlayOpen
+    && !props.creationType && props.clusterAddType === null && !props.moveTargeting && !props.clusterMoveTargeting) {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('select-route-object', routeObject.routeId, routeObject.objectId)
+    return
+  }
   if (props.creationType && isActivation
     && !props.clusterChooserOpen && !props.moveTargeting && !props.clusterMoveTargeting) {
     if (event.repeat || props.keyboardOwnedOverlayOpen) {

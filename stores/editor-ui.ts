@@ -23,6 +23,7 @@ export type InspectedMapTarget =
   | { kind: 'object'; systemId: string; objectId: string }
   | { kind: 'orbit'; systemId: string; orbitId: string }
   | { kind: 'route'; routeId: string }
+  | { kind: 'route-object'; routeId: string; objectId: string }
 
 const emptySelection = (): EditorUiSelection => ({
   activeView: 'system',

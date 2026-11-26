@@ -119,6 +119,10 @@ export function prepareContinuousWardenImageScene(
   request: ContinuousWardenImageSceneRequest,
   measurements: ContinuousWardenImageSceneMeasurements,
 ): ContinuousWardenImageScene {
+  if (request.scope !== 'system'
+    && Object.values(request.cluster.routeContents).some(contents => contents.objects.length > 0)) {
+    throw new Error('Choose a Zone image or download a complete Cluster backup. Cluster images with route objects are unavailable.')
+  }
   const selected = request.scope === 'system'
     ? request.projections.find(projection => projection.id === request.selectedSystemId)
     : undefined

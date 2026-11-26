@@ -1,7 +1,7 @@
 /**
  * Orbit commands enforce host relationships and sibling order, and normalize older circle layouts.
  */
-import type { ObjectPlacement, Orbit, OrbitRadii, Point, StarSystem } from './workspace-model'
+import type { CataloguePlacement, Orbit, OrbitRadii, Point, StarSystem } from './workspace-model'
 import { isRecord } from './workspace-validation'
 
 /**
@@ -105,7 +105,7 @@ export function minimumOrbitRadius(
  */
 export function canPlaceObjectInOrbit(
   system: {
-    readonly objects: readonly { readonly id: string; readonly placement: ObjectPlacement }[]
+    readonly objects: readonly { readonly id: string; readonly placement: CataloguePlacement }[]
     readonly orbits: readonly { readonly id: string; readonly hostId: string | null }[]
   },
   objectId: string,
@@ -124,7 +124,7 @@ export function canPlaceObjectInOrbit(
       return false
     }
     visited.add(host.id)
-    if (host.placement.kind === 'system') {
+    if (host.placement.kind !== 'orbit') {
       return true
     }
 

@@ -62,10 +62,15 @@ test('a complete backup preserves only existing legacy duplicate key assignments
     .toEqual({})
 
   const backup = exportJumpCluster(edited)
+  const v6Cluster = { ...backup.cluster }
+  Reflect.deleteProperty(v6Cluster, 'routeContents')
+  const fromV6 = restoreJumpClusterBackup({ ...backup, version: 6, cluster: v6Cluster })
+  expect(fromV6.cluster.systems).toEqual(edited.cluster.systems)
+  expect(fromV6.cluster.routeContents).toEqual({})
   expect(() => restoreJumpClusterBackup({
     ...backup,
     layout: { ...backup.layout, orbitRotations: undefined },
-  })).toThrow(/valid version 1 through 6 Jump Cluster JSON backup/)
+  })).toThrow(/valid version 1 through 7 Jump Cluster JSON backup/)
   const roundTrip = restoreJumpClusterBackup(JSON.parse(JSON.stringify(backup)))
   expect(roundTrip.cluster.systems.flatMap(system => system.objects.map(object => [object.id, object.locationKey])))
     .toEqual([[firstObject.id, 'PL-01'], [secondObject.id, 'PL-01']])
