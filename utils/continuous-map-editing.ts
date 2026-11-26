@@ -1,4 +1,4 @@
-import type { CatalogueSubtype, LocalWorkspace, OrbitRadii, Point } from '../domain/workspace'
+import type { CatalogueSubtype, LocalWorkspace, OrbitRadii, Point, RouteLanding } from '../domain/workspace'
 import type { SystemCreationCandidate } from '../composables/editor-workflows/types'
 import { orbitPointAtAngle } from './system-map-geometry'
 
@@ -12,6 +12,7 @@ export interface ContinuousObjectAddTarget {
   subtype: CatalogueSubtype
   otherType?: string
   workspaceSnapshot: LocalWorkspace
+  routeLanding?: RouteLanding
   directTarget: { kind: 'object' | 'orbit'; id: string } | null
   requiresOwnerChoice: boolean
   owners: ContinuousObjectAddOwner[]

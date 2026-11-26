@@ -461,6 +461,7 @@
                     :selected-orbit-id="selectedOrbitId"
                     :selected-route-id="selectedRouteId"
                     :mode="mapMode"
+                    :route-object-editing-id="routeObjectSession?.targetId"
                     :creation-type="standaloneImportPlacementEnabled ? null : mapCreationType"
                     :orbit-creation-preview="orbitCreationPreview"
                     :creation-other-type="continuousObjectAddType === 'other' ? continuousObjectAddOtherType : null"
@@ -498,6 +499,7 @@
                     @continuous-object-add-target="handleContinuousObjectAddTarget"
                     @continuous-orbit-add-target="handleOrbitAddTarget"
                     @move-object-in-system="handleContinuousObjectMove"
+                    @move-route-object="placeRouteObject"
                     @resize-system-frame="resizeSystemFrame"
                     @transfer-object-on-drop="transfer.dropObject"
                     @orbit-adjustment="updateOrbitAdjustment"
@@ -523,8 +525,8 @@
                 </ClientOnly>
               </div>
               <p v-if="activeView === 'cluster' && (continuousObjectAddType || clusterAddType || clusterMoveTargeting)" class="map-note mb-[1em] flex justify-between gap-3 px-[0.2rem] pt-[0.55rem] pb-[0.1rem] max-[760px]:flex-col">
-                <span>{{ continuousObjectAddType ? `ADD ${continuousObjectAddLabel.toUpperCase()} / CHOOSE A ZONE LOCATION` : clusterAddType === 'system' ? 'ADD ZONE / OPEN CLUSTER SPACE' : clusterAddType === 'route' ? 'ADD JUMP ROUTE / CHOOSE ZONES' : 'MOVE ZONE / CHOOSE A DESTINATION' }}</span>
-                <span>{{ continuousObjectAddType ? 'Choose an object mark, Orbit, or clear map position; select a Zone when prompted for an owner.' : clusterAddType === 'system' ? 'Choose clear Cluster space, or pan with the arrow keys and press Enter.' : clusterAddType === 'route' ? 'Choose a Zone for each endpoint; local Jump Points are optional.' : 'Choose Move selected Zone on map, then click or use the arrow keys to preview.' }}</span>
+                <span>{{ continuousObjectAddType ? `ADD ${continuousObjectAddLabel.toUpperCase()} / CHOOSE A ZONE OR JUMP ROUTE` : clusterAddType === 'system' ? 'ADD ZONE / OPEN CLUSTER SPACE' : clusterAddType === 'route' ? 'ADD JUMP ROUTE / CHOOSE ZONES' : 'MOVE ZONE / CHOOSE A DESTINATION' }}</span>
+                <span>{{ continuousObjectAddType ? 'Choose a Jump Route or a position within a Zone. Focus a route and press Enter to add at its midpoint.' : clusterAddType === 'system' ? 'Choose clear Cluster space, or pan with the arrow keys and press Enter.' : clusterAddType === 'route' ? 'Choose a Zone for each endpoint; local Jump Points are optional.' : 'Choose Move selected Zone on map, then click or use the arrow keys to preview.' }}</span>
               </p>
             </section>
           </template>
@@ -1453,7 +1455,7 @@ const {
   quitAdd,
 } = placement
 const {
-  moveSystem, moveMapObject, moveMapObjectInSystem, resizeSystemFrame, addMapObjectInSystem,
+  moveSystem, moveMapObject, moveMapObjectInSystem, resizeSystemFrame, addMapObjectInSystem, placeRouteObject,
   placeMapObjectInOrbit, rotateMapObject, resizeMapOrbit, rotateMapOrbit,
   moveMapOrbitCenter, detachSelectedOrbit,
 } = mapPlacement
@@ -1673,7 +1675,7 @@ const clusterAddPresentation = computed(() => orbitAddArmed.value
       label: continuousObjectAddLabel.value,
       status: continuousObjectPinnedOwnerId.value
         ? `ADD ${continuousObjectAddLabel.value} · ${continuousObjectOwnerName(continuousObjectPinnedOwnerId.value)} owns this placement. Click an Orbit or clear position in that Zone.`
-        : `ADD ${continuousObjectAddLabel.value} · Click an object, Orbit, or clear space in the owning Zone.`,
+        : `ADD ${continuousObjectAddLabel.value} · Choose a Jump Route or a position within a Zone.`,
       error: editorError.value || undefined,
     }
   : clusterAddType.value === 'system'
@@ -1842,12 +1844,24 @@ function handleContinuousObjectAddTarget(request: ContinuousObjectAddTarget): vo
   const owned = continuousObjectAddRequestLease.capture(request)
   pendingContinuousObjectAdd.value = null
   continuousObjectOwnerChooserOpen.value = false
+  if (request.routeLanding) {
+    void placeRouteObject({
+      ...request.routeLanding,
+      kind: 'create',
+      subtype: request.subtype,
+      workspaceSnapshot: request.workspaceSnapshot,
+      ...(request.otherType ? { otherType: request.otherType } : {}),
+    }, () => continuousAddRequestIsCurrent(owned)).then(applied => {
+      if (applied && continuousObjectAddRequestLease.isCurrent(owned)) editorError.value = ''
+    }).finally(() => clearContinuousObjectAddRequest(owned))
+    return
+  }
   if (request.owners.length === 1 && !request.requiresOwnerChoice) {
     void addContinuousObjectToOwner(owned, request.owners[0]!.systemId)
     return
   }
   if (request.owners.length === 0) {
-    editorError.value = 'Choose an available Zone before adding an object.'
+    editorError.value = 'Choose an available Zone or Jump Route before adding an object.'
     clearContinuousObjectAddRequest(owned)
     return
   }

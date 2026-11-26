@@ -6,6 +6,8 @@ import {
   clusterCircleScenePosition,
   clickDockAction,
   hideWorkspaceInspector,
+  quitSystemAdd,
+  selectCatalogueObjectButton,
   selectInspectorOption,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
@@ -175,4 +177,49 @@ test('continuous routes support clipped selection, guarded inspection and author
   await waitForWorkspaceSaved(page)
   await expect.poll(async () => (await clusterCircleScenePosition(marker)).x).toBeGreaterThan(originalX + 10)
   await expect(exit).toHaveAttribute('aria-pressed', 'true')
+
+  await (await selectCatalogueObjectButton(page, 'hazard')).click()
+  await exit.press('Enter')
+  const hazard = map.getByRole('button', { name: /Select .*New hazard 1/ })
+  await expect(hazard).toBeVisible()
+  await waitForWorkspaceSaved(page)
+  await quitSystemAdd(page)
+  await hazard.press('Enter')
+  const objectInspector = page.getByRole('complementary', { name: 'Object inspector' })
+  await expect(objectInspector.getByText(/50%/)).toBeVisible()
+  await objectInspector.getByRole('button', { name: 'Edit map object' }).click()
+  await objectInspector.getByLabel('Route position (%)').fill('25.125')
+  await objectInspector.getByRole('button', { name: /Apply changes/ }).click()
+  await waitForWorkspaceSaved(page)
+  await expect(objectInspector.getByText(/25\.125%/)).toBeVisible()
+
+  await hideWorkspaceInspector(page)
+  const arrivalAim = await exit.locator('.cluster-route-line').evaluate(path => {
+    if (!(path instanceof SVGPathElement)) throw new Error('The route needs a painted cubic.')
+    const transform = path.getScreenCTM()!
+    const length = path.getTotalLength()
+    const near = path.getPointAtLength(0.7 * length).matrixTransform(transform)
+    const next = path.getPointAtLength(0.71 * length).matrixTransform(transform)
+    const delta = { x: next.x - near.x, y: next.y - near.y }
+    const offset = 24 / Math.hypot(delta.x, delta.y)
+    return { x: near.x - delta.y * offset, y: near.y + delta.x * offset }
+  })
+  const existing = hazard.locator('.warden-route-object-marker')
+  const origin = await existing.boundingBox()
+  if (!origin) throw new Error('The route object needs a visible mark.')
+  await page.mouse.move(origin.x + origin.width / 2, origin.y + origin.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(arrivalAim.x, arrivalAim.y, { steps: 6 })
+  const ghost = map.locator('.warden-route-object-landing-preview .warden-route-object-marker')
+  await expect(ghost).toBeVisible()
+  const proposed = await ghost.boundingBox()
+  if (!proposed) throw new Error('The route move needs a visible landing ghost.')
+  await test.info().attach('route-object-landing', { body: await map.screenshot(), contentType: 'image/png' })
+  await page.mouse.up()
+  await expect(ghost).toHaveCount(0)
+  await waitForWorkspaceSaved(page)
+  const accepted = await existing.boundingBox()
+  if (!accepted) throw new Error('The moved route object needs a visible mark.')
+  // The preview and the accepted mark share the same map framing and should align within a CSS pixel.
+  expect(Math.hypot(accepted.x - proposed.x, accepted.y - proposed.y)).toBeLessThan(1)
 })

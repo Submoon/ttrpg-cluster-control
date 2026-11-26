@@ -30,6 +30,9 @@ export function objectDraftValuesFor(
     subtype: object?.subtype ?? '',
     placement: object?.placement.kind === 'orbit'
       ? `orbit:${object.placement.orbitId}` : object?.placement.kind ?? 'system',
+    ...(object?.placement.kind === 'route'
+      ? { routePercentage: String(Number((object.placement.progression * 100).toPrecision(15))) }
+      : {}),
     atmosphere: object?.atmosphere ?? '',
     portClass: object?.portClass ?? '',
     jumpStationId: object?.jumpStationId ?? '',

@@ -1,5 +1,9 @@
 <template>
-  <g :transform="`translate(${viewport.x} ${viewport.y}) scale(${viewport.k})`">
+  <g
+    :transform="`translate(${viewport.x} ${viewport.y}) scale(${viewport.k})`"
+    :class="preview ? `warden-route-object-${preview}-preview` : undefined"
+    :aria-hidden="preview ? true : undefined"
+  >
     <ellipse
       v-for="orbit in visibleOrbits"
       :key="orbit.id"
@@ -15,13 +19,13 @@
       v-for="{ object, point } in marks"
       :key="object.id"
       class="warden-route-object"
-      :data-route-object-id="object.id"
-      :data-owner-route-id="routeId"
+      :data-route-object-id="preview ? undefined : object.id"
+      :data-owner-route-id="preview ? undefined : routeId"
       :transform="`translate(${point.x} ${point.y}) scale(${markerScale})`"
-      role="button"
-      tabindex="0"
-      :aria-label="`Select ${catalogueObjectLabel(object)}`"
-      :aria-pressed="object.id === selectedObjectId"
+      :role="preview ? undefined : 'button'"
+      :tabindex="preview ? undefined : 0"
+      :aria-label="preview ? undefined : `Select ${catalogueObjectLabel(object)}`"
+      :aria-pressed="preview ? undefined : object.id === selectedObjectId"
     >
       <title>{{ catalogueObjectLabel(object) }}</title>
       <circle r="14" class="warden-route-object-marker" aria-hidden="true" />
@@ -45,6 +49,7 @@ import type { ContinuousMapRouteGeometry } from '../../utils/continuous-map-rout
 import type { MapViewport } from '../../utils/map-zoom'
 import { projectRouteObjects } from '../../utils/route-object-geometry'
 import type { SystemMapGeometry } from '../../utils/system-map-geometry'
+import type { SystemObjectBranch } from '../../domain/workspace-object-branch'
 import { CONTINUOUS_MAP_SYSTEM_SCALE } from '../../utils/continuous-map-projection'
 
 const props = defineProps<{
@@ -55,16 +60,20 @@ const props = defineProps<{
   viewport: MapViewport
   svgPixelScale: number
   selectedObjectId?: string
+  preview?: 'landing' | 'pointer'
+  hiddenBranch?: SystemObjectBranch
 }>()
 
 const projection = computed(() => projectRouteObjects(props.contents, props.geometry, props.layout))
 const pixelsPerSceneUnit = computed(() => props.viewport.k * props.svgPixelScale)
 const markerScale = computed(() => 1 / Math.max(pixelsPerSceneUnit.value, Number.EPSILON))
 const showDetail = computed(() => pixelsPerSceneUnit.value * CONTINUOUS_MAP_SYSTEM_SCALE >= 0.65)
-const visibleOrbits = computed(() => showDetail.value ? projection.value.orbits : [])
+const visibleOrbits = computed(() => props.preview === 'landing' || showDetail.value
+  ? projection.value.orbits.filter(orbit => !props.hiddenBranch?.orbitIds.includes(orbit.id)) : [])
 const marks = computed(() => props.contents.objects.flatMap(object => {
   const point = projection.value.positions.get(object.id)
-  return point && (object.placement.kind === 'route' || showDetail.value || object.id === props.selectedObjectId)
+  return point && !props.hiddenBranch?.objectIds.includes(object.id)
+    && (props.preview === 'landing' || object.placement.kind === 'route' || showDetail.value || object.id === props.selectedObjectId)
     ? [{ object, point }]
     : []
 }))
@@ -72,6 +81,8 @@ const marks = computed(() => props.contents.objects.flatMap(object => {
 
 <style scoped>
 .warden-route-object { cursor: pointer; }
+.warden-route-object-landing-preview { opacity: 0.52; pointer-events: none; }
+.warden-route-object-pointer-preview { pointer-events: none; }
 .warden-route-object-orbit {
   fill: none;
   pointer-events: none;

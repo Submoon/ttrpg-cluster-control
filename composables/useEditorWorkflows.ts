@@ -14,6 +14,7 @@ import { useEntityInspectorSession } from './editor-workflows/useEntityInspector
 import { useFieldDefinitionWorkflows } from './editor-workflows/useFieldDefinitionWorkflows'
 import { useMapInteractionCoordinator } from './editor-workflows/useMapInteractionCoordinator'
 import { useMapWorkflows } from './editor-workflows/useMapWorkflows'
+import { useRouteObjectPlacement, type RouteObjectPlacementRequest } from './editor-workflows/useRouteObjectPlacement'
 import { useRouteObjectInspectorSession } from './editor-workflows/useRouteObjectInspectorSession'
 import { useRouteInspectorSession } from './editor-workflows/useRouteInspectorSession'
 import { useSystemCreationWorkflows } from './editor-workflows/useSystemCreationWorkflows'
@@ -99,6 +100,16 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     }
     if (result.status === 'applied') void result.durable.catch(() => undefined)
     return true
+  }
+
+  const applyRouteLanding = useRouteObjectPlacement({
+    workspace, mutations, getRevision: () => options.appliedRevision?.value ?? 0,
+    beforeWorkspaceOperation, editorError,
+  })
+
+  function placeRouteObject(request: RouteObjectPlacementRequest, ownsRequest: () => boolean): Promise<boolean> {
+    return applyRouteLanding(request, () => store.activeView === 'cluster' && options.continuousMap?.value === true
+      && ownsRequest() && (request.kind !== 'move' || routeObject.session.value?.targetId !== request.objectId))
   }
 
   const charts = useChartNamesSession({
@@ -684,6 +695,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
         moveMapObjectInSystem: map.moveMapObjectInSystem,
         resizeSystemFrame: map.resizeSystemFrame,
         addMapObjectInSystem: map.addMapObjectInSystem,
+        placeRouteObject,
         placeMapObjectInOrbit: map.placeMapObjectInOrbit,
         rotateMapObject: map.rotateMapObject,
         resizeMapOrbit: map.resizeMapOrbit,

@@ -26,6 +26,7 @@ function baselineFor(workspace: LocalWorkspace, routeId: string, objectId: strin
   const branch = routeContentsFor(workspace.cluster, routeId)
   return JSON.stringify([
     workspace.id, workspace.cluster.id,
+    workspace.cluster.routes.find(route => route.id === routeId),
     branch?.objects.find(object => object.id === objectId),
     branch?.objects.filter(object => object.family === 'Installation' && object.subtype === 'station')
       .map(object => object.id),

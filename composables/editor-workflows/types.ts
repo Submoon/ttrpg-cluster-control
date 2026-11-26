@@ -70,6 +70,7 @@ export interface ObjectDraft {
   markerColor: string | null
   subtype: string
   placement: string
+  routePercentage?: string
   atmosphere: string
   portClass: string
   jumpStationId: string

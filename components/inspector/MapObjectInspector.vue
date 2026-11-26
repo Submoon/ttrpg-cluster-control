@@ -161,6 +161,14 @@
               @update:model-value="updatePlacement"
             />
           </UFormField>
+          <UFormField
+            v-else-if="selectedObject.placement.kind === 'route' && objectSession"
+            label="Route position (%)"
+            class="entity-inspector-full-row"
+            :error="fieldError('routePercentage')"
+          >
+            <UInput :id="controlId('routePercentage')" v-model="objectDraft.routePercentage" inputmode="decimal" />
+          </UFormField>
           <UFormField v-if="selectedObject.family === 'JumpPoint'" label="Physical Station association" class="entity-inspector-full-row" :error="fieldError('jumpStationId')">
             <USelect
               :id="controlId('jumpStationId')"
