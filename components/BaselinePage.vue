@@ -1513,6 +1513,7 @@ provideEditorCommands({
   navigation: {
     selectSystem,
     inspectContinuousTarget,
+    inspectRouteObject,
     selectObject,
     replaceObjectSelection,
     toggleObjectSelection,

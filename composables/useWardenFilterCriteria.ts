@@ -1,6 +1,7 @@
 import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
 import type { LocalWorkspace, PublicationMode } from '../domain/workspace'
 import { catalogueTypes } from '../domain/workspace'
+import { clusterObjects } from '../domain/workspace-location-keys'
 import { useEditorUiStore } from '../stores/editor-ui'
 import type { FieldCondition, FieldFilterOption } from '../utils/field-filter-matching'
 import { countActiveFilterCriteria, type WardenFilterCriteria } from '../utils/filter-criteria'
@@ -74,12 +75,11 @@ export function useWardenFilterCriteria({
       const option = mapObjectTypeOption({ family: type.family, subtype: type.value })
       options.set(option.value, option)
     }
-    for (const system of workspace.value?.cluster.systems ?? []) {
-      for (const object of system.objects) {
-        if (object.family !== 'Other') continue
-        const option = mapObjectTypeOption(object)
-        if (!options.has(option.value)) options.set(option.value, option)
-      }
+    const current = workspace.value
+    for (const object of current ? clusterObjects(current.cluster) : []) {
+      if (object.family !== 'Other') continue
+      const option = mapObjectTypeOption(object)
+      if (!options.has(option.value)) options.set(option.value, option)
     }
     return [...options.values()]
   })
