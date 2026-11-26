@@ -1,5 +1,5 @@
 /** Pure whole-workspace proposal and immutable application for transferring one hosted object branch. */
-import { routeContentsFor } from './workspace-route-objects'
+import { catalogueBranches } from './workspace-route-objects'
 import type { LocalWorkspace, StarSystem, SystemObject } from './workspace-model'
 import { canPlaceObjectInOrbit } from './workspace-orbits'
 import { captureEffectiveObjectAngles } from './workspace-placement'
@@ -243,9 +243,6 @@ function applyTransfer(
     const detachFrom = detachedEnds?.has('from') ?? false
     const detachTo = detachedEnds?.has('to') ?? false
     if (!detachFrom && !detachTo) return route
-    if (routeContentsFor(workspace.cluster, route.id)?.objects.length) {
-      throw new Error('The transfer would detach a Jump Point from a route containing route objects.')
-    }
     if (detachFrom && detachTo && route.toSystemId !== null) {
       return { ...route, fromPointId: null, toPointId: null }
     }
@@ -254,8 +251,9 @@ function applyTransfer(
     return route
   })
 
-  const retainedOrbitIds = new Set(systems.flatMap(system => system.orbits.map(orbit => orbit.id)))
-  const retainedOrbitalObjectIds = new Set(systems.flatMap(system => system.objects
+  const branches = catalogueBranches({ ...workspace.cluster, systems, routes })
+  const retainedOrbitIds = new Set(branches.flatMap(branch => branch.orbits.map(orbit => orbit.id)))
+  const retainedOrbitalObjectIds = new Set(branches.flatMap(branch => branch.objects
     .filter(object => object.placement.kind === 'orbit')
     .map(object => object.id)))
   const orbitRadii = Object.fromEntries(Object.entries(workspace.layout.orbitRadii)

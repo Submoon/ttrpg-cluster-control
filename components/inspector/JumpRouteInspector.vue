@@ -200,6 +200,16 @@
               @update:model-value="updateToPoint($event)"
             />
           </UFormField>
+          <UButton
+            v-if="props.session.routeId !== null && props.session.draft.fromSystemId && props.session.draft.toSystemId"
+            color="neutral"
+            variant="outline"
+            type="button"
+            :disabled="props.saving"
+            @click="emit('reverse-route-endpoints', props.session.id)"
+          >
+            Reverse endpoints
+          </UButton>
           <p class="inspector-intro m-0">
             Destination Zone: {{ destinationSystem?.name ?? 'Select a Zone' }}.
             Jump Points are optional local attachments; Stations remain separate physical locations.
@@ -303,6 +313,7 @@ const emit = defineEmits<{
   'delete-route': []
   'clear-error': []
   'update-route-input': [sessionId: number, field: RouteDraftField, value: string | boolean]
+  'reverse-route-endpoints': [sessionId: number]
   'choose-route-system': [sessionId: number, systemId: string]
   'choose-route-point': [sessionId: number, pointId: string]
   'apply-route-session': [sessionId: number]

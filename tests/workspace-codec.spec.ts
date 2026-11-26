@@ -19,7 +19,7 @@ import {
   type StarSystem,
   routeContentsFor,
   planMapEntityDeletion,
-  updateJumpRoute,
+  replaceWorkspaceSystem,
   updateWorkspaceRouteObject,
   updateCustomFieldOptions,
   addCustomFieldDefinition,
@@ -504,15 +504,10 @@ test('route object context supports unusual route IDs and preserves private auth
   const updated = updateWorkspaceRouteObject(source, oddId, root.id, { name: 'Private updated vessel' })
   expect(routeContentsFor(updated.cluster, oddId)?.objects[0]?.name).toBe('Private updated vessel')
 
-  expect(() => planMapEntityDeletion(updated, { kind: 'route', routeId: oddId })).toThrow(/contains route objects/)
-  expect(() => planMapEntityDeletion(updated, { kind: 'system', systemId: route.fromSystemId })).toThrow(/contains route objects/)
-  expect(() => updateJumpRoute(updated.cluster, oddId, {
-    jumpLevel: occupied.jumpLevel,
-    fromSystemId: occupied.toSystemId!,
-    fromPointId: null,
-    toSystemId: occupied.fromSystemId,
-    toPointId: null,
-  })).toThrow(/contains route objects/)
+  const deleted = planMapEntityDeletion(updated, { kind: 'route', routeId: oddId }).workspace
+  expect(routeContentsFor(deleted.cluster, oddId)).toBeUndefined()
+  const modifiedZone = { ...updated.cluster.systems[0]!, name: 'Renamed Vesper' }
+  expect(replaceWorkspaceSystem(updated, modifiedZone).layout).toEqual(updated.layout)
   expect(() => prepareJsonImport(source, exportJumpCluster(updated))).toThrow(/open this complete Jump Cluster as a backup/i)
   expect(JSON.stringify(projectPlayerCluster(updated))).not.toMatch(/route-vessel|Private updated vessel|Private expedition log/)
 })
