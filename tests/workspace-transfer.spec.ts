@@ -11,6 +11,7 @@ import {
   type SystemObject,
 } from '../domain/workspace'
 import { objectPositions } from '../utils/system-map-geometry'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 
 function object(
   id: string,
@@ -247,9 +248,12 @@ test('transfer clears only cross-owner route attachments and Station links in bo
       toPointId: 'destination-jp', playerShared: false,
     },
   ]
+  const { branch, workspace: routeFixture } = workspaceWithRouteObjects()
   const workspace = workspaceWithSystems(base, source, destination, routes, {
     unresolvedExitPositions: { unresolved: { x: 1320, y: 360 } },
+    ...geometryOf(routeFixture),
   })
+  workspace.cluster.routeContents.outbound = branch
   const request = {
     sourceSystemId: sourceId,
     rootObjectId: 'transfer-root',
@@ -275,6 +279,8 @@ test('transfer clears only cross-owner route attachments and Station links in bo
     routes[3],
   ])
   expect(next.layout.unresolvedExitPositions).toEqual({ unresolved: { x: 1320, y: 360 } })
+  expect(next.cluster.routeContents.outbound).toEqual(branch)
+  expect(geometryOf(next)).toMatchObject(geometryOf(routeFixture))
   const nextSource = next.cluster.systems[0]!
   const nextDestination = next.cluster.systems[1]!
   expect(nextSource.objects.find(candidate => candidate.id === 'source-jp-incoming')?.jumpStationId).toBeNull()
