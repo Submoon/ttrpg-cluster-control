@@ -10,18 +10,19 @@ import type {
   Orbit,
   StarSystem,
   SystemObject,
+  CatalogueObject,
 } from './workspace-model'
 
-function mapObjectLabel(object: SystemObject): string {
+function mapObjectLabel(object: CatalogueObject): string {
   const label = catalogueTypes.find(type => type.value === object.subtype && type.family === object.family)?.label
     ?? object.subtype
   return `${object.name} (${label}, ${object.locationKey})`
 }
 
-function orbitLabel(system: StarSystem, orbit: Orbit): string {
+function orbitLabel(branch: { objects: CatalogueObject[] }, orbit: Orbit): string {
   const hostName = orbit.hostId === null
     ? 'unoccupied center'
-    : system.objects.find(object => object.id === orbit.hostId)?.name ?? 'unknown object'
+    : branch.objects.find(object => object.id === orbit.hostId)?.name ?? 'unknown object'
   return `Orbit ${orbit.order} around ${hostName}`
 }
 
@@ -127,7 +128,7 @@ function normalizeOrbitOrders(orbits: Orbit[]): Orbit[] {
 /**
  * Plans the dependent cleanup for deleting a system, object, Orbit, or route without mutating the input.
  * Nested object/Orbit branches cascade; surviving sibling orders and durable layout are updated.
- * Routes detach removed Jump Points and are removed when either endpoint system is deleted.
+ * Routes detach removed Jump Points and cascade to their contents when either endpoint Zone is deleted.
  * @param workspace Current workspace snapshot.
  * @param target Entity selected for removal.
  * @returns Confirmation labels and a proposed next workspace; persistence remains the caller's responsibility.
@@ -266,11 +267,23 @@ export function planMapEntityDeletion(
   }
 
   for (const route of workspace.cluster.routes) {
-    if (removedRouteIds.has(route.id)) continue
     if (removedSystemIds.has(route.fromSystemId)
       || (route.toSystemId !== null && removedSystemIds.has(route.toSystemId))) {
       removedRouteIds.add(route.id)
       addEffect(routeReviewLabel(route))
+    }
+    if (removedRouteIds.has(route.id)) {
+      const contents = routeContentsFor(workspace.cluster, route.id)
+      if (contents) {
+        for (const object of contents.objects) {
+          removedObjectIds.add(object.id)
+          addEffect(mapObjectLabel(object))
+        }
+        for (const orbit of contents.orbits) {
+          removedOrbitIds.add(orbit.id)
+          addEffect(orbitLabel(contents, orbit))
+        }
+      }
       continue
     }
     let nextRoute = route
@@ -287,11 +300,6 @@ export function planMapEntityDeletion(
     if (nextRoute !== route) routeUpdates.set(route.id, nextRoute)
   }
 
-  for (const routeId of [...removedRouteIds, ...routeUpdates.keys()]) {
-    if (routeContentsFor(workspace.cluster, routeId)?.objects.length) {
-      throw new Error('This Jump Route contains route objects and its endpoints cannot be deleted here.')
-    }
-  }
   const systems = workspace.cluster.systems
     .filter(candidate => !removedSystemIds.has(candidate.id))
     .map(candidate => {
@@ -330,7 +338,14 @@ export function planMapEntityDeletion(
     left.orbitId.localeCompare(right.orbitId))
   const removedRouteEffects = workspace.cluster.routes
     .filter(route => removedRouteIds.has(route.id))
-    .map(route => routeEffectSignature(workspace, route))
+    .map(route => {
+      const contents = routeContentsFor(workspace.cluster, route.id)
+      return {
+        ...routeEffectSignature(workspace, route),
+        objects: contents?.objects.map(({ id, placement }) => ({ id, placement })),
+        orbits: contents?.orbits,
+      }
+    })
     .sort((left, right) => left.id.localeCompare(right.id))
   const effectSignature = JSON.stringify({
     entityLabel,

@@ -480,7 +480,11 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
     routeSession: route.routeSession,
     armRouteAdd: clusterSystemPlacement.armRouteAdd,
     resolveTransition: transitions.resolveTransition,
-    isEntityDraftCommandBlocked: entity.isEntityCommandBlocked,
+    isEntityDraftCommandBlocked: command => {
+      const active = routeObject.session.value
+      return entity.isEntityCommandBlocked(command)
+        || (command.kind === 'deletion' && !!active && !!command.affectedObjectIds?.includes(active.targetId))
+    },
     isRouteCommandBlocked: route.isRouteCommandBlocked,
     isChartDraftTarget: navigation.isChartDraftTarget,
     editorError,
@@ -637,6 +641,7 @@ export function useEditorWorkflows(options: EditorWorkflowsOptions) {
       chooseRouteSystem: route.chooseRouteSystem,
       chooseRoutePoint: route.chooseRoutePoint,
       updateRouteInput: route.updateRouteInput,
+      reverseRouteEndpoints: route.reverseRouteEndpoints,
       applyRouteSession,
       discardRouteSession,
       cancelRouteCreation: route.cancelRouteCreation,

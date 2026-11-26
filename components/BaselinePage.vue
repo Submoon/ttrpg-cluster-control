@@ -614,6 +614,7 @@
               @request-route-edit="beginRouteEdit"
               @set-route-sharing="setRouteSharing"
               @update-route-input="updateRouteInput"
+              @reverse-route-endpoints="reverseRouteEndpoints"
               @choose-route-system="chooseRouteSystem"
               @choose-route-point="chooseRoutePoint"
               @apply-route-session="applyRouteSession"
@@ -1353,7 +1354,7 @@ const {
   entitySession, routeObjectSession, hasModifiedEntitySession, orbitPlacementPreview, applyEntitySession, discardEntitySession,
   updateObjectPlacement, updateOrbitHost, previewOrbitPlacement, isEntityCommandBlocked, resumeEntitySession,
   beginObjectEdit, beginOrbitEdit,
-  routeSession, hasModifiedRouteSession, offerRouteSystems, chooseRouteSystem, chooseRoutePoint, updateRouteInput,
+  routeSession, hasModifiedRouteSession, offerRouteSystems, chooseRouteSystem, chooseRoutePoint, updateRouteInput, reverseRouteEndpoints,
   applyRouteSession, discardRouteSession, cancelRouteCreation,
 } = inspector
 const inspectorMode = computed(() => {
