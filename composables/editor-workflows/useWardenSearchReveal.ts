@@ -1,5 +1,5 @@
 import { getCurrentScope, nextTick, onScopeDispose, watch, type Ref } from 'vue'
-import type { LocalWorkspace } from '../../domain/workspace'
+import { routeContentsFor, type LocalWorkspace } from '../../domain/workspace'
 import type { EditorUiSelection, InspectedMapTarget, useEditorUiStore } from '../../stores/editor-ui'
 import type {
   MapInteractionMode,
@@ -59,6 +59,7 @@ interface SearchRevealOptions {
   resolveTransition: ResolveTransition
   getChartSession(): ChartSession
   getEntitySession(): EntitySession
+  selectRouteObjectInCluster(routeId: string, objectId: string): void
   compactViewport: Readonly<Ref<boolean>>
   editorError: Ref<string>
   setSelection(patch: Partial<EditorUiSelection>): void
@@ -171,6 +172,10 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
   function searchTargetExists(currentWorkspace: LocalWorkspace | null, target: SearchTarget): boolean {
     if (!currentWorkspace || !sameSearchWorkspace(currentWorkspace, target)) return false
     if (target.kind === 'cluster') return true
+    if (target.kind === 'object' && target.routeId !== undefined) {
+      return continuousMap.value && routeContentsFor(currentWorkspace.cluster, target.routeId)
+        ?.objects.some(object => object.id === target.objectId) === true
+    }
     const system = currentWorkspace.cluster.systems.find(candidate => candidate.id === target.systemId)
     return target.kind === 'system'
       ? system !== undefined
@@ -227,6 +232,7 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
   function inspectedTargetForSearch(target: SearchTarget): InspectedMapTarget {
     if (target.kind === 'cluster') return { kind: 'cluster' }
     if (target.kind === 'system') return { kind: 'system', systemId: target.systemId }
+    if (target.routeId !== undefined) return { kind: 'route-object', routeId: target.routeId, objectId: target.objectId }
     return { kind: 'object', systemId: target.systemId, objectId: target.objectId }
   }
 
@@ -263,7 +269,7 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
       }
       next.selection.selectedObjectId = null
       next.selection.selectedObjectIds = next.selection.selectedObjectIds.filter(id => id !== target.objectId)
-      if (!currentWorkspace.cluster.systems.some(system => system.id === target.systemId)) {
+      if (target.systemId !== undefined && !currentWorkspace.cluster.systems.some(system => system.id === target.systemId)) {
         next.selection.selectedSystemId = currentWorkspace.cluster.systems[0]?.id ?? null
         next.selection.selectedOrbitId = null
       }
@@ -314,7 +320,10 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
             && system.orbits.some(orbit => orbit.id === inspectedTarget.orbitId))
           : inspectedTarget?.kind === 'route'
             ? currentWorkspace.cluster.routes.some(routeValue => routeValue.id === inspectedTarget.routeId)
-            : true
+            : inspectedTarget?.kind === 'route-object'
+              ? routeContentsFor(currentWorkspace.cluster, inspectedTarget.routeId)?.objects
+                .some(object => object.id === inspectedTarget.objectId)
+              : true
     if (!inspectedTargetSurvives) next.inspectedTarget = null
     const selectedSystem = currentWorkspace.cluster.systems.find(system => system.id === next.selectedSystemId)
     if (continuousMap.value && next.activeView === 'cluster') {
@@ -456,7 +465,9 @@ export function useWardenSearchReveal(options: SearchRevealOptions) {
       activeSearchContextLease = leaseState
 
       publishingSearchContext = true
-      if (continuousMap.value) {
+      if (target.kind === 'object' && target.routeId !== undefined) {
+        options.selectRouteObjectInCluster(target.routeId, target.objectId)
+      } else if (continuousMap.value) {
         const targetSelection = inspectedTargetForSearch(target)
         setSelection({
           activeView: 'cluster',

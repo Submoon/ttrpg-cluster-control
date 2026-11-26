@@ -10,6 +10,7 @@ export interface EditorCommandContext {
   navigation: {
     selectSystem(systemId: string): Promise<void>
     inspectContinuousTarget(target: Extract<InspectedMapTarget, { kind: 'system' | 'object' | 'orbit' }>, openInspector?: boolean): Promise<boolean>
+    inspectRouteObject(routeId: string, objectId: string): Promise<boolean>
     selectObject(objectId: string, openInspector?: boolean): Promise<void>
     replaceObjectSelection(objectIds: readonly string[], isCurrent?: () => boolean): Promise<boolean>
     toggleObjectSelection(objectId: string): Promise<void>

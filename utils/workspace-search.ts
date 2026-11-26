@@ -1,4 +1,4 @@
-import type { LocalWorkspace, PublicationMode, StarSystem, SystemObject } from '../domain/workspace'
+import { routeContentsFor, type CatalogueObject, type LocalWorkspace, type PublicationMode } from '../domain/workspace'
 import { catalogueSubtypeLabel } from './catalogue-labels'
 import { objectMark } from './catalogue-marks'
 import type { FieldCondition } from './field-filter-matching'
@@ -6,7 +6,10 @@ import { normalizeSearchText } from './normalize-search-text'
 import { createWardenObjectFilterMatcher } from './warden-map-filters'
 
 export type SearchTarget = { workspaceId: string; clusterId: string }
-  & ({ kind: 'cluster' } | { kind: 'system'; systemId: string } | { kind: 'object'; systemId: string; objectId: string })
+  & ({ kind: 'cluster' } | { kind: 'system'; systemId: string }
+    | ({ kind: 'object'; objectId: string } & (
+      { systemId: string; routeId?: never } | { routeId: string; systemId?: never }
+    )))
 
 export type SearchResultMark =
   | { kind: 'glyph'; value: string }
@@ -43,8 +46,9 @@ export interface WorkspaceSearchCriteria {
 }
 
 interface WorkspaceObjectSearchCandidate extends SearchCandidate<SearchTarget> {
-  system: StarSystem
-  object: SystemObject
+  ownerId: string
+  ownerName: string
+  object: CatalogueObject
 }
 
 function compareText(left: string, right: string): number {
@@ -64,7 +68,7 @@ function resultKey(target: SearchTarget): string {
   if (target.kind === 'cluster') return JSON.stringify([target.workspaceId, target.clusterId, target.kind])
   return target.kind === 'system'
     ? JSON.stringify([target.workspaceId, target.clusterId, target.kind, target.systemId])
-    : JSON.stringify([target.workspaceId, target.clusterId, target.kind, target.systemId, target.objectId])
+    : JSON.stringify([target.workspaceId, target.clusterId, target.kind, target.routeId ?? target.systemId, target.objectId])
 }
 
 function matchRank(name: string, query: string): number | null {
@@ -124,37 +128,55 @@ export function rankSearchCandidates<TTarget>(
 function workspaceSearchCandidates(workspace: LocalWorkspace): {
   candidates: SearchCandidate<SearchTarget>[]
   objectCandidates: WorkspaceObjectSearchCandidate[]
-  objectsByKey: Map<string, SystemObject>
+  objectsByKey: Map<string, CatalogueObject>
 } {
-  const objectsByKey = new Map<string, SystemObject>()
-  const objectCandidates: WorkspaceObjectSearchCandidate[] = workspace.cluster.systems.flatMap(system =>
-    system.objects.map((object): WorkspaceObjectSearchCandidate => {
-      const target: SearchTarget = {
-        workspaceId: workspace.id,
-        clusterId: workspace.cluster.id,
-        kind: 'object',
-        systemId: system.id,
-        objectId: object.id,
-      }
-      const key = resultKey(target)
-      objectsByKey.set(key, object)
-      return {
-        system,
-        object,
-        result: {
-          key,
-          target,
-          name: object.name,
-          typeLabel: catalogueSubtypeLabel(object),
-          contextLabel: `Zone: ${system.name}`,
-          leadingMark: { kind: 'glyph', value: objectMark(object) },
-          locationKey: object.locationKey,
-          occurrence: null,
-        },
-        identityOrder: `object:${system.id}:${object.id}`,
-      }
+  const objectsByKey = new Map<string, CatalogueObject>()
+  function objectCandidate(
+    owner: { systemId: string } | { routeId: string },
+    ownerName: string,
+    object: CatalogueObject,
+  ): WorkspaceObjectSearchCandidate {
+    const ownerId = 'routeId' in owner ? owner.routeId : owner.systemId
+    const target: SearchTarget = {
+      workspaceId: workspace.id,
+      clusterId: workspace.cluster.id,
+      kind: 'object',
+      objectId: object.id,
+      ...owner,
+    }
+    const key = resultKey(target)
+    objectsByKey.set(key, object)
+    return {
+      ownerId,
+      ownerName,
+      object,
+      result: {
+        key,
+        target,
+        name: object.name,
+        typeLabel: catalogueSubtypeLabel(object),
+        contextLabel: `${'routeId' in owner ? 'Jump Route' : 'Zone'}: ${ownerName}`,
+        leadingMark: { kind: 'glyph', value: objectMark(object) },
+        locationKey: object.locationKey,
+        occurrence: null,
+      },
+      identityOrder: key,
+    }
+  }
+
+  const zones = new Map(workspace.cluster.systems.map(system => [system.id, system.name]))
+  const objectCandidates = [
+    ...workspace.cluster.systems.flatMap(system =>
+      system.objects.map(object => objectCandidate({ systemId: system.id }, system.name, object))),
+    ...workspace.cluster.routes.flatMap(route => {
+      const contents = routeContentsFor(workspace.cluster, route.id)
+      if (!contents) return []
+      const departure = zones.get(route.fromSystemId)
+      const arrival = route.toSystemId === null ? route.unresolvedExit : zones.get(route.toSystemId)
+      const ownerName = route.name || `${departure} to ${arrival} (Level ${route.jumpLevel})`
+      return contents.objects.map(object => objectCandidate({ routeId: route.id }, ownerName, object))
     }),
-  )
+  ]
 
   const candidates: SearchCandidate<SearchTarget>[] = [
     {
@@ -232,8 +254,8 @@ export function searchWorkspace(
     setDuplicateOccurrences(objectCandidates)
     return objectCandidates
       .filter(candidate => filterObject(candidate.object))
-      .sort((left, right) => compareName(left.system.name, right.system.name)
-        || compareText(left.system.id, right.system.id)
+      .sort((left, right) => compareName(left.ownerName, right.ownerName)
+        || compareText(left.ownerId, right.ownerId)
         || compareName(left.object.name, right.object.name)
         || compareText(left.object.id, right.object.id))
       .map(candidate => candidate.result)

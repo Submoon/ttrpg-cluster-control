@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test as freshTest, type Locator } from './fixtures'
+import { buildMapHierarchy } from '../utils/map-hierarchy'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 import {
   createSingleSystemWorkspaceWithPrimaryStar,
   type DownloadWindow,
@@ -22,6 +24,16 @@ import {
   workspaceNavigation,
   workspaceZoomControls,
 } from './helpers'
+
+freshTest('a route branch preserves hierarchy levels from hosted Orbit through its occupant @pure', () => {
+  const { branch, root, orbit, occupant } = workspaceWithRouteObjects()
+  const rows = buildMapHierarchy(branch)
+  expect(rows).toMatchObject([
+    { kind: 'object', object: { id: root.id }, depth: 0 },
+    { kind: 'orbit', orbit: { id: orbit.id }, host: { id: root.id }, childCount: 1, depth: 1 },
+    { kind: 'object', object: { id: occupant.id }, depth: 2 },
+  ])
+})
 
 async function renderedObjectPosition(mark: Locator): Promise<{ x: number; y: number }> {
   return wardenObjectLocalPosition(mark)

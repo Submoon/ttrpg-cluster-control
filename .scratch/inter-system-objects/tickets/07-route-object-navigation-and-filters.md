@@ -1,6 +1,7 @@
 ---
 title: Find and inspect route objects across semantic zoom
-status: open
+status: in-progress
+assignee: codex/issue-60-ticket-07
 type: implementation
 specification: ../spec.md
 baseline: c649b576f1636c8ffec57da6b6112b6316bee882
@@ -29,7 +30,7 @@ Use origin/main at c649b576f1636c8ffec57da6b6112b6316bee882, verified on 2026-11
 
 Use the accepted specification's whole-Cluster key policy and explicit legacy exceptions. Route objects include stationary obstacles, anomalies, derelicts and ships; position is manual. Keep one guarded mutation/writer/history path and exclude unapplied previews from saved or public data.
 
-This ticket is planned and unclaimed. Its ready-for-agent role means the brief is specified; unresolved blockers still prevent execution. Intermediate consumers must preserve admitted data or explicitly reject an unsupported operation, never silently drop records.
+Implementation started from integrated prerequisite revision `3470aa42c496c67d1f2d988e7a16f5109b110b25`, compared against `origin/main` at the baseline above.
 
 ## Acceptance criteria
 

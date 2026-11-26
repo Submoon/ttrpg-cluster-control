@@ -56,7 +56,7 @@ test('published player content opens in a separate browser context and survives 
   await expect(badge).toBeVisible()
   await expect(badge.locator('.gm-publication-badge-icon')).not.toHaveJSProperty('innerHTML', previousGlyph)
 
-  await hierarchy.getByRole('button', { name: /^Select Jump Level 1:/ }).click()
+  await hierarchy.getByRole('treeitem', { name: /^Select Jump Level 1:/ }).click()
   await page.getByRole('button', { name: 'Set Jump Route visibility to Shared', exact: true }).click()
   await waitForWorkspaceSaved(page)
 

@@ -58,7 +58,7 @@
       </div>
     </nav>
 
-    <nav class="object-tree grid gap-[0.1rem] border-t border-[var(--line-soft)] pt-[0.65rem]" aria-label="Jump Routes">
+    <nav v-if="!props.continuousMap" class="object-tree grid gap-[0.1rem] border-t border-[var(--line-soft)] pt-[0.65rem]" aria-label="Jump Routes">
       <span class="subsection-label">JUMP ROUTES</span>
       <p v-if="props.workspace.cluster.routes.length === 0" class="empty-copy my-[0.65rem]">No Jump Routes on this chart.</p>
       <button
@@ -90,7 +90,7 @@
       @focusout="releaseHierarchyFocus"
     >
       <div class="tree-heading flex justify-between gap-[0.4rem] pb-[0.45rem]">
-        <span class="subsection-label">OBJECTS / ORBITS · ALL ZONES</span>
+        <span class="subsection-label">OBJECTS / ORBITS</span>
         <span class="tree-count whitespace-nowrap">{{ continuousHierarchyRecordCount }} records</span>
       </div>
       <p v-if="props.workspace.cluster.systems.length === 0" class="empty-copy my-[0.65rem]">No Zones charted yet.</p>
@@ -123,7 +123,7 @@
             :class="ui.link({
               class: [
                 'tree-row grid min-h-[2.55rem] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-1 gap-y-0 rounded-[2px] border border-transparent bg-transparent px-0.5 py-1 text-left',
-                item.kind === 'system' ? 'system-row' : item.kind === 'object' ? 'object-row' : 'orbit-row',
+                item.kind === 'system' ? 'system-row' : item.kind === 'orbit' ? 'orbit-row' : 'object-row',
                 { active: selected },
               ],
               selected,
@@ -131,9 +131,10 @@
             :data-hierarchy-key="item.key"
             :data-object-id="item.kind === 'object' ? item.row.object.id : undefined"
             :data-orbit-id="item.kind === 'orbit' ? item.row.orbit.id : undefined"
-            :data-system-id="item.kind === 'system' ? item.system.id : item.ownerSystemId"
-            :aria-label="item.kind === 'object' ? item.ariaLabel : item.label"
-            :aria-description="item.kind === 'orbit' ? item.ownerSystemName : item.ariaDescription"
+            :data-system-id="item.kind === 'system' ? item.system.id : item.kind === 'route' ? undefined : item.ownerSystemId"
+            :data-route-id="item.kind === 'route' ? item.route.id : item.kind === 'system' ? undefined : item.ownerRouteId"
+            :aria-label="item.kind === 'object' || item.kind === 'route' ? item.ariaLabel : item.label"
+            :aria-description="item.ariaDescription"
             @contextmenu="openHierarchyMenu($event, item)"
             @keydown.capture="openHierarchyMenuFromKeyboard($event, item)"
           >
@@ -160,6 +161,9 @@
               <small v-if="item.kind === 'system'" class="mt-[0.18rem] block">
                 {{ item.system.objects.length }} map objects
               </small>
+              <small v-if="item.kind === 'route'" class="mt-[0.18rem] block">
+                {{ commands.navigation.routeSummary(item.route) }}
+              </small>
               <small v-if="item.kind === 'object'" class="tree-type-label mt-[0.18rem] block [overflow-wrap:anywhere]">
                 {{ catalogueFamilyLabel(item.row.object.family) }} / {{ catalogueSubtypeLabel(item.row.object) }}
               </small>
@@ -167,7 +171,7 @@
                 <span class="key-tag block min-w-0 [overflow-wrap:anywhere]">{{ item.row.object.locationKey }}</span>
                 <span class="block">{{ item.parentContext }}</span>
               </small>
-              <small v-if="item.kind !== 'system'" class="mt-[0.12rem] block">{{ item.ownerSystemName }}</small>
+              <small v-if="item.kind === 'object' || item.kind === 'orbit'" class="mt-[0.12rem] block">{{ item.ownerName }}</small>
             </span>
             <div class="col-start-2 row-start-1 flex min-w-0 flex-col items-center gap-0.5 self-center">
               <UButton
@@ -183,7 +187,7 @@
                 <UIcon name="i-lucide-eye" aria-hidden="true" />
               </UButton>
               <UButton
-                v-if="item.kind === 'object'"
+                v-if="item.kind === 'object' && !item.ownerRouteId"
                 class="tree-publication-control min-h-[2rem] min-w-[2rem] shrink-0 justify-center px-0"
                 color="neutral"
                 variant="ghost"
@@ -211,12 +215,12 @@
               </UButton>
             </div>
             <UButton
-              v-if="item.kind === 'system' && expanded && !seededHierarchyOwners.has(item.key)"
+              v-if="(item.kind === 'system' || item.kind === 'route') && expanded && !seededHierarchyOwners.has(item.key)"
               class="col-span-2 row-start-2 min-w-0 max-w-full justify-center whitespace-normal"
               color="neutral"
               variant="outline"
               size="xs"
-              :aria-label="`Show all ${item.system.name} records`"
+              :aria-label="`Show all ${item.label} records`"
               @keydown.stop
               @click.stop="showAllHierarchyOwner($event, item.key)"
             >Show all records</UButton>
@@ -307,7 +311,7 @@
           :aria-description="item.ariaDescription"
           :data-hierarchy-key="item.key"
           :data-hierarchy-level="level"
-          :data-system-id="item.kind === 'system' ? item.system.id : item.ownerSystemId"
+          :data-system-id="item.kind === 'system' ? item.system.id : item.kind === 'route' ? undefined : item.ownerSystemId"
           :data-object-id="item.kind === 'object' ? item.row.object.id : undefined"
           :data-orbit-id="item.kind === 'orbit' ? item.row.orbit.id : undefined"
           :data-host-object-id="item.kind === 'orbit' ? item.row.host?.id : undefined"
@@ -415,6 +419,9 @@
  */
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import {
+  routeContentsFor,
+  type CatalogueObject,
+  type JumpRoute,
   type LocalWorkspace,
   type StarSystem,
 } from '../domain/workspace'
@@ -445,10 +452,13 @@ interface HierarchyTreeItemBase {
   [key: string]: unknown
 }
 
+type HierarchyBranchOwner = { ownerSystemId?: string; ownerRouteId?: string; ownerName: string }
+
 type HierarchyTreeItem = HierarchyTreeItemBase & (
   | { kind: 'system'; system: StarSystem }
-  | { kind: 'object'; row: ObjectHierarchyRow; ownerSystemId: string; ownerSystemName: string }
-  | { kind: 'orbit'; row: OrbitHierarchyRow; ownerSystemId: string; ownerSystemName: string }
+  | { kind: 'route'; route: JumpRoute }
+  | ({ kind: 'object'; row: ObjectHierarchyRow<CatalogueObject> } & HierarchyBranchOwner)
+  | ({ kind: 'orbit'; row: OrbitHierarchyRow<CatalogueObject> } & HierarchyBranchOwner)
 )
 
 const props = defineProps<{
@@ -473,14 +483,17 @@ const selectedSystem = computed(() =>
 )
 
 const hierarchyRows = computed(() => buildMapHierarchy(selectedSystem.value))
-const continuousHierarchyRecordCount = computed(() => props.workspace.cluster.systems.reduce(
-  (count, system) => count + buildMapHierarchy(system).length,
-  0,
-))
 const hierarchyItems = computed(() => props.continuousMap
-  ? props.workspace.cluster.systems.flatMap(system => buildHierarchyTreeItems(buildMapHierarchy(system), system, true))
+  ? [
+      ...props.workspace.cluster.systems.flatMap(system => buildHierarchyTreeItems(buildMapHierarchy(system), system, true)),
+      ...props.workspace.cluster.routes.flatMap(route => buildHierarchyTreeItems(
+        buildMapHierarchy(routeContentsFor(props.workspace.cluster, route.id)), undefined, false, route,
+      )),
+    ]
   : buildHierarchyTreeItems(hierarchyRows.value, selectedSystem.value))
 const flatHierarchyItems = computed(() => flattenHierarchyTreeItems(hierarchyItems.value))
+const continuousHierarchyRecordCount = computed(() => flatHierarchyItems.value
+  .filter(item => item.kind === 'object' || item.kind === 'orbit').length)
 const hierarchyItemsByKey = computed(() => new Map(flatHierarchyItems.value.map(item => [item.key, item])))
 const maximumHierarchyLevel = computed(() => props.continuousMap
   ? flatHierarchyItems.value.reduce((maximum, item) => Math.max(maximum, item.ancestorKeys.length + 1), 1)
@@ -492,6 +505,8 @@ const selectedHierarchyKey = computed(() => {
     if (target?.kind === 'object') return `object:${target.systemId}:${target.objectId}`
     if (target?.kind === 'orbit') return `orbit:${target.systemId}:${target.orbitId}`
     if (target?.kind === 'system') return `system:${target.systemId}`
+    if (target?.kind === 'route') return `route:${target.routeId}`
+    if (target?.kind === 'route-object') return `route-object:${target.routeId}:${target.objectId}`
     return ''
   }
   const lastSelectedObjectId = store.selectedObjectIds[store.selectedObjectIds.length - 1]
@@ -502,14 +517,9 @@ const selectedHierarchyKey = computed(() => {
 })
 const selectedHierarchyItem = computed(() => flatHierarchyItems.value.find(item => item.key === selectedHierarchyKey.value))
 const selectedHierarchyItems = computed(() => {
-  const target = props.inspectedTarget
   if (props.continuousMap) {
     const selectedKeys = new Set(store.selectedObjectIds.map(objectHierarchyKey))
-    if (store.selectedObjectIds.length === 0 && target?.kind === 'orbit') {
-      selectedKeys.add(`orbit:${target.systemId}:${target.orbitId}`)
-    } else if (store.selectedObjectIds.length === 0 && target?.kind === 'system') {
-      selectedKeys.add(`system:${target.systemId}`)
-    }
+    if (store.selectedObjectIds.length === 0 && selectedHierarchyKey.value) selectedKeys.add(selectedHierarchyKey.value)
     return flatHierarchyItems.value.filter(item => selectedKeys.has(item.key))
   }
   const selectedKeys = new Set(store.selectedObjectIds.length
@@ -557,7 +567,7 @@ const renderedHierarchyItems = computed(() => {
   const expanded = new Set(expandedHierarchyKeys.value)
   const project = (item: HierarchyTreeItem): HierarchyTreeItem => {
     if (!item.children?.length || !expanded.has(item.key) || browsedHierarchyBranches.has(item.key)) return item
-    const ownerKey = item.kind === 'system' ? item.key : `system:${item.ownerSystemId}`
+    const ownerKey = item.ancestorKeys[0] ?? item.key
     if (seededHierarchyOwners.has(ownerKey)) return item
     // An empty children array retains Reka's disclosure semantics for a formerly revealed branch.
     return { ...item, children: item.children.filter(child => revealedKeys.has(child.key)).map(project) }
@@ -570,7 +580,7 @@ watch(revealedHierarchyAncestors, ancestors => {
   // Automatic paths expire with their target; deliberately browsed branches keep their own expansion.
   expandedHierarchyKeys.value = expandedHierarchyKeys.value.filter(key => {
     const item = hierarchyItemsByKey.value.get(key)
-    const ownerKey = item?.kind === 'system' ? item.key : `system:${item?.ownerSystemId}`
+    const ownerKey = item?.ancestorKeys[0] ?? key
     return ancestors.has(key) || browsedHierarchyBranches.has(key) || seededHierarchyOwners.has(ownerKey)
   })
 })
@@ -583,7 +593,8 @@ watch(renderedHierarchyItems, () => {
   const key = row?.dataset.hierarchyKey
   const objectId = row?.dataset.objectId
   const orbitId = row?.dataset.orbitId
-  const ownerKey = row?.dataset.systemId ? `system:${row.dataset.systemId}` : key
+  const ownerKey = row?.dataset.routeId ? `route:${row.dataset.routeId}`
+    : row?.dataset.systemId ? `system:${row.dataset.systemId}` : key
   if (!key) return
   void nextTick(() => {
     const active = root.ownerDocument.activeElement
@@ -625,8 +636,8 @@ watch(hierarchyBranches, (branches, previousBranches) => {
     if (!currentKeys.has(key)) browsedHierarchyBranches.delete(key)
   }
   expandedHierarchyKeys.value = branches
-    .filter(item => expanded.has(item.key) || (item.kind !== 'system' && !previouslyExpandable.has(item.key)
-      && (!props.continuousMap || seededHierarchyOwners.has(`system:${item.ownerSystemId}`))))
+    .filter(item => expanded.has(item.key) || (!previouslyExpandable.has(item.key)
+      && (!props.continuousMap || seededHierarchyOwners.has(item.ancestorKeys[0] ?? item.key))))
     .map(item => item.key)
 }, { immediate: true })
 
@@ -744,12 +755,23 @@ function hierarchyObjectPublicationStatus(item: Extract<HierarchyTreeItem, { kin
 }
 
 function buildHierarchyTreeItems(
-  rows: MapHierarchyRow[],
-  ownerSystem = selectedSystem.value,
+  rows: MapHierarchyRow<CatalogueObject>[],
+  ownerSystem: StarSystem | undefined,
   includeSystemRoot = false,
+  ownerRoute?: JumpRoute,
 ): HierarchyTreeItem[] {
-  const systemRoot: HierarchyTreeItem | undefined = includeSystemRoot && ownerSystem
+  const root: HierarchyTreeItem | undefined = ownerRoute
     ? {
+        kind: 'route',
+        route: ownerRoute,
+        key: `route:${ownerRoute.id}`,
+        label: ownerRoute.name || `Jump Level ${ownerRoute.jumpLevel}`,
+        textValue: ownerRoute.name || commands.navigation.routeSummary(ownerRoute),
+        ariaLabel: `Select Jump Level ${ownerRoute.jumpLevel}: ${commands.navigation.routeSummary(ownerRoute)}`,
+        ancestorKeys: [],
+        children: [],
+      }
+    : includeSystemRoot && ownerSystem ? {
         kind: 'system',
         system: ownerSystem,
         key: `system:${ownerSystem.id}`,
@@ -761,12 +783,21 @@ function buildHierarchyTreeItems(
         children: [],
       }
     : undefined
-  const roots: HierarchyTreeItem[] = systemRoot ? [systemRoot] : []
+  const roots: HierarchyTreeItem[] = root ? [root] : []
   const parentsAtDepth: HierarchyTreeItem[] = []
   const dimmedObjectIds = new Set(props.dimmedObjectIds ?? [])
+  const ownerName = ownerRoute
+    ? ownerRoute.name || commands.navigation.routeSummary(ownerRoute)
+    : ownerSystem?.name ?? ''
+  const owner: HierarchyBranchOwner = {
+    ownerName,
+    ownerRouteId: ownerRoute?.id,
+    ownerSystemId: ownerSystem?.id,
+  }
+  const ownerSuffix = props.continuousMap && ownerName ? ` in ${ownerName}` : ''
 
   for (const row of rows) {
-    const parent = row.depth > 0 ? parentsAtDepth[row.depth - 1] : systemRoot
+    const parent = row.depth > 0 ? parentsAtDepth[row.depth - 1] : root
     const ancestorKeys = parent ? [...parent.ancestorKeys, parent.key] : []
     const parentContext = row.kind === 'object'
       ? hierarchyParentContext(parent)
@@ -780,16 +811,12 @@ function buildHierarchyTreeItems(
       ? {
           kind: 'object',
           row,
-          ownerSystemId: ownerSystem?.id ?? '',
-          ownerSystemName: ownerSystem?.name ?? '',
-          key: props.continuousMap && ownerSystem
-            ? `object:${ownerSystem.id}:${row.object.id}`
-            : `object:${row.object.id}`,
+          ...owner,
+          key: ownerRoute ? `route-object:${ownerRoute.id}:${row.object.id}`
+            : props.continuousMap && ownerSystem ? `object:${ownerSystem.id}:${row.object.id}` : `object:${row.object.id}`,
           label: row.object.name,
-          textValue: props.continuousMap && ownerSystem ? `${row.object.name}, ${ownerSystem.name}` : row.object.name,
-          ariaLabel: props.continuousMap && ownerSystem
-            ? `Select ${row.object.locationKey}, ${row.object.name} in ${ownerSystem.name}`
-            : `Select ${row.object.locationKey}, ${row.object.name}`,
+          textValue: props.continuousMap && ownerName ? `${row.object.name}, ${ownerName}` : row.object.name,
+          ariaLabel: `Select ${row.object.locationKey}, ${row.object.name}${ownerSuffix}`,
           ariaDescription: `${catalogueFamilyLabel(row.object.family)} / ${catalogueSubtypeLabel(row.object)}. ${parentContext}. ${publicationDescription}${isDimmed ? ' Dimmed on map because it does not match the active filters.' : ''}`,
           isDimmed,
           parentContext,
@@ -798,16 +825,17 @@ function buildHierarchyTreeItems(
       : {
           kind: 'orbit',
           row,
-          ownerSystemId: ownerSystem?.id ?? '',
-          ownerSystemName: ownerSystem?.name ?? '',
-          key: props.continuousMap && ownerSystem ? `orbit:${ownerSystem.id}:${row.orbit.id}` : `orbit:${row.orbit.id}`,
+          ...owner,
+          key: ownerRoute ? `route-orbit:${ownerRoute.id}:${row.orbit.id}`
+            : props.continuousMap && ownerSystem ? `orbit:${ownerSystem.id}:${row.orbit.id}` : `orbit:${row.orbit.id}`,
           label: `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`,
-          textValue: props.continuousMap && ownerSystem
-            ? `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'} in ${ownerSystem.name}`
+          textValue: props.continuousMap && ownerName
+            ? `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}${ownerSuffix}`
             : `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`,
-          ariaLabel: props.continuousMap && ownerSystem
-            ? `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'} in ${ownerSystem.name}`
+          ariaLabel: props.continuousMap && ownerName
+            ? `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}${ownerSuffix}`
             : `Orbit ${row.orbit.order} around ${row.host?.name ?? 'unoccupied center'}, ${row.childCount} object${row.childCount === 1 ? '' : 's'}`,
+          ariaDescription: ownerName,
           ancestorKeys,
         }
 
@@ -826,6 +854,7 @@ function buildHierarchyTreeItems(
 }
 
 function hierarchyParentContext(parent: HierarchyTreeItem | undefined): string {
+  if (parent?.kind === 'route') return 'Jump Route'
   if (parent?.kind !== 'orbit') return 'Zone map'
   return `Orbit ${parent.row.orbit.order} around ${parent.row.host?.name ?? 'unoccupied center'}`
 }
@@ -855,7 +884,7 @@ function updateExpandedHierarchyKeys(keys: string[]): void {
   for (const key of keys) {
     if (previous.has(key)) continue
     manuallyCollapsedHierarchyKeys.delete(key)
-    if (key.startsWith('system:')) expanded = seedHierarchyOwner(key, expanded)
+    if (key.startsWith('system:') || key.startsWith('route:')) expanded = seedHierarchyOwner(key, expanded)
     else browsedHierarchyBranches.add(key)
   }
   expandedHierarchyKeys.value = [...expanded]
@@ -866,7 +895,11 @@ function selectHierarchyItem(event: TreeItemSelectEvent<HierarchyTreeItem>, item
   if (props.continuousMap) {
     if (item.kind === 'system') {
       void commands.navigation.inspectContinuousTarget({ kind: 'system', systemId: item.system.id })
-    } else if (item.kind === 'object') {
+    } else if (item.kind === 'route') {
+      void commands.navigation.selectRoute(item.route.id)
+    } else if (item.kind === 'object' && item.ownerRouteId !== undefined) {
+      void commands.navigation.inspectRouteObject(item.ownerRouteId, item.row.object.id)
+    } else if (item.kind === 'object' && item.ownerSystemId !== undefined) {
       const sourceEvent = event.detail.originalEvent
       const modified = sourceEvent instanceof MouseEvent
         && (sourceEvent.shiftKey || sourceEvent.ctrlKey || sourceEvent.metaKey)
@@ -879,7 +912,7 @@ function selectHierarchyItem(event: TreeItemSelectEvent<HierarchyTreeItem>, item
         systemId: item.ownerSystemId,
         objectId: item.row.object.id,
       })
-    } else {
+    } else if (item.kind === 'orbit' && item.ownerSystemId !== undefined) {
       void commands.navigation.inspectContinuousTarget({
         kind: 'orbit',
         systemId: item.ownerSystemId,
@@ -899,7 +932,7 @@ function selectHierarchyItem(event: TreeItemSelectEvent<HierarchyTreeItem>, item
     }
   }
   else if (item.kind === 'orbit') void commands.navigation.selectOrbit(item.row.orbit.id)
-  else void commands.navigation.selectSystem(item.system.id)
+  else if (item.kind === 'system') void commands.navigation.selectSystem(item.system.id)
 }
 
 function systemTarget(systemId: string): EntityContextTarget {
@@ -958,6 +991,8 @@ function openSystemMenuFromButton(event: MouseEvent, system: { id: string }): vo
 
 function hierarchyItemTarget(item: HierarchyTreeItem): EntityContextTarget | null {
   if (item.kind === 'system') return systemTarget(item.system.id)
+  if (item.kind === 'route') return routeTarget(item.route.id)
+  if (item.ownerRouteId !== undefined) return null
   if (item.kind === 'object') return objectTarget(item.row.object.id, item.ownerSystemId)
   return item.ownerSystemId
     ? { kind: 'orbit', id: item.row.orbit.id, systemId: item.ownerSystemId }

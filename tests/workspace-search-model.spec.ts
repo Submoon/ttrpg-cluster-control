@@ -1,9 +1,32 @@
 import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
+import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 import { expect, test } from '@playwright/test'
 import { createLocalWorkspace } from '../domain/workspace'
 
 import { searchWorkspace, type WorkspaceSearchCriteria } from '../utils/workspace-search'
 import { mapObjectTypeKey } from '../utils/map-type-filters'
+
+test('Search finds a hosted anomaly by Location key and shared Warden criteria under its Jump Route @pure', () => {
+  const { workspace, route, occupant } = workspaceWithRouteObjects()
+  workspace.objectFieldSettings.customFields = [{
+    id: 'signal', name: 'Signal', playerShared: false, type: 'text',
+  }]
+  Object.assign(occupant, { publication: 'revealed', customFieldValues: { signal: 'distress' } })
+
+  const criteria = {
+    types: [mapObjectTypeKey(occupant)],
+    publicationModes: ['revealed'],
+    fieldConditions: [{ fieldId: 'signal', type: 'text', operator: 'contains', value: 'distress' }],
+  } satisfies WorkspaceSearchCriteria
+  const result = searchWorkspace(workspace, occupant.locationKey, criteria)
+  expect(result).toHaveLength(1)
+  expect(result[0]).toMatchObject({
+    name: 'Captured echo',
+    contextLabel: 'Jump Route: Vesper to Aster (Level 3)',
+    target: { kind: 'object', routeId: route.id, objectId: occupant.id },
+  })
+  expect(searchWorkspace(workspace, '', criteria)).toEqual(result)
+})
 
 test('workspace search trims and normalizes a literal query, then ranks exact, prefix, and substring matches @pure', () => {
   const workspace = createLocalWorkspace('Café Nebula', 'Alpha Cafe')
