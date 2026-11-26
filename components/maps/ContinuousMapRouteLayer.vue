@@ -141,14 +141,18 @@ function stopAnimation(): void {
 function routeIdAtStroke(event: MouseEvent): string | undefined {
   const stroke = event.target
   if (!(stroke instanceof SVGPathElement) || !stroke.matches('.cluster-route-hit-target')) return
-  const layer = stroke.closest('.continuous-map-route-layer')
-  const hits = stroke.ownerDocument.elementsFromPoint(event.clientX, event.clientY)
+  return routeIdAtClient(event)
+}
+
+function routeIdAtClient({ clientX, clientY }: { clientX: number; clientY: number }): string | undefined {
+  const layer = layerElement.value
+  if (!layer) return
+  const hits = layer.ownerDocument.elementsFromPoint(clientX, clientY)
     .filter(element => element.matches('.cluster-route-hit-target') && element.closest('.continuous-map-route-layer') === layer)
-  if (hits.length < 2) return
-  const matrix = stroke.getScreenCTM()
+  const matrix = layer.getScreenCTM()
   if (!matrix) return
-  const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
-  const candidates = hits.flatMap((path) => {
+  const point = new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse())
+  const candidates = hits.flatMap(path => {
     const id = path.closest('.cluster-route')?.getAttribute('data-route-id')
     if (!id) return []
     const geometry = animated.value.get(id) ?? props.geometries.get(id)
@@ -211,7 +215,7 @@ function getRenderedRouteEnd(id: string): Point | undefined {
   return (animated.value.get(id) ?? props.geometries.get(id))?.end
 }
 
-defineExpose({ routeIdAtStroke, focusRoute, getRenderedRouteEnd, displayedMarks: marks })
+defineExpose({ routeIdAtStroke, routeIdAtClient, focusRoute, getRenderedRouteEnd, displayedMarks: marks })
 </script>
 
 <style scoped>

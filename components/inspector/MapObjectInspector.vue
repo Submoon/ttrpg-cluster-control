@@ -148,6 +148,18 @@
           >
             Change Zone…
           </UButton>
+          <UButton
+            v-else-if="props.routeObjectContext"
+            class="workspace-control"
+            color="neutral"
+            variant="outline"
+            size="xs"
+            type="button"
+            :disabled="props.saving || props.transferBusy"
+            @click="emit('detach-route-object')"
+          >
+            Detach�
+          </UButton>
         </div>
         <p v-if="props.routeObjectContext" class="entity-inspector-subtitle m-0">
           {{ props.routeObjectContext.summary }} · {{ routePlacementSummary }}
@@ -443,6 +455,7 @@ const emit = defineEmits<{
   'resume-chart-draft': []
   'retry-save': []
   'export-current-json': []
+  'detach-route-object': []
   'system-transfer-intent': [intent: Extract<SystemObjectTransferIntent, { kind: 'open' }>]
 }>()
 const commands = useEditorCommands()

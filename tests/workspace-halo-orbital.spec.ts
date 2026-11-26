@@ -18,6 +18,7 @@ import {
   hideWorkspaceInspector,
   resolveJumpClusterRestoreReview,
   reviewJumpClusterBackup,
+  selectInspectorOption,
   setWorkspaceMapMode,
   waitForWorkspaceSaved,
   waitForWorkspaceStartup,
@@ -167,7 +168,7 @@ function createTransferWorkspace() {
 }
 
 test('transferring a hosted branch reviews its route attachment and retains its Location keys', async ({ page }) => {
-  test.setTimeout(60_000)
+  test.setTimeout(120_000)
   await captureMapExportBlobs(page)
   await createSingleSystemWorkspace(page, { viewport: { width: 1440, height: 900 } })
   const fixture = createTransferWorkspace()
@@ -245,4 +246,57 @@ test('transferring a hosted branch reviews its route attachment and retains its 
   expect(destinationAfter.orbits).toContainEqual({ ...fixture.orbit, hostId: fixture.root.id })
   expect(destinationAfter.objects.find(object => object.id === fixture.conflict.id)?.locationKey)
     .toBe(fixture.conflict.locationKey)
+
+  await setWorkspaceMapMode(page, 'Move')
+  const zoneRoot = wardenObjectMark(page, fixture.destination.id, fixture.root.id)
+  for (let step = 0; step < 5 && !await zoneRoot.isVisible(); step += 1) await zoomIn.click()
+  await expect.poll(() => exposedContinuousObjectHitPoint(zoneRoot)).not.toBeNull()
+  const rootHit = (await exposedContinuousObjectHitPoint(zoneRoot))!
+  const routeHit = await map.locator('.cluster-route[data-route-id="halo-transfer-route"] .cluster-route-hit-target')
+    .evaluate(path => {
+      if (!(path instanceof SVGPathElement)) throw new Error('Expected a route stroke.')
+      const matrix = path.getScreenCTM()!
+      const length = path.getTotalLength()
+      for (const fraction of [0.5, 0.4, 0.6, 0.3, 0.7]) {
+        const point: DOMPoint = path.getPointAtLength(fraction * length).matrixTransform(matrix)
+        if (document.elementsFromPoint(point.x, point.y).includes(path)) return { x: point.x, y: point.y }
+      }
+      return null
+    })
+  if (!routeHit) throw new Error('Expected an exposed route landing target.')
+  await page.mouse.move(rootHit.x, rootHit.y)
+  await page.mouse.down()
+  await page.mouse.move(routeHit.x, routeHit.y, { steps: 12 })
+  const routeGhost = map.locator('.warden-route-object-landing-preview')
+  await expect(routeGhost.locator('.warden-route-object')).toHaveCount(2)
+  await expect(routeGhost.locator('ellipse')).toHaveCount(1)
+  const markCenter = (locator: Locator) => locator.evaluate(mark => {
+    if (!(mark instanceof SVGGraphicsElement)) throw new Error('Expected a route object mark.')
+    const { x, y } = new DOMPoint().matrixTransform(mark.getScreenCTM()!)
+    return { x, y }
+  })
+  const routeLanding = await markCenter(routeGhost.locator('.warden-route-object').filter({ hasText: 'Herma' }))
+  await test.info().attach('zone-to-route-branch-landing', { body: await map.screenshot(), contentType: 'image/png' })
+  await page.mouse.up()
+  const routeRoot = map.locator(`.warden-route-object[data-route-object-id="${fixture.root.id}"]`)
+  await expect(routeRoot).toBeVisible()
+  await expect.poll(async () => {
+    const accepted = await markCenter(routeRoot)
+    return Math.hypot(accepted.x - routeLanding.x, accepted.y - routeLanding.y)
+  }).toBeLessThan(1)
+  await waitForWorkspaceSaved(page)
+  await routeRoot.press('Enter')
+  const routeObjectInspector = page.getByRole('complementary', { name: 'Object inspector' })
+  await routeObjectInspector.getByRole('button', { name: 'Detach…' }).click()
+  const detach = page.getByRole('dialog', { name: 'Detach from Jump Route' })
+  await expect(detach.getByRole('button', { name: 'Detach to Zone' })).toBeDisabled()
+  await selectInspectorOption(detach.getByLabel('Destination Zone'), 'Helion')
+  await detach.getByRole('button', { name: 'Detach to Zone' }).click()
+  await expect(detach).toBeHidden()
+  await waitForWorkspaceSaved(page)
+  await expect(routeRoot).toHaveCount(0)
+  const detached = await downloadJson(page, 'Export Jump Cluster JSON')
+  expect(detached.cluster?.systems.find(system => system.id === fixture.destination.id)?.orbits)
+    .toContainEqual({ ...fixture.orbit, hostId: fixture.root.id })
+
 })

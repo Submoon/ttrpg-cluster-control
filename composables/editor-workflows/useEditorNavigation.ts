@@ -1,6 +1,6 @@
 import { computed, nextTick, watch, type Ref } from 'vue'
 import { routeContentsFor,
-  resolveSystemObjectHistoryTarget,
+  resolveCatalogueObjectHistoryTarget,
   type JumpCluster,
   type JumpRoute,
   type LocalWorkspace,
@@ -830,9 +830,13 @@ export function useEditorNavigation(options: {
     const { action } = context
     const workspaceAtSelection = workspace.value
     const initiatingFocus = typeof document === 'undefined' ? null : document.activeElement
-    if (action.target.kind === 'route-object' && continuousMap.value
-      && routeObjectTargetExists(workspaceAtSelection, action.target.routeId, action.target.id)) {
-      const { routeId, id } = action.target
+    const actionTarget = action.kind === 'transfer'
+      && (action.target.kind === 'object' || action.target.kind === 'route-object') && workspaceAtSelection
+      ? resolveCatalogueObjectHistoryTarget(workspaceAtSelection, action.target.id) ?? action.target
+      : action.target
+    if (actionTarget.kind === 'route-object' && continuousMap.value
+      && routeObjectTargetExists(workspaceAtSelection, actionTarget.routeId, actionTarget.id)) {
+      const { routeId, id } = actionTarget
       selectRouteObjectInCluster(routeId, id)
       const acceptedContextStamp = navigationContextStamp()
       await nextTick()
@@ -859,12 +863,7 @@ export function useEditorNavigation(options: {
     }
 
     const currentClusterId = workspace.value?.cluster.id
-    const transferTarget = action.kind === 'transfer'
-      && action.target.kind === 'object'
-      && workspaceAtSelection
-      ? resolveSystemObjectHistoryTarget(workspaceAtSelection, action.target.id) ?? undefined
-      : undefined
-    const target = retainedTargetExists(transferTarget ?? action.target)
+    const target = retainedTargetExists(actionTarget)
       ?? retainedTargetExists(action.parent ?? undefined)
       ?? (continuousMap.value && currentClusterId ? { kind: 'cluster' as const, id: currentClusterId } : null)
     const targetKind = target?.kind ?? action.target.kind

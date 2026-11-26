@@ -76,7 +76,7 @@
           :route-session-active="!chartEditing && activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelPresentationOpen"
           :compact-panel="compactPanel"
-          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || mobileMenuOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || mapTypeFiltersOpen || helpOpen || publicationMenuRequest !== null || creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || mobileMenuOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || mapTypeFiltersOpen || helpOpen || publicationMenuRequest !== null || creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen || routeTransferReview !== null || routeDetach !== null"
           :is-compact-viewport="isCompactViewport"
           @close-panel="closePanel"
         >
@@ -471,7 +471,7 @@
                     :cluster-add-type="standaloneImportPlacementEnabled ? null : clusterAddType"
                     :cluster-move-targeting="!standaloneImportPlacementEnabled && clusterSystemMapMoveTargeting && clusterAddType === null"
                     :move-targeting="!standaloneImportPlacementEnabled && mapMoveTargeting"
-                    :cluster-chooser-open="creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen"
+                    :cluster-chooser-open="creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen || routeTransferReview !== null || routeDetach !== null"
                     :is-entity-command-blocked="isEntityCommandBlocked"
                     :orbit-adjustment-preview="orbitAdjustmentPreview"
                     :system-object-transfer-preview="transferMapPreview"
@@ -626,6 +626,7 @@
               @export-current-json="downloadClusterJson"
               @open-field-definitions="openFieldDefinitions"
               @system-transfer-intent="inspector.handleSystemTransferIntent"
+              @detach-route-object="openRouteDetach"
             >
               <template #chart-editor>
                 <ChartDetailsEditor
@@ -663,6 +664,16 @@
         />
       </section>
     </main>
+
+    <CatalogueTransferDialog
+      v-if="workspace"
+      :workspace="workspace"
+      :review="routeTransferReview"
+      :detach="routeDetach"
+      @cancel="cancelCatalogueTransfer"
+      @confirm="transfer.resolveRouteReview(true)"
+      @detach="applyRouteDetach"
+    />
 
     <WorkspaceDeletionReview
       v-if="workspace"
@@ -724,7 +735,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch, type Ref } from 'vue'
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { catalogueTypes, projectPlayerCluster, routeContentsFor, type CatalogueSubtype, type JumpRoute, type LocalWorkspace, type ObjectFamily, type Point, type SystemFrameInsets } from '../domain/workspace'
+import { catalogueTypes, projectPlayerCluster, routeContentsFor, type CatalogueObjectTransferReview, type CatalogueSubtype, type JumpRoute, type LocalWorkspace, type ObjectFamily, type Point, type SystemFrameInsets } from '../domain/workspace'
 import { validName } from '../domain/workspace-validation'
 import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { EntityCommand, SearchPresentationSettlement, SelectMapObjectDragContext, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
@@ -758,6 +769,7 @@ import { DROPBOX_BACKUP_LIMIT } from '../utils/dropbox-backup-snapshot'
 import ChartNamesDialog from './ChartNamesDialog.vue'
 import ChartDetailsEditor from './inspector/ChartDetailsEditor.vue'
 import WorkspaceDeletionReview from './WorkspaceDeletionReview.vue'
+import CatalogueTransferDialog from './CatalogueTransferDialog.vue'
 import WorkspaceImportReview from './WorkspaceImportReview.vue'
 import WorkspaceRestoreReview from './WorkspaceRestoreReview.vue'
 import WorkspaceFeedback from './WorkspaceFeedback.vue'
@@ -1072,6 +1084,30 @@ const workflows = useEditorWorkflows({
   }),
 })
 const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search, filterCriteria, transfer } = workflows
+const routeTransferReview = transfer.routeReview
+const routeDetach = shallowRef<{ routeId: string; objectId: string; workspace: LocalWorkspace } | null>(null)
+
+function openRouteDetach(): void {
+  const target = inspectedTarget.value
+  if (target?.kind !== 'route-object' || !workspace.value) return
+  routeDetach.value = { routeId: target.routeId, objectId: target.objectId, workspace: workspace.value }
+}
+
+function cancelCatalogueTransfer(): void {
+  routeDetach.value = null
+  transfer.resolveRouteReview(false)
+}
+
+function applyRouteDetach(proposal: CatalogueObjectTransferReview): void {
+  const detaching = routeDetach.value
+  if (!detaching) return
+  routeDetach.value = null
+  void placeRouteObject({ kind: 'transfer', proposal }, () => {
+    const target = inspectedTarget.value
+    return target?.kind === 'route-object' && target.routeId === detaching.routeId && target.objectId === detaching.objectId
+  })
+}
+
 const transferMapPreview = transfer.mapPreview
 const transferMapPlacementLease = transfer.pendingMapPlacement
 const systemTransferSession = inspector.systemTransferSession
@@ -2647,6 +2683,8 @@ publicationFocusRestoreAllowed = request => !(
   || searchOpen.value
   || mapTypeFiltersOpen.value
   || deletionReview.value !== null
+  || routeTransferReview.value !== null
+  || routeDetach.value !== null
   || creationChooserOpen.value
   || continuousObjectOwnerChooserOpen.value
   || continuousObjectOtherTypeOpen.value
@@ -2672,6 +2710,8 @@ const workspaceOverlayAvailable = computed(() => workspace.value !== null
   && !continuousObjectOwnerChooserOpen.value
   && !continuousObjectOtherTypeOpen.value
   && deletionReview.value === null
+  && routeTransferReview.value === null
+  && routeDetach.value === null
   && !importReview.value.open
   && !importReview.value.suspended
   && !importReview.value.confirming
@@ -2692,6 +2732,7 @@ function openPlayerPreview(focusMapFiles: () => void): void {
 readEditorHistoryBlockReason = () => {
   if (standaloneImportPlacement.value) return 'Finish or cancel standalone system placement before using Undo or Redo.'
   if (historyOpen.value) return 'Close History before using Undo or Redo.'
+  if (routeDetach.value) return 'Finish or cancel the current detachment before using Undo or Redo.'
   if (helpOpen.value) return 'Close Help before using Undo or Redo.'
   if (searchOpen.value) return 'Close Search before using Undo or Redo.'
   if (mapTypeFiltersOpen.value) return 'Close Filters before using Undo or Redo.'

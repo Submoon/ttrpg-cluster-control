@@ -7,6 +7,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { computed, effectScope, nextTick, ref, shallowRef, watchEffect } from 'vue'
 import {
   createLocalWorkspace,
+  prepareCatalogueObjectTransfer,
   type LocalWorkspace,
   type Orbit,
   type SystemObject,
@@ -950,6 +951,100 @@ test('route placement rejects a superseded request and records one accepted endp
     expect(await apply(landing, () => owned)).toBe(false)
     expect(harness.publicationCount).toBe(1)
     expect(harness.history.getEntries()[0]?.action.target).toEqual({ kind: 'route-object', id: root.id, routeId: route.id })
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('route detachment applies its exact landing once and Undo and Redo preserve the hosted branch @pure', async () => {
+  const { workspace, route, root, branch } = workspaceWithRouteObjects()
+  const harness = createHistoryHarness(workspace)
+  let ownsLanding = true
+  const apply = useRouteObjectPlacement({
+    workspace: harness.workspace,
+    mutations: harness.history,
+    getRevision: () => harness.publicationCount,
+    editorError: ref(''),
+    beforeWorkspaceOperation: async () => true,
+  })
+  const destination = workspace.cluster.systems[1]!
+  const proposal = prepareCatalogueObjectTransfer(harness.workspace.value!, {
+    source: { kind: 'route', routeId: route.id },
+    rootObjectId: root.id,
+    landing: { kind: 'system', systemId: destination.id, placement: { kind: 'system', x: 0.53, y: 0.48 } },
+  })
+  const request = { kind: 'transfer' as const, proposal }
+  try {
+    ownsLanding = false
+    expect(await apply(request, () => ownsLanding)).toBe(false)
+    expect(harness.publicationCount).toBe(0)
+    ownsLanding = true
+    expect(await apply(request, () => ownsLanding)).toBe(true)
+    expect(harness.workspace.value).toEqual(proposal.previewWorkspace)
+    expect(harness.history.getEntries().map(entry => entry.action)).toMatchObject([{
+      kind: 'transfer', target: { kind: 'object', id: root.id, systemId: destination.id },
+    }])
+    expect((await harness.history.undo()).status).toBe('applied')
+    expect(harness.workspace.value?.cluster.routeContents[route.id]).toEqual(branch)
+    expect((await harness.history.redo()).status).toBe('applied')
+    expect(harness.workspace.value).toEqual(proposal.previewWorkspace)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('a cancelled or stale consequence review cannot detach a Jump Point or publish its transfer @pure', async () => {
+  const { workspace, routeId } = createUnresolvedRouteWorkspace()
+  const sourceId = workspace.cluster.systems[0]!.id
+  const pointId = workspace.cluster.routes[0]!.fromPointId!
+  const harness = createHistoryHarness(workspace)
+  const request = {
+    kind: 'transfer' as const,
+    proposal: prepareCatalogueObjectTransfer(harness.workspace.value!, {
+      source: { kind: 'system', systemId: sourceId },
+      rootObjectId: pointId,
+      landing: { kind: 'route', routeId, progression: 0.4 },
+    }),
+  }
+  let completeReview: ((accept: boolean) => void) | undefined
+  let ownsRequest = true
+  const apply = useRouteObjectPlacement({
+    workspace: harness.workspace,
+    mutations: harness.history,
+    getRevision: () => harness.publicationCount,
+    editorError: ref(''),
+    beforeWorkspaceOperation: async () => true,
+    reviewTransfer: proposal => {
+      expect(proposal.detachedRouteAttachments).toEqual([{ routeId, end: 'from', pointId }])
+      return new Promise(resolve => { completeReview = resolve })
+    },
+  })
+  try {
+    const cancelled = apply(request, () => ownsRequest)
+    await expect.poll(() => Boolean(completeReview)).toBe(true)
+    completeReview!(false)
+    expect(await cancelled).toBe(false)
+
+    completeReview = undefined
+    const stale = apply(request, () => ownsRequest)
+    await expect.poll(() => Boolean(completeReview)).toBe(true)
+    ownsRequest = false
+    completeReview!(true)
+    expect(await stale).toBe(false)
+    expect(harness.publicationCount).toBe(0)
+    expect(harness.workspace.value?.cluster.routes[0]?.fromPointId).toBe(pointId)
+
+    completeReview = undefined
+    ownsRequest = true
+    const confirmed = apply(request, () => ownsRequest)
+    await expect.poll(() => Boolean(completeReview)).toBe(true)
+    completeReview!(true)
+    expect(await confirmed).toBe(true)
+    expect(harness.publicationCount).toBe(1)
+    expect(harness.workspace.value?.cluster.routes[0]).toMatchObject({
+      fromSystemId: sourceId, fromPointId: null, toSystemId: null, unresolvedExit: 'Beyond the known Cluster',
+    })
+    expect(harness.workspace.value?.cluster.routeContents[routeId]?.objects.map(object => object.id)).toEqual([pointId])
   } finally {
     harness.dispose()
   }
