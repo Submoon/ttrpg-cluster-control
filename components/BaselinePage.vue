@@ -76,7 +76,7 @@
           :route-session-active="!chartEditing && activeView === 'cluster' && routeSession !== null"
           :compact-modal-open="compactPanelPresentationOpen"
           :compact-panel="compactPanel"
-          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || mobileMenuOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || mapTypeFiltersOpen || helpOpen || publicationMenuRequest !== null || creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen || routeTransferReview !== null || routeDetach !== null"
+          :overlay-open="chartNamesDialogOpen || fieldDefinitionDialogOpen || headerFilesOpen || mobileMenuOpen || recoveryDetailsOpen || historyCapacityRequest !== null || historyOpen || playerPreviewOpen || searchOpen || mapTypeFiltersOpen || helpOpen || publicationMenuRequest !== null || creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen || routeTransferReview !== null || catalogueTransferForm !== null"
           :is-compact-viewport="isCompactViewport"
           @close-panel="closePanel"
         >
@@ -471,7 +471,7 @@
                     :cluster-add-type="standaloneImportPlacementEnabled ? null : clusterAddType"
                     :cluster-move-targeting="!standaloneImportPlacementEnabled && clusterSystemMapMoveTargeting && clusterAddType === null"
                     :move-targeting="!standaloneImportPlacementEnabled && mapMoveTargeting"
-                    :cluster-chooser-open="creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen || routeTransferReview !== null || routeDetach !== null"
+                    :cluster-chooser-open="creationChooserOpen || continuousObjectOwnerChooserOpen || continuousObjectOtherTypeOpen || routeTransferReview !== null || catalogueTransferForm !== null"
                     :is-entity-command-blocked="isEntityCommandBlocked"
                     :orbit-adjustment-preview="orbitAdjustmentPreview"
                     :system-object-transfer-preview="transferMapPreview"
@@ -571,6 +571,7 @@
               :mode="inspectorMode"
               :workspace="workspace"
               system-transfer-enabled
+              :route-transfer-enabled="routeTransferAvailable"
               :publication-busy="publicationBusy"
               :selected-system="inspectorSelectedSystem"
               :draft-system="wardenSystem"
@@ -626,7 +627,7 @@
               @export-current-json="downloadClusterJson"
               @open-field-definitions="openFieldDefinitions"
               @system-transfer-intent="inspector.handleSystemTransferIntent"
-              @detach-route-object="openRouteDetach"
+              @place-catalogue-object="openCatalogueTransfer"
             >
               <template #chart-editor>
                 <ChartDetailsEditor
@@ -669,10 +670,17 @@
       v-if="workspace"
       :workspace="workspace"
       :review="routeTransferReview"
-      :detach="routeDetach"
+      :form="catalogueTransferForm"
+      :suspended="chartNamesDialogOpen || historyCapacityRequest !== null"
+      :applying="catalogueTransferApplying"
+      :error="catalogueTransferError"
+      :opener="catalogueTransferOpener"
+      :fallback-focus-target="workspaceMain"
+      :route-summary="routeEndpointSummary"
       @cancel="cancelCatalogueTransfer"
       @confirm="transfer.resolveRouteReview(true)"
-      @detach="applyRouteDetach"
+      @submit="applyCatalogueTransfer"
+      @focus-returned="catalogueTransferOpener = null"
     />
 
     <WorkspaceDeletionReview
@@ -711,6 +719,7 @@
       v-if="workspace"
       :open="chartNamesDialogOpen"
       :guard-mode="transitionGuard"
+      :suppress-return-focus="catalogueTransferForm !== null"
       :has-modified-entity-session="hasModifiedEntitySession || hasModifiedRouteSession"
       @update:open="handleChartGuardOpenChange"
       @resolve-transition="resolveChartTransitionChoice"
@@ -724,7 +733,11 @@
     />
 
 
-    <WorkspaceHistoryCapacityDialog :request="historyCapacityRequest" @resolve="resolveHistoryCapacity" />
+    <WorkspaceHistoryCapacityDialog
+      :request="historyCapacityRequest"
+      :suppress-return-focus="catalogueTransferForm !== null"
+      @resolve="resolveHistoryCapacity"
+    />
 
   </div>
 </template>
@@ -735,7 +748,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch, type Ref } from 'vue'
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { catalogueTypes, projectPlayerCluster, routeContentsFor, type CatalogueObjectTransferReview, type CatalogueSubtype, type JumpRoute, type LocalWorkspace, type ObjectFamily, type Point, type SystemFrameInsets } from '../domain/workspace'
+import { catalogueTypes, projectPlayerCluster, routeContentsFor, type CatalogueObjectTransferReview, type CatalogueTransferSource, type CatalogueSubtype, type JumpRoute, type LocalWorkspace, type ObjectFamily, type Point, type SystemFrameInsets } from '../domain/workspace'
 import { validName } from '../domain/workspace-validation'
 import type { CurrentPlayerMapScene } from '../domain/player-scene'
 import type { EntityCommand, SearchPresentationSettlement, SelectMapObjectDragContext, SystemCreationCandidate, SystemCreationType } from '../composables/editor-workflows/types'
@@ -1085,28 +1098,75 @@ const workflows = useEditorWorkflows({
 })
 const { navigation, inspector, charts, fields, cluster, placement, mapControls, feedback, adjustments, search, filterCriteria, transfer } = workflows
 const routeTransferReview = transfer.routeReview
-const routeDetach = shallowRef<{ routeId: string; objectId: string; workspace: LocalWorkspace } | null>(null)
-
-function openRouteDetach(): void {
+const catalogueTransferForm = shallowRef<{
+  source: CatalogueTransferSource
+  rootObjectId: string
+  destination: 'system' | 'route'
+} | null>(null)
+const catalogueTransferOpener = shallowRef<HTMLElement | null>(null)
+const catalogueTransferApplying = ref(false)
+const catalogueTransferError = ref('')
+const routeTransferAvailable = computed(() => {
   const target = inspectedTarget.value
-  if (target?.kind !== 'route-object' || !workspace.value) return
-  routeDetach.value = { routeId: target.routeId, objectId: target.objectId, workspace: workspace.value }
+  if (!workspace.value || (target?.kind !== 'object' && target?.kind !== 'route-object')) return false
+  if (target.kind === 'object') return workspace.value.cluster.routes.length > 0
+  const routeObject = routeContentsFor(workspace.value.cluster, target.routeId)?.objects.find(object => object.id === target.objectId)
+  return workspace.value.cluster.routes.some(route => route.id !== target.routeId || routeObject?.placement.kind === 'orbit')
+})
+
+function openCatalogueTransfer(destination: 'system' | 'route', opener: EventTarget | null): void {
+  const target = inspectedTarget.value
+  if (!workspace.value || catalogueTransferForm.value || catalogueTransferApplying.value
+    || (target?.kind !== 'route-object' && target?.kind !== 'object')) return
+  if (destination === 'system' && target.kind !== 'route-object') return
+  if (destination === 'route' && !routeTransferAvailable.value) return
+  catalogueTransferOpener.value = opener instanceof HTMLElement ? opener : null
+  catalogueTransferError.value = ''
+  catalogueTransferForm.value = {
+    source: target.kind === 'route-object'
+      ? { kind: 'route', routeId: target.routeId }
+      : { kind: 'system', systemId: target.systemId },
+    rootObjectId: target.objectId,
+    destination,
+  }
 }
 
 function cancelCatalogueTransfer(): void {
-  routeDetach.value = null
-  transfer.resolveRouteReview(false)
+  if (routeTransferReview.value) transfer.resolveRouteReview(false)
+  else if (!catalogueTransferApplying.value) catalogueTransferForm.value = null
 }
 
-function applyRouteDetach(proposal: CatalogueObjectTransferReview): void {
-  const detaching = routeDetach.value
-  if (!detaching) return
-  routeDetach.value = null
-  void placeRouteObject({ kind: 'transfer', proposal }, () => {
+async function applyCatalogueTransfer(proposal: CatalogueObjectTransferReview): Promise<void> {
+  const form = catalogueTransferForm.value
+  if (!form || catalogueTransferApplying.value) return
+  const ownsForm = () => {
     const target = inspectedTarget.value
-    return target?.kind === 'route-object' && target.routeId === detaching.routeId && target.objectId === detaching.objectId
-  })
+    if (catalogueTransferForm.value !== form || (target?.kind !== 'route-object' && target?.kind !== 'object')
+      || target.objectId !== form.rootObjectId) return false
+    return form.source.kind === 'route'
+      ? target.kind === 'route-object' && target.routeId === form.source.routeId
+      : target.kind === 'object' && target.systemId === form.source.systemId
+  }
+  catalogueTransferApplying.value = true
+  catalogueTransferError.value = ''
+  const errorAtStart = editorError.value
+  try {
+    const accepted = await placeRouteObject({ kind: 'transfer', proposal }, ownsForm)
+    if (catalogueTransferForm.value !== form) return
+    if (accepted) catalogueTransferForm.value = null
+    else if (editorError.value !== errorAtStart) catalogueTransferError.value = editorError.value
+  } catch (error) {
+    if (catalogueTransferForm.value === form) {
+      catalogueTransferError.value = error instanceof Error ? error.message : String(error)
+    }
+  } finally {
+    catalogueTransferApplying.value = false
+  }
 }
+
+watch([() => workspace.value?.id, () => workspace.value?.cluster.id], () => {
+  catalogueTransferForm.value = null
+}, { flush: 'sync' })
 
 const transferMapPreview = transfer.mapPreview
 const transferMapPlacementLease = transfer.pendingMapPlacement
@@ -2684,7 +2744,7 @@ publicationFocusRestoreAllowed = request => !(
   || mapTypeFiltersOpen.value
   || deletionReview.value !== null
   || routeTransferReview.value !== null
-  || routeDetach.value !== null
+  || catalogueTransferForm.value !== null
   || creationChooserOpen.value
   || continuousObjectOwnerChooserOpen.value
   || continuousObjectOtherTypeOpen.value
@@ -2711,7 +2771,7 @@ const workspaceOverlayAvailable = computed(() => workspace.value !== null
   && !continuousObjectOtherTypeOpen.value
   && deletionReview.value === null
   && routeTransferReview.value === null
-  && routeDetach.value === null
+  && catalogueTransferForm.value === null
   && !importReview.value.open
   && !importReview.value.suspended
   && !importReview.value.confirming
@@ -2732,7 +2792,7 @@ function openPlayerPreview(focusMapFiles: () => void): void {
 readEditorHistoryBlockReason = () => {
   if (standaloneImportPlacement.value) return 'Finish or cancel standalone system placement before using Undo or Redo.'
   if (historyOpen.value) return 'Close History before using Undo or Redo.'
-  if (routeDetach.value) return 'Finish or cancel the current detachment before using Undo or Redo.'
+  if (catalogueTransferForm.value) return 'Finish or cancel the current transfer before using Undo or Redo.'
   if (helpOpen.value) return 'Close Help before using Undo or Redo.'
   if (searchOpen.value) return 'Close Search before using Undo or Redo.'
   if (mapTypeFiltersOpen.value) return 'Close Filters before using Undo or Redo.'

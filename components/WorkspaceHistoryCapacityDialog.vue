@@ -1,6 +1,7 @@
 <template>
   <UModal
     :open="props.request !== null"
+    :content="{ onOpenAutoFocus, onCloseAutoFocus }"
     title="This change cannot be undone"
     description="This operation exceeds the capacity of this session's history."
     :ui="{ overlay: 'z-[80]', content: 'z-[81] max-h-[calc(100dvh-2rem)] overflow-hidden', body: 'min-h-0 overflow-y-auto', footer: 'shrink-0' }"
@@ -25,6 +26,14 @@
 <script setup lang="ts">
 import type { HistoryCapacityRequest } from '../composables/useWorkspaceHistory'
 
-const props = defineProps<{ request: HistoryCapacityRequest | null }>()
+const props = defineProps<{ request: HistoryCapacityRequest | null; suppressReturnFocus?: boolean }>()
 const emit = defineEmits<{ resolve: [accepted: boolean] }>()
+let suppressReturnFocus = false
+function onOpenAutoFocus(): void {
+  suppressReturnFocus = props.suppressReturnFocus === true
+}
+
+function onCloseAutoFocus(event: Event): void {
+  if (suppressReturnFocus) event.preventDefault()
+}
 </script>
