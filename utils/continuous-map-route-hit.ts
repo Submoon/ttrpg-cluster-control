@@ -29,16 +29,17 @@ function nearestCurveProjection(
   return projectCurveSegment(point, controls, toleranceSquared, { progression: 0, distanceSquared }, 0, 0)
 }
 
-/** Chooses among actual stroke hits in front-to-back paint order. */
+/** Chooses the nearest eligible curve, breaking ties in front-to-back paint order. */
 export function nearestContinuousMapRouteHit(
   point: Point,
   candidates: readonly { id: string; geometry: ContinuousMapRouteGeometry }[],
   pixelsPerSceneUnit: number,
+  maximumDistancePixels = Number.POSITIVE_INFINITY,
 ): string | undefined {
   if (!(pixelsPerSceneUnit > 0) || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return
   const toleranceSquared = (0.05 / pixelsPerSceneUnit) ** 2
   let nearest: string | undefined
-  let nearestDistance = Number.POSITIVE_INFINITY
+  let nearestDistance = (maximumDistancePixels / pixelsPerSceneUnit) ** 2
   for (const { id, geometry } of candidates) {
     const { distanceSquared: distance } = nearestCurveProjection(point, controlPoints(geometry), toleranceSquared, nearestDistance)
     if (distance < nearestDistance) {

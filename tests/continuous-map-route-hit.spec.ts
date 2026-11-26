@@ -25,3 +25,17 @@ test('exact centerline ties keep front-to-back paint priority', { tag: '@pure' }
   const hits = [{ id: 'front', geometry }, { id: 'back', geometry }]
   expect(nearestContinuousMapRouteHit(geometry.midpoint, hits, 1)).toBe('front')
 })
+
+test('object placement snaps to the closest route within a screen-pixel radius at either zoom', { tag: '@pure' }, () => {
+  const geometry = buildContinuousMapRouteGeometries([
+    { id: 'upper', fromSystemId: 'a', toSystemId: 'b', start: { x: 0, y: 0 }, end: { x: 600, y: 0 } },
+    { id: 'lower', fromSystemId: 'c', toSystemId: 'd', start: { x: 0, y: 14 }, end: { x: 600, y: 14 } },
+  ])
+  const upper = geometry.get('upper')!
+  const hits = [{ id: 'lower', geometry: geometry.get('lower')! }, { id: 'upper', geometry: upper }]
+  for (const pixelScale of [0.5, 4]) {
+    const pointAtOffset = (pixels: number) => ({ x: upper.midpoint.x, y: upper.midpoint.y - pixels / pixelScale })
+    expect(nearestContinuousMapRouteHit(pointAtOffset(12), hits, pixelScale, 16)).toBe('upper')
+    expect(nearestContinuousMapRouteHit(pointAtOffset(18), hits, pixelScale, 16)).toBeUndefined()
+  }
+})

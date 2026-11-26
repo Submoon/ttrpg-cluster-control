@@ -88,6 +88,7 @@ export interface ContinuousWardenImageSceneSystem {
 export interface ContinuousWardenImageSceneRoute {
   route: JumpCluster['routes'][number]
   branch?: {
+    detailed: boolean
     objects: readonly { object: RouteObject; point: Point }[]
     orbits: Readonly<ReturnType<typeof projectRouteObjects>['orbits']>
   }
@@ -191,6 +192,7 @@ export function prepareContinuousWardenImageScene(
       : undefined
     const branch = projectedBranch && contents
       ? {
+          detailed: routeBranchDetail,
           objects: contents.objects.flatMap(object => {
             const point = projectedBranch.positions.get(object.id)
             const selectedObjectId = request.scope === 'viewport' ? request.selectedRouteObjectId : undefined

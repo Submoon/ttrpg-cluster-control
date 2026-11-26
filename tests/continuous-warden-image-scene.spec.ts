@@ -31,6 +31,7 @@ test('entire-Cluster export shows route roots at overview detail @pure', () => {
   }
   const scene = prepareContinuousWardenImageScene(request, measurements)
   const branch = scene.routes[0]?.branch
+  expect(branch?.detailed).toBe(false)
   expect(branch?.objects.map(({ object }) => object.id)).toEqual([root.id])
   expect(branch?.orbits).toEqual([])
   expect(scene.dimmedObjectIds.has(root.id)).toBe(false)
@@ -62,6 +63,7 @@ test('viewport export follows route detail, selected-object reveal and applied f
   expect(detail.sceneViewport).toEqual(request.viewport)
   expect(detail.dimmedObjectIds).toEqual(new Set([occupant.id]))
   const branch = detail.routes[0]?.branch
+  expect(branch?.detailed).toBe(true)
   expect(branch?.objects.map(({ object }) => object.id)).toEqual([root.id, occupant.id])
   expect(branch?.orbits[0]).toMatchObject({ id: orbit.id, rotation: 90, vertical: 9 })
   expect(branch?.orbits[0]?.horizontal).toBeCloseTo(18.4)
@@ -69,6 +71,7 @@ test('viewport export follows route detail, selected-object reveal and applied f
 
   const overview = { ...request, svgPixelScale: .5 }
   const overviewScene = prepareContinuousWardenImageScene(overview, measurements)
+  expect(overviewScene.routes[0]?.branch?.detailed).toBe(false)
   expect(overviewScene.routes[0]?.branch?.objects.map(({ object }) => object.id)).toEqual([root.id])
   const selectedScene = prepareContinuousWardenImageScene({ ...overview, selectedRouteObjectId: occupant.id }, measurements)
   expect(selectedScene.routes[0]?.branch?.objects.map(({ object }) => object.id)).toEqual([root.id, occupant.id])

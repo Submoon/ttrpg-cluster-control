@@ -611,7 +611,7 @@ import ContinuousMapRouteLayer from './maps/ContinuousMapRouteLayer.vue'
 import WardenRouteObjectLayer from './maps/WardenRouteObjectLayer.vue'
 import { pointOnRoute, projectRouteObjects, routeObjectMarkerRadiusPixels } from '../utils/route-object-geometry'
 import { routeObjectTargetAt } from './maps/route-object-target'
-import { projectPointOntoRoute } from '../utils/continuous-map-route-hit'
+import { nearestContinuousMapRouteHit, projectPointOntoRoute } from '../utils/continuous-map-route-hit'
 import type { SystemObjectBranch } from '../domain/workspace-object-branch'
 import type { CatalogueObjectTransferRequest, CatalogueObjectTransferReview, RouteContents, RouteLanding, RouteObject } from '../domain/workspace'
 import type { RouteObjectPlacementRequest } from '../composables/editor-workflows/useRouteObjectPlacement'
@@ -2699,6 +2699,14 @@ function displayedRouteGeometry(routeId: string): ContinuousMapRouteGeometry | u
   return routeLayer.value?.displayedMarks.find(mark => mark.id === routeId)?.geometry
 }
 
+const ROUTE_OBJECT_SNAP_RADIUS_PIXELS = 16
+
+function nearbyRouteIdForPlacement(pointerPoint: Point, landingPoint = pointerPoint): string | undefined {
+  const marks = routeLayer.value?.displayedMarks
+  if (!marks?.length || systemIdsAtDisplayPoint(landingPoint, true).length) return
+  return nearestContinuousMapRouteHit(pointerPoint, [...marks].reverse(), routePixelScale.value, ROUTE_OBJECT_SNAP_RADIUS_PIXELS)
+}
+
 function routeLandingAtPoint(point: Point, routeId: string | undefined, keyboard: boolean): RouteLanding | null {
   const geometry = routeId ? displayedRouteGeometry(routeId) : undefined
   const progression = geometry ? keyboard ? 0.5 : projectPointOntoRoute(point, geometry) : null
@@ -2709,9 +2717,13 @@ function offerObjectAdd(point: Point, event: MouseEvent | KeyboardEvent): void {
   const type = props.creationType
   if (type?.kind !== 'object') return
   const { target } = event
+  const object = objectTargetAtTarget(target)
+  const orbit = orbitTargetAtTarget(target)
+  const keyboard = event instanceof KeyboardEvent
   const routeId = (event instanceof MouseEvent ? routeLayer.value?.routeIdAtStroke(event) : undefined)
     ?? routeIdAtTarget(target) ?? routeObjectTargetAt(target)?.routeId
-  const routeLanding = routeLandingAtPoint(point, routeId, event instanceof KeyboardEvent)
+    ?? (!keyboard && !object && !orbit ? nearbyRouteIdForPlacement(point) : undefined)
+  const routeLanding = routeLandingAtPoint(point, routeId, keyboard)
   const otherType = type.subtype === 'other' && props.creationOtherType ? { otherType: props.creationOtherType } : {}
   if (routeLanding) {
     emit('continuous-object-add-target', {
@@ -2725,8 +2737,6 @@ function offerObjectAdd(point: Point, event: MouseEvent | KeyboardEvent): void {
     })
     return
   }
-  const object = objectTargetAtTarget(target)
-  const orbit = orbitTargetAtTarget(target)
   const hitOwnerId = object?.systemId ?? orbit?.systemId ?? null
   const pinnedOwnerId = props.objectAddPinnedOwnerId
   const foreignHit = pinnedOwnerId && hitOwnerId && pinnedOwnerId !== hitOwnerId
@@ -3770,9 +3780,12 @@ function startRouteObjectDrag(event: PointerEvent, element: SVGSVGElement, sourc
 }
 
 function routeDropTarget(aim: Point, event: PointerEvent): RouteLanding | null {
-  const routeId = routeLayer.value?.routeIdAtClient(event)
-  const mark = routeObjectTargetAt(svgElement.value?.ownerDocument.elementFromPoint(event.clientX, event.clientY) ?? null)
-  return routeLandingAtPoint(aim, routeId ?? mark?.routeId, false)
+  const svg = svgElement.value
+  const target = svg?.ownerDocument.elementFromPoint(event.clientX, event.clientY) ?? null
+  const explicitRouteId = routeLayer.value?.routeIdAtClient(event) ?? routeObjectTargetAt(target)?.routeId
+  if (explicitRouteId) return routeLandingAtPoint(aim, explicitRouteId, false)
+  const pointer = svg?.contains(target) ? cameraPoint(event) : null
+  return pointer ? routeLandingAtPoint(aim, nearbyRouteIdForPlacement(pointer, aim), false) : null
 }
 
 function zoneDropTarget(aim: Point, snapshot: LocalWorkspace, rootObjectId: string): CatalogueObjectTransferRequest['landing'] | null {

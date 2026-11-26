@@ -30,7 +30,7 @@
       @focus="focusedObjectId = object.id"
       @blur="focusedObjectId = undefined"
     >
-      <title>{{ catalogueObjectLabel(object) }}</title>
+      <title v-if="showDetail || preview">{{ catalogueObjectLabel(object) }}</title>
       <circle
         v-if="object.id === searchLocatorObjectId"
         class="warden-route-object-search-locator"
@@ -47,18 +47,20 @@
           y="5"
           aria-hidden="true"
         >{{ objectMark(object) }}</text>
-        <text class="warden-route-object-key" text-anchor="middle" y="27" aria-hidden="true">
-          {{ object.locationKey }}
-        </text>
-        <text class="warden-route-object-name" text-anchor="middle" y="41" aria-hidden="true">
-          {{ object.name }}
-        </text>
-        <WardenObjectPublicationBadge
-          v-if="!preview"
-          :identity="`route-object-${routeId}-${object.id}`"
-          :mode="object.publication"
-          transform="translate(24 -13) scale(1.5)"
-        />
+        <template v-if="showDetail">
+          <text class="warden-route-object-key" text-anchor="middle" y="27" aria-hidden="true">
+            {{ object.locationKey }}
+          </text>
+          <text class="warden-route-object-name" text-anchor="middle" y="41" aria-hidden="true">
+            {{ object.name }}
+          </text>
+          <WardenObjectPublicationBadge
+            v-if="!preview"
+            :identity="`route-object-${routeId}-${object.id}`"
+            :mode="object.publication"
+            transform="translate(24 -13) scale(1.5)"
+          />
+        </template>
       </g>
     </g>
   </g>

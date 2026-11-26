@@ -163,8 +163,6 @@ function appendRouteBranch(
     mark.setAttribute('data-route-object-id', object.id)
     mark.setAttribute('transform', `translate(${point.x} ${point.y}) scale(${markerScale})`)
     if (dimmedObjectIds.has(object.id)) mark.setAttribute('opacity', '0.35')
-    const title = mark.ownerDocument.createElementNS(svgNamespace, 'title')
-    title.textContent = catalogueObjectLabel(object)
     const marker = createScopedElement(parent, 'circle', 'warden-route-object-marker')
     marker.setAttribute('r', String(routeObjectMarkerRadiusPixels))
     const glyph = createScopedElement(parent, 'text', 'warden-route-object-glyph')
@@ -172,15 +170,21 @@ function appendRouteBranch(
     glyph.setAttribute('text-anchor', 'middle')
     glyph.setAttribute('y', '5')
     glyph.textContent = objectMark(object)
-    const key = createScopedElement(parent, 'text', 'warden-route-object-key')
-    key.setAttribute('text-anchor', 'middle')
-    key.setAttribute('y', '27')
-    key.textContent = object.locationKey
-    const name = createScopedElement(parent, 'text', 'warden-route-object-name')
-    name.setAttribute('text-anchor', 'middle')
-    name.setAttribute('y', '41')
-    name.textContent = object.name
-    mark.append(title, marker, glyph, key, name)
+    mark.append(marker, glyph)
+    if (branch.detailed) {
+      const title = mark.ownerDocument.createElementNS(svgNamespace, 'title')
+      title.textContent = catalogueObjectLabel(object)
+      const key = createScopedElement(parent, 'text', 'warden-route-object-key')
+      key.setAttribute('text-anchor', 'middle')
+      key.setAttribute('y', '27')
+      key.textContent = object.locationKey
+      const name = createScopedElement(parent, 'text', 'warden-route-object-name')
+      name.setAttribute('text-anchor', 'middle')
+      name.setAttribute('y', '41')
+      name.textContent = object.name
+      mark.prepend(title)
+      mark.append(key, name)
+    }
     parent.append(mark)
   }
 }

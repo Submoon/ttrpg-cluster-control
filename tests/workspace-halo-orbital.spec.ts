@@ -283,8 +283,19 @@ test('transferring a hosted branch reviews its route attachment and retains its 
       const matrix = path.getScreenCTM()!
       const length = path.getTotalLength()
       for (const fraction of [0.5, 0.4, 0.6, 0.3, 0.7]) {
-        const point: DOMPoint = path.getPointAtLength(fraction * length).matrixTransform(matrix)
-        if (document.elementsFromPoint(point.x, point.y).includes(path)) return { x: point.x, y: point.y }
+        const distance = fraction * length
+        const point: DOMPoint = path.getPointAtLength(distance).matrixTransform(matrix)
+        if (!document.elementsFromPoint(point.x, point.y).includes(path)) continue
+        const next: DOMPoint = path.getPointAtLength(distance + 1).matrixTransform(matrix)
+        const tangent = { x: next.x - point.x, y: next.y - point.y }
+        const magnitude = Math.hypot(tangent.x, tangent.y)
+        for (const offset of [12, -12]) {
+          const x = point.x - offset * tangent.y / magnitude
+          const y = point.y + offset * tangent.x / magnitude
+          const hits = document.elementsFromPoint(x, y)
+          if (hits.includes(path.ownerSVGElement!) && !hits.includes(path)
+            && !hits.some(hit => hit.closest('.cluster-route, .continuous-warden-system'))) return { x, y }
+        }
       }
       return null
     })
@@ -309,14 +320,18 @@ test('transferring a hosted branch reviews its route attachment and retains its 
     const accepted = await markCenter(routeRoot)
     return Math.hypot(accepted.x - routeLanding.x, accepted.y - routeLanding.y)
   }).toBeLessThan(1)
-  await expect(routeRoot.locator('.warden-route-object-key')).toHaveText(fixture.root.locationKey)
-  await expect(routeRoot.locator('.warden-route-object-name')).toHaveText('Herma')
-  await expect(routeRoot.locator('.gm-publication-badge')).toBeVisible()
+  await fitWorkspaceMap(page)
+  await expect(routeRoot.locator('.warden-route-object-key')).toBeHidden()
+  await expect(routeRoot.locator('.warden-route-object-name')).toBeHidden()
+  await expect(routeRoot.locator('.gm-publication-badge')).toBeHidden()
   await page.setViewportSize({ width: 390, height: 700 })
   const navigation = page.getByRole('button', { name: 'Open map navigation controls' })
   await navigation.click()
   await page.getByRole('slider', { name: 'Map zoom level' }).press('End')
   await expect(zoomIn).toBeDisabled()
+  await expect(routeRoot.locator('.warden-route-object-key')).toHaveText(fixture.root.locationKey)
+  await expect(routeRoot.locator('.warden-route-object-name')).toHaveText('Herma')
+  await expect(routeRoot.locator('.gm-publication-badge')).toBeVisible()
   await expect(map.locator(`[data-route-object-id="${fixture.child.id}"] .warden-route-object-name`)).toHaveText('Nix')
   await expect(map.locator('.warden-route-object-orbit')).toHaveCount(1)
   await navigation.click()
