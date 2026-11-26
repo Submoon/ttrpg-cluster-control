@@ -325,16 +325,17 @@
         :search-locator-object-id="searchLocatorTarget?.ownerId === id ? searchLocatorTarget.objectId : undefined"
         :hidden-branch="routeMovePreview?.routeId === id ? routeMovePreview.branch : undefined"
       />
+      <WardenRouteObjectLayer
+        v-if="routeLandingPreview"
+        :route-id="routeLandingPreview.routeId"
+        :contents="routeLandingPreview.contents"
+        :geometry="routeLandingPreview.geometry"
+        :layout="routeLandingPreview.layout"
+        :viewport="viewport"
+        :svg-pixel-scale="svgPixelScale"
+        preview="landing"
+      />
       <template v-if="routeMovePreview">
-        <WardenRouteObjectLayer
-          :route-id="routeMovePreview.routeId"
-          :contents="routeMovePreview.landing"
-          :geometry="routeMovePreview.geometry"
-          :layout="workspace.layout"
-          :viewport="viewport"
-          :svg-pixel-scale="svgPixelScale"
-          preview="landing"
-        />
         <WardenRouteObjectLayer
           :route-id="routeMovePreview.routeId"
           :contents="routeMovePreview.pointer"
@@ -583,7 +584,7 @@ import { useWardenMapDom } from './maps/useWardenMapDom'
 import type { MapImageExportOptions, MapImageFormat, MapImagePalette } from '../utils/map-image-export'
 import { mapImageContextKey, type MapImageScope } from '../utils/map-image-scope'
 import { exportContinuousWardenMapImage } from '../utils/continuous-warden-image-export'
-import { projectZoneObjectBranch } from '../utils/zone-object-branch'
+import { prepareFittedCatalogueObjectTransfer, projectZoneObjectBranch } from '../utils/zone-object-branch'
 import { resolveSystemObjectTransferMapPlacement } from '../utils/system-object-transfer-map-placement'
 import {
   CONTINUOUS_SYSTEM_NAME_FONT_PIXELS as SYSTEM_NAME_FONT_PIXELS,
@@ -611,7 +612,7 @@ import { pointOnRoute, projectRouteObjects } from '../utils/route-object-geometr
 import { routeObjectTargetAt } from './maps/route-object-target'
 import { projectPointOntoRoute } from '../utils/continuous-map-route-hit'
 import type { SystemObjectBranch } from '../domain/workspace-object-branch'
-import type { RouteContents, RouteLanding, RouteObject } from '../domain/workspace'
+import type { CatalogueObjectTransferRequest, CatalogueObjectTransferReview, RouteContents, RouteLanding, RouteObject } from '../domain/workspace'
 import type { RouteObjectPlacementRequest } from '../composables/editor-workflows/useRouteObjectPlacement'
 import ContinuousWardenOrbitLayer from './maps/ContinuousWardenOrbitLayer.vue'
 import WardenObjectPublicationBadge from './maps/WardenObjectPublicationBadge.vue'
@@ -786,6 +787,7 @@ interface ActiveObjectDrag {
     frameInsets?: SystemFrameInsets
   } | null
   transfer: SystemObjectTransferDrop | null
+  crossContext: CatalogueObjectTransferReview | null
   targetScenePoint: Point
 }
 
@@ -818,6 +820,7 @@ interface ActiveRouteObjectDrag extends RouteDragSource {
   contents: RouteContents
   root: RouteObject & { placement: Extract<RouteObject['placement'], { kind: 'route' }> }
   landing: RouteLanding | null
+  crossContext: CatalogueObjectTransferReview | null
 }
 let activeRouteObjectDrag: ActiveRouteObjectDrag | null = null
 let routeDragGeneration = 0
@@ -825,9 +828,14 @@ const routeMovePreview = shallowRef<{
   routeId: string
   geometry: ContinuousMapRouteGeometry
   branch: SystemObjectBranch
-  landing: RouteContents
   pointer: RouteContents
   offset: Point
+} | null>(null)
+const routeLandingPreview = shallowRef<{
+  routeId: string
+  contents: RouteContents
+  geometry: ContinuousMapRouteGeometry
+  layout: LocalWorkspace['layout']
 } | null>(null)
 let selectObjectDragGeneration = 0
 let activeSelectedObjectDrag: {
@@ -2858,7 +2866,7 @@ function wheelAnchorPoint(event: WheelEvent, element: SVGSVGElement): [number, n
   return pointer(event, element) as [number, number]
 }
 
-function updateObjectMovePreview(drag: ActiveObjectDrag, scenePoint: Point): void {
+function updateObjectMovePreview(drag: ActiveObjectDrag, scenePoint: Point, event: PointerEvent): void {
   const targetLocal = continuousObjectDragTarget(
     drag.projection,
     drag.anchorDelta,
@@ -2877,6 +2885,8 @@ function updateObjectMovePreview(drag: ActiveObjectDrag, scenePoint: Point): voi
   drag.targetScenePoint = projectPoint(targetLocal)
   drag.landing = null
   drag.transfer = null
+  drag.crossContext = null
+  routeLandingPreview.value = null
   draggedBranchPreview.value = null
   elasticPlacementPreview.value = null
 
@@ -2901,6 +2911,18 @@ function updateObjectMovePreview(drag: ActiveObjectDrag, scenePoint: Point): voi
     new Map(source.orbits.map(orbit => [orbit.id, orbit.hostId])),
   )
   objectMovePreview.value = { systemId: drag.systemId, objectId: drag.objectId, projection }
+  const routeTarget = routeDropTarget(drag.targetScenePoint, event)
+  if (routeTarget) {
+    const proposal = previewCrossContextTransfer(drag.workspaceSnapshot, {
+      source: { kind: 'system', systemId: drag.systemId },
+      rootObjectId: drag.objectId,
+      landing: { kind: 'route', ...routeTarget },
+    })
+    if (proposal) {
+      drag.crossContext = proposal
+      return
+    }
+  }
   const pointer = moveBranch(targetLocal)
 
   let transfer: ReturnType<typeof transferDropForObjectDrag> = null
@@ -3272,6 +3294,7 @@ function clearOwnedGestureClickSuppression(): void {
 }
 
 function clearObjectMovePreview(): void {
+  routeLandingPreview.value = null
   draggedBranchPreview.value = null
   objectMovePreview.value = null
 }
@@ -3369,6 +3392,14 @@ function finishObjectDrag(cancelled: boolean): void {
     : null
   elasticPlacementPreview.value = null
   if (!cancelled && drag.moved) {
+    if (drag.crossContext) {
+      clearObjectMovePreview()
+      const generation = selectObjectDragGeneration
+      const mode = props.mode
+      emit('move-route-object', { kind: 'transfer', proposal: drag.crossContext },
+        () => generation === selectObjectDragGeneration && mode === props.mode && drag.selectDrag?.isCurrent() !== false)
+      return
+    }
     if (drag.transfer) {
       clearObjectMovePreview()
       emit('transfer-object-on-drop', drag.transfer, drag.selectDrag)
@@ -3653,6 +3684,7 @@ function beginSingleObjectDrag(
     moved: false,
     landing: null,
     transfer: null,
+    crossContext: null,
     targetScenePoint: { x: localObject.scenePosition.x + delta.x, y: localObject.scenePosition.y + delta.y },
   }
   event.preventDefault()
@@ -3705,11 +3737,81 @@ function startRouteObjectDrag(event: PointerEvent, element: SVGSVGElement, sourc
     },
     root: { ...root, placement: root.placement },
     landing: null,
+    crossContext: null,
   }
   event.preventDefault()
   event.stopImmediatePropagation()
   try { element.setPointerCapture(event.pointerId) } catch { /* Pointer capture is best effort for synthetic input. */ }
   emit('editing-gesture-change', true)
+}
+
+function routeDropTarget(aim: Point, event: PointerEvent): RouteLanding | null {
+  const routeId = routeLayer.value?.routeIdAtClient(event)
+  const geometry = routeId ? displayedRouteGeometry(routeId) : undefined
+  const progression = geometry ? projectPointOntoRoute(aim, geometry) : null
+  return routeId && progression !== null ? { routeId, progression } : null
+}
+
+function zoneDropTarget(aim: Point, snapshot: LocalWorkspace): CatalogueObjectTransferRequest['landing'] | null {
+  const containing = baselineDisplayedFrameInputs().filter(frame => continuousMapRoundedFrameContains(aim, frame.envelope))
+  if (containing.length !== 1) return null
+  const systemId = containing[0]!.id
+  const projection = projections.value.find(candidate => candidate.id === systemId)
+  if (!projection || !snapshot.cluster.systems.some(system => system.id === systemId)) return null
+  const delta = anchorDelta(projection)
+  const point = projection.unprojectLocalPoint({ x: aim.x - delta.x, y: aim.y - delta.y })
+  return { kind: 'system', systemId, placement: { kind: 'system', ...toNormalizedMapPoint(point) } }
+}
+
+function previewCrossContextTransfer(
+  snapshot: LocalWorkspace,
+  request: CatalogueObjectTransferRequest,
+): CatalogueObjectTransferReview | null {
+  try {
+    const proposal = prepareFittedCatalogueObjectTransfer(snapshot, request)
+    const { previewWorkspace: candidate, branch } = proposal
+    const { landing, rootObjectId } = request
+    const candidateProjections = candidate.cluster.systems.map((system, index) => projectWardenSystem(
+      system, candidate.layout.systemPositions[system.id] ?? initialClusterSystemPosition(index),
+      candidate.layout, undefined, workspaceSystemFrame(candidate, system.id),
+    ))
+    if (landing.kind === 'system') {
+      const system = candidate.cluster.systems.find(value => value.id === landing.systemId)
+      const projection = candidateProjections.find(value => value.id === landing.systemId)
+      if (!system || !projection) return null
+      const projectedBranch = projectZoneObjectBranch(system, projection, rootObjectId)
+      if (!projectedBranch) return null
+      draggedBranchPreview.value = projectedBranch
+    } else {
+      const contents = routeContentsFor(candidate.cluster, landing.routeId)
+      const geometry = buildContinuousWardenRouteGeometries({
+        routes: candidate.cluster.routes,
+        projections: candidateProjections,
+        detailSystemIds: detailSystemIds.value,
+        frames: continuousSystemFrames(candidateProjections.map(projection => ({
+          id: projection.id,
+          anchor: projection.anchor,
+          envelope: projection.preferredFrame ?? projection.envelope,
+        }))),
+        unresolvedExitPositions: candidate.layout.unresolvedExitPositions ?? {},
+        display: { pixelsPerSceneUnit: routePixelScale.value, fanOutLimitPixels: routeFanOutLimitPixels.value },
+      }).get(landing.routeId)
+      if (!contents || !geometry) return null
+      routeLandingPreview.value = {
+        routeId: landing.routeId,
+        contents: {
+          objects: contents.objects.filter(object => branch.objectIds.includes(object.id)),
+          orbits: contents.orbits.filter(orbit => branch.orbitIds.includes(orbit.id)),
+        },
+        geometry,
+        layout: candidate.layout,
+      }
+    }
+    return proposal
+  } catch {
+    // The gesture retains its original support when the proposed cross-context landing cannot fit.
+    return null
+  }
 }
 
 function updateRouteObjectDrag(drag: ActiveRouteObjectDrag, event: PointerEvent): void {
@@ -3721,17 +3823,33 @@ function updateRouteObjectDrag(drag: ActiveRouteObjectDrag, event: PointerEvent)
     y: drag.origin.y + pointer.y - drag.pointerStart.y,
   }
   const geometry = displayedRouteGeometry(drag.routeId) ?? drag.geometry
+  routeLandingPreview.value = null
+  draggedBranchPreview.value = null
+  const routeTarget = routeDropTarget(aim, event)
+  const crossTarget = routeTarget
+    ? routeTarget.routeId === drag.routeId ? null : { kind: 'route' as const, ...routeTarget }
+    : zoneDropTarget(aim, drag.workspaceSnapshot)
+  drag.crossContext = crossTarget ? previewCrossContextTransfer(drag.workspaceSnapshot, {
+    source: { kind: 'route', routeId: drag.routeId },
+    landing: crossTarget,
+    rootObjectId: drag.objectId,
+  }) : null
   const atOrigin = event.clientX === drag.startClient.x && event.clientY === drag.startClient.y
   const progression = atOrigin ? drag.root.placement.progression : projectPointOntoRoute(aim, geometry)
   if (progression === null) return
   const root = { ...drag.root, placement: { kind: 'route' as const, progression } }
   const anchor = pointOnRoute(geometry, progression)
   drag.landing = { routeId: drag.routeId, progression }
+  if (!drag.crossContext) routeLandingPreview.value = {
+    routeId: drag.routeId,
+    geometry,
+    contents: { ...drag.contents, objects: drag.contents.objects.map(object => object.id === root.id ? root : object) },
+    layout: drag.workspaceSnapshot.layout,
+  }
   routeMovePreview.value = {
     routeId: drag.routeId,
     geometry,
     branch: drag.branch,
-    landing: { ...drag.contents, objects: drag.contents.objects.map(object => object.id === root.id ? root : object) },
     pointer: { objects: [root], orbits: [] },
     offset: { x: aim.x - anchor.x, y: aim.y - anchor.y },
   }
@@ -3743,6 +3861,8 @@ function finishRouteObjectDrag(cancelled: boolean): void {
   if (!drag) return
   activeRouteObjectDrag = null
   routeMovePreview.value = null
+  routeLandingPreview.value = null
+  draggedBranchPreview.value = null
   const element = svgElement.value
   if (element?.hasPointerCapture(drag.pointerId)) {
     try { element.releasePointerCapture(drag.pointerId) } catch { /* Capture may already be released. */ }
@@ -3751,13 +3871,11 @@ function finishRouteObjectDrag(cancelled: boolean): void {
   if (cancelled || drag.landing) suppressClickAfterOwnedGesture()
   if (cancelled || !drag.landing) return
   const generation = routeDragGeneration
-  emit('move-route-object', {
-    ...drag.landing,
-    kind: 'move',
-    objectId: drag.objectId,
-    workspaceSnapshot: drag.workspaceSnapshot,
-  // The live drag and a history capacity confirmation both suppress map keyboard input.
-  }, () => generation === routeDragGeneration && props.mode === drag.mode && hasRouteObjectDragContext(drag))
+  const request: RouteObjectPlacementRequest = drag.crossContext
+    ? { kind: 'transfer', proposal: drag.crossContext }
+    : { ...drag.landing, kind: 'move', objectId: drag.objectId, workspaceSnapshot: drag.workspaceSnapshot }
+  emit('move-route-object', request,
+    () => generation === routeDragGeneration && props.mode === drag.mode && hasRouteObjectDragContext(drag))
 }
 
 function onPointerDownCapture(event: PointerEvent): void {
@@ -3905,7 +4023,7 @@ function onPointerMoveCapture(event: PointerEvent): void {
     if (!hasMapDragThreshold(objectDrag.startClient, { x: event.clientX, y: event.clientY }) && !objectDrag.moved) return
     objectDrag.moved = true
     const point = cameraPointAt(event, objectDrag.camera)
-    if (point) updateObjectMovePreview(objectDrag, point)
+    if (point) updateObjectMovePreview(objectDrag, point, event)
     event.preventDefault()
     return
   }
@@ -4024,7 +4142,7 @@ function onPointerEndCapture(event: PointerEvent): void {
     if (!cancelled && (drag.moved || hasMapDragThreshold(drag.startClient, { x: event.clientX, y: event.clientY }))) {
       drag.moved = true
       const point = cameraPointAt(event, drag.camera)
-      if (point) updateObjectMovePreview(drag, point)
+      if (point) updateObjectMovePreview(drag, point, event)
     }
     const moved = drag.moved
     if (!cancelled && !moved) {

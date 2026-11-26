@@ -80,6 +80,12 @@ export { fromNormalizedMapPoint, toNormalizedMapPoint } from './workspace-map-co
 export {
   applySystemObjectTransfer,
   prepareSystemObjectTransfer,
+  prepareCatalogueObjectTransfer,
+  resolveCatalogueObjectHistoryTarget,
+  type CatalogueObjectTransferRequest,
+  type CatalogueObjectTransferReview,
+  type CatalogueTransferLanding,
+  type CatalogueTransferSource,
   resolveSystemObjectHistoryTarget,
 } from './workspace-transfer'
 export type {

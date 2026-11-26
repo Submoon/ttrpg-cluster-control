@@ -7,6 +7,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { computed, effectScope, nextTick, ref, shallowRef, watchEffect } from 'vue'
 import {
   createLocalWorkspace,
+  prepareCatalogueObjectTransfer,
   type LocalWorkspace,
   type Orbit,
   type SystemObject,
@@ -950,6 +951,43 @@ test('route placement rejects a superseded request and records one accepted endp
     expect(await apply(landing, () => owned)).toBe(false)
     expect(harness.publicationCount).toBe(1)
     expect(harness.history.getEntries()[0]?.action.target).toEqual({ kind: 'route-object', id: root.id, routeId: route.id })
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('route detachment applies its exact landing once and Undo and Redo preserve the hosted branch @pure', async () => {
+  const { workspace, route, root, branch } = workspaceWithRouteObjects()
+  const harness = createHistoryHarness(workspace)
+  let ownsLanding = true
+  const apply = useRouteObjectPlacement({
+    workspace: harness.workspace,
+    mutations: harness.history,
+    getRevision: () => harness.publicationCount,
+    editorError: ref(''),
+    beforeWorkspaceOperation: async () => true,
+  })
+  const destination = workspace.cluster.systems[1]!
+  const proposal = prepareCatalogueObjectTransfer(harness.workspace.value!, {
+    source: { kind: 'route', routeId: route.id },
+    rootObjectId: root.id,
+    landing: { kind: 'system', systemId: destination.id, placement: { kind: 'system', x: 0.53, y: 0.48 } },
+  })
+  const request = { kind: 'transfer' as const, proposal }
+  try {
+    ownsLanding = false
+    expect(await apply(request, () => ownsLanding)).toBe(false)
+    expect(harness.publicationCount).toBe(0)
+    ownsLanding = true
+    expect(await apply(request, () => ownsLanding)).toBe(true)
+    expect(harness.workspace.value).toEqual(proposal.previewWorkspace)
+    expect(harness.history.getEntries().map(entry => entry.action)).toMatchObject([{
+      kind: 'transfer', target: { kind: 'object', id: root.id, systemId: destination.id },
+    }])
+    expect((await harness.history.undo()).status).toBe('applied')
+    expect(harness.workspace.value?.cluster.routeContents[route.id]).toEqual(branch)
+    expect((await harness.history.redo()).status).toBe('applied')
+    expect(harness.workspace.value).toEqual(proposal.previewWorkspace)
   } finally {
     harness.dispose()
   }

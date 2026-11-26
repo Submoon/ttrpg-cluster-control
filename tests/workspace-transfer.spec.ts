@@ -4,6 +4,9 @@ import {
   createLocalWorkspace,
   exportJumpCluster,
   prepareSystemObjectTransfer,
+  prepareCatalogueObjectTransfer,
+  createJumpRoute,
+  routeContentsFor,
   resolveSystemObjectHistoryTarget,
   restoreJumpClusterBackup,
   type LocalWorkspace,
@@ -359,4 +362,44 @@ test('prototype-looking legacy entity IDs remain map keys through branch angle c
   expect(Object.hasOwn(workspace.layout.objectAngles, 'constructor')).toBe(false)
   expect(next.layout.objectAngles.constructor).toBeCloseTo(Math.PI / 2, 12)
   expect(sourceAfter.get('constructor')).toEqual(sourceBefore.get('constructor'))
+})
+
+test('a Zone Orbit occupant carries its complete branch to a Jump Route and back @pure', () => {
+  const workspace = nestedBranchWorkspace()
+  const [source, destination] = workspace.cluster.systems
+  const route = createJumpRoute(workspace.cluster, {
+    jumpLevel: 2,
+    fromSystemId: source!.id,
+    fromPointId: null,
+    toSystemId: destination!.id,
+    toPointId: null,
+  })
+  workspace.cluster.routes.push(route)
+  const before = objectPositions(source!, geometryOf(workspace))
+  const departure = prepareCatalogueObjectTransfer(workspace, {
+    source: { kind: 'system', systemId: source!.id },
+    rootObjectId: 'root',
+    landing: { kind: 'route', routeId: route.id, progression: 1 },
+  })
+  const inTransit = departure.previewWorkspace
+  expect(routeContentsFor(inTransit.cluster, route.id)?.objects.map(object => [object.id, object.locationKey]))
+    .toEqual([['root', 'PL-01'], ['moon', 'MO-01'], ['nested', 'MO-02']])
+  expect(routeContentsFor(inTransit.cluster, route.id)?.objects[0]?.placement).toEqual({ kind: 'route', progression: 1 })
+  expect(objectPositions(inTransit.cluster.systems[0]!, geometryOf(inTransit)).get('source-survivor'))
+    .toEqual(before.get('source-survivor'))
+  const arrival = prepareCatalogueObjectTransfer(inTransit, {
+    source: { kind: 'route', routeId: route.id },
+    rootObjectId: 'root',
+    landing: { kind: 'system', systemId: destination!.id, placement: { kind: 'system', x: 0.61, y: 0.35 } },
+  })
+  const landed = arrival.previewWorkspace
+  const after = objectPositions(landed.cluster.systems[1]!, geometryOf(landed))
+  expect(routeContentsFor(landed.cluster, route.id)?.objects ?? []).toEqual([])
+  expect(landed.cluster.systems[1]?.orbits.map(orbit => orbit.id)).toEqual([
+    'destination-ring', 'root-ring', 'root-empty', 'moon-ring',
+  ])
+  expect(landed.layout.orbitRotations['moon-ring']).toBe(36)
+  expect(landed.layout.orbitRadii['moon-ring']).toEqual({ horizontal: 37, vertical: 33 })
+  expect(after.get('nested')!.x - after.get('root')!.x).toBeCloseTo(before.get('nested')!.x - before.get('root')!.x, 8)
+  expect(after.get('nested')!.y - after.get('root')!.y).toBeCloseTo(before.get('nested')!.y - before.get('root')!.y, 8)
 })

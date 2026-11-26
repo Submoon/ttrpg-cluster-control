@@ -92,6 +92,7 @@
           @retry-save="emit('retry-save')"
           @export-current-json="emit('export-current-json')"
           @system-transfer-intent="emit('system-transfer-intent', $event)"
+          @detach-route-object="emit('detach-route-object')"
         />
       </div>
       <div v-else-if="props.selectedOrbit" class="map-inspector-entity-content">
@@ -234,6 +235,7 @@ const emit = defineEmits<{
   'resume-chart-draft': []
   'retry-save': []
   'export-current-json': []
+  'detach-route-object': []
   'system-transfer-intent': [intent: SystemObjectTransferIntent]
 }>()
 

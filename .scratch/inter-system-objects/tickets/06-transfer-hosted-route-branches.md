@@ -1,6 +1,7 @@
 ---
 title: Transfer hosted branches between Zones and routes
-status: open
+status: in-progress
+assignee: Codex
 type: implementation
 specification: ../spec.md
 baseline: c649b576f1636c8ffec57da6b6112b6316bee882
@@ -29,7 +30,7 @@ Use origin/main at c649b576f1636c8ffec57da6b6112b6316bee882, verified on 2026-11
 
 Use the accepted specification's whole-Cluster key policy and explicit legacy exceptions. Route objects include stationary obstacles, anomalies, derelicts and ships; position is manual. Keep one guarded mutation/writer/history path and exclude unapplied previews from saved or public data.
 
-This ticket is planned and unclaimed. Its ready-for-agent role means the brief is specified; unresolved blockers still prevent execution. Intermediate consumers must preserve admitted data or explicitly reject an unsupported operation, never silently drop records.
+Implementation started at 14e13d7bee9f0b3704066e90bb568f32bc48fd29, the integration revision containing the completed prerequisites. The original comparison baseline is origin/main. Intermediate consumers must preserve admitted data or explicitly reject an unsupported operation, never silently drop records.
 
 ## Acceptance criteria
 

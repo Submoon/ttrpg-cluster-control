@@ -1,4 +1,4 @@
-import { setWorkspaceSystemFrame, workspaceSystemFrame, type LocalWorkspace, type Point, type StarSystem } from '../domain/workspace'
+import { prepareCatalogueObjectTransfer, setWorkspaceSystemFrame, workspaceSystemFrame, type CatalogueObjectTransferRequest, type CatalogueObjectTransferReview, type LocalWorkspace, type Point, type StarSystem } from '../domain/workspace'
 import { initialClusterSystemPosition } from '../domain/workspace-cluster'
 import { resolveSystemObjectBranch } from '../domain/workspace-object-branch'
 import { projectWardenSystem, systemFrameInsetsFromRect, type ContinuousWardenSystemProjection } from './continuous-map-projection'
@@ -112,4 +112,24 @@ export function fitZoneObjectWorkspace(
 function projectInWorkspace(workspace: LocalWorkspace, system: StarSystem, index: number): ContinuousWardenSystemProjection {
   const anchor = workspace.layout.systemPositions[system.id] ?? initialClusterSystemPosition(index)
   return projectWardenSystem(system, anchor, workspace.layout, undefined, workspaceSystemFrame(workspace, system.id))
+}
+
+/** Includes frame changes in the exact cross-context preview later published by the editor. */
+export function prepareFittedCatalogueObjectTransfer(
+  workspace: LocalWorkspace,
+  request: CatalogueObjectTransferRequest,
+): CatalogueObjectTransferReview {
+  const proposal = prepareCatalogueObjectTransfer(workspace, request)
+  const { source, landing, rootObjectId } = request
+  let next = proposal.previewWorkspace
+  // Preserve the inferred source frame when removing contents would otherwise shrink it.
+  if (source.kind === 'system' && !workspaceSystemFrame(workspace, source.systemId)) {
+    const index = workspace.cluster.systems.findIndex(system => system.id === source.systemId)
+    const system = workspace.cluster.systems[index]!
+    const projection = projectInWorkspace(workspace, system, index)
+    next = setWorkspaceSystemFrame(next, system.id,
+      systemFrameInsetsFromRect(projection.anchor, projection.preferredFrame ?? projection.envelope))
+  }
+  if (landing.kind === 'system') next = fitZoneObjectWorkspace(workspace, next, landing.systemId, rootObjectId)
+  return { ...proposal, previewWorkspace: next }
 }
