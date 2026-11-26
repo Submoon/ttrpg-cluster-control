@@ -6,7 +6,7 @@ import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 import campaignBaselineFixture from './fixtures/workspace-data-campaign-baseline.json' with { type: 'json' }
 import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 
-test('a Warden downloads the Cluster overview and the named Zone interior', async ({ page }) => {
+test('a Warden downloads the Cluster overview and the named Zone interior', async ({ page }, testInfo) => {
   const campaign = restoreJumpClusterBackup(campaignBaselineFixture)
   const { branch, root } = workspaceWithRouteObjects()
   const routeId = campaign.cluster.routes[0]!.id
@@ -27,6 +27,7 @@ test('a Warden downloads the Cluster overview and the named Zone interior', asyn
       marks: marks.map(mark => ({
         owner: mark.getAttribute('data-owner-route-id'),
         name: mark.querySelector('title')?.textContent,
+        visibleName: mark.querySelector('.warden-route-object-name')?.textContent,
         color: (mark.querySelector('.warden-route-object-glyph') as SVGElement | null)?.style.fill,
         radius: mark.querySelector('.warden-route-object-marker')?.getAttribute('r'),
       })),
@@ -34,10 +35,25 @@ test('a Warden downloads the Cluster overview and the named Zone interior', asyn
     }
   }, clusterText)
   expect(routePaint).toEqual({
-    marks: [{ owner: routeId, name: 'VES-99, Survey vessel (Vessel)', color: 'rgb(34, 153, 255)', radius: '14' }],
+    marks: [{
+      owner: routeId,
+      name: 'VES-99, Survey vessel (Vessel)',
+      visibleName: 'Survey vessel',
+      color: 'rgb(34, 153, 255)',
+      radius: '14',
+    }],
     interactiveContent: 0,
   })
   expect(clusterText).not.toContain(root.description)
+
+  const clusterPngMenu = await openMapFilesSection(page, 'Export an image')
+  const clusterPngDownload = page.waitForEvent('download')
+  await clusterPngMenu.getByRole('menuitem', { name: 'Warden PNG', exact: true }).click()
+  const clusterPng = await clusterPngDownload
+  expect(clusterPng.suggestedFilename()).toBe('Kestrel Reach Prime-jump-cluster.png')
+  const clusterBytes = await readFile(await clusterPng.path())
+  expect(Math.max(clusterBytes.readUInt32BE(16), clusterBytes.readUInt32BE(20))).toBeGreaterThanOrEqual(2000)
+  await testInfo.attach('cluster-overview', { body: clusterBytes, contentType: 'image/png' })
 
   const images = await openMapFilesSection(page, 'Export an image', 'keyboard')
   await images.getByRole('menuitem', { name: 'Export a Zone…', exact: true }).press('ArrowRight')

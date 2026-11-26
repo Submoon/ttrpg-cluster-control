@@ -429,7 +429,8 @@ export function continuousMapNameLabels<T extends ContinuousMapNameProjection>({
       height,
       anchorX: anchor.x,
       anchorY: anchor.y,
-      hasLeader: Math.hypot(chosenX, chosenY + height / 2) * scale > 24,
+      hasLeader: Math.hypot(chosenX * scale - anchor.preferredOffset.x,
+        chosenY * scale - anchor.preferredOffset.y) > 24,
     })
   }
   return labels

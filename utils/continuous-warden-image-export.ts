@@ -164,7 +164,7 @@ function appendRouteBranch(
     ring.setAttribute('transform', `rotate(${orbit.rotation} ${orbit.center.x} ${orbit.center.y})`)
     parent.append(ring)
   }
-  for (const { object, point } of branch.objects) {
+  for (const { object, point, nameBounds } of branch.objects) {
     const mark = createScopedElement(parent, 'g', 'warden-route-object')
     mark.setAttribute('data-owner-route-id', routeId)
     mark.setAttribute('data-route-object-id', object.id)
@@ -178,9 +178,34 @@ function appendRouteBranch(
     glyph.setAttribute('y', '5')
     glyph.textContent = objectMark(object)
     mark.append(marker, glyph)
-    if (branch.detailed && (!captionIds || captionIds.has(object.id))) {
+    const showDetail = branch.detailed && (!captionIds || captionIds.has(object.id))
+    if (showDetail || nameBounds) {
       const title = mark.ownerDocument.createElementNS(svgNamespace, 'title')
       title.textContent = catalogueObjectLabel(object)
+      mark.prepend(title)
+    }
+    if (nameBounds) {
+      const y = (nameBounds.y - point.y) / markerScale
+      const height = nameBounds.height / markerScale
+      const width = nameBounds.width / markerScale
+      const leader = createScopedElement(parent, 'line', 'continuous-warden-name-leader')
+      const below = y > 0
+      leader.setAttribute('x1', '0')
+      leader.setAttribute('x2', '0')
+      leader.setAttribute('y1', String(below ? routeObjectMarkerRadiusPixels : -routeObjectMarkerRadiusPixels))
+      leader.setAttribute('y2', String(below ? y : y + height))
+      const background = createScopedElement(parent, 'rect', 'continuous-warden-name-background')
+      background.setAttribute('x', String(-width / 2))
+      background.setAttribute('y', String(y))
+      background.setAttribute('width', String(width))
+      background.setAttribute('height', String(height))
+      background.setAttribute('rx', '4')
+      const name = createScopedElement(parent, 'text', 'warden-route-object-name')
+      name.setAttribute('text-anchor', 'middle')
+      name.setAttribute('y', String(y + height * .7))
+      name.textContent = object.name
+      mark.append(leader, background, name)
+    } else if (showDetail) {
       const key = createScopedElement(parent, 'text', 'warden-route-object-key')
       key.setAttribute('text-anchor', 'middle')
       key.setAttribute('y', '27')
@@ -189,7 +214,6 @@ function appendRouteBranch(
       name.setAttribute('text-anchor', 'middle')
       name.setAttribute('y', '41')
       name.textContent = object.name
-      mark.prepend(title)
       mark.append(key, name)
     }
     parent.append(mark)

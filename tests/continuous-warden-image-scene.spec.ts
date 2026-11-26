@@ -12,7 +12,7 @@ const measurements = {
   textWidth: (text: string, size: number) => text.length * size * .6,
 }
 
-test('entire-Cluster export shows route roots at overview detail @pure', () => {
+test('entire-Cluster export fits readable route object names independently of camera and raster density @pure', () => {
   const { workspace, root } = workspaceWithRouteObjects()
   const request: ContinuousWardenImageSceneRequest = {
     cluster: workspace.cluster,
@@ -41,6 +41,47 @@ test('entire-Cluster export shows route roots at overview detail @pure', () => {
   expect(mark.x).toBeLessThan(480)
   expect(mark.y - 14).toBeGreaterThan(scene.frame.y)
   expect(mark.x - 14).toBeGreaterThan(scene.frame.x)
+  const name = branch!.objects[0]!.nameBounds!
+  const longestEdge = Math.max(scene.frame.outputWidth, scene.frame.outputHeight)
+  expect(longestEdge).toBeGreaterThanOrEqual(1200)
+  expect(name.height * scene.routeSvgPixelScale).toBeCloseTo(20)
+  expect(name.x).toBeGreaterThan(scene.frame.x)
+  expect(name.x + name.width).toBeLessThan(scene.frame.x + scene.frame.width)
+  expect(name.y).toBeGreaterThan(scene.frame.y)
+  expect(name.y + name.height).toBeLessThan(scene.frame.y + scene.frame.height)
+  for (const label of scene.labels) {
+    const overlaps = name.x < label.centerX + label.width / 2 && name.x + name.width > label.centerX - label.width / 2
+      && name.y < label.top + label.height && name.y + name.height > label.top
+    expect(overlaps).toBe(false)
+  }
+  const png = prepareContinuousWardenImageScene({
+    ...request, format: 'png', viewport: { x: 0, y: 0, k: .2 }, svgPixelScale: .35,
+  }, measurements)
+  expect(png.routes).toEqual(scene.routes)
+  expect(png.labels).toEqual(scene.labels)
+  expect(png.frame.outputWidth).toBeGreaterThanOrEqual(scene.frame.outputWidth * 2 - 1)
+  expect(png.frame.outputHeight).toBeGreaterThanOrEqual(scene.frame.outputHeight * 2 - 1)
+
+  const route = workspace.cluster.routes[0]!
+  const obstruction = { ...root, placement: { kind: 'route', progression: .5 } as const }
+  const nearby = prepareContinuousWardenImageScene({
+    ...request,
+    cluster: {
+      ...workspace.cluster,
+      routeContents: {
+        [route.id]: {
+          objects: [obstruction, { ...obstruction, id: 'other-obstacle', name: 'Debris field' }],
+          orbits: [],
+        },
+      },
+    },
+    projections: workspace.cluster.systems.map((system, index) =>
+      projectWardenSystem(system, { x: .43 + .14 * index, y: .5 }, workspace.layout)),
+  }, measurements)
+  const crowdedRoute = nearby.routes[0]!
+  expect(crowdedRoute.routeLabelWidthPixels).toBeNull()
+  const [first, second] = crowdedRoute.branch!.objects.map(object => object.nameBounds!)
+  expect(Math.abs(first!.y - second!.y)).toBeGreaterThan(first!.height)
 })
 
 test('viewport export follows route detail, selected-object reveal and applied filtering @pure', () => {

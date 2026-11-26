@@ -4,7 +4,7 @@ import type { ContinuousWardenSystemProjection } from './continuous-map-projecti
 import { continuousMapRouteCurve, type ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
 import { continuousSystemFrames } from './continuous-system-frames'
 import type { MapViewport, SvgViewportRect } from './map-zoom'
-import { CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS, placeContinuousMapRouteLabels } from './continuous-map-route-labels'
+import { placeContinuousMapRouteLabels } from './continuous-map-route-labels'
 import {
   CONTINUOUS_SYSTEM_NAME_FONT_PIXELS,
   CONTINUOUS_SYSTEM_NAME_LAYOUT_RING_COUNT,
@@ -22,7 +22,6 @@ import {
   type MapImageScope,
   type MapImageScopeFrames,
 } from './map-image-scope'
-import { clusterRoutePresentationLabel } from './cluster-route-presentation'
 import { continuousSystemRouteCaptionLayouts, type ContinuousSystemRouteCaptionLayout } from './continuous-system-route-caption'
 import {
   projectRouteObjects,
@@ -33,6 +32,10 @@ import {
 import type { SystemMapGeometry } from './system-map-geometry'
 
 const exportPadding = 24
+const clusterExportLayoutEdge = 1160
+const clusterExportPngDensity = 2
+const routeObjectNameFontPixels = 12
+const routeObjectNameHeightPixels = 20
 const systemExportPadding = 12
 const systemExportSvgMaximumEdge = 1400
 const systemExportPngMinimumScale = 6
@@ -90,7 +93,7 @@ export interface ContinuousWardenImageSceneRoute {
   route: JumpCluster['routes'][number]
   branch?: {
     detailed: boolean
-    objects: readonly { object: RouteObject; point: Point }[]
+    objects: readonly { object: RouteObject; point: Point; nameBounds?: SvgViewportRect }[]
     orbits: Readonly<ReturnType<typeof projectRouteObjects>['orbits']>
   }
   /** Selected-system routes carry the pre-trimmed 60-unit prefix used for drawing and bounds. */
@@ -101,9 +104,10 @@ export interface ContinuousWardenImageSceneRoute {
   systemCaption?: ContinuousSystemRouteCaptionLayout
 }
 
-interface PreparedImageSceneRoute extends ContinuousWardenImageSceneRoute {
+interface PreparedImageSceneRoute extends Omit<ContinuousWardenImageSceneRoute, 'routeLabelWidthPixels'> {
   geometry?: ContinuousMapRouteGeometry
   fixedBounds: readonly SvgViewportRect[]
+  exitLabelBounds?: SvgViewportRect
 }
 
 export interface ContinuousWardenImageScene {
@@ -112,7 +116,7 @@ export interface ContinuousWardenImageScene {
   systems: readonly ContinuousWardenImageSceneSystem[]
   routes: readonly ContinuousWardenImageSceneRoute[]
   labels: readonly ContinuousWardenImageSceneLabel[]
-  frame: MapImageSceneFrame
+  frame: MapImageSceneFrame & { outputWidth: number; outputHeight: number }
   scale: number
   sceneViewport: MapViewport
   routeSvgPixelScale: number
@@ -177,6 +181,14 @@ export function prepareContinuousWardenImageScene(
   const sourceRoutes = request.scope === 'system'
     ? incidentRoutesForMapImage(request.cluster.routes, selected!.id)
     : request.cluster.routes
+  const clusterBounds = request.scope === 'cluster'
+    ? mapImageBounds([...displayFrames.values(), ...Array.from(allRouteGeometries.values(), geometry => geometry.bounds)])
+      ?? { x: 0, y: 0, width: 960, height: 560 }
+    : null
+  // Lay out type and symbols against the composition, independently of the raster density and editor zoom.
+  const clusterScale = clusterBounds
+    ? clusterExportLayoutEdge / Math.max(clusterBounds.width, clusterBounds.height, 1)
+    : 1
   const routeBranchDetail = request.scope === 'viewport'
     && wardenRouteBranchShowsDetail(request.viewport.k, request.svgPixelScale, request.detailZoomPercent)
   const routes = sourceRoutes.map((route): PreparedImageSceneRoute => {
@@ -203,28 +215,22 @@ export function prepareContinuousWardenImageScene(
         }
       : undefined
     const fixedBounds: SvgViewportRect[] = []
+    let exitLabelBounds: SvgViewportRect | undefined
     if (geometry && renderGeometry) {
       if (request.scope === 'system') {
         fixedBounds.push(cubicBounds(renderGeometry))
-      } else {
+      } else if (request.scope === 'cluster') {
         fixedBounds.push(geometry.bounds)
-        const width = continuousRouteLabelWidth(route.jumpLevel)
-        fixedBounds.push({
-          x: geometry.midpoint.x - width / 2,
-          y: geometry.midpoint.y - CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS / 2,
-          width,
-          height: CONTINUOUS_ROUTE_LABEL_HEIGHT_PIXELS,
-        })
-        if (route.toSystemId === null && request.scope === 'cluster') {
+        if (route.toSystemId === null) {
           const exitText = `Unknown: ${route.unresolvedExit}`
           const exitWidth = measurements.textWidth(exitText, routeLabelFontPixels, 'Consolas, monospace')
-          fixedBounds.push({ x: geometry.end.x - exitWidth - 12, y: geometry.end.y - 20, width: exitWidth + 12, height: 26 })
-        }
-        if (request.scope === 'cluster' && branch) {
-          const radius = routeObjectMarkerRadiusPixels + 1
-          for (const { point } of branch.objects) {
-            fixedBounds.push({ x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2 })
+          exitLabelBounds = {
+            x: geometry.end.x - (exitWidth + 12) / clusterScale,
+            y: geometry.end.y - 24 / clusterScale,
+            width: (exitWidth + 20) / clusterScale,
+            height: 32 / clusterScale,
           }
+          fixedBounds.push(exitLabelBounds)
         }
       }
     }
@@ -234,19 +240,15 @@ export function prepareContinuousWardenImageScene(
       geometry,
       renderGeometry,
       incident,
-      routeLabelWidthPixels: incident
-        ? null
-        : request.scope === 'viewport'
-          ? null
-          : continuousRouteLabelWidth(route.jumpLevel),
       fixedBounds,
+      exitLabelBounds,
     }
   })
 
   const labels = layoutSystemNames(
     request.projections.filter(projection => request.scope !== 'system' || projection.id === selected!.id),
     request.scope === 'viewport' ? request.viewport : null,
-    request.scope === 'viewport' ? request.svgPixelScale : 1,
+    request.scope === 'viewport' ? request.svgPixelScale : clusterScale,
     request.scope === 'viewport' ? request.viewportRect : null,
     request.scope === 'system' ? exportFrames : displayFrames,
     detailSystemIds,
@@ -254,6 +256,12 @@ export function prepareContinuousWardenImageScene(
     measurements,
   )
 
+  const clusterLabelBounds = clusterBounds
+    ? layoutClusterRouteNames(routes, labels, clusterScale, measurements)
+    : []
+  const overviewRouteLabels = clusterBounds
+    ? placeImageRouteLabels(routes, { x: 0, y: 0, k: 1 }, clusterBounds, clusterScale, clusterLabelBounds)
+    : null
   const initialCalculation = calculateSceneFrames(
     request,
     selected,
@@ -263,29 +271,23 @@ export function prepareContinuousWardenImageScene(
     request.scope === 'system' ? null : 1,
     measurements,
   )
+  if (clusterBounds) {
+    initialCalculation.frame.overview = mapImageBounds([
+      initialCalculation.frame.overview,
+      ...clusterLabelBounds,
+    ])
+    initialCalculation.frame.padding = exportPadding / clusterScale
+  }
   const initialFrame = mapImageScopeFrame(request.scope, initialCalculation.frame!)
   let scale = request.scope === 'system'
     ? systemSvgOutputScale(initialFrame)
-    : request.scope === 'viewport' ? request.svgPixelScale : 1
+    : request.scope === 'viewport' ? request.svgPixelScale : clusterScale
   let imageLabels = request.scope === 'system'
     ? labels.map(label => scaleSystemNameForExport(label, selected!, scale))
     : [...labels]
   const viewportRouteLabels = request.scope === 'viewport'
-    ? placeContinuousMapRouteLabels({
-        routes: routes.flatMap(route => route.geometry
-          ? [{ id: route.route.id, jumpLevel: route.route.jumpLevel, geometry: route.geometry }]
-          : []),
-        selectedRouteId: request.selectedRouteId ?? null,
-        viewport: request.viewport,
-        viewportRect: request.viewportRect,
-        svgPixelScale: request.svgPixelScale,
-        obstacles: labels.map(label => ({
-          x: label.centerX - label.width / 2,
-          y: label.top,
-          width: label.width,
-          height: label.height,
-        })),
-      })
+    ? placeImageRouteLabels(routes, request.viewport, request.viewportRect, request.svgPixelScale,
+        labels.map(systemNameBounds), request.selectedRouteId)
     : null
 
   let finalCalculation = request.scope === 'system'
@@ -306,9 +308,9 @@ export function prepareContinuousWardenImageScene(
 
   const outputScale = request.scope === 'system' && request.format === 'png'
     ? systemPngOutputScale(frame, scale)
-    : scale
+    : request.scope === 'cluster' && request.format === 'png' ? scale * clusterExportPngDensity : scale
   const title = imageAccessibleName(request, selected)
-  const exportFrame: MapImageSceneFrame = {
+  const exportFrame: ContinuousWardenImageScene['frame'] = {
     ...frame,
     outputWidth: Math.max(1, Math.ceil(frame.width * outputScale)),
     outputHeight: Math.max(1, Math.ceil(frame.height * outputScale)),
@@ -319,12 +321,9 @@ export function prepareContinuousWardenImageScene(
     branch: route.branch,
     renderGeometry: route.renderGeometry,
     incident: route.incident,
-    routeLabelWidthPixels: route.routeLabelWidthPixels,
+    routeLabelWidthPixels: (overviewRouteLabels ?? viewportRouteLabels)?.get(route.route.id)?.widthPixels ?? null,
     ...(finalCalculation.captions.get(route.route.id)
       ? { systemCaption: finalCalculation.captions.get(route.route.id)! }
-      : {}),
-    ...(request.scope === 'viewport'
-      ? { routeLabelWidthPixels: viewportRouteLabels?.get(route.route.id)?.widthPixels ?? null }
       : {}),
   }))
   const systemsById = new Map(request.cluster.systems.map(system => [system.id, system]))
@@ -345,7 +344,7 @@ export function prepareContinuousWardenImageScene(
     frame: exportFrame,
     scale,
     sceneViewport: request.scope === 'viewport' ? request.viewport : { x: 0, y: 0, k: 1 },
-    routeSvgPixelScale: request.scope === 'viewport' ? request.svgPixelScale : request.scope === 'system' ? scale : 1,
+    routeSvgPixelScale: scale,
     systemSvgPixelScale: request.scope === 'system' ? scale : request.svgPixelScale,
     includeUnresolvedCaption: request.scope === 'cluster',
     dimmedObjectIds: new Set(request.scope === 'viewport' ? request.dimmedObjectIds : undefined),
@@ -609,9 +608,65 @@ function systemNameBounds(label: ContinuousWardenImageSceneLabel): SvgViewportRe
   }
 }
 
-function continuousRouteLabelWidth(jumpLevel: number): number {
-  const label = clusterRoutePresentationLabel(jumpLevel)
-  return Math.max(54, label.length * 6.5 + 14)
+function placeImageRouteLabels(
+  routes: readonly PreparedImageSceneRoute[],
+  viewport: MapViewport,
+  viewportRect: SvgViewportRect,
+  svgPixelScale: number,
+  obstacles: readonly SvgViewportRect[],
+  selectedRouteId: string | null = null,
+) {
+  return placeContinuousMapRouteLabels({
+    routes: routes.flatMap(({ route, geometry }) => geometry
+      ? [{ id: route.id, jumpLevel: route.jumpLevel, geometry }]
+      : []),
+    selectedRouteId,
+    viewport,
+    viewportRect,
+    svgPixelScale,
+    obstacles,
+  })
+}
+
+function layoutClusterRouteNames(
+  routes: readonly PreparedImageSceneRoute[],
+  labels: readonly ContinuousWardenImageSceneLabel[],
+  scale: number,
+  measurements: ContinuousWardenImageSceneMeasurements,
+): SvgViewportRect[] {
+  const markers = routes.flatMap(route => route.branch?.objects ?? [])
+  const radius = (routeObjectMarkerRadiusPixels + 1) / scale
+  const gap = 4 / scale
+  const height = routeObjectNameHeightPixels / scale
+  const occupied = [
+    ...labels.map(systemNameBounds),
+    ...routes.flatMap(route => route.exitLabelBounds ? [route.exitLabelBounds] : []),
+    ...markers.map(({ point }) => ({
+      x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2,
+    })),
+  ]
+  for (const marker of markers) {
+    const { object, point } = marker
+    const width = (measurements.textWidth(object.name, routeObjectNameFontPixels) + 12) / scale
+    const x = point.x - width / 2
+    const column = occupied.filter(rect => x < rect.x + rect.width + gap && x + width + gap > rect.x)
+      .map(rect => ({ top: rect.y - gap - height, bottom: rect.y + rect.height + gap }))
+    const nearestFreeTop = (direction: -1 | 1) => {
+      let y = direction === 1 ? point.y + radius + gap : point.y - radius - gap - height
+      let overlap = column.find(rect => y < rect.bottom && y > rect.top)
+      while (overlap) {
+        y = direction === 1 ? overlap.bottom : overlap.top
+        overlap = column.find(rect => y < rect.bottom && y > rect.top)
+      }
+      return y
+    }
+    const below = nearestFreeTop(1)
+    const above = nearestFreeTop(-1)
+    const y = below - point.y <= point.y - (above + height) ? below : above
+    marker.nameBounds = { x, y, width, height }
+    occupied.push(marker.nameBounds)
+  }
+  return occupied
 }
 
 function imageAccessibleName(
