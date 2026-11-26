@@ -1,3 +1,4 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { ref } from 'vue'
@@ -50,7 +51,7 @@ function mountWorkflows(initialWorkspace: LocalWorkspace) {
 
 test('Warden draft workspace previews valid object fields and keeps invalid values applied @pure', async () => {
   await withControlledBrowserEnvironment(async () => {
-    const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+    const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
     const system = initial.cluster.systems[0]!
     const object = system.objects[0]!
     const harness = mountWorkflows(initial)
@@ -181,7 +182,7 @@ test('Warden route draft keeps endpoints coherent when an incomplete destination
 
 test('Warden Orbit preview moves a selected host immediately and protects its provisional geometry @pure', async () => {
   await withControlledBrowserEnvironment(async () => {
-    const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+    const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
     const baseSystem = initial.cluster.systems[0]!
     const host = baseSystem.objects[0]!
     const freeObject = createSystemObject(baseSystem, 'planet')

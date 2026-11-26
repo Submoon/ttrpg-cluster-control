@@ -182,7 +182,7 @@ function createClusterImage(
     appendClusterRoute(routesGroup, route, paint)
   }
 
-  const systemsGroup = appendSvg(svg, 'g', { 'aria-label': 'Player-visible Star Systems', role: 'group' })
+  const systemsGroup = appendSvg(svg, 'g', { 'aria-label': 'Player-visible Zones', role: 'group' })
   for (const system of documentScene.systems) appendClusterSystem(systemsGroup, system, paint)
 
   const foregroundRoutes = geometry.routes.filter(route => route.foreground)
@@ -320,7 +320,7 @@ function createSystemImage(
 ): { svg: Blob; width: number; height: number } {
   const geometry = playerSystemGeometry(documentScene)
   const bounds = withTitleBand(geometry.bounds, label)
-  const svg = createRootSvg(bounds, `${label} player system map`, label, paint)
+  const svg = createRootSvg(bounds, `${label} player Zone map`, label, paint)
 
   const orbitsGroup = appendSvg(svg, 'g', {
     class: 'player-system-orbits',

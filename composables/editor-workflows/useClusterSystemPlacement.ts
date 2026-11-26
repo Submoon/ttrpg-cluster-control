@@ -147,7 +147,7 @@ export function useClusterSystemPlacement({ workspace, continuousMap, clusterMap
         return systemIds.includes(system.id) || (usesContinuousMap && anchor?.x === point.x && anchor.y === point.y)
       }) || (!usesContinuousMap && pointOverlapsSystem(scenePositionForNormalizedPoint(point), workspace))
     if (blocksPlacement(currentWorkspace)) {
-      formError.value = 'Choose an open point clear of existing systems.'
+      formError.value = 'Choose an open point clear of existing Zones.'
       return false
     }
 
@@ -165,9 +165,9 @@ export function useClusterSystemPlacement({ workspace, continuousMap, clusterMap
           && store.activeView === 'cluster'
           && clusterAddType.value === 'system',
         prepare: (latest) => {
-          if (latest.cluster.id !== clusterId) throw new Error('The Jump Cluster changed before this system could be added.')
+          if (latest.cluster.id !== clusterId) throw new Error('The Jump Cluster changed before this Zone could be added.')
           if (blocksPlacement(latest)) {
-            throw new Error('Choose an open point clear of existing systems.')
+            throw new Error('Choose an open point clear of existing Zones.')
           }
           const created = addStarSystem(latest)
           const generatedId = created.system.id
@@ -206,13 +206,13 @@ export function useClusterSystemPlacement({ workspace, continuousMap, clusterMap
     const sourceSystemId = store.clusterSelectedSystemId
     const sourceSystem = currentWorkspace?.cluster.systems.find(system => system.id === sourceSystemId)
     if (!currentWorkspace || !sourceSystem || !sourceSystemId) {
-      systemMoveError.value = 'Choose a system that is still on this Cluster.'
+      systemMoveError.value = 'Choose a Zone that is still on this Cluster.'
       return false
     }
 
     const originPosition = currentWorkspace.layout.systemPositions[sourceSystemId]
     if (!originPosition) {
-      systemMoveError.value = 'The selected system has no saved Cluster position.'
+      systemMoveError.value = 'The selected Zone has no saved Cluster position.'
       return false
     }
 
@@ -249,7 +249,7 @@ export function useClusterSystemPlacement({ workspace, continuousMap, clusterMap
       || currentOrigin?.x !== origin.position.x
       || currentOrigin?.y !== origin.position.y
       || store.clusterSelectedSystemId !== origin.systemId) {
-      systemMoveError.value = 'The selected system changed. Choose a source and preview its destination again.'
+      systemMoveError.value = 'The selected Zone changed. Choose a source and preview its destination again.'
       return false
     }
     if (!Number.isFinite(scenePoint.x) || !Number.isFinite(scenePoint.y)) {
@@ -264,7 +264,7 @@ export function useClusterSystemPlacement({ workspace, continuousMap, clusterMap
     }
     if (systemIds.some(id => id !== origin.systemId)
       || pointOverlapsSystem(scenePoint, currentWorkspace, origin.systemId)) {
-      systemMoveError.value = 'Choose an open point clear of other systems.'
+      systemMoveError.value = 'Choose an open point clear of other Zones.'
       return false
     }
     if (point.x === origin.position.x && point.y === origin.position.y) {
@@ -313,7 +313,7 @@ export function useClusterSystemPlacement({ workspace, continuousMap, clusterMap
       && store.clusterSelectedSystemId === preview.sourceSystemId
     if (!isCurrent) {
       cancelSystemMovePreview()
-      systemMoveError.value = 'The selected system changed. Choose a source and preview its destination again.'
+      systemMoveError.value = 'The selected Zone changed. Choose a source and preview its destination again.'
       return false
     }
     if (pointOverlapsSystem(scenePositionForNormalizedPoint(preview.targetPosition), currentWorkspace, preview.sourceSystemId)) {
@@ -341,7 +341,7 @@ export function useClusterSystemPlacement({ workspace, continuousMap, clusterMap
           const latestOrigin = latest.layout.systemPositions[preview.sourceSystemId]
           if (latest.cluster.id !== preview.clusterId || !latestSource
             || latestOrigin?.x !== preview.originPosition.x || latestOrigin?.y !== preview.originPosition.y) {
-            throw new Error('The selected system changed. Choose a source and preview its destination again.')
+            throw new Error('The selected Zone changed. Choose a source and preview its destination again.')
           }
           if (pointOverlapsSystem(scenePositionForNormalizedPoint(preview.targetPosition), latest, preview.sourceSystemId)) {
             throw new Error('That destination is no longer clear. Choose another point.')
@@ -396,7 +396,7 @@ export function useClusterSystemPlacement({ workspace, continuousMap, clusterMap
     if (pendingSystemMoveToken === preview?.token) return
     if (!currentWorkspace) {
       cancelSystemMovePreview()
-      systemMoveError.value = 'The selected system changed. Choose a source and preview its destination again.'
+      systemMoveError.value = 'The selected Zone changed. Choose a source and preview its destination again.'
       return
     }
     const sourceExists = currentWorkspace.cluster.id === origin.clusterId
@@ -404,7 +404,7 @@ export function useClusterSystemPlacement({ workspace, continuousMap, clusterMap
     const currentOrigin = sourceExists ? currentWorkspace.layout.systemPositions[origin.systemId] : undefined
     if (currentOrigin?.x !== origin.position.x || currentOrigin?.y !== origin.position.y) {
       cancelSystemMovePreview()
-      systemMoveError.value = 'The selected system changed. Choose a source and preview its destination again.'
+      systemMoveError.value = 'The selected Zone changed. Choose a source and preview its destination again.'
       return
     }
 
@@ -418,7 +418,7 @@ export function useClusterSystemPlacement({ workspace, continuousMap, clusterMap
         : undefined
       if (latestPosition?.x !== preview.originPosition.x || latestPosition?.y !== preview.originPosition.y) {
         cancelSystemMovePreview()
-        systemMoveError.value = 'The selected system changed. Choose a source and preview its destination again.'
+        systemMoveError.value = 'The selected Zone changed. Choose a source and preview its destination again.'
         return
       }
       clusterMapRef.value?.setClusterSystemPositionPreview?.(preview.sourceSystemId, preview.targetPosition)

@@ -30,7 +30,7 @@ function publicDocument(): PlayerClusterDocument {
         position: { x: 500, y: 300 },
         disclosure: 'known-type',
         type: 'star-system',
-        label: 'Star system',
+        label: 'Zone',
       },
       {
         id: 'system-3',

@@ -61,7 +61,7 @@ export function updateWorkspaceObject(
     throw new Error('Object Orbit angle must be finite.')
   }
   const system = workspace.cluster.systems.find(candidate => candidate.id === systemId)
-  if (!system) throw new Error('The star system for this map object no longer exists.')
+  if (!system) throw new Error('The Zone for this map object no longer exists.')
   const original = system.objects.find(candidate => candidate.id === objectId)
   if (!original) throw new Error('The selected map object no longer exists.')
 

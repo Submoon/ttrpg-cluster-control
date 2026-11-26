@@ -2,7 +2,7 @@ import { expect, test } from './fixtures'
 import {
   addClusterSystem,
   centerWorkspaceSelection,
-  createSingleSystemWorkspace,
+  createSingleSystemWorkspaceWithPrimaryStar,
   editMapObject,
   fitWorkspaceMap,
   openWorkspaceHierarchy,
@@ -14,7 +14,7 @@ import {
 } from './helpers'
 
 test('one Warden camera retains selection and focus through semantic zoom, Fit, and right-button map navigation @preview-smoke', async ({ page }) => {
-  const { systemId, primaryObjectId, systemName } = await createSingleSystemWorkspace(page, {
+  const { systemId, primaryObjectId, systemName } = await createSingleSystemWorkspaceWithPrimaryStar(page, {
     viewport: { width: 1440, height: 900 },
   })
   await addClusterSystem(page, { position: { x: 0.86, y: 0.72 } })

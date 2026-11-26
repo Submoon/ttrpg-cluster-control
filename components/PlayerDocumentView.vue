@@ -62,7 +62,7 @@
               <UIcon name="i-lucide-x" aria-hidden="true" />
             </UButton>
             <div class="player-workspace-map-caption">
-              <span class="section-kicker">{{ selectedSystemMarker ? 'SYSTEM INSPECTION' : 'PLAYER MAP' }}</span>
+              <span class="section-kicker">{{ selectedSystemMarker ? 'ZONE INSPECTION' : 'PLAYER MAP' }}</span>
               <h2>{{ selectedSystemMarker?.label ?? 'Jump Cluster' }}</h2>
             </div>
           </div>
@@ -164,14 +164,14 @@
               @inspect-object="inspectObject"
             />
           </template>
-          <section v-else-if="selectedSystemMarker" class="player-workspace-inspector-empty" aria-label="Published system marker details">
+          <section v-else-if="selectedSystemMarker" class="player-workspace-inspector-empty" aria-label="Published Zone marker details">
             <span class="section-kicker">PLAYER-VISIBLE SYSTEM MARKER</span>
             <h2>{{ selectedSystemMarker.label }}</h2>
-            <p v-if="selectedSystemMarker.disclosure === 'unknown'">No further system details are shared.</p>
-            <p v-else>The system type is shared without its internal map.</p>
+            <p v-if="selectedSystemMarker.disclosure === 'unknown'">No further Zone details are shared.</p>
+            <p v-else>Only the presence and type of this Zone are shared.</p>
           </section>
           <section v-else class="player-workspace-inspector-empty" aria-label="Jump Cluster details">
-            <p>Select a Revealed system to inspect its shared map.</p>
+            <p>Select a Revealed Zone to inspect its shared map.</p>
           </section>
         </div>
       </template>
@@ -199,7 +199,7 @@
             <UIcon name="i-lucide-x" aria-hidden="true" />
           </UButton>
           <div class="player-workspace-map-caption">
-            <span class="section-kicker">{{ selectedSystemMarker ? 'SYSTEM INSPECTION' : 'PLAYER MAP' }}</span>
+            <span class="section-kicker">{{ selectedSystemMarker ? 'ZONE INSPECTION' : 'PLAYER MAP' }}</span>
             <h2>{{ selectedSystemMarker?.label ?? 'Jump Cluster' }}</h2>
           </div>
         </div>
@@ -315,11 +315,11 @@
             <template v-else-if="selectedSystemMarker">
               <span class="section-kicker">PLAYER-VISIBLE SYSTEM MARKER</span>
               <h2>{{ selectedSystemMarker.label }}</h2>
-              <p v-if="selectedSystemMarker.disclosure === 'unknown'">No further system details are shared.</p>
-              <p v-else>The system type is shared without its internal map.</p>
+              <p v-if="selectedSystemMarker.disclosure === 'unknown'">No further Zone details are shared.</p>
+              <p v-else>Only the presence and type of this Zone are shared.</p>
             </template>
             <template v-else>
-              <p>Select a Revealed system to inspect its shared map.</p>
+              <p>Select a Revealed Zone to inspect its shared map.</p>
             </template>
           </section>
         </aside>

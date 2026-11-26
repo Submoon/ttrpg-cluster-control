@@ -20,7 +20,7 @@ test('wide captions on coincident vertical routes separate without overlapping @
 test('a system title obstacle keeps an upward route caption clear @pure', { tag: '@pure' }, () => {
   const [caption] = continuousSystemRouteCaptionLayouts([{
     jumpLevel: 2,
-    destinationLabel: 'New System 2',
+    destinationLabel: 'New Zone 2',
     selectedAnchor: { x: 100, y: 100 },
     remoteEndpoint: { x: 180, y: -1 },
   }], 5, [{ x: 100, y: -18, width: 160, height: 38 }])

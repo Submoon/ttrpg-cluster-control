@@ -93,7 +93,7 @@ export function constrainContinuousSystemFrame(
 ): SvgViewportRect {
   if (fixedFrames.some(frame => frame.id === proposal.id)
     || new Set(fixedFrames.map(frame => frame.id)).size !== fixedFrames.length) {
-    throw new Error('A proposed system frame needs unique system identities.')
+    throw new Error('A proposed Zone frame needs unique Zone identities.')
   }
 
   const proposalBounds = boundsOf(proposal.envelope)

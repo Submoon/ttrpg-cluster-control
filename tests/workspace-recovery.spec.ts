@@ -63,7 +63,7 @@ test('recover the last valid workspace after the current snapshot becomes unread
 test('a failed IndexedDB save preserves current and backup snapshots @development-storage', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('Jump Cluster').fill('Kestrel Reach')
-  await page.getByLabel('First star system').fill('Vesper')
+  await page.getByLabel('First Zone').fill('Vesper')
   await page.getByRole('button', { name: 'Create local workspace' }).click()
   await waitForWorkspaceSaved(page)
 

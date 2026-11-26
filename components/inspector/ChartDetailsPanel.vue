@@ -69,7 +69,7 @@
       class="orbit-facts grid grid-cols-[1fr_auto] gap-[0.55rem]"
     >
       <template v-if="props.mode === 'cluster'">
-        <span>Star systems</span>
+        <span>Zones</span>
         <strong data-testid="stat-star-systems">{{ props.workspace.cluster.systems.length }}</strong>
         <span>Jump Routes</span>
         <strong data-testid="stat-jump-routes">{{ props.workspace.cluster.routes.length }}</strong>
@@ -121,7 +121,7 @@ const chartEditSystemId = computed(() => props.chartEditSystemId
   ?? props.selectedSystem?.id
   ?? props.workspace.cluster.systems[0]?.id)
 const starCount = computed(() => props.selectedSystem?.objects.filter(object => object.subtype === 'star').length ?? 0)
-const statisticsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cluster statistics' : 'Star System statistics')
+const statisticsRegionLabel = computed(() => props.mode === 'cluster' ? 'Jump Cluster statistics' : 'Zone statistics')
 
 function setSystemPublication(mode: PublicationMode): void {
   const system = props.selectedSystem

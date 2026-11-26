@@ -55,7 +55,7 @@ export function resolveSystemObjectHistoryTarget(
 
 function findSystem(workspace: LocalWorkspace, systemId: string, label: string): StarSystem {
   const system = workspace.cluster.systems.find(candidate => candidate.id === systemId)
-  if (!system) throw new Error(`The ${label} star system no longer exists.`)
+  if (!system) throw new Error(`The ${label} Zone no longer exists.`)
   return system
 }
 
@@ -119,16 +119,16 @@ function buildTransferReview(
   request: SystemObjectTransferRequest,
 ): SystemObjectTransferReview {
   if (request.sourceSystemId === request.destinationSystemId) {
-    throw new Error('Choose a different destination star system.')
+    throw new Error('Choose a different destination Zone.')
   }
   const source = findSystem(workspace, request.sourceSystemId, 'source')
   const destination = findSystem(workspace, request.destinationSystemId, 'destination')
   const branch = resolveSystemObjectBranch(source, request.rootObjectId)
-  if (!branch) throw new Error('The selected map object no longer exists in its source system.')
+  if (!branch) throw new Error('The selected map object no longer exists in its source Zone.')
   const root = source.objects.find(object => object.id === request.rootObjectId)
-  if (!root) throw new Error('The selected map object no longer exists in its source system.')
+  if (!root) throw new Error('The selected map object no longer exists in its source Zone.')
   if (destination.objects.some(object => object.id === root.id)) {
-    throw new Error('The selected map object already exists in the destination system.')
+    throw new Error('The selected map object already exists in the destination Zone.')
   }
   validatePlacement(destination, root.id, request.placement)
 
@@ -179,7 +179,7 @@ function applyTransfer(
   const movedObjects = source.objects.filter(object => branchObjectIds.has(object.id))
   const movedOrbits = source.orbits.filter(orbit => branchOrbitIds.has(orbit.id))
   const root = movedObjects.find(object => object.id === request.rootObjectId)
-  if (!root) throw new Error('The selected map object no longer exists in its source system.')
+  if (!root) throw new Error('The selected map object no longer exists in its source Zone.')
 
   const sourceParentOrbitId = root.placement.kind === 'orbit' ? root.placement.orbitId : undefined
   const retainedSourceAngles = sourceParentOrbitId

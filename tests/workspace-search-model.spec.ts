@@ -1,3 +1,4 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { createLocalWorkspace } from '../domain/workspace'
 
@@ -61,7 +62,7 @@ test('duplicate names remain distinct and receive deterministic result-only occu
 })
 
 test('workspace search finds objects by name and Location key in unopened systems @pure', () => {
-  const workspace = createLocalWorkspace('Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Reach', 'Vesper')
   const firstSystem = workspace.cluster.systems[0]
   const template = firstSystem?.objects[0]
   if (!firstSystem || !template) throw new Error('The local workspace did not create its first system object.')
@@ -85,13 +86,13 @@ test('workspace search finds objects by name and Location key in unopened system
     objectId: remoteObject.id,
   }])
   expect(keyResult.map(result => result.target)).toEqual(nameResult.map(result => result.target))
-  expect(nameResult[0]).toMatchObject({ name: 'Distant Beacon', contextLabel: 'Star System: Harrow' })
+  expect(nameResult[0]).toMatchObject({ name: 'Distant Beacon', contextLabel: 'Zone: Harrow' })
 })
 
 
 
 test('object matches are ranked once by their strongest name or Location key match @pure', () => {
-  const workspace = createLocalWorkspace('Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Reach', 'Vesper')
   const system = workspace.cluster.systems[0]
   const firstObject = system?.objects[0]
   if (!system || !firstObject) throw new Error('The local workspace did not create its first system object.')
@@ -109,7 +110,7 @@ test('object matches are ranked once by their strongest name or Location key mat
 })
 
 test('criteria-only workspace search returns matching objects grouped by system and sorted by name with stable duplicate ties @pure', () => {
-  const workspace = createLocalWorkspace('Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Reach', 'Vesper')
   const firstSystem = workspace.cluster.systems[0]
   const template = firstSystem?.objects[0]
   if (!firstSystem || !template) throw new Error('The local workspace did not create its first system object.')
@@ -136,15 +137,15 @@ test('criteria-only workspace search returns matching objects grouped by system 
   })
 
   expect(results.map(result => [result.contextLabel, result.name, result.target.kind === 'object' ? result.target.objectId : null])).toEqual([
-    ['Star System: Altair', 'Beacon', 'relay-a'],
-    ['Star System: Altair', 'Beacon', 'relay-z'],
-    ['Star System: Altair', 'Signal', 'relay-signal'],
-    ['Star System: Vesper', 'Beacon', 'vesper-relay'],
+    ['Zone: Altair', 'Beacon', 'relay-a'],
+    ['Zone: Altair', 'Beacon', 'relay-z'],
+    ['Zone: Altair', 'Signal', 'relay-signal'],
+    ['Zone: Vesper', 'Beacon', 'vesper-relay'],
   ])
 })
 
 test('text and criteria combine with AND while text ranking and duplicate occurrences are assigned before criteria filtering @pure', () => {
-  const workspace = createLocalWorkspace('Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Reach', 'Vesper')
   const system = workspace.cluster.systems[0]
   const template = system?.objects[0]
   if (!system || !template) throw new Error('The local workspace did not create its first system object.')

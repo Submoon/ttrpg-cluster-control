@@ -1,7 +1,8 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRenderer, nextTick, ref } from 'vue'
-import { applySystemObjectTransfer, createLocalWorkspace, createOrbit, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
+import { applySystemObjectTransfer, createOrbit, nativePlayerFieldIds, planMapEntityDeletion, updateNativeFieldOptions, updateWorkspaceObject } from '../domain/workspace'
 import type { MapNavigationHandle, SaveState, SearchPresentationSettlement, SystemMapHandle } from '../composables/editor-workflows/types'
 import { useEditorWorkflows } from '../composables/useEditorWorkflows'
 import { createWorkspaceHistoryCoordinator } from '../composables/editor-workflows/workspace-mutations'
@@ -86,7 +87,7 @@ function createSearchHarness(
 ) {
   const restoreBrowserBoundary = installBrowserLifecycleBoundary(compact)
   setActivePinia(createPinia())
-  const initialWorkspace = createLocalWorkspace(clusterName, systemName)
+  const initialWorkspace = createWorkspaceWithPrimaryStar(clusterName, systemName)
   if (additionalSystemName) {
     const firstSystem = initialWorkspace.cluster.systems[0]
     if (!firstSystem) throw new Error('The local workspace did not create its first system.')
@@ -668,7 +669,7 @@ test('transfer Undo and Redo reveal the stable root in its actual owner @pure', 
       clusterId: before.cluster.id,
       contextLabel: source.name,
       kind: 'transfer' as const,
-      label: `Change system for ${root.name}`,
+      label: `Change Zone for ${root.name}`,
       target: { kind: 'object' as const, id: root.id, systemId: source.id },
       parent: { kind: 'system' as const, id: destination.id },
     }
@@ -735,7 +736,7 @@ test('editing the destination Orbit resumes transfer review and preserves the dr
     expect(transfer.completeMapPlacement(lease, { kind: 'orbit', orbitId: orbit.id, angle: 1.5 })).toBe(false)
     expect(inspector.systemTransferSession.value).toMatchObject({
       sessionId, open: true, placingOnMap: false, placement: previousPlacement,
-      error: 'Finish editing the destination system before continuing the transfer.',
+      error: 'Finish editing the destination Zone before continuing the transfer.',
     })
     await transfer.handleIntent({ kind: 'place-on-map', sessionId })
     expect(transfer.pendingMapPlacement.value).toBeNull()
@@ -837,9 +838,9 @@ test('continuous history refits the surviving Cluster after its inspected system
     const action = {
       workspaceId: harness.workspace.value.id,
       clusterId,
-      contextLabel: 'Star System',
+      contextLabel: 'Zone',
       kind: 'delete' as const,
-      label: 'Delete Star System',
+      label: 'Delete Zone',
       target: { kind: 'system' as const, id: removedSystem.id },
       parent: { kind: 'cluster' as const, id: clusterId },
     }

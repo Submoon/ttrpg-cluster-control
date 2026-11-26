@@ -608,7 +608,7 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
       return 'The Jump Cluster for this draft no longer exists.'
     }
     const system = plannedSystem(currentWorkspace, session.systemId)
-    if (!system) return 'The star system for this draft no longer exists.'
+    if (!system) return 'The Zone for this draft no longer exists.'
 
     if (session.kind === 'object') {
       const currentObject = system.objects.find(object => object.id === session.targetId)
@@ -1197,7 +1197,7 @@ export function useEntityInspectorSession({ workspace, mutations }: EntityInspec
     }
     const system = plannedSystem(currentWorkspace, session.systemId)
     if (!system) {
-      session.error = 'The star system for this draft no longer exists.'
+      session.error = 'The Zone for this draft no longer exists.'
       return false
     }
     const staleError = getEntitySessionStaleError(session)

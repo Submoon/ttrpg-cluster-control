@@ -558,7 +558,7 @@ export function useSystemObjectPlacement({
     if (!current) return false
     const localPoint = toOwnerLocalScenePoint(current, point)
     if (!localPoint) {
-      systemObjectMoveError.value = 'The owning system is no longer visible for this placement.'
+      systemObjectMoveError.value = 'The owning Zone is no longer visible for this placement.'
       return false
     }
     return previewSystemObjectMoveAtLocal(localPoint)

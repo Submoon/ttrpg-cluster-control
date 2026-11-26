@@ -120,7 +120,7 @@ export function useSystemObjectTransferDraft(
 
   function ensureDestination(): void {
     ensureOpen()
-    if (!destinationSystemId.value) throw new Error('Choose a destination star system first.')
+    if (!destinationSystemId.value) throw new Error('Choose a destination Zone first.')
   }
 
   function selectDestination(systemId: string): void {

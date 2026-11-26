@@ -595,7 +595,7 @@ export function applySelectedObjectTranslation(
 ): LocalWorkspace {
   if (plan.updates.length === 0) return workspace
   const system = workspace.cluster.systems.find(candidate => candidate.id === systemId)
-  if (!system) throw new Error('The star system for this map object no longer exists.')
+  if (!system) throw new Error('The Zone for this map object no longer exists.')
 
   const changedOrbitIds = new Set<string>()
   for (const change of plan.updates) {

@@ -174,7 +174,7 @@ const modalBodyClass = computed(() => hasFilterSlot.value
   : 'flex min-h-0 flex-col overflow-hidden')
 const dialogTitle = computed(() => props.title ?? 'Search workspace')
 const dialogDescription = computed(() => props.description
-  ?? 'Find the Jump Cluster or any star system by name, or any object in the workspace by name or Location key.')
+  ?? 'Find the Jump Cluster or any Zone by name, or any object in the workspace by name or Location key.')
 const componentId = useId()
 const inputId = computed(() => props.idPrefix === undefined
   ? 'workspace-search-input'

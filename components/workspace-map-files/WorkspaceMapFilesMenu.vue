@@ -173,7 +173,7 @@ const canViewGeneratedLink = computed(() => Boolean(props.generatedPlayerUrl)
   && generatedWorkspaceId.value === props.workspaceId)
 const imageScopeChoices: ReadonlyArray<{ value: MapImageScope; label: string }> = [
   { value: 'cluster', label: 'Entire Cluster' },
-  { value: 'system', label: 'Selected system' },
+  { value: 'system', label: 'Selected Zone' },
   { value: 'viewport', label: 'Current viewport' },
 ]
 const explicitImageSystem = computed(() => props.imageSystems.find(system => system.id === explicitImageSystemId.value) ?? null)
@@ -181,7 +181,7 @@ const activeWardenImageScope = computed(() => explicitImageSystem.value
   ? 'system'
   : effectiveWardenMapImageScope(wardenImageScope.value, props.selectedImageSystemId, props.continuousMap))
 const selectedImageScopeLabel = computed(() => explicitImageSystem.value
-  ? `Selected system · ${explicitImageSystem.value.name}`
+  ? `Selected Zone · ${explicitImageSystem.value.name}`
   : imageScopeChoices.find(choice => choice.value === activeWardenImageScope.value)?.label ?? 'Entire Cluster')
 const systemFilterInputProps = {
   placeholder: 'Filter systems',
@@ -236,9 +236,9 @@ const items = computed<MenuItem[][]>(() => {
   }
   const systemJson: MenuItem = {
     menuValue: 'private-system-json',
-    label: 'Download private Star System JSON',
+    label: 'Download private Zone JSON',
     icon: 'i-lucide-file-json',
-    hint: 'Download editable Warden data for the active Star System.',
+    hint: 'Download editable Warden data for the active Zone.',
     onSelect: () => emit('export-system-json'),
   }
 
@@ -261,7 +261,7 @@ const items = computed<MenuItem[][]>(() => {
 
   const wardenSystemImageItem: MenuItem = {
     menuValue: 'warden-image-system',
-    label: 'Export a system…',
+    label: 'Export a Zone…',
     icon: 'i-lucide-orbit',
     disabled: props.imageSystems.length === 0,
     filter: systemFilterInputProps,
@@ -297,9 +297,9 @@ const items = computed<MenuItem[][]>(() => {
     restore: [
       {
         menuValue: 'import-system',
-        label: 'Add a Star System from JSON',
+        label: 'Add a Zone from JSON',
         icon: 'i-lucide-file-plus',
-        hint: 'Add an independent copy of this Star System to the active Jump Cluster.',
+        hint: 'Add an independent copy of this Zone to the active Jump Cluster.',
         onSelect: () => emit('import-system'),
       },
       {
@@ -337,7 +337,7 @@ const items = computed<MenuItem[][]>(() => {
         menuValue: 'preview-player-view',
         label: 'Preview player view',
         icon: 'i-lucide-eye',
-        hint: 'Preview published locations and Revealed system maps.',
+        hint: 'Preview published locations and Revealed Zone maps.',
         onSelect: event => { event.preventDefault(); void openPreview() },
       },
       {

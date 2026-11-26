@@ -1,13 +1,13 @@
 import type { Locator } from '@playwright/test'
 import {
   addStarSystem,
-  createLocalWorkspace,
   createOrbit,
   createSystemObject,
   exportJumpCluster,
 } from '../domain/workspace'
 import { fromNormalizedMapPoint } from '../domain/workspace-map-coordinates'
 import { expect, test } from './fixtures'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import {
   addClusterSystem,
   captureMapExportBlobs,
@@ -55,7 +55,7 @@ test('create, name, move, resize, and reload a Warden system', async ({ page }) 
   const menu = page.getByRole('menu', { name: 'Map item actions', exact: true })
   await menu.getByRole('menuitem', { name: 'Edit', exact: true }).click()
   const inspector = page.locator('#workspace-inspector-panel')
-  const systemName = inspector.getByLabel('Star system', { exact: true })
+  const systemName = inspector.getByLabel('Zone', { exact: true })
   await expect(systemName).toBeEditable()
   await systemName.fill('Helion')
   await inspector.getByRole('button', { name: 'Apply details', exact: true }).click()
@@ -115,7 +115,7 @@ test('create, name, move, resize, and reload a Warden system', async ({ page }) 
 })
 
 function createTransferWorkspace() {
-  const initial = createLocalWorkspace('Halo Transfer', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Halo Transfer', 'Vesper')
   const source = initial.cluster.systems[0]!
   const root = { ...createSystemObject(source, 'planet'), name: 'Herma' }
   const sourceWithRoot = { ...source, objects: [...source.objects, root] }
@@ -216,9 +216,9 @@ test('transferring a hosted branch reviews its route attachment and retains its 
   })
   await page.mouse.up()
 
-  const review = page.getByRole('dialog', { name: 'Change system', exact: true })
+  const review = page.getByRole('dialog', { name: 'Change Zone', exact: true })
   await expect(review).toBeVisible()
-  await expect(review.getByLabel('Destination star system')).toHaveValue(fixture.destination.id)
+  await expect(review.getByLabel('Destination Zone')).toHaveValue(fixture.destination.id)
   await expect(review).toContainText('2 objects and 1 hosted Orbits will move together.')
   await expect(review).toContainText('Herma')
   await expect(review).toContainText('Nix')

@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { addZoneWithPrimaryStar } from './support/primary-star-fixture'
 import {
   addStarSystem,
   createLocalWorkspace,
@@ -27,7 +28,7 @@ test('player projection emits only the marker information allowed by each public
   const hiddenId = workspace.cluster.systems[0]!.id
   const withUnknown = addStarSystem(workspace, 'Unknown Name')
   const withKnown = addStarSystem(withUnknown.workspace, 'Known Name')
-  const withRevealed = addStarSystem(withKnown.workspace, 'Revealed Name')
+  const withRevealed = addZoneWithPrimaryStar(withKnown.workspace, 'Revealed Name')
   workspace = withRevealed.workspace
   workspace = setPublication(workspace, hiddenId, 'hidden')
   workspace = setPublication(workspace, withUnknown.system.id, 'unknown')
@@ -42,7 +43,7 @@ test('player projection emits only the marker information allowed by each public
     title: 'Player Jump Cluster',
     systems: [
       { id: 'system-1', disclosure: 'unknown', label: 'Unknown presence' },
-      { id: 'system-2', disclosure: 'known-type', type: 'star-system', label: 'Star system' },
+      { id: 'system-2', disclosure: 'known-type', type: 'star-system', label: 'Zone' },
       { id: 'system-3', disclosure: 'revealed', type: 'star-system', label: 'Revealed Name' },
     ],
   })

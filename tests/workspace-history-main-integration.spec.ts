@@ -1,3 +1,4 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { createPinia, setActivePinia } from 'pinia'
 import { computed, effectScope, nextTick, ref, shallowRef, watchEffect } from 'vue'
@@ -104,7 +105,7 @@ interface UnoccupiedOrbitFixture {
 async function createUnoccupiedOrbitWorkspace(
   reorderPropertiesForRegression = false,
 ): Promise<UnoccupiedOrbitFixture> {
-  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const system = initial.cluster.systems[0]
   if (!system) throw new Error('The initial workspace has no star system.')
   const harness = createHistoryHarness(initial)
@@ -783,7 +784,7 @@ test('capacity-delayed Orbit-center moves do not rebase a replacement Inspector 
 test('accepted object-position moves retain the clean Object Inspector session @pure', async () => {
   await withControlledBrowserEnvironment(async () => {
     setActivePinia(createPinia())
-    const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+    const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
     const system = initial.cluster.systems[0]!
     const object = system.objects[0]!
     const harness = createHistoryHarness(initial)

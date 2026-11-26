@@ -1,7 +1,7 @@
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { expect, test } from '@playwright/test'
 import { ref } from 'vue'
 import {
-  createLocalWorkspace,
   createOrbit,
   replaceWorkspaceSystem,
   type LocalWorkspace,
@@ -10,7 +10,7 @@ import { useEntityInspectorSession } from '../composables/editor-workflows/useEn
 import { createWorkspaceMutationExecutor } from '../composables/editor-workflows/workspace-mutations'
 
 test('applying a previewed free Orbit host change completes the same Inspector session @pure', async () => {
-  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const system = initial.cluster.systems[0]!
   const host = system.objects[0]!
   const orbit = createOrbit(system, null)

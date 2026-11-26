@@ -1,13 +1,13 @@
 import { expect, test } from './fixtures'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import {
-  createLocalWorkspace,
   createSystemObject,
   planMapEntityDeletion,
   replaceWorkspaceSystem,
 } from '../domain/workspace'
 
 test('default object names skip occupied names after a deletion @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const initialSystem = workspace.cluster.systems[0]
   if (!initialSystem) throw new Error('Expected the starter workspace to contain a system.')
 

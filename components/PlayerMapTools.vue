@@ -4,7 +4,7 @@
     v-model:open="searchOpen"
     v-model:query="searchQuery"
     title="Search player map"
-    description="Find the shared Jump Cluster, a Revealed star system, or a published map object."
+    description="Find the shared Jump Cluster, a Revealed Zone, or a published map object."
     id-prefix="player-search"
     :results="props.searchResults"
     :reveal="props.revealSearchTarget"
@@ -97,7 +97,7 @@ const printLight = ref(false)
 const requestedScope = ref<MapImageScope>('cluster')
 const imageScopeItems = computed<Array<{ label: string; value: MapImageScope; disabled?: boolean }>>(() => [
   { label: 'Entire Cluster', value: 'cluster' },
-  { label: 'Selected system', value: 'system', disabled: !props.canExportSystemImage },
+  { label: 'Selected Zone', value: 'system', disabled: !props.canExportSystemImage },
   { label: 'Current viewport', value: 'viewport' },
 ])
 const imageScope = computed({

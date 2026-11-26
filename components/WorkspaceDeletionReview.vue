@@ -123,7 +123,7 @@ function restoreFocus(event: Event): void {
     : document.querySelector<HTMLElement>(
         '#workspace-hierarchy-panel [role="treeitem"][aria-selected="true"], #workspace-hierarchy-panel [aria-current="true"]',
       )
-      ?? document.querySelector<HTMLElement>('#workspace-main [role="group"][aria-label$="star system map"]')
+      ?? document.querySelector<HTMLElement>('#workspace-main [role="group"][aria-label$="Zone map"]')
       ?? document.getElementById('workspace-main')
   target?.focus()
   opener = null

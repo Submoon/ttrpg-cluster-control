@@ -123,7 +123,7 @@ export function prepareContinuousWardenImageScene(
     ? request.projections.find(projection => projection.id === request.selectedSystemId)
     : undefined
   if (request.scope === 'system' && !selected) {
-    throw new Error('Choose a selected Star System before exporting that image scope.')
+    throw new Error('Choose a selected Zone before exporting that image scope.')
   }
 
   const detailSystemIds = request.scope === 'cluster'
@@ -557,7 +557,7 @@ function systemRouteDestination(
 ): string {
   if (route.toSystemId === null) return `Unknown: ${route.unresolvedExit}`
   const remoteSystemId = route.toSystemId === selected.id ? route.fromSystemId : route.toSystemId
-  return request.cluster.systems.find(system => system.id === remoteSystemId)?.name ?? 'Star System'
+  return request.cluster.systems.find(system => system.id === remoteSystemId)?.name ?? 'Zone'
 }
 
 function systemNameBounds(label: ContinuousWardenImageSceneLabel): SvgViewportRect {
@@ -578,7 +578,7 @@ function imageAccessibleName(
   request: ContinuousWardenImageSceneRequest,
   selected: ContinuousWardenSystemProjection | undefined,
 ): string {
-  if (request.scope === 'system') return `${selected?.name ?? 'Star System'} map image`
+  if (request.scope === 'system') return `${selected?.name ?? 'Zone'} map image`
   if (request.scope === 'viewport') return `${request.cluster.name} current viewport image`
   return `${request.cluster.name} Jump Cluster image`
 }

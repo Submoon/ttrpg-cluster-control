@@ -133,7 +133,7 @@
       <section class="entity-inspector-section" aria-labelledby="object-placement-heading">
         <div class="entity-inspector-section-heading">
           <div>
-            <p class="section-kicker">SYSTEM STRUCTURE</p>
+            <p class="section-kicker">ZONE STRUCTURE</p>
             <h3 id="object-placement-heading">Placement and relationships</h3>
           </div>
           <UButton
@@ -146,7 +146,7 @@
             :disabled="props.saving || props.transferBusy || !selectedSystem"
             @click="requestSystemTransfer"
           >
-            Change system…
+            Change Zone…
           </UButton>
         </div>
         <fieldset class="entity-inspector-fields entity-inspector-fields--paired" :disabled="!objectSession || props.saving">
@@ -477,7 +477,7 @@ const hasAtmosphere = computed(() => selectedObject.value?.family === 'Celestial
 const hasNativeFields = computed(() => hasAtmosphere.value || selectedObject.value?.family === 'Installation')
 type StoredSelectOption = { label: string; storedValue: string }
 const placementItems = computed(() => [
-  { label: 'System-level position', value: 'system' },
+  { label: 'Zone-level position', value: 'system' },
   ...placeableOrbits.value.map(orbit => ({
     label: `Orbit ${orbit.order} around ${orbit.hostId === null
       ? 'unoccupied center'

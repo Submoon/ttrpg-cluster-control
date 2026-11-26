@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import {
   addCustomFieldDefinition,
   addStarSystem,
@@ -119,7 +120,7 @@ function legacyReservedFieldIdFixture(): {
 }
 
 test('new player-sharing data starts private and empty @pure', () => {
-  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const workspace = addStarSystem(initial, 'Harrow').workspace
   const [system, destinationSystem] = workspace.cluster.systems
   if (!system || !destinationSystem) throw new Error('The route fixture needs two systems.')
@@ -146,7 +147,7 @@ test('new player-sharing data starts private and empty @pure', () => {
 })
 
 test('version 3 workspaces migrate publication additions privately while retaining GM notes @pure', () => {
-  const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const workspace = addStarSystem(initial, 'Harrow').workspace
   expect(isLocalWorkspace(workspace)).toBe(true)
   const [system, destinationSystem] = workspace.cluster.systems
@@ -203,7 +204,7 @@ test('version 3 workspaces migrate publication additions privately while retaini
 })
 
 test('current workspace data requires every sharing field and rejects unsupported versions @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   expect(isLocalWorkspace(workspace)).toBe(true)
   expect(restoreLocalWorkspace(workspace)).toMatchObject({ version: 6 })
 
@@ -227,7 +228,7 @@ test('current workspace data requires every sharing field and rejects unsupporte
 })
 
 test('versions 1 and 2 keep their prior disclosure rules and receive private sharing defaults @pure', () => {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const versionTwo = structuredClone(workspace) as unknown as Record<string, unknown>
   versionTwo.version = 2
   const versionTwoCluster = versionTwo.cluster as {
@@ -399,11 +400,11 @@ test('route endpoints require distinct known systems and local Jump Point owners
     fromPointId: null,
     toSystemId: originSystem.id,
     toPointId: null,
-  })).toThrow(/different system/)
+  })).toThrow(/different Zone/)
 })
 
 test('version 6 backup restore and independent import preserve private notes and remap Field masks @pure', () => {
-  const initial = addStarSystem(createLocalWorkspace('Source Reach', 'Aster'), 'Boreal').workspace
+  const initial = addStarSystem(createWorkspaceWithPrimaryStar('Source Reach', 'Aster'), 'Boreal').workspace
   const withFaction = addCustomFieldDefinition(initial, 'Faction', 'single-select', ['Merchants', 'Cult'], true)
   const faction = withFaction.objectFieldSettings.customFields[0]!
   const [system, destinationSystem] = withFaction.cluster.systems
@@ -483,7 +484,7 @@ test('version 6 backup restore and independent import preserve private notes and
 })
 
 test('object masks reject unknown and duplicate IDs and custom definitions reserve native IDs @pure', () => {
-  const workspace = createLocalWorkspace('Mask Reach', 'Aster')
+  const workspace = createWorkspaceWithPrimaryStar('Mask Reach', 'Aster')
   const system = workspace.cluster.systems[0]!
   const star = system.objects[0]!
 
@@ -619,7 +620,7 @@ test('shared custom applicability conflicts reject union while private compatibl
 })
 
 test('masks remain on private, inapplicable, and unassigned Fields until their definitions are deleted @pure', () => {
-  let workspace = createLocalWorkspace('Mask Reach', 'Aster')
+  let workspace = createWorkspaceWithPrimaryStar('Mask Reach', 'Aster')
   workspace = addCustomFieldDefinition(workspace, 'Private Clue', 'text')
   workspace = addCustomFieldDefinition(workspace, 'Planet Habitat', 'text', [], true)
   workspace = addCustomFieldDefinition(workspace, 'Unassigned Public Field', 'boolean', [], true)

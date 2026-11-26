@@ -28,7 +28,7 @@ export type PlayerSystemMarker = {
   position: Point
 } & (
   | { disclosure: 'unknown'; label: 'Unknown presence' }
-  | { disclosure: 'known-type'; type: 'star-system'; label: 'Star system' }
+  | { disclosure: 'known-type'; type: 'star-system'; label: 'Zone' }
   | { disclosure: 'revealed'; type: 'star-system'; label: string; map: PlayerSystemDocument }
 )
 
@@ -126,7 +126,7 @@ export function projectPlayerCluster(workspace: LocalWorkspace): PlayerClusterDo
         position,
         disclosure: 'known-type',
         type: 'star-system',
-        label: 'Star system',
+        label: 'Zone',
       })
     } else if (system.publication === 'revealed') {
       const projected = projectPlayerSystem(workspace, system)
@@ -163,7 +163,7 @@ function projectPlayerRoutes(
   for (const route of workspace.cluster.routes) {
     if (!route.playerShared) continue
     const from = workspace.cluster.systems.find(system => system.id === route.fromSystemId)
-    if (!from) throw new Error('A shared Jump Route has a missing origin system.')
+    if (!from) throw new Error('A shared Jump Route has a missing origin Zone.')
     const fromSystemId = publicSystemIds.get(from.id)
     const fromPointId = publicRoutePointId(from, route.fromPointId, revealedJumpPointIdsBySystem)
 
@@ -193,7 +193,7 @@ function projectPlayerRoutes(
     }
 
     const to = workspace.cluster.systems.find(system => system.id === route.toSystemId)
-    if (!to) throw new Error('A shared Jump Route has a missing destination system.')
+    if (!to) throw new Error('A shared Jump Route has a missing destination Zone.')
     const toSystemId = publicSystemIds.get(to.id)
 
     if (fromSystemId && toSystemId) {

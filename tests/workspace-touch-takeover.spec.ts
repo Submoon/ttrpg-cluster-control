@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from './fixtures'
 import {
   captureMapExportBlobs,
   centerWorkspaceSelection,
-  createSingleSystemWorkspace,
+  createSingleSystemWorkspaceWithPrimaryStar,
   dockAction,
   downloadJson,
   exposedContinuousObjectHitPoint,
@@ -142,7 +142,7 @@ async function readWorkspaceRecords(page: Page): Promise<StoredWorkspaceRecords>
 
 test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and pans only the view', async ({ page }) => {
   await captureMapExportBlobs(page)
-  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspaceWithPrimaryStar(page, {
     viewport: { width: 390, height: 844 },
   })
   await waitForWorkspaceSaved(page)
@@ -165,7 +165,7 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
   const downloads = page.getByRole('menu', { name: 'Download or back up', exact: true })
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    tap(downloads.getByRole('menuitem', { name: 'Download private Star System JSON', exact: true })),
+    tap(downloads.getByRole('menuitem', { name: 'Download private Zone JSON', exact: true })),
   ])
   expect(download.suggestedFilename()).toMatch(/\.json$/i)
   const jsonBefore = await page.evaluate(async () => {
@@ -282,7 +282,7 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
 
   await waitForWorkspaceSaved(page)
   expect(await readWorkspaceRecords(page)).toEqual(recordsBefore)
-  expect(await downloadJson(page, 'Export star system JSON')).toEqual(jsonBefore)
+  expect(await downloadJson(page, 'Export Zone JSON')).toEqual(jsonBefore)
 
   const orbitCdp = await enableTouch(page)
   try {
@@ -399,7 +399,7 @@ test('touch takeover cancels Move previews, resumes Add Orbit after pinch, and p
   }
 
   await waitForWorkspaceSaved(page)
-  const savedAfterTouch = await downloadJson(page, 'Export star system JSON')
+  const savedAfterTouch = await downloadJson(page, 'Export Zone JSON')
   expect(savedAfterTouch.system?.id).toBe(systemId)
   expect(savedAfterTouch.system?.orbits.map(orbit => ({ hostId: orbit.hostId, order: orbit.order }))).toEqual([
     { hostId: primaryObjectId, order: 1 },

@@ -37,7 +37,7 @@ import {
 import { minimumOrbitRadius, normalizeOrbitRadii, normalizeOrbitRotations, orbitRadiiMeetMinimum } from './workspace-orbits'
 import { isObjectFieldSettings, isPoint, isRecord, objectFieldValidationError } from './workspace-validation'
 
-const invalidMapMessage = 'Choose a valid version 1 through 6 Jump Cluster or version 1 through 5 star system JSON export.'
+const invalidMapMessage = 'Choose a valid version 1 through 6 Jump Cluster or version 1 through 5 Zone JSON export.'
 
 type ImportableMap =
   | (Omit<JumpClusterExport, 'version'> & { version: 6 })
@@ -260,7 +260,7 @@ function workspaceEntityNames(workspace: LocalWorkspace): Map<string, string> {
     [workspace.cluster.id, `Jump Cluster "${workspace.cluster.name}"`],
   ])
   for (const system of workspace.cluster.systems) {
-    entities.set(system.id, `Star system "${system.name}"`)
+    entities.set(system.id, `Zone "${system.name}"`)
     for (const object of system.objects) {
       entities.set(object.id, `${object.subtype} "${object.name}" in "${system.name}"`)
     }
@@ -457,7 +457,7 @@ export function prepareJsonImport(
   const existingNames = workspaceEntityNames(workspace)
   const sourceEntities = [
     ...sourceSystems.flatMap(system => [
-      { id: system.id, entity: 'Star system', name: system.name },
+      { id: system.id, entity: 'Zone', name: system.name },
       ...system.objects.map(object => ({ id: object.id, entity: object.subtype, name: object.name })),
       ...system.orbits.map(orbit => ({ id: orbit.id, entity: 'Orbit', name: `Orbit ${orbit.order}` })),
     ]),
@@ -477,7 +477,7 @@ export function prepareJsonImport(
     )
     for (const existingSystem of existingSystems) {
       possibleMatches.push({
-        entity: 'Star system',
+        entity: 'Zone',
         name: sourceSystem.name,
         existingSystem: existingSystem.name,
         reason: 'same name',
@@ -634,10 +634,10 @@ export function prepareJsonImport(
   } else {
     const addedSystemId = addedSystemIds[0]
     if (!addedSystemId) {
-      throw new Error('The imported star system is missing.')
+      throw new Error('The imported Zone is missing.')
     }
     const anchor = standaloneAnchor ?? initialClusterSystemPosition(workspace.cluster.systems.length)
-    if (!isPoint(anchor)) throw new Error('Choose a finite Cluster position for the imported star system.')
+    if (!isPoint(anchor)) throw new Error('Choose a finite Cluster position for the imported Zone.')
     layout.systemPositions[addedSystemId] = { x: anchor.x, y: anchor.y }
   }
   const importedOrbitRadii = normalizeOrbitRadii(

@@ -1,5 +1,8 @@
 import { expect, test } from './fixtures'
+import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import {
+  addStarSystem,
+  createJumpRoute,
   createLocalWorkspace,
   createSystemObject,
   exportJumpCluster,
@@ -13,8 +16,26 @@ import {
   type StarSystem,
 } from '../domain/workspace'
 
-function workspaceForPortableExports(): LocalWorkspace {
+test('an initial and added Zone begin empty and can host catalogue entries and routes @pure', () => {
   const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const first = initial.cluster.systems[0]!
+  const { workspace, system: second } = addStarSystem(initial)
+
+  expect(first).toMatchObject({ name: 'Vesper', objects: [], orbits: [] })
+  expect(second).toMatchObject({ name: 'New Zone 2', objects: [], orbits: [] })
+  expect(createSystemObject(first, 'star')).toMatchObject({ family: 'CelestialBody', subtype: 'star' })
+  expect(createSystemObject(second, 'station')).toMatchObject({ family: 'Installation', subtype: 'station' })
+  expect(createJumpRoute(workspace.cluster, {
+    jumpLevel: 1,
+    fromSystemId: first.id,
+    fromPointId: null,
+    toSystemId: second.id,
+    toPointId: null,
+  })).toMatchObject({ fromSystemId: first.id, toSystemId: second.id })
+})
+
+function workspaceForPortableExports(): LocalWorkspace {
+  const initial = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const firstSystem = initial.cluster.systems[0]
   const primaryStar = firstSystem?.objects[0]
   if (!firstSystem || !primaryStar) throw new Error('The fixture is missing its initial Primary Star.')
@@ -350,7 +371,7 @@ test('standalone JSON export carries shared definitions and only its system layo
   expect(exported.layout).not.toHaveProperty('systemPositions')
   expect(exported.layout).not.toHaveProperty('unresolvedExitPositions')
   expect(() => exportStarSystem(workspace, 'missing-system'))
-    .toThrow('The selected star system no longer exists.')
+    .toThrow('The selected Zone no longer exists.')
 })
 
 test('legacy Zone positions survive hydration, a complete backup, and an independent Cluster copy @pure', () => {

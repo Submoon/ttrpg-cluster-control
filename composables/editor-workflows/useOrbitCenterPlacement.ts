@@ -158,7 +158,7 @@ export function useOrbitCenterPlacement({
       ? systemMapRef.value?.toSystemScenePoint?.(current.system.id, scenePoint) ?? null
       : scenePoint
     if (!localPoint) {
-      orbitCenterMoveError.value = 'The owning system is no longer visible for this Orbit-center move.'
+      orbitCenterMoveError.value = 'The owning Zone is no longer visible for this Orbit-center move.'
       return false
     }
     return previewOrbitCenterMoveAtLocal(localPoint)

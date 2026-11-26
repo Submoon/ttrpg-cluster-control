@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { addZoneWithPrimaryStar, createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
 import { computed, ref } from 'vue'
 import {
   addStarSystem,
@@ -130,7 +131,7 @@ test('standalone import previews a detached placement that can be moved and canc
 
 test('legacy standalone placement reviews and applies the selected anchor with its complete rotated Orbit geometry @pure', async () => {
   const initial = createLocalWorkspace('Kestrel Reach', 'Vesper')
-  const source = createLocalWorkspace('Far Reach', 'Iria')
+  const source = createWorkspaceWithPrimaryStar('Far Reach', 'Iria')
   const sourceSystem = source.cluster.systems[0]
   if (!sourceSystem) throw new Error('The legacy import fixture needs a source system.')
   const star = sourceSystem.objects[0]
@@ -264,9 +265,9 @@ test('a workspace replacement while standalone file text is pending prevents pla
 })
 
 function makeCascadeWorkspace(): LocalWorkspace {
-  let workspace = createLocalWorkspace('Kestrel Reach', 'A')
+  let workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'A')
   const systemA = workspace.cluster.systems[0]!
-  const systemBResult = addStarSystem(workspace, 'B')
+  const systemBResult = addZoneWithPrimaryStar(workspace, 'B')
   workspace = systemBResult.workspace
   const systemB = systemBResult.system
 
@@ -324,7 +325,7 @@ function makeCascadeWorkspace(): LocalWorkspace {
 }
 
 function makeFieldWorkspace(): LocalWorkspace {
-  const workspace = createLocalWorkspace('Kestrel Reach', 'Vesper')
+  const workspace = createWorkspaceWithPrimaryStar('Kestrel Reach', 'Vesper')
   const system = workspace.cluster.systems[0]!
   const object = system.objects[0]!
   const customFields = [
@@ -586,7 +587,7 @@ test('cluster import keeps its remapped copy and shared options on one exact his
 
 test('standalone-system import can be undone and redone without adding its copied data to Cluster routes @pure', async () => {
   const initial = createWorkspaceSnapshot(createLocalWorkspace('Kestrel Reach', 'Vesper'))
-  const source = createWorkspaceSnapshot(addStarSystem(initial, 'Distant Reach').workspace)
+  const source = createWorkspaceSnapshot(addZoneWithPrimaryStar(initial, 'Distant Reach').workspace)
   const standalone = exportStarSystem(source, source.cluster.systems[1]!.id)
   const before = createWorkspaceSnapshot(initial)
   const harness = makeHistory(initial)
@@ -803,7 +804,7 @@ test('focused map deletion reviews a seeded system cascade and Undo restores the
   await expect(deletion).toBeFocused()
   await page.keyboard.press('Space')
   await expect(review).toBeVisible()
-  await expect(review).toContainText('A star system')
+  await expect(review).toContainText('A Zone')
   await expect(review).toContainText('Herma')
   await expect(review).toContainText('Iria')
   await expect(review).toContainText('Lost Gate')

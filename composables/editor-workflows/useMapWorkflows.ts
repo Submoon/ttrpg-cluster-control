@@ -283,7 +283,7 @@ export function useMapWorkflows({
   async function updateOrbitAdjustment(intent: OrbitAdjustmentIntent) {
     const command: EntityCommand = { kind: 'orbit-geometry', orbitId: intent.orbitId }
     if (!canAdjustMapOrbit(intent.systemId, intent.orbitId) || !isOrbitAvailableOnCurrentMap(intent.systemId, intent.orbitId)) {
-      return { status: 'rejected', reason: 'stale', message: 'The selected system changed before this Orbit adjustment was received.' } as const
+      return { status: 'rejected', reason: 'stale', message: 'The selected Zone changed before this Orbit adjustment was received.' } as const
     }
     if (rejectBlockedEntityCommand(command)) {
       return { status: 'rejected', reason: 'unavailable', message: 'Resolve the Inspector draft before changing this Orbit.' } as const
@@ -367,7 +367,7 @@ export function useMapWorkflows({
         isCurrent: () => contextIsCurrent(workspace.value),
         prepare: (latest) => {
           if (!contextIsCurrent(latest)) {
-            throw new Error('The selected star system is no longer available.')
+            throw new Error('The selected Zone is no longer available.')
           }
           return {
             ...latest,
@@ -663,9 +663,9 @@ export function useMapWorkflows({
         },
         isCurrent: contextIsCurrent,
         prepare: latest => {
-          if (!contextIsCurrent()) throw new Error('The selected star system or Add target changed before this object could be added.')
+          if (!contextIsCurrent()) throw new Error('The selected Zone or Add target changed before this object could be added.')
           const latestSystem = latest.cluster.systems.find(candidate => candidate.id === systemId)
-          if (!latestSystem) throw new Error('The star system for this Add action is no longer available.')
+          if (!latestSystem) throw new Error('The Zone for this Add action is no longer available.')
           if (isEntityCommandBlocked(command)) {
             throw new Error('Resolve the Inspector draft before adding an object to this Orbit.')
           }

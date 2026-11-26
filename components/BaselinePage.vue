@@ -68,7 +68,7 @@
       <section v-else-if="workspace" class="editor">
           <MapEditorLayout
           mode="cluster"
-          :hierarchy-label="activeView === 'cluster' ? 'Jump Cluster contents' : 'System hierarchy'"
+          :hierarchy-label="activeView === 'cluster' ? 'Jump Cluster contents' : 'Zone hierarchy'"
           :inspector-label="inspectorLabel"
           :hierarchy-visible="hierarchyPanelVisible"
           :inspector-visible="inspectorPanelVisible"
@@ -233,8 +233,8 @@
             </UModal>
             <UModal
               v-model:open="continuousObjectOwnerChooserOpen"
-              title="Choose the owning system"
-              description="The Add target overlaps systems or falls outside every system. Choose the owning system."
+              title="Choose the owning Zone"
+              description="The Add target overlaps Zones or falls outside every Zone. Choose the owning Zone."
               @update:open="onContinuousObjectOwnerChooserOpenChange"
             >
               <template #body>
@@ -369,7 +369,7 @@
                       icon="i-lucide-orbit"
                       @click="armSystemAddAndClose(close)"
                     >
-                      Add star system
+                      Add Zone
                     </UButton>
                     <UButton
                       class="object-palette-button"
@@ -390,7 +390,7 @@
                   v-if="standaloneImportPlacementEnabled"
                   class="workspace-dock-placement-controls"
                   role="group"
-                  aria-label="Standalone star system placement controls"
+                  aria-label="Standalone Zone placement controls"
                   @keydown.esc.stop.prevent="handleStandaloneImportPlacementEscape"
                 >
                   <span class="workspace-dock-placement-instruction">
@@ -522,8 +522,8 @@
                 </ClientOnly>
               </div>
               <p v-if="activeView === 'cluster' && (continuousObjectAddType || clusterAddType || clusterMoveTargeting)" class="map-note mb-[1em] flex justify-between gap-3 px-[0.2rem] pt-[0.55rem] pb-[0.1rem] max-[760px]:flex-col">
-                <span>{{ continuousObjectAddType ? `ADD ${continuousObjectAddLabel.toUpperCase()} / CHOOSE A SYSTEM LOCATION` : clusterAddType === 'system' ? 'ADD SYSTEM / OPEN CLUSTER SPACE' : clusterAddType === 'route' ? 'ADD JUMP ROUTE / CHOOSE SYSTEMS' : 'MOVE SYSTEM / CHOOSE A DESTINATION' }}</span>
-                <span>{{ continuousObjectAddType ? 'Choose an object mark, Orbit, or clear map position; select a system when prompted for an owner.' : clusterAddType === 'system' ? 'Choose clear Cluster space, or pan with the arrow keys and press Enter.' : clusterAddType === 'route' ? 'Choose a system for each endpoint; local Jump Points are optional.' : 'Choose Move selected system on map, then click or use the arrow keys to preview.' }}</span>
+                <span>{{ continuousObjectAddType ? `ADD ${continuousObjectAddLabel.toUpperCase()} / CHOOSE A ZONE LOCATION` : clusterAddType === 'system' ? 'ADD ZONE / OPEN CLUSTER SPACE' : clusterAddType === 'route' ? 'ADD JUMP ROUTE / CHOOSE ZONES' : 'MOVE ZONE / CHOOSE A DESTINATION' }}</span>
+                <span>{{ continuousObjectAddType ? 'Choose an object mark, Orbit, or clear map position; select a Zone when prompted for an owner.' : clusterAddType === 'system' ? 'Choose clear Cluster space, or pan with the arrow keys and press Enter.' : clusterAddType === 'route' ? 'Choose a Zone for each endpoint; local Jump Points are optional.' : 'Choose Move selected Zone on map, then click or use the arrow keys to preview.' }}</span>
               </p>
             </section>
           </template>
@@ -1354,7 +1354,7 @@ const inspectorLabel = computed(() => {
   } else if (routeSession.value || selectedRoute.value) {
     return 'Jump Route inspector'
   }
-  return inspectorSelectedSystem.value ? 'Star System details' : 'Jump Cluster details'
+  return inspectorSelectedSystem.value ? 'Zone details' : 'Jump Cluster details'
 })
 const { editorError } = feedback
 const moveSelectionError = workflows.move.error
@@ -1657,14 +1657,14 @@ const clusterAddPresentation = computed(() => orbitAddArmed.value
   ? {
       label: continuousObjectAddLabel.value,
       status: continuousObjectPinnedOwnerId.value
-        ? `ADD ${continuousObjectAddLabel.value} · ${continuousObjectOwnerName(continuousObjectPinnedOwnerId.value)} owns this placement. Click an Orbit or clear position in that system.`
-        : `ADD ${continuousObjectAddLabel.value} · Click a system object, Orbit, or clear space in the owning system.`,
+        ? `ADD ${continuousObjectAddLabel.value} · ${continuousObjectOwnerName(continuousObjectPinnedOwnerId.value)} owns this placement. Click an Orbit or clear position in that Zone.`
+        : `ADD ${continuousObjectAddLabel.value} · Click an object, Orbit, or clear space in the owning Zone.`,
       error: editorError.value || undefined,
     }
   : clusterAddType.value === 'system'
   ? {
-      label: 'System',
-      status: 'ADD System · Choose a clear map point, or pan with the arrow keys and press Enter.',
+      label: 'Zone',
+      status: 'ADD Zone · Choose a clear map point, or pan with the arrow keys and press Enter.',
       error: clusterAddError.value,
     }
   : clusterAddType.value === 'route'
@@ -1677,13 +1677,13 @@ const clusterAddPresentation = computed(() => orbitAddArmed.value
 const clusterMovePresentation = computed(() => {
   if (!clusterMoveTargeting.value || clusterAddType.value !== null) return null
   const preview = clusterSystemMovePreview.value
-  const systemName = clusterSelectedSystem.value?.name ?? 'selected system'
+  const systemName = clusterSelectedSystem.value?.name ?? 'selected Zone'
   return {
     status: preview
       ? `MOVE preview · ${systemName} · Confirm or cancel the move.`
       : clusterSystemMapMoveTargeting.value
         ? `MOVE ${systemName} · Choose a destination or adjust it with the arrow keys.`
-        : `MOVE ${systemName} · Choose Move selected system on map, or drag the system.`,
+        : `MOVE ${systemName} · Choose Move selected Zone on map, or drag the Zone.`,
     error: clusterSystemMoveError.value || undefined,
     previewing: preview !== null,
   }
@@ -1807,7 +1807,7 @@ function onContinuousObjectOtherTypeOpenChange(open: boolean): void {
 }
 
 function continuousObjectOwnerName(systemId: string): string {
-  return workspace.value?.cluster.systems.find(system => system.id === systemId)?.name ?? 'Unknown system'
+  return workspace.value?.cluster.systems.find(system => system.id === systemId)?.name ?? 'Unknown Zone'
 }
 
 function continuousAddRequestIsCurrent(owned: OwnedContinuousObjectAddRequest<ContinuousObjectAddTarget>): boolean {
@@ -1832,7 +1832,7 @@ function handleContinuousObjectAddTarget(request: ContinuousObjectAddTarget): vo
     return
   }
   if (request.owners.length === 0) {
-    editorError.value = 'Choose an available system before adding an object.'
+    editorError.value = 'Choose an available Zone before adding an object.'
     clearContinuousObjectAddRequest(owned)
     return
   }
@@ -1864,7 +1864,7 @@ async function addContinuousObjectToOwner(
     if (request.directTarget?.kind === 'object' && !choice.candidate) {
       continuousObjectPinnedOwnerId.value = systemId
       const systemName = continuousObjectOwnerName(systemId)
-      editorError.value = `${systemName} is selected. Choose an Orbit or clear position in this system.`
+      editorError.value = `${systemName} is selected. Choose an Orbit or clear position in this Zone.`
     } else {
       editorError.value = choice.error
     }
@@ -1970,7 +1970,7 @@ function handleOrbitAddTarget(
   if (!orbitAddArmed.value || source !== workspace.value) return
   const request = { owners, workspace: source }
   if (!owners.length) {
-    editorError.value = 'Add a star system before creating an Orbit.'
+    editorError.value = 'Add a Zone before creating an Orbit.'
     return
   }
   if (requiresOwnerChoice) {

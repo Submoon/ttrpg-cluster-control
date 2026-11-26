@@ -46,13 +46,13 @@ export function searchPlayerDocument(document: PlayerClusterDocument, rawQuery: 
         key: `player-system-${systemIndex}`,
         target: systemTarget,
         name: system.label,
-        typeLabel: 'Star system',
+        typeLabel: 'Zone',
         contextLabel: `Player document: ${document.title}`,
         leadingMark: { kind: 'icon', value: 'i-lucide-orbit' },
         occurrence: null,
       },
       identityOrder: `system:${String(systemIndex).padStart(8, '0')}`,
-      searchTerms: [system.label, 'Star system'],
+      searchTerms: [system.label, 'Zone'],
     })
 
     system.map.objects.forEach((object, objectIndex) => {
@@ -70,7 +70,7 @@ export function searchPlayerDocument(document: PlayerClusterDocument, rawQuery: 
           target,
           name: presentation.label,
           typeLabel,
-          contextLabel: `Star system: ${system.label}`,
+          contextLabel: `Zone: ${system.label}`,
           leadingMark: presentation.glyph === null
             ? { kind: 'none' }
             : { kind: 'glyph', value: presentation.glyph },

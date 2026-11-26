@@ -6,8 +6,8 @@ import { importCampaignWorkspace } from './scenarios/campaign-workspace'
 test('a Warden downloads the named system interior as SVG and PNG', async ({ page }) => {
   await importCampaignWorkspace(page, undefined, { width: 390, height: 844 })
   const images = await openMapFilesSection(page, 'Export an image', 'keyboard')
-  await images.getByRole('menuitem', { name: 'Export a system…', exact: true }).press('ArrowRight')
-  const systems = page.getByRole('menu', { name: 'Export a system…', exact: true })
+  await images.getByRole('menuitem', { name: 'Export a Zone…', exact: true }).press('ArrowRight')
+  const systems = page.getByRole('menu', { name: 'Export a Zone…', exact: true })
   await systems.getByLabel('Filter systems', { exact: true }).fill('vesp')
   await expect(systems.getByRole('menuitem', { name: 'Harrow', exact: true })).toHaveCount(0)
   await systems.getByRole('menuitem', { name: 'Vesper Prime', exact: true }).press('Enter')

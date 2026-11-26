@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test as freshTest, type Locator } from './fixtures'
 import {
-  createSingleSystemWorkspace,
+  createSingleSystemWorkspaceWithPrimaryStar,
   type DownloadWindow,
   editMapObject,
   exposedContinuousObjectHitPoint,
@@ -29,11 +29,11 @@ async function renderedObjectPosition(mark: Locator): Promise<{ x: number; y: nu
 
 async function downloadJsonFromFile(
   page: import('@playwright/test').Page,
-  buttonName: 'Export Jump Cluster JSON' | 'Export star system JSON',
+  buttonName: 'Export Jump Cluster JSON' | 'Export Zone JSON',
 ): Promise<ExportedMap> {
   const itemName = buttonName === 'Export Jump Cluster JSON'
     ? 'Download private Jump Cluster JSON'
-    : 'Download private Star System JSON'
+    : 'Download private Zone JSON'
   const downloads = await openMapFilesSection(page, 'Download or back up')
   try {
     const downloadPromise = page.waitForEvent('download')
@@ -48,7 +48,7 @@ async function downloadJsonFromFile(
 }
 
 freshTest('Select distinguishes a single object drag from a selection click', async ({ page }) => {
-  const { systemId, primaryObjectId } = await createSingleSystemWorkspace(page, {
+  const { systemId, primaryObjectId } = await createSingleSystemWorkspaceWithPrimaryStar(page, {
     viewport: { width: 1440, height: 900 },
   })
   const star = wardenObjectMark(page, systemId, primaryObjectId)

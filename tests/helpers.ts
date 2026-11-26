@@ -1037,7 +1037,7 @@ export type SingleSystemWorkspaceOptions = {
 export async function createSingleSystemWorkspace(
   page: import('@playwright/test').Page,
   options: SingleSystemWorkspaceOptions = {},
-): Promise<{ clusterName: string; systemName: string; systemId: string; primaryObjectId: string }> {
+): Promise<{ clusterName: string; systemName: string; systemId: string }> {
   const clusterName = options.clusterName ?? 'Kestrel Reach'
   const systemName = options.systemName ?? 'Vesper'
   if (options.viewport) await page.setViewportSize(options.viewport)
@@ -1046,7 +1046,7 @@ export async function createSingleSystemWorkspace(
   await waitForWorkspaceStartup(page)
   await expect(page.getByRole('heading', { name: 'Give the unknown a name.' })).toBeVisible()
   await page.getByLabel('Jump Cluster', { exact: true }).fill(clusterName)
-  await page.getByLabel('First star system', { exact: true }).fill(systemName)
+  await page.getByLabel('First Zone', { exact: true }).fill(systemName)
   await page.getByRole('button', { name: 'Create local workspace', exact: true }).click()
   const map = wardenMap(page)
   await expect(map).toHaveAccessibleName(`${clusterName} continuous map`)
@@ -1075,11 +1075,26 @@ export async function createSingleSystemWorkspace(
 
   await expect(page.getByRole('group', { name: 'Map interaction mode' })
     .getByRole('button', { name: 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  return { clusterName, systemName, systemId }
+}
+
+/** Creates and places the Star required by a browser fixture through the catalogue. */
+export async function createSingleSystemWorkspaceWithPrimaryStar(
+  page: import('@playwright/test').Page,
+  options: SingleSystemWorkspaceOptions = {},
+): Promise<{ clusterName: string; systemName: string; systemId: string; primaryObjectId: string }> {
+  const workspace = await createSingleSystemWorkspace(page, options)
+  const { systemId } = workspace
+  await (await selectCatalogueObjectButton(page, 'star')).click()
+  await dismissAddChooser(page)
+  await clickWardenSystemPoint(page, systemId, { x: 0.5, y: 0.5 })
+  const map = wardenMap(page)
   const primaryObjects = map.locator(`.continuous-warden-object${domainIdentitySelector('data-system-id', systemId)}`)
   await expect(primaryObjects).toHaveCount(1)
   const primaryObjectId = await primaryObjects.first().getAttribute('data-object-id')
   if (!primaryObjectId) throw new Error('The primary Star is missing its domain identity.')
-  return { clusterName, systemName, systemId, primaryObjectId }
+  await quitSystemAdd(page)
+  return { ...workspace, primaryObjectId }
 }
 
 /** Reaches the public minimum zoom without assuming a particular starting level. */
@@ -1112,7 +1127,7 @@ export async function openWorkspaceZoomNavigation(
  */
 export async function openWorkspaceHierarchy(
   page: import('@playwright/test').Page,
-  name: 'System hierarchy' | 'Jump Cluster contents' = 'Jump Cluster contents',
+  name: 'Zone hierarchy' | 'Jump Cluster contents' = 'Jump Cluster contents',
 ): Promise<import('@playwright/test').Locator> {
   const toggle = page.getByRole('button', { name: 'Hierarchy', exact: true })
   await expect(toggle).toBeVisible()
@@ -1152,8 +1167,8 @@ export async function openChartDetailsEditor(
   const inspector = page.locator('#workspace-inspector-panel')
   const chartDetails = inspector.getByRole('region', { name: 'Jump Cluster details', exact: true })
   const context = page.getByTestId('workspace-map-context-kind')
-  await expect(context).toHaveText(/^(Jump Cluster|Star System)$/)
-  const name = await context.textContent() === 'Jump Cluster' ? 'Jump Cluster contents' : 'System hierarchy'
+  await expect(context).toHaveText(/^(Jump Cluster|Zone)$/)
+  const name = await context.textContent() === 'Jump Cluster' ? 'Jump Cluster contents' : 'Zone hierarchy'
   const compactHierarchy = page.getByRole('dialog', { name, exact: true })
   const hierarchyAlreadyOpen = await compactHierarchy.isVisible()
   if (hierarchyAlreadyOpen || !(await chartDetails.isVisible())) {
@@ -1192,9 +1207,9 @@ export async function returnToClusterMap(page: import('@playwright/test').Page):
   const context = page.getByRole('navigation', { name: 'Map context and commands', exact: true })
   await expect(context).toBeVisible()
   const contextKind = workspaceMapContextType(page)
-  await expect(contextKind).toHaveText(/^(Jump Cluster|Star System)$/)
+  await expect(contextKind).toHaveText(/^(Jump Cluster|Zone)$/)
   const back = context.getByRole('button', { name: 'Back to Jump Cluster', exact: true })
-  if (await contextKind.textContent() === 'Star System') {
+  if (await contextKind.textContent() === 'Zone') {
     // A closing review can still hide its focus-restoration target for one render.
     await expect(back).toBeVisible()
     await dismissAddChooser(page)
@@ -1242,7 +1257,7 @@ export async function addClusterSystem(
   const existingSystemIds = new Set(await domainIdentityValues(systemMarks, 'data-system-id'))
   expect(existingSystemIds.size).toBeGreaterThan(0)
 
-  await clickDockAction(page, 'Add star system')
+  await clickDockAction(page, 'Add Zone')
 
   const position = options.position ?? { x: 0.75, y: 0.75 }
   await clickNormalizedClusterPoint(page, clusterMap, position)
@@ -1276,7 +1291,7 @@ export function jumpClusterBackupInput(page: import('@playwright/test').Page): i
 }
 
 export function starSystemImportInput(page: import('@playwright/test').Page): import('@playwright/test').Locator {
-  return page.getByLabel('Choose star system JSON')
+  return page.getByLabel('Choose Zone JSON')
 }
 
 /** Opens the complete-cluster restore action in Map files and returns its file input. */
@@ -1294,7 +1309,7 @@ export async function openStarSystemImportPicker(
   page: import('@playwright/test').Page,
 ): Promise<import('@playwright/test').Locator> {
   const restore = await openMapFilesSection(page, 'Import or restore')
-  await restore.getByRole('menuitem', { name: 'Add a Star System from JSON', exact: true }).click()
+  await restore.getByRole('menuitem', { name: 'Add a Zone from JSON', exact: true }).click()
   await setHeaderMapActionsOpen(page, false)
   return starSystemImportInput(page)
 }
@@ -1321,7 +1336,7 @@ export async function reviewStarSystemImport(
   content: string,
 ): Promise<import('@playwright/test').Locator> {
   await setJsonFile(await openStarSystemImportPicker(page), name, content)
-  const placement = page.getByRole('group', { name: 'Standalone star system placement controls', exact: true })
+  const placement = page.getByRole('group', { name: 'Standalone Zone placement controls', exact: true })
   await placement.getByRole('button', { name: 'Review placement', exact: true }).click()
   return importReviewDialog(page)
 }
@@ -1353,7 +1368,7 @@ export function deletionReviewDialog(page: import('@playwright/test').Page): imp
 
 /** Returns the public review dialog for a validated standalone star-system import. */
 export function importReviewDialog(page: import('@playwright/test').Page): import('@playwright/test').Locator {
-  return page.getByRole('dialog', { name: 'Review Star System Restore', exact: true })
+  return page.getByRole('dialog', { name: 'Review Zone Restore', exact: true })
 }
 
 /** Resolves a deletion review through its visible action. Read its summary before calling this helper. */
@@ -1375,14 +1390,14 @@ export async function resolveImportReview(
 ): Promise<void> {
   await expect(review).toBeVisible()
   await review.getByRole('button', {
-    name: choice === 'confirm' ? 'Restore a Star System' : 'Cancel restore',
+    name: choice === 'confirm' ? 'Restore a Zone' : 'Cancel restore',
     exact: true,
   }).click()
 }
 
 const mapJsonDownloadLabels = {
   'Export Jump Cluster JSON': 'Download private Jump Cluster JSON',
-  'Export star system JSON': 'Download private Star System JSON',
+  'Export Zone JSON': 'Download private Zone JSON',
 } as const
 
 export async function downloadJson(
@@ -1523,7 +1538,7 @@ export type DownloadedImage = {
 export async function downloadImage(
   page: import('@playwright/test').Page,
   mimeType: 'image/svg+xml' | 'image/png',
-  scope?: 'Entire Cluster' | 'Selected system' | 'Current viewport',
+  scope?: 'Entire Cluster' | 'Selected Zone' | 'Current viewport',
 ): Promise<DownloadedImage> {
   const images = await openMapFilesSection(page, 'Export an image')
   if (scope) {
@@ -1763,7 +1778,7 @@ export async function completeCatalogueObjectCreation(
   const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
   if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
 
-  const map = page.getByRole('group', { name: /star system map$/ }).first()
+  const map = page.getByRole('group', { name: /Zone map$/ }).first()
   const mapObjects = map.locator('.system-object[data-object-id]')
   const existingObjectIds = new Set(await domainIdentityValues(mapObjects, 'data-object-id'))
   const target = options.target ?? await defaultCatalogueCreationTarget(page, map, options)
@@ -1808,7 +1823,7 @@ async function defaultCatalogueCreationTarget(
 ): Promise<CatalogueCreationTarget> {
   if (options.preserveDraft || options.noSelection) return { kind: 'free', ...await nextFreeSystemPoint(map) }
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = page.getByRole('complementary', { name: 'Zone hierarchy' })
   if (await hierarchy.count() > 0) {
     const selected = hierarchy.getByRole('treeitem', { selected: true })
     if (await selected.count() > 0) {
@@ -1838,7 +1853,7 @@ export async function completeOrbitCreation(
   const placementToggle = controls.getByRole('button', { name: 'Placement', exact: true })
   if (await placementToggle.getAttribute('aria-expanded') !== 'true') await placementToggle.click()
 
-  const map = page.getByRole('group', { name: /star system map$/ }).first()
+  const map = page.getByRole('group', { name: /Zone map$/ }).first()
   const mapOrbits = map.locator('.orbit-mark[data-orbit-id]')
   const existingOrbitIds = new Set(await domainIdentityValues(mapOrbits, 'data-orbit-id'))
   const target = options.target ?? await defaultOrbitCreationTarget(page, map, options)
@@ -1881,7 +1896,7 @@ async function defaultOrbitCreationTarget(
 ): Promise<OrbitCreationTarget> {
   if (options.preserveDraft || options.noSelection) return { kind: 'center', x: 0.25, y: 0.25 }
 
-  const hierarchy = page.getByRole('complementary', { name: 'System hierarchy' })
+  const hierarchy = page.getByRole('complementary', { name: 'Zone hierarchy' })
   if (await hierarchy.count() > 0) {
     const selected = hierarchy.getByRole('treeitem', { selected: true })
     if (await selected.count() > 0) {

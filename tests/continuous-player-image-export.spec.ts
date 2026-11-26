@@ -204,7 +204,7 @@ test('a selected player route reveals a destination name only for a Revealed opp
     position: { x: 2600, y: 500 },
     disclosure: 'known-type',
     type: 'star-system',
-    label: 'Star system',
+    label: 'Zone',
   }
   const image = serializeContinuousPlayerMapImage(
     document,
@@ -214,7 +214,7 @@ test('a selected player route reveals a destination name only for a Revealed opp
 
   expect(image.svg).toContain('Jump-2')
   expect(image.svg).toContain('Jump-3')
-  expect(image.svg).not.toContain('Star system')
+  expect(image.svg).not.toContain('Zone')
   expect(image.svg).not.toContain('Remote Reach')
   expect(image.svg).not.toContain('Remote Gate')
   expect(image.svg).not.toContain('Unknown destination')
@@ -254,14 +254,14 @@ test('Selected system rejects marker-only disclosure instead of exporting a name
     position: { x: 1800, y: 460 },
     disclosure: 'known-type',
     type: 'star-system',
-    label: 'Star system',
+    label: 'Zone',
   }
 
   expect(() => serializeContinuousPlayerMapImage(
     document,
     { scope: 'system', systemId: 'system-3' },
     'print-light',
-  )).toThrow('Select a Revealed public system')
+  )).toThrow('Select a Revealed public Zone')
 })
 
 test('a Revealed empty system frames its published name without the cluster anchor @pure', () => {

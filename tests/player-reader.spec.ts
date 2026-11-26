@@ -111,7 +111,7 @@ test('the default player reader opens shared links and files with one camera and
     position: { x: 620, y: 360 },
     disclosure: 'known-type',
     type: 'star-system',
-    label: 'Star system',
+    label: 'Zone',
   })
   document.systems.push({
     id: 'system-3',
@@ -352,9 +352,9 @@ test('the default player reader opens shared links and files with one camera and
   await expect(searchLocator).toBeVisible()
   await page.getByRole('button', { name: 'Map files', exact: true }).click()
   const imageFiles = page.getByRole('dialog', { name: 'Map files', exact: true })
-  await imageFiles.getByRole('radio', { name: /^selected system$/i }).click()
+  await imageFiles.getByRole('radio', { name: /^selected Zone$/i }).click()
   const svgDownloadPromise = page.waitForEvent('download')
-  await imageFiles.getByRole('button', { name: 'Export Selected system SVG', exact: true }).click()
+  await imageFiles.getByRole('button', { name: 'Export Selected Zone SVG', exact: true }).click()
   const svgDownload = await svgDownloadPromise
   const exportedSvg = await readFile(await svgDownload.path(), 'utf8')
   for (const publicName of ['Public Star', 'Harbor World', 'Quiet Moon', 'Unknown presence']) {
@@ -423,9 +423,9 @@ test('the default player reader opens shared links and files with one camera and
   expect(overviewSvg).toContain('Remote System')
   expect(overviewSvg).toContain('class="cluster-route-line"')
   expect(overviewSvg).not.toContain('Harbor World')
-  await imageFiles.getByRole('radio', { name: /^selected system$/i }).click()
+  await imageFiles.getByRole('radio', { name: /^selected Zone$/i }).click()
   const pendingDownload = page.waitForEvent('download')
-  await imageFiles.getByRole('button', { name: 'Export Selected system PNG', exact: true }).click()
+  await imageFiles.getByRole('button', { name: 'Export Selected Zone PNG', exact: true }).click()
   const download = await pendingDownload
   expect(download.suggestedFilename()).toMatch(/\.png$/i)
   expect((await readFile(await download.path())).subarray(0, 8))

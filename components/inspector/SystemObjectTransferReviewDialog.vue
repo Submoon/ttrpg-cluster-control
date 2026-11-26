@@ -1,7 +1,7 @@
 <template>
   <UModal
     v-model:open="dialogOpen"
-    title="Change system"
+    title="Change Zone"
     description="Choose the destination and placement, then review relationship changes for this hosted branch."
     :dismissible="!props.session?.confirming && !props.session?.placingOnMap"
     :content="{ onOpenAutoFocus: focusFirstControl, onCloseAutoFocus: restoreFocus }"
@@ -23,7 +23,7 @@
           </div>
 
           <label class="grid gap-1 text-sm font-medium">
-            Destination star system
+            Destination Zone
             <select
               class="workspace-control min-h-10 w-full rounded-md px-3"
               data-transfer-destination
@@ -231,7 +231,7 @@ function objectReference(objectId: string): string {
 
 function ownerName(systemId: string | null): string {
   if (systemId === null) return 'unresolved exit'
-  return props.session?.sourceWorkspace?.cluster.systems.find(system => system.id === systemId)?.name ?? 'unknown system'
+  return props.session?.sourceWorkspace?.cluster.systems.find(system => system.id === systemId)?.name ?? 'unknown Zone'
 }
 
 function routeEndpointDescription(systemId: string | null, pointId: string | null, unresolvedExit?: string): string {
@@ -290,7 +290,7 @@ function restoreFocus(event: Event): void {
   event.preventDefault()
   const target = opener?.isConnected && !opener.matches(':disabled')
     ? opener
-    : document.querySelector<HTMLElement>('#workspace-main [role="group"][aria-label$="star system map"]')
+    : document.querySelector<HTMLElement>('#workspace-main [role="group"][aria-label$="Zone map"]')
       ?? document.getElementById('workspace-main')
   target?.focus({ preventScroll: true })
   opener = null
