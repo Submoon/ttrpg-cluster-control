@@ -39,7 +39,7 @@
         aria-hidden="true"
       />
       <g :opacity="dimmedObjectIds?.has(object.id) ? 0.35 : 1">
-        <circle r="14" class="warden-route-object-marker" aria-hidden="true" />
+        <circle :r="routeObjectMarkerRadiusPixels" class="warden-route-object-marker" aria-hidden="true" />
         <text
           class="warden-route-object-glyph"
           :fill="object.markerColor ?? 'var(--map-text)'"
@@ -59,10 +59,14 @@ import { catalogueObjectLabel } from '../../utils/catalogue-labels'
 import { objectMark } from '../../utils/catalogue-marks'
 import type { ContinuousMapRouteGeometry } from '../../utils/continuous-map-route-geometry'
 import type { MapViewport } from '../../utils/map-zoom'
-import { projectRouteObjects } from '../../utils/route-object-geometry'
+import {
+  projectRouteObjects,
+  routeBranchShowsDetail,
+  routeObjectIsVisible,
+  routeObjectMarkerRadiusPixels,
+} from '../../utils/route-object-geometry'
 import type { SystemMapGeometry } from '../../utils/system-map-geometry'
 import type { SystemObjectBranch } from '../../domain/workspace-object-branch'
-import { CONTINUOUS_MAP_SYSTEM_SCALE } from '../../utils/continuous-map-projection'
 
 const props = defineProps<{
   routeId: string
@@ -82,13 +86,13 @@ const focusedObjectId = ref<string>()
 const projection = computed(() => projectRouteObjects(props.contents, props.geometry, props.layout))
 const pixelsPerSceneUnit = computed(() => props.viewport.k * props.svgPixelScale)
 const markerScale = computed(() => 1 / Math.max(pixelsPerSceneUnit.value, Number.EPSILON))
-const showDetail = computed(() => pixelsPerSceneUnit.value * CONTINUOUS_MAP_SYSTEM_SCALE >= 0.65)
+const showDetail = computed(() => routeBranchShowsDetail(pixelsPerSceneUnit.value))
 const visibleOrbits = computed(() => props.preview === 'landing' || showDetail.value
   ? projection.value.orbits.filter(orbit => !props.hiddenBranch?.orbitIds.includes(orbit.id)) : [])
 const marks = computed(() => props.contents.objects.flatMap(object => {
   const point = projection.value.positions.get(object.id)
-  const showObject = props.preview === 'landing' || object.placement.kind === 'route' || showDetail.value
-    || object.id === props.selectedObjectId || object.id === focusedObjectId.value
+  const showObject = routeObjectIsVisible(object, props.preview === 'landing' || showDetail.value, props.selectedObjectId)
+    || object.id === focusedObjectId.value
   return point && showObject && !props.hiddenBranch?.objectIds.includes(object.id)
     ? [{ object, point }]
     : []
@@ -99,27 +103,10 @@ const marks = computed(() => props.contents.objects.flatMap(object => {
 .warden-route-object { cursor: pointer; }
 .warden-route-object-landing-preview { opacity: 0.52; pointer-events: none; }
 .warden-route-object-pointer-preview { pointer-events: none; }
-.warden-route-object-orbit {
-  fill: none;
-  pointer-events: none;
-  stroke: var(--map-route-line, var(--map-text));
-  stroke-width: 1;
-  stroke-dasharray: 4 4;
-  vector-effect: non-scaling-stroke;
-}
-.warden-route-object-marker {
-  fill: var(--map-bg, var(--surface));
-  stroke: var(--map-text);
-  stroke-width: 1.5;
-}
 .warden-route-object:focus-visible .warden-route-object-marker,
 .warden-route-object[aria-pressed="true"] .warden-route-object-marker {
   stroke: var(--map-selection, var(--map-text));
   stroke-width: 3;
-}
-.warden-route-object-glyph {
-  pointer-events: none;
-  font-size: 16px;
 }
 .warden-route-object-search-locator {
   fill: none;
@@ -127,5 +114,26 @@ const marks = computed(() => props.contents.objects.flatMap(object => {
   stroke: var(--map-selection, var(--map-text));
   stroke-width: 2;
   stroke-dasharray: 4 3;
+}
+</style>
+
+<style>
+/* Shared with detached Warden SVG export. */
+.continuous-warden-map-svg .warden-route-object-orbit {
+  fill: none;
+  pointer-events: none;
+  stroke: var(--map-route-line, var(--map-text));
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
+}
+.continuous-warden-map-svg .warden-route-object-marker {
+  fill: var(--map-bg, var(--surface));
+  stroke: var(--map-text);
+  stroke-width: 1.5;
+}
+.continuous-warden-map-svg .warden-route-object-glyph {
+  pointer-events: none;
+  font-size: 16px;
 }
 </style>

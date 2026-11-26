@@ -1,4 +1,4 @@
-import type { JumpCluster, Point, StarSystem } from '../domain/workspace'
+import { routeContentsFor, type JumpCluster, type Point, type RouteObject, type StarSystem } from '../domain/workspace'
 import { buildContinuousWardenRouteGeometries } from './continuous-warden-routes'
 import type { ContinuousWardenSystemProjection } from './continuous-map-projection'
 import { continuousMapRouteCurve, type ContinuousMapRouteGeometry } from './continuous-map-route-geometry'
@@ -24,6 +24,13 @@ import {
 } from './map-image-scope'
 import { clusterRoutePresentationLabel } from './cluster-route-presentation'
 import { continuousSystemRouteCaptionLayouts, type ContinuousSystemRouteCaptionLayout } from './continuous-system-route-caption'
+import {
+  projectRouteObjects,
+  routeBranchShowsDetail,
+  routeObjectIsVisible,
+  routeObjectMarkerRadiusPixels,
+} from './route-object-geometry'
+import type { SystemMapGeometry } from './system-map-geometry'
 
 const exportPadding = 24
 const systemExportPadding = 12
@@ -37,12 +44,14 @@ const overviewDetailSystemIds: ReadonlySet<string> = new Set()
 
 export interface ContinuousWardenImageSceneRequest {
   cluster: JumpCluster
+  layout: SystemMapGeometry
   projections: readonly ContinuousWardenSystemProjection[]
   unresolvedExitPositions?: Readonly<Record<string, Point>>
   dimmedObjectIds?: readonly string[]
   scope: MapImageScope
   selectedSystemId?: string | null
   selectedRouteId?: string | null
+  selectedRouteObjectId?: string
   format: MapImageFormat
   viewport: MapViewport
   viewportRect: SvgViewportRect
@@ -78,6 +87,10 @@ export interface ContinuousWardenImageSceneSystem {
 
 export interface ContinuousWardenImageSceneRoute {
   route: JumpCluster['routes'][number]
+  branch?: {
+    objects: readonly { object: RouteObject; point: Point }[]
+    orbits: Readonly<ReturnType<typeof projectRouteObjects>['orbits']>
+  }
   /** Selected-system routes carry the pre-trimmed 60-unit prefix used for drawing and bounds. */
   renderGeometry?: Pick<ContinuousMapRouteGeometry, 'start' | 'control1' | 'control2' | 'end' | 'path'>
     & Partial<Pick<ContinuousMapRouteGeometry, 'midpoint'>>
@@ -119,10 +132,6 @@ export function prepareContinuousWardenImageScene(
   request: ContinuousWardenImageSceneRequest,
   measurements: ContinuousWardenImageSceneMeasurements,
 ): ContinuousWardenImageScene {
-  if (request.scope !== 'system'
-    && Object.values(request.cluster.routeContents).some(contents => contents.objects.length > 0)) {
-    throw new Error('Choose a Zone image or download a complete Cluster backup. Cluster images with route objects are unavailable.')
-  }
   const selected = request.scope === 'system'
     ? request.projections.find(projection => projection.id === request.selectedSystemId)
     : undefined
@@ -166,6 +175,8 @@ export function prepareContinuousWardenImageScene(
   const sourceRoutes = request.scope === 'system'
     ? incidentRoutesForMapImage(request.cluster.routes, selected!.id)
     : request.cluster.routes
+  const routeBranchDetail = request.scope === 'viewport'
+    && routeBranchShowsDetail(request.viewport.k * request.svgPixelScale)
   const routes = sourceRoutes.map((route): PreparedImageSceneRoute => {
     const geometry = allRouteGeometries.get(route.id)
     const incident = request.scope === 'system'
@@ -173,6 +184,20 @@ export function prepareContinuousWardenImageScene(
       ? incident
         ? trimMapImageRoute(geometry, route.fromSystemId === selected!.id ? 'start' : 'end', selectedRoutePrefixLength)
         : geometry
+      : undefined
+    const contents = incident ? undefined : routeContentsFor(request.cluster, route.id)
+    const projectedBranch = geometry && contents?.objects.length
+      ? projectRouteObjects(contents, geometry, request.layout)
+      : undefined
+    const branch = projectedBranch && contents
+      ? {
+          objects: contents.objects.flatMap(object => {
+            const point = projectedBranch.positions.get(object.id)
+            const selectedObjectId = request.scope === 'viewport' ? request.selectedRouteObjectId : undefined
+            return point && routeObjectIsVisible(object, routeBranchDetail, selectedObjectId) ? [{ object, point }] : []
+          }),
+          orbits: routeBranchDetail ? projectedBranch.orbits : [],
+        }
       : undefined
     const fixedBounds: SvgViewportRect[] = []
     if (geometry && renderGeometry) {
@@ -192,10 +217,17 @@ export function prepareContinuousWardenImageScene(
           const exitWidth = measurements.textWidth(exitText, routeLabelFontPixels, 'Consolas, monospace')
           fixedBounds.push({ x: geometry.end.x - exitWidth - 12, y: geometry.end.y - 20, width: exitWidth + 12, height: 26 })
         }
+        if (request.scope === 'cluster' && branch) {
+          const radius = routeObjectMarkerRadiusPixels + 1
+          for (const { point } of branch.objects) {
+            fixedBounds.push({ x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2 })
+          }
+        }
       }
     }
     return {
       route,
+      branch,
       geometry,
       renderGeometry,
       incident,
@@ -281,6 +313,7 @@ export function prepareContinuousWardenImageScene(
   }
   const preparedRoutes = routes.map(route => ({
     route: route.route,
+    branch: route.branch,
     renderGeometry: route.renderGeometry,
     incident: route.incident,
     routeLabelWidthPixels: route.routeLabelWidthPixels,
