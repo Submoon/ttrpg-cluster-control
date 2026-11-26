@@ -1,7 +1,7 @@
 /**
  * Cluster operations keep route references and workspace layout aligned with system changes.
  */
-import { routeContentsFor } from './workspace-route-objects'
+import { catalogueBranches } from './workspace-route-objects'
 import { defaultObjectFieldSettings } from './workspace-model'
 import type {
   JumpCluster,
@@ -130,8 +130,9 @@ export function replaceWorkspaceSystem(workspace: LocalWorkspace, system: StarSy
   const systems = workspace.cluster.systems.map(candidate =>
     candidate.id === system.id ? system : candidate,
   )
-  const orbitIds = new Set(systems.flatMap(candidate => candidate.orbits.map(orbit => orbit.id)))
-  const orbitalObjectIds = new Set(systems.flatMap(candidate =>
+  const branches = catalogueBranches({ ...workspace.cluster, systems })
+  const orbitIds = new Set(branches.flatMap(candidate => candidate.orbits.map(orbit => orbit.id)))
+  const orbitalObjectIds = new Set(branches.flatMap(candidate =>
     candidate.objects
       .filter(object => object.placement.kind === 'orbit')
       .map(object => object.id),
@@ -230,17 +231,10 @@ export function updateJumpRoute(
   if (input.playerShared !== undefined && typeof input.playerShared !== 'boolean') {
     throw new Error('Choose whether this Jump Route is shared with players.')
   }
-  const endpoints = jumpRouteDetails(cluster, input)
-  if (routeContentsFor(cluster, routeId)?.objects.length
-    && (endpoints.fromSystemId !== route.fromSystemId || endpoints.fromPointId !== route.fromPointId
-      || endpoints.toSystemId !== route.toSystemId || endpoints.toPointId !== route.toPointId
-      || endpoints.unresolvedExit !== route.unresolvedExit)) {
-    throw new Error('This Jump Route contains route objects and its endpoints cannot be changed here.')
-  }
   return {
     id: route.id,
     ...(route.name !== undefined ? { name: route.name } : {}),
-    ...endpoints,
+    ...jumpRouteDetails(cluster, input),
     playerShared: input.playerShared ?? route.playerShared,
   }
 }

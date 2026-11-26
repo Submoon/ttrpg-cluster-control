@@ -38,6 +38,7 @@
         @request-route-edit="emit('request-route-edit', $event)"
         @set-route-sharing="(routeId, playerShared) => emit('set-route-sharing', routeId, playerShared)"
         @update-route-input="(sessionId, field, value) => emit('update-route-input', sessionId, field, value)"
+        @reverse-route-endpoints="sessionId => emit('reverse-route-endpoints', sessionId)"
         @choose-route-system="(sessionId, systemId) => emit('choose-route-system', sessionId, systemId)"
         @choose-route-point="(sessionId, pointId) => emit('choose-route-point', sessionId, pointId)"
         @apply-route-session="emit('apply-route-session', $event)"
@@ -223,6 +224,7 @@ const emit = defineEmits<{
   'request-route-edit': [routeId: string]
   'set-route-sharing': [routeId: string, playerShared: boolean]
   'update-route-input': [sessionId: number, field: RouteDraftField, value: string | boolean]
+  'reverse-route-endpoints': [sessionId: number]
   'choose-route-system': [sessionId: number, systemId: string]
   'choose-route-point': [sessionId: number, pointId: string]
   'apply-route-session': [sessionId: number]

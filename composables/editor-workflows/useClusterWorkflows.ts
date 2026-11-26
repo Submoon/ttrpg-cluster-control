@@ -214,6 +214,7 @@ export function useClusterWorkflows({
     const active = deletionReview.value
     if (!active || !active.open || active.suspended || active.confirming || active.error) return
     if (!await beforeWorkspaceOperation()) return
+    if (deletionReview.value !== active || active.confirming || saveState.value === 'saving') return
     const reviewId = active.id
     const target = active.target
     active.confirming = true

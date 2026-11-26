@@ -140,6 +140,15 @@ test('continuous routes support clipped selection, guarded inspection and author
   await inspector.getByRole('button', { name: 'Discard changes', exact: true }).click()
   await expect(first).toHaveAccessibleName(/Select Jump Level 1 route/)
 
+  await inspector.getByRole('button', { name: 'Edit Jump Route' }).click()
+  await inspector.getByRole('button', { name: 'Reverse endpoints', exact: true }).click()
+  await inspector.getByRole('button', { name: 'Apply Jump Route', exact: true }).click()
+  await waitForWorkspaceSaved(page)
+  await expect(first).toHaveAccessibleName(/from Arrival \(Harrow\) to Vesper Departure \(Vesper Prime\)/)
+  await page.getByRole('button', { name: /^Undo(?:\b|:)/ }).click()
+  await waitForWorkspaceSaved(page)
+  await expect(first).toHaveAccessibleName(/from Vesper Departure \(Vesper Prime\) to Arrival \(Harrow\)/)
+
   await clickDockAction(page, 'Add Jump Route')
   await selectInspectorOption(inspector.getByLabel('From Zone'), 'Vesper Prime')
   await selectInspectorOption(inspector.getByLabel('Route destination'), 'Unresolved external exit')
