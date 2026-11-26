@@ -118,7 +118,11 @@ test('create, name, move, resize, and reload a Warden system', async ({ page }) 
 function createTransferWorkspace() {
   const initial = createWorkspaceWithPrimaryStar('Halo Transfer', 'Vesper')
   const source = initial.cluster.systems[0]!
-  const root = { ...createSystemObject(source, 'planet'), name: 'Herma' }
+  const root = {
+    ...createSystemObject(source, 'planet'),
+    name: 'Herma',
+    placement: { kind: 'system' as const, x: .64, y: .48 },
+  }
   const sourceWithRoot = { ...source, objects: [...source.objects, root] }
   const orbit = createOrbit(sourceWithRoot, root.id)
   const sourceWithOrbit = { ...sourceWithRoot, orbits: [...sourceWithRoot.orbits, orbit] }
