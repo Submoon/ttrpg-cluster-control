@@ -221,15 +221,20 @@ test('continuous routes support clipped selection, guarded inspection and author
   await page.mouse.move(arrivalAim.x, arrivalAim.y, { steps: 6 })
   const ghost = map.locator('.warden-route-object-landing-preview .warden-route-object-marker')
   await expect(ghost).toBeVisible()
-  const proposed = await ghost.boundingBox()
-  if (!proposed) throw new Error('The route move needs a visible landing ghost.')
+  const markerCenter = (locator: Locator) => locator.evaluate(circle => {
+    if (!(circle instanceof SVGCircleElement)) throw new Error('Expected a route-object marker circle.')
+    const { x, y } = new DOMPoint(circle.cx.baseVal.value, circle.cy.baseVal.value).matrixTransform(circle.getScreenCTM()!)
+    return { x, y }
+  })
+  const proposed = await markerCenter(ghost)
+  expect(Math.hypot(proposed.x - origin.x - origin.width / 2, proposed.y - origin.y - origin.height / 2)).toBeGreaterThan(4)
   await test.info().attach('route-object-landing', { body: await map.screenshot(), contentType: 'image/png' })
   await page.mouse.up()
   await expect(ghost).toHaveCount(0)
-  // The preview and the accepted mark share the same map framing and should align within a CSS pixel.
+  // Compare centers within a CSS pixel because a selected marker has a wider stroke than its ghost.
   await expect.poll(async () => {
-    const accepted = await existing.boundingBox()
-    return accepted ? Math.hypot(accepted.x - proposed.x, accepted.y - proposed.y) : Number.POSITIVE_INFINITY
+    const accepted = await markerCenter(existing)
+    return Math.hypot(accepted.x - proposed.x, accepted.y - proposed.y)
   }).toBeLessThan(1)
   await waitForWorkspaceSaved(page)
 })
