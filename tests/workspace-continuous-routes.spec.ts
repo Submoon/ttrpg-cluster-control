@@ -81,7 +81,8 @@ async function usesIndependentlyRevealedEnds(mark: Locator): Promise<boolean> {
 }
 
 test('continuous routes support clipped selection, guarded inspection and authored exits', async ({ page }) => {
-  test.setTimeout(60_000)
+  // Cold fixture import can use 40 seconds before route editing starts.
+  test.setTimeout(90_000)
   const fixture = structuredClone(campaignFixture)
   const original = fixture.cluster.routes[0]!
   const departure = fixture.cluster.systems[0]!.objects.find(object => object.id === original.fromPointId)!
