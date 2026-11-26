@@ -127,6 +127,8 @@ export type {
 } from './player-projection'
 export {
   routeContentsFor,
+  createWorkspaceRouteObject,
   updateWorkspaceRouteObject,
+  type RouteLanding,
   catalogueBranches,
 } from './workspace-route-objects'

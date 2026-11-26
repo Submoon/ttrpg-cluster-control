@@ -293,7 +293,7 @@ export function projectObjectDraft(
   return projectedObject && JSON.stringify(projectedObject) !== JSON.stringify(object) ? projected : null
 }
 
-/** Prepares a route catalogue edit without altering progression or Orbit relationships. */
+/** Prepares a catalogue edit and any explicitly edited root percentage. */
 export function validateRouteObjectDraft(
   workspace: LocalWorkspace,
   routeId: string,
@@ -303,10 +303,21 @@ export function validateRouteObjectDraft(
   draft: ObjectDraft,
 ): { workspace: LocalWorkspace | null; errors: Record<string, string> } {
   const parsed = parseObjectDraft(workspace, branch, object, initial, draft)
+  let position: { progression?: number } = {}
+  if (object.placement.kind === 'route' && draft.routePercentage !== initial.routePercentage) {
+    const text = draft.routePercentage?.trim() ?? ''
+    const percentage = Number(text)
+    if (!/^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:e[+-]?[0-9]+)?$/i.test(text)
+      || !Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+      parsed.errors.routePercentage = 'Enter a route position between 0% and 100%.'
+    } else {
+      position = { progression: percentage / 100 }
+    }
+  }
   if (Object.keys(parsed.errors).length) return { workspace: null, errors: parsed.errors }
   try {
     return {
-      workspace: updateWorkspaceRouteObject(workspace, routeId, object.id, parsed.changes),
+      workspace: updateWorkspaceRouteObject(workspace, routeId, object.id, { ...parsed.changes, ...position }),
       errors: {},
     }
   } catch (error) {

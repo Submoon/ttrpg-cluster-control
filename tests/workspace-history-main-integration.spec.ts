@@ -1,3 +1,4 @@
+import { useRouteObjectPlacement } from '../composables/editor-workflows/useRouteObjectPlacement'
 import { workspaceWithRouteObjects } from './support/route-objects-fixture'
 import { useRouteObjectInspectorSession } from '../composables/editor-workflows/useRouteObjectInspectorSession'
 import { createWorkspaceWithPrimaryStar } from './support/primary-star-fixture'
@@ -883,11 +884,18 @@ test('a route object Inspector edit saves through the history writer and keeps i
     const draft = session.session.value!
     draft.draft.name = 'Patrol vessel'
     draft.draft.description = 'Revised orders'
+    for (const invalid of ['', '-1', '101', 'Infinity']) {
+      draft.draft.routePercentage = invalid
+      expect(await session.apply(draft.id)).toBe(false)
+      expect(draft.errors.routePercentage).toMatch(/0% and 100%/)
+    }
+    expect(harness.publicationCount).toBe(0)
+    draft.draft.routePercentage = '73.125'
     expect(await session.apply(draft.id)).toBe(true)
     expect(harness.publicationCount).toBe(1)
     const changed = harness.workspace.value?.cluster.routeContents[route.id]
     expect(changed?.objects[0]).toMatchObject({
-      id: root.id, name: 'Patrol vessel', description: 'Revised orders', placement: { kind: 'route', progression: 0.25 },
+      id: root.id, name: 'Patrol vessel', description: 'Revised orders', placement: { kind: 'route', progression: 0.73125 },
     })
     expect(changed?.objects[1]).toEqual(occupant)
     expect(changed?.orbits).toEqual([orbit])
@@ -898,6 +906,50 @@ test('a route object Inspector edit saves through the history writer and keeps i
     const redo = await harness.history.redo()
     expect(redo.status).toBe('applied')
     expect(harness.workspace.value?.cluster.routeContents[route.id]).toEqual(changed)
+  } finally {
+    harness.dispose()
+  }
+})
+
+test('route placement rejects a superseded request and records one accepted endpoint move @pure', async () => {
+  const { workspace, route, root, branch } = workspaceWithRouteObjects()
+  const harness = createHistoryHarness(workspace)
+  let owned = true
+  const editorError = ref('')
+  let settleGuard: (accepted: boolean) => void = () => {}
+  let guard = new Promise<boolean>(resolve => { settleGuard = resolve })
+  const apply = useRouteObjectPlacement({
+    workspace: harness.workspace,
+    mutations: harness.history,
+    getRevision: () => harness.publicationCount,
+    editorError,
+    beforeWorkspaceOperation: () => guard,
+  })
+  const landing = {
+    kind: 'move' as const,
+    objectId: root.id,
+    routeId: route.id,
+    progression: 1,
+    workspaceSnapshot: harness.workspace.value!,
+  }
+  try {
+    const pending = apply(landing, () => owned)
+    owned = false
+    settleGuard(true)
+    expect(await pending).toBe(false)
+    expect(harness.publicationCount).toBe(0)
+
+    guard = Promise.resolve(true)
+    owned = true
+    expect(await apply(landing, () => owned)).toBe(true)
+    const retained = harness.workspace.value!.cluster.routeContents[route.id]
+    expect(retained).toEqual({
+      ...branch,
+      objects: [{ ...root, placement: { kind: 'route', progression: 1 } }, branch.objects[1]],
+    })
+    expect(await apply(landing, () => owned)).toBe(false)
+    expect(harness.publicationCount).toBe(1)
+    expect(harness.history.getEntries()[0]?.action.target).toEqual({ kind: 'route-object', id: root.id, routeId: route.id })
   } finally {
     harness.dispose()
   }

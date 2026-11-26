@@ -4,6 +4,7 @@
 import { catalogueTypes } from './workspace-model'
 import type {
   CatalogueSubtype,
+  CataloguePlacement,
   CatalogueObject,
   ObjectFieldSettings,
   ObjectPlacement,
@@ -47,28 +48,36 @@ export function createSystemObject(
   orbitId?: string,
   keyOwners: readonly CatalogueObject[] = system.objects,
 ): SystemObject {
+  const placement: ObjectPlacement = orbitId === undefined
+    ? initialSystemPlacement(system)
+    : { kind: 'orbit', orbitId }
+  const object = createCatalogueObject(system.objects, subtype, placement, keyOwners)
+  if (placement.kind === 'orbit' && !canPlaceObjectInOrbit(system, object.id, placement.orbitId)) {
+    throw new Error('Choose a valid Orbit for this object.')
+  }
+  return object
+}
+
+/** Creates shared authored catalogue data for the supplied owning branch and placement. */
+export function createCatalogueObject<P extends CataloguePlacement>(
+  objects: readonly CatalogueObject[],
+  subtype: CatalogueSubtype,
+  placement: P,
+  keyOwners: readonly CatalogueObject[],
+): SystemObject<P> {
   const catalogueType = catalogueTypes.find(type => type.value === subtype)
   if (!catalogueType) {
     throw new Error(`Unsupported catalogue type "${subtype}".`)
   }
 
-  let count = system.objects.filter(object => object.subtype === subtype).length + 1
+  let count = objects.filter(object => object.subtype === subtype).length + 1
   let name = `New ${catalogueType.label.toLowerCase()} ${count}`
-  while (system.objects.some(object => object.name === name)) {
+  while (objects.some(object => object.name === name)) {
     count += 1
     name = `New ${catalogueType.label.toLowerCase()} ${count}`
   }
-  const objectId = crypto.randomUUID()
-  const placement: ObjectPlacement = orbitId === undefined
-    ? initialSystemPlacement(system)
-    : { kind: 'orbit', orbitId }
-
-  if (placement.kind === 'orbit' && !canPlaceObjectInOrbit(system, objectId, placement.orbitId)) {
-    throw new Error('Choose a valid Orbit for this object.')
-  }
-
   return {
-    id: objectId,
+    id: crypto.randomUUID(),
     publication: 'known-type',
     family: catalogueType.family,
     subtype,

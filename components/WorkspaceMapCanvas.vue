@@ -50,6 +50,7 @@
       :begin-selected-object-drag="commands.move.beginSelectedObjectDrag"
       :inspected-target="props.inspectedTarget ?? null"
       :selected-route-id="props.selectedRouteId"
+      :route-object-editing-id="props.routeObjectEditingId"
       :mode="props.mode"
       :creation-type="props.creationType ?? null"
       :orbit-creation-preview="props.orbitCreationPreview"
@@ -79,6 +80,7 @@
       @orbit-adjustment="forwardOrbitAdjustment"
       @entity-command-blocked="emit('entity-command-blocked', $event)"
       @move-object-in-system="forwardMoveObjectInSystem"
+      @move-route-object="forwardRouteObjectMove"
       @resize-system-frame="forwardResizeSystemFrame"
       @transfer-object-on-drop="forwardObjectDropTransfer"
       @move-orbit-center="forwardMoveOrbitCenter"
@@ -188,6 +190,7 @@
 
 <script setup lang="ts">
 import { routeObjectTargetAt } from './maps/route-object-target'
+import type { RouteObjectPlacementRequest } from '../composables/editor-workflows/useRouteObjectPlacement'
 /** Owns pointer arbitration around one stable map surface and forwards validated renderer commands. */
 import { computed, onBeforeUnmount, onMounted, nextTick, shallowRef, watch } from 'vue'
 import type {
@@ -261,6 +264,7 @@ const props = defineProps<{
   dimmedObjectIds?: readonly string[]
   appliedDimmedObjectIds?: readonly string[]
   selectedRouteId: string | null
+  routeObjectEditingId?: string
   mode: MapInteractionMode
   isObjectMoveBlocked?: (objectId: string) => boolean
   isEntityCommandBlocked?: (command: EntityCommand) => boolean
@@ -338,6 +342,7 @@ const emit = defineEmits<{
   'cluster-target': [point: Point, systemIds: string[]]
   'continuous-object-add-target': [request: ContinuousObjectAddTarget]
   'continuous-orbit-add-target': [owners: readonly { systemId: string; candidates: SystemCreationCandidate[] }[], requiresChoice: boolean, workspace: LocalWorkspace]
+  'move-route-object': [request: RouteObjectPlacementRequest, ownsRequest: () => boolean]
   'move-object-in-system': [systemId: string, objectId: string, position: Point, workspaceSnapshot: LocalWorkspace, frameInsets?: SystemFrameInsets, selectDrag?: SelectMapObjectDragContext]
   'resize-system-frame': [systemId: string, insets: SystemFrameInsets, workspaceSnapshot: LocalWorkspace]
   'transfer-object-on-drop': [drop: SystemObjectTransferDrop, selectDrag?: SelectMapObjectDragContext]
@@ -762,6 +767,12 @@ function forwardMoveObjectInSystem(
   emit('move-object-in-system', systemId, objectId, position, workspaceSnapshot, frameInsets, selectDrag)
 }
 
+function forwardRouteObjectMove(request: RouteObjectPlacementRequest, ownsRequest: () => boolean): void {
+  if (!ownsRequest()) return
+  holdClickSuppression()
+  emit('move-route-object', request, ownsRequest)
+}
+
 function forwardResizeSystemFrame(systemId: string, insets: SystemFrameInsets, workspaceSnapshot: LocalWorkspace): void {
   if (props.mode !== 'move' && !(props.mode === 'select' && isInspectedSystem(systemId))) return
   holdClickSuppression()
@@ -859,7 +870,10 @@ function isSelectedContinuousEditPress(event: PointerEvent): boolean {
   const systemControl = event.target.closest('.continuous-warden-name-target, [data-system-resize-handle]')
   const systemId = systemControl?.getAttribute('data-system-id')
   if (systemId && isInspectedSystem(systemId)) return true
-  return continuousWardenMapRef.value?.hasSelectedOrbitOrExitMoveTarget(event) ?? false
+  const routeObject = routeObjectTargetAt(event.target)
+  const map = continuousWardenMapRef.value
+  if (routeObject && map?.canDragRouteObject(routeObject)) return true
+  return map?.hasSelectedOrbitOrExitMoveTarget(event) ?? false
 }
 
 function inspectLongPress(target: EventTarget | null): void {
