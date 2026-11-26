@@ -102,7 +102,7 @@ function orbitLabel(geometry: NonNullable<ReturnType<typeof projectPlayerRouteBr
 .player-branch-marker[aria-pressed="true"] circle,
 .player-branch-orbit:focus-visible,
 .player-branch-orbit[aria-pressed="true"] {
-  stroke: var(--map-selection, var(--map-text));
+  stroke: var(--map-selected, var(--map-text));
   stroke-width: 3;
 }
 </style>

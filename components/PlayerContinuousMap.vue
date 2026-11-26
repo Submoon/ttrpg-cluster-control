@@ -782,6 +782,11 @@ function captureImageViewport(expectedDocument: PlayerClusterDocument): PlayerIm
       ? { systemId: dimmedOwner, ids: [...props.dimmedObjectIds].sort() }
       : null,
     selectedRouteId: props.selectedRouteId ?? null,
+    selectedBranchTarget: props.selectedBranchId && branchSelection.value
+      ? { branchId: props.selectedBranchId, target: branchSelection.value }
+      : null,
+    dimmedBranchObjects: [...props.dimmedBranchObjects].flatMap(([branchId, ids]) =>
+      ids.size ? [{ branchId, ids: [...ids].sort() }] : []),
   }
 }
 
